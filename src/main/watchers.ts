@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { dueKind, markStarted, nextRuns, parseFindings, pickTier, type RunKind, type WatchConfig } from '../shared/watchCore'
 import { appName } from '../shared/appName'
 import {
-  defaultPrompt, earliest, emptyState, foldersOf, legacyState, legacyWatcher, MAX_RUNS, normalizeSchedule, normalizeState,
+  defaultPrompt, earliest, emptyState, foldersOf, reportsRootOf, legacyState, legacyWatcher, MAX_RUNS, normalizeSchedule, normalizeState,
   normalizeWatcher, statusOf, textHash, watcherConfig, watcherHeader, watcherId,
   type WatcherDetail, type WatcherFile, type WatcherInput, type WatcherState, type WatcherSummary, type WatchersList,
 } from '../shared/watchersCore'
@@ -78,9 +78,12 @@ export function initWatchers(env: Record<string, string>, workspaceRoot: string,
   setInterval(() => void tick(), 30_000).unref()
 }
 
-export function configureWatchers(workspaceRoot: string) {
+export function configureWatchers(workspaceRoot: string, env: Record<string, string> = {}) {
   workspace = workspaceRoot
+  reportsRoot = TEST_MODE ? '' : reportsRootOf(env.HIVE_WATCHERS_REPORTS_DIR, workspaceRoot)
 }
+let reportsRoot = ''
+const reportsDir = (id: string, w: WatcherFile) => foldersOf(id, dirOf(id), reportsRoot, w.name).reports
 
 // ---- migration of the single Watch (HIVE_WATCH_DIR + ~/.claude/hive/watch.json) into watcher "watch" ----
 
@@ -172,7 +175,7 @@ const started = (s: WatcherState, kind: RunKind, at: number) => { const m = mark
 // one run: a new turn in the watcher's thread, or a new (or resumed) thread when none is live. '' = started
 function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind): string {
   const now = new Date()
-  const f = foldersOf(id, c.dir)
+  const f = foldersOf(id, c.dir, reportsRoot, w.name)
   const prev = s.runs.at(-1) ?? null
   const runId = `${id}-${kind}-${now.getTime()}`
   let text: string
@@ -361,7 +364,7 @@ export async function watcherDetail(id: string): Promise<WatcherDetail | null> {
   return {
     ...sm,
     findingsList: findingsOf(join(p.c.dir, 'findings.jsonl')),
-    reports: listReports(join(p.c.dir, 'reports')),
+    reports: listReports(reportsDir(id, w)),
     runs: [...readState(id).runs].reverse().map((r) => ({ ...r, cwd, path: r.sessionId ? deps.transcript(cwd, r.sessionId) : null })),
   }
 }

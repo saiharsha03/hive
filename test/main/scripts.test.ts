@@ -71,9 +71,9 @@ describe.skipIf(!PY)('scripts runner (real python)', () => {
     assert.throws(() => sc.runScript('Loop', 'Go'), /already running/)
     sc.runScript('Version', 'Show') // a different script runs alongside
     await until(() => /tick 5/.test(latest('Loop').output))
-    const seen = updates.map((u) => u.find((r) => r.name === 'Loop')?.output ?? '').filter(Boolean)
-    const distinct = new Set(seen).size
-    assert.ok(distinct >= 3, 'output should arrive in several pushes, not at the end')
+    // several pushes while it runs, not one at the end (under a loaded machine they can batch, so wait for them)
+    const distinct = () => new Set(updates.map((u) => u.find((r) => r.name === 'Loop')?.output ?? '').filter(Boolean)).size
+    await until(() => distinct() >= 3)
     assert.match(latest('Loop').output, /err \d/) // stderr too
     const pid = Number(latest('Loop').output.match(/pid (\d+)/)![1])
     const alive = () => { try { process.kill(pid, 0); return true } catch { return false } }

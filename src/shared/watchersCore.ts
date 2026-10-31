@@ -137,9 +137,23 @@ export function textHash(s: string): string {
 }
 
 export type Folders = { dir: string; memory: string; reports: string; findings: string; db: string }
-export const foldersOf = (id: string, dir: string): Folders => ({
-  dir, memory: joinP(dir, 'memory'), reports: joinP(dir, 'reports'), findings: joinP(dir, 'findings.jsonl'), db: joinP(joinP(dir, 'memory'), `${id}.db`),
+// reportsRoot set: reports go to <reportsRoot>/<watcher name> (a folder people browse); else the watcher's own reports/
+export const foldersOf = (id: string, dir: string, reportsRoot = '', name = id): Folders => ({
+  dir, memory: joinP(dir, 'memory'), reports: reportsRoot ? joinP(reportsRoot, folderName(name, id)) : joinP(dir, 'reports'),
+  findings: joinP(dir, 'findings.jsonl'), db: joinP(joinP(dir, 'memory'), `${id}.db`),
 })
+
+// a watcher's name as a Windows-safe folder name (the id when nothing usable is left)
+export const folderName = (name: string, id: string): string => name.replace(/[<>:"/\\|?*]/g, ' ').replace(/[\s.]+$/, '').trim() || id
+
+// HIVE_WATCHERS_REPORTS_DIR: absolute, or relative to the repos root; empty = <repos root>/Watch reports; "-" = keep
+// reports inside each watcher's folder
+export function reportsRootOf(setting: string | undefined, reposRoot: string): string {
+  const v = (setting ?? '').trim()
+  if (v === '-') return ''
+  if (!v) return reposRoot ? joinP(reposRoot, 'Watch reports') : ''
+  return isAbs(v) || !reposRoot ? v : joinP(reposRoot, v)
+}
 
 const stamp = (t: number | null | undefined) => (t ? localIso(new Date(t)) : 'none')
 

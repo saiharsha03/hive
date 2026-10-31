@@ -84,7 +84,7 @@ function applySettings() {
   initDeploy(appConfig)
   gitPanel.initGit(appConfig)
   initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
-  configureWatchers(appConfig.config?.root ?? '')
+  configureWatchers(appConfig.config?.root ?? '', appConfig.env)
 }
 const draftOf = (d: unknown): Draft => {
   const n = normalizeSettings(d) ?? normalizeSettings({})!

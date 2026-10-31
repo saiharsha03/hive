@@ -13,8 +13,15 @@ const PARALLEL = 4
 const git = (cwd: string, args: string[], timeout = 120_000) =>
   new Promise<string>((ok, bad) => {
     execFile('git', args, { cwd, timeout, maxBuffer: 16 * 1024 * 1024, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } },
-      (err, stdout, stderr) => (err ? bad(new Error((stderr || err.message).toString().trim().split('\n')[0])) : ok(stdout.toString())))
+      // git's first real error line: "hint:" lines are advice, and a bare first line of them says nothing
+      (err, stdout, stderr) => (err ? bad(new Error(firstError((stderr || err.message).toString()))) : ok(stdout.toString())))
   })
+
+const firstError = (text: string) => {
+  const lines = text.trim().split('\n').map((l) => l.trim()).filter(Boolean)
+  return (lines.find((l) => /^(fatal|error):/i.test(l)) ?? lines.find((l) => !/^hint:/i.test(l)) ?? lines[0] ?? '')
+    .replace(/^fatal:\s*/i, '')
+}
 
 const isRepo = (d: string) => existsSync(join(d, '.git'))
 const dirs = (d: string) => readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory() && scanName(e.name)).map((e) => e.name)
