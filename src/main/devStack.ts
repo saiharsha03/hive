@@ -8,13 +8,14 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSy
 import { connect } from 'node:net'
 import { dirname, join } from 'node:path'
 import {
-  LogBuffer, canControl, decideStart, detectDefault, formatStatus, ownerLabel, parseComposePs, parseEnvFile, parseListening, parseWorktrees, samePath, serviceState,
+  LogBuffer, canControl, decideStart, detectDefault, formatStatus, ownerLabel, parseComposePs, parseEnvFile, parseListening, parseWorktrees, serviceState,
   sourceOptions, validBranchName, worktreeDir,
   type DevConfig, type DevService, type DevState, type Owner, type Source, type SourceOption, type SvcDef,
 } from '../shared/devCore'
 import type { Loaded } from './devConfig'
 import { WIP_MESSAGE, decideCleanup, envCopies, hasWork, planWorktree, validRepoName, type WorktreeLink } from '../shared/worktreeCore'
 import { appName } from '../shared/appName'
+import { sameDir } from './paths'
 
 export type { Owner, Source }
 export const USER: Owner = { kind: 'user' }
@@ -195,17 +196,17 @@ async function resolveDir(repo: string, src: Source): Promise<{ dir: string; lab
   const main = repoDir(repo)
   if (!existsSync(main)) throw new Error(`${repo} not found at ${main}`)
   const wts = await worktrees(repo)
-  const mainWt = wts.find((w) => samePath(w.path, main))
+  const mainWt = wts.find((w) => sameDir(w.path, main))
   if (src.kind === 'main') return { dir: main, label: `main checkout (${mainWt?.branch ?? 'detached'})` }
   if (src.kind === 'worktree') {
-    const w = wts.find((x) => samePath(x.path, src.path))
+    const w = wts.find((x) => sameDir(x.path, src.path))
     if (!w) throw new Error(`${src.path} is not a worktree of ${repo}`)
-    return { dir: w.path, label: samePath(w.path, main) ? `main checkout (${w.branch ?? 'detached'})` : `worktree ${w.branch ?? 'detached'}` }
+    return { dir: w.path, label: sameDir(w.path, main) ? `main checkout (${w.branch ?? 'detached'})` : `worktree ${w.branch ?? 'detached'}` }
   }
   const b = src.branch
   if (!validBranchName(b)) throw new Error(`Not a valid branch name: ${b}`)
   const have = wts.find((w) => w.branch === b)
-  if (have) return { dir: have.path, label: samePath(have.path, main) ? `main checkout (${b})` : `worktree ${b}` }
+  if (have) return { dir: have.path, label: sameDir(have.path, main) ? `main checkout (${b})` : `worktree ${b}` }
   await git(main, ['rev-parse', '--verify', '-q', `refs/heads/${b}`]).catch(() => { throw new Error(`${repo} has no local branch ${b}`) })
   return { dir: await addWorktree(repo, b), label: `worktree ${b}` }
 }
@@ -452,7 +453,7 @@ export async function ensureWorktree(repo: string, want: { branch?: string; tick
 }
 
 // Hive services still running from a folder
-const runningFrom = (dir: string) => [...procs.entries()].filter(([, p]) => !p.exited && samePath(p.dir, dir)).map(([n]) => n)
+const runningFrom = (dir: string) => [...procs.entries()].filter(([, p]) => !p.exited && sameDir(p.dir, dir)).map(([n]) => n)
 
 // a closed / archived thread's worktree: refuse while a service runs from it, auto-save uncommitted work as a WIP commit
 // on its branch, then delete the folder. Never deletes the branch, never pushes. done = the link can be forgotten.
@@ -461,9 +462,9 @@ export async function retireWorktree(l: WorktreeLink): Promise<{ done: boolean; 
   try {
     const main = repoDir(l.repo)
     const exists = existsSync(l.path)
-    const registered = exists && (await worktrees(l.repo)).some((w) => samePath(w.path, l.path))
+    const registered = exists && (await worktrees(l.repo)).some((w) => sameDir(w.path, l.path))
     const status = registered ? await git(l.path, ['status', '--porcelain']) : ''
-    const d = decideCleanup({ exists, isMain: samePath(l.path, main), registered, dirty: hasWork(status), running: runningFrom(l.path) })
+    const d = decideCleanup({ exists, isMain: sameDir(l.path, main), registered, dirty: hasWork(status), running: runningFrom(l.path) })
     if (d.act === 'refuse') return { done: false, note: `${head}: ${d.note}` }
     if (d.act === 'gone') {
       await git(main, ['worktree', 'prune']).catch(() => {})

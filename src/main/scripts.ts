@@ -100,7 +100,7 @@ export function runScript(name: string, label: string): string {
     return id
   }
   // the user's own environment (DB settings etc.); Python told to flush as it goes and to write UTF-8 into the pipe
-  const child = spawn(opt.cmd, { cwd: def.cwd, shell: true, windowsHide: true, env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' } })
+  const child = spawn(opt.cmd, { cwd: def.cwd, shell: true, windowsHide: true, detached: process.platform !== 'win32', env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' } })
   const p = { child, stopping: false }
   procs.set(name, p)
   const stream = (s: NodeJS.ReadableStream | null) => {
@@ -139,7 +139,8 @@ export function runScript(name: string, label: string): string {
 const killTree = (c: ChildProcess) => {
   if (!c.pid) return
   if (process.platform === 'win32') execFile('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true }, () => {})
-  else c.kill()
+  // elsewhere the script runs in its own process group (detached), so the shell and everything it started go together
+  else { try { process.kill(-c.pid!, 'SIGKILL') } catch { c.kill('SIGKILL') } }
 }
 
 export function stopScript(name: string) {

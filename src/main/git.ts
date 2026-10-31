@@ -4,7 +4,8 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
-import { parseWorktrees, samePath } from '../shared/devCore'
+import { parseWorktrees } from '../shared/devCore'
+import { sameDir } from './paths'
 import { detailOf, LOG_FORMAT, parseBranches, parseLog, parseStatus, pushArgs, safePath, safeSha, type Commit, type Detail, type FileArea, type GitRow, type GitTarget } from '../shared/gitCore'
 import type { Loaded } from './devConfig'
 import { scanRepos } from './pull'
@@ -43,7 +44,7 @@ async function targets(): Promise<GitTarget[]> {
     out.push({ name: r.name, dir: r.dir, repo: r.name, worktree: false })
     try {
       for (const w of parseWorktrees(await git(r.dir, ['worktree', 'list', '--porcelain'], 30_000))) {
-        if (!w.path || samePath(w.path, r.dir) || !existsSync(w.path)) continue
+        if (!w.path || sameDir(w.path, r.dir) || !existsSync(w.path)) continue
         out.push({ name: `${r.name} / ${basename(w.path)}`, dir: w.path, repo: r.name, worktree: true })
       }
     } catch { /* the repo row still shows, with its own error */ }
@@ -55,7 +56,7 @@ async function targets(): Promise<GitTarget[]> {
 
 // only folders Hive lists; a worktree made since the last list is picked up by listing again
 async function resolve(dir: string): Promise<string> {
-  const find = () => known.find((t) => samePath(t.dir, dir))
+  const find = () => known.find((t) => sameDir(t.dir, dir))
   const hit = find() ?? (await targets(), find())
   if (!hit) throw new Error(`${dir} is not a repo or worktree ${appName()} lists`)
   return hit.dir
