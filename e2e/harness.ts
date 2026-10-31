@@ -93,7 +93,8 @@ export async function launch(opts: { envFile?: string; data?: string } = {}): Pr
   proc.on('exit', (code, signal) => { if (!quitting.has(app)) console.warn(`Hive exited unexpectedly: code ${code} signal ${signal}`) })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
-  await page.getByTestId('top-new').waitFor({ timeout: 30_000 })
+  // the app is up once its top menu bar renders (every layout has it; the sidebar's New thread is Default-only)
+  await page.getByTestId('menu-tools').waitFor({ timeout: 30_000 })
   return { app, page }
 }
 
