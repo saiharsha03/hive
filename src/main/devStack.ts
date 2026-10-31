@@ -15,7 +15,7 @@ import {
 import type { Loaded } from './devConfig'
 import { WIP_MESSAGE, decideCleanup, envCopies, hasWork, planWorktree, validRepoName, type WorktreeLink } from '../shared/worktreeCore'
 import { appName } from '../shared/appName'
-import { sameDir } from './paths'
+import { sameDir, withRealRoots } from './paths'
 
 export type { Owner, Source }
 export const USER: Owner = { kind: 'user' }
@@ -74,7 +74,7 @@ function publish() {
 // called again when the settings change: new starts use the new config, running services keep theirs
 let started = false
 export function init(l: Loaded) {
-  loaded = l
+  loaded = withRealRoots(l)
   if (started) return
   started = true
   setInterval(() => {

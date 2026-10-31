@@ -1,6 +1,6 @@
 // Helpers for the integration tests that drive real tools: skip cleanly when a tool is not installed.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -26,7 +26,8 @@ export function git(cwd: string, ...args: string[]): string {
 }
 
 export function tempDir(prefix: string): { dir: string; cleanup: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), `hive-${prefix}-`))
+  // the long form: CI's Windows temp folder is an 8.3 short name (RUNNER~1), and git always prints the long one
+  const dir = realpathSync.native(mkdtempSync(join(tmpdir(), `hive-${prefix}-`)))
   return {
     dir,
     cleanup: () => {

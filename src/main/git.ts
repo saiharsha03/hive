@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { parseWorktrees } from '../shared/devCore'
-import { sameDir } from './paths'
+import { realDir, sameDir, withRealRoots } from './paths'
 import { detailOf, LOG_FORMAT, parseBranches, parseLog, parseStatus, pushArgs, safePath, safeSha, type Commit, type Detail, type FileArea, type GitRow, type GitTarget } from '../shared/gitCore'
 import type { Loaded } from './devConfig'
 import { scanRepos } from './pull'
@@ -17,7 +17,7 @@ const PARALLEL = 6
 let loaded: Loaded | null = null
 let known: GitTarget[] = []
 
-export function initGit(l: Loaded) { loaded = l }
+export function initGit(l: Loaded) { loaded = withRealRoots(l) }
 
 type Run = { code: number; out: string; err: string }
 // git's own output either way; okCodes lists the exit codes that are not failures
@@ -181,7 +181,7 @@ export async function gitFetch(dir: string): Promise<string> {
 // file's path inside it; null when Hive lists none
 export async function gitLocate(file: string): Promise<{ dir: string; name: string; path: string } | null> {
   const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
-  const f = norm(String(file))
+  const f = norm(realDir(String(file)))
   const find = () => known
     .filter((t) => f.toLowerCase().startsWith(`${norm(t.dir).toLowerCase()}/`))
     .sort((a, b) => b.dir.length - a.dir.length)[0]
