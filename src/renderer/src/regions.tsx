@@ -73,7 +73,7 @@ export function ActivityBar({ items, current, open, onPick, badges, bottom }: {
   )
 }
 
-export function Dock({ items, current, onPick, badges }: { items: ViewId[]; current: ViewId | null; onPick: (v: ViewId) => void; badges: Badges }) {
+export function Dock({ items, current, onPick, badges, extra }: { items: ViewId[]; current: ViewId | null; onPick: (v: ViewId) => void; badges: Badges; extra?: ReactNode }) {
   return (
     <nav className="dock" data-testid="tool-dock">
       {items.map((id) => (
@@ -82,6 +82,7 @@ export function Dock({ items, current, onPick, badges }: { items: ViewId[]; curr
           <span className="dk-l">{VIEW[id].label}</span>
         </button>
       ))}
+      {extra}
     </nav>
   )
 }

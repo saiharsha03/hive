@@ -128,10 +128,39 @@ export function App() {
     else if (v === 'pull' || v === 'dev') setPop({ kind: v, anchor: el ? anchorOf(el) : centre() })
   }
   // tools: Deploy and Settings are focused modals; Pull latest, Dev stack, MCP, hooks and plugins are popovers
+  // Pull latest runs in the background from any layout's button: a note when it is done, a popup only when a repo failed
+  const [pulling, setPulling] = useState(false)
+  const [pullFail, setPullFail] = useState<{ repo: string; result: string }[] | null>(null)
+  const runPull = async () => {
+    if (pulling) return
+    setPulling(true)
+    try {
+      const rows = await window.api.pullRun(false)
+      const bad = (r: { result: string }) => r.result.startsWith('failed')
+      if (rows.some(bad)) setPullFail([...rows.filter(bad), ...rows.filter((r) => !bad(r))])
+      else {
+        const n = (p: string) => rows.filter((r) => r.result.startsWith(p)).length
+        const rest = rows.length - n('updated') - n('skipped')
+        notice(rows.length === 1 && !n('updated') && !n('skipped') ? `Pull latest: ${rows[0].result}` : `Pull latest: ${n('updated')} updated, ${n('skipped')} skipped, ${rest} already up to date`)
+      }
+    } catch (e: any) {
+      setPullFail([{ repo: 'Pull latest', result: `failed: ${e?.message ?? e}` }])
+    } finally {
+      setPulling(false)
+    }
+  }
+  const pullButton = (
+    <button className="dk" title="Pull latest: fetch every repo and fast-forward its default branch" onClick={() => void runPull()} disabled={pulling} data-testid="dock-pull">
+      <span className="dk-i"><Icon name={pulling ? 'sync' : 'repo-pull'} className={pulling ? 'mk-pull spin' : 'mk-pull'} /></span>
+      <span className="dk-l">{pulling ? 'Pulling…' : 'Pull latest'}</span>
+    </button>
+  )
+
   function openTool(id: string, el?: HTMLElement | null) {
     if (id === 'deploy') return setModal('deploy')
     if (id === 'settings') return setModal('settings')
-    if (id === 'pull' || id === 'mcp' || id === 'hooks' || id === 'plugins') return setPop({ kind: id, anchor: el ? anchorOf(el) : centre() })
+    if (id === 'pull') return void runPull()
+    if (id === 'mcp' || id === 'hooks' || id === 'plugins') return setPop({ kind: id, anchor: el ? anchorOf(el) : centre() })
     if (id === 'dev' && placeOf(ui, 'dev') === 'popover') return setPop({ kind: 'dev', anchor: el ? anchorOf(el) : centre() })
     if (id === 'terminal') { openTerminal(); return }
     showView(id as ViewId, el)
@@ -376,7 +405,7 @@ export function App() {
   }
   const toolRows: ToolRow[] = [
     { id: 'deploy', label: 'Deploy', icon: 'rocket', mk: 'mk-deploy', status: deploy.liveRow ? deploy.liveRow.note || deploy.liveRow.title : '', cls: deploy.liveRow?.state === 'waiting' ? 's-wait' : deploy.liveRow ? 's-work' : '' },
-    { id: 'pull', label: 'Pull latest', icon: 'repo-pull', mk: 'mk-pull' },
+    { id: 'pull', label: 'Pull latest', icon: pulling ? 'sync' : 'repo-pull', mk: pulling ? 'mk-pull spin' : 'mk-pull', status: pulling ? 'pulling…' : '' },
     { id: 'dev', label: 'Dev stack', icon: 'server-process', mk: 'mk-dev', status: dev.state?.configured ? `${devUp} up` : '', cls: devUp ? 's-done' : '' },
     { id: 'scripts', label: 'Scripts', icon: 'play', mk: 'mk-scripts', status: runningScripts ? `${runningScripts} running` : '', cls: runningScripts ? 's-work' : '' },
     { id: 'todos', label: 'To-dos', icon: 'checklist', mk: 'mk-todos', status: tb.open ? `${tb.late ? 'some late, ' : ''}${tb.open} open` : '', cls: tb.late ? 's-wait' : '' },
@@ -591,7 +620,7 @@ export function App() {
         <div className="main">
           {centreCol}
           {right}
-          <Dock items={arr.right} current={rightOpen ? rightView : null} onPick={pickDock} badges={badges} />
+          <Dock items={arr.right} current={rightOpen ? rightView : null} onPick={pickDock} badges={badges} extra={pullButton} />
         </div>
       </>
     )
@@ -607,6 +636,7 @@ export function App() {
   const toggles = [
     ...(arr.left.length ? [{ icon: leftOpen ? 'layout-sidebar-left' : 'layout-sidebar-left-off', on: leftOpen, title: 'Toggle side bar', onClick: () => toggleRegion('left'), testid: 'toggle-left' }] : []),
     ...(ui === 'focus' || ui === 'strip' ? [{ icon: 'list-unordered', on: pop?.kind === 'threads', title: 'Threads', onClick: () => setPop({ kind: 'threads', anchor: anchorOf(document.querySelector('[data-testid="toggle-threads"]')) }), testid: 'toggle-threads' }] : []),
+    ...(ui === 'focus' ? [{ icon: pulling ? 'sync' : 'repo-pull', on: pulling, title: 'Pull latest', onClick: () => void runPull(), testid: 'toggle-pull' }] : []),
     { icon: bottomOpen ? 'layout-panel' : 'layout-panel-off', on: bottomOpen, title: 'Toggle panel (Ctrl+J)', onClick: () => toggleRegion('bottom'), testid: 'toggle-bottom' },
     { icon: rightOpen ? 'layout-sidebar-right' : 'layout-sidebar-right-off', on: rightOpen, title: 'Toggle right side', onClick: () => toggleRegion('right'), testid: 'toggle-right' },
   ]
@@ -659,6 +689,17 @@ export function App() {
       {modal === 'deploy' && (
         <Modal title={<><Icon name="rocket" className="mk-deploy" /> Deploy{deploy.w.suite ? `: ${deploy.w.suite}` : ''}</>} onClose={() => setModal(null)} wide testid="deploy-modal">
           <DeployPanel cfg={deploy.cfg} w={deploy.w} out={deploy.out} act={deploy.act} onDiagnose={diagnose} />
+        </Modal>
+      )}
+      {pullFail && (
+        <Modal title="Pull latest: some repos failed" onClose={() => setPullFail(null)} testid="pull-result">
+          <table className="pulltab">
+            <tbody>
+              {pullFail.map((r) => (
+                <tr key={r.repo}><td className="pr-repo">{r.repo}</td><td className={r.result.startsWith('failed') ? 'pr-bad' : r.result.startsWith('updated') ? 'pr-ok' : r.result.startsWith('skipped') ? 'pr-warn' : 'pr-dim'}>{r.result}</td></tr>
+              ))}
+            </tbody>
+          </table>
         </Modal>
       )}
       {modal === 'settings' && <SettingsPanel onClose={() => setModal(null)} onWatchers={() => { setModal(null); showView('watchers') }} />}

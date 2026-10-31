@@ -863,3 +863,10 @@ button.sbi:hover { background: var(--hover); }
 
 /* the per-watcher schedule editor */
 .wright .drow .sin.num { width: 72px; }
+
+/* Pull latest result popup (only shown when a repo failed) */
+.pulltab { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pulltab td { padding: 4px 8px; vertical-align: top; border-bottom: 1px solid var(--line); }
+.pulltab .pr-repo { white-space: nowrap; color: var(--ink); width: 1%; }
+.pulltab .pr-ok { color: var(--done); } .pulltab .pr-bad { color: var(--fail); } .pulltab .pr-warn { color: var(--wait); } .pulltab .pr-dim { color: var(--dim); }
+.dk:disabled { opacity: 1; cursor: progress; }
