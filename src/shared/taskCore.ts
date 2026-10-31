@@ -1,0 +1,154 @@
+// A thread's background work: workflows (phases and agents), subagents, shells, and Hive's own Codex runs,
+// from the SDK's task_* messages and Hive's hive_codex events. Pure, so it can be tested without Electron.
+
+export type TaskAgent = {
+  key: string
+  label: string
+  state: string // start / running / done / failed / ...
+  phase?: string
+  model?: string
+  tokens?: number
+  toolCalls?: number
+  durationMs?: number
+  startedAt?: number
+  result?: string
+}
+export type TaskPhase = { index: number; title: string }
+export type Task = {
+  id: string
+  kind: string // local_workflow, local_agent, local_bash, codex, ...
+  title: string
+  name?: string // workflow name
+  status: 'running' | 'completed' | 'failed' | 'stopped'
+  startedAt: number
+  endedAt?: number
+  tokens?: number
+  toolUses?: number
+  durationMs?: number
+  lastTool?: string
+  summary?: string
+  error?: string
+  phases: TaskPhase[]
+  agents: TaskAgent[]
+}
+
+const STATUS: Record<string, Task['status']> = {
+  pending: 'running', running: 'running', paused: 'running',
+  completed: 'completed', failed: 'failed', killed: 'stopped', stopped: 'stopped',
+}
+
+function upsert(tasks: Task[], id: string, make: () => Task, patch: (t: Task) => Task): Task[] {
+  const i = tasks.findIndex((t) => t.id === id)
+  if (i < 0) return [...tasks, patch(make())]
+  const next = tasks.slice()
+  next[i] = patch(tasks[i])
+  return next
+}
+
+const blank = (id: string, now: number, over: Partial<Task> = {}): Task => ({ id, kind: 'task', title: id, status: 'running', startedAt: now, phases: [], agents: [], ...over })
+
+// merge a workflow_progress list (a snapshot or a delta: both merge by key)
+function mergeProgress(t: Task, list: any[]): Task {
+  const phases = t.phases.slice()
+  const agents = t.agents.slice()
+  for (const p of list) {
+    if (p?.type === 'workflow_phase') {
+      const i = phases.findIndex((x) => x.index === p.index)
+      const v = { index: p.index, title: String(p.title ?? `Phase ${p.index}`) }
+      if (i < 0) phases.push(v); else phases[i] = v
+    } else if (p?.type === 'workflow_agent') {
+      const key = String(p.agentId ?? `${p.phaseIndex ?? 0}:${p.index}`)
+      const i = agents.findIndex((x) => x.key === key)
+      const old = i < 0 ? undefined : agents[i]
+      const v: TaskAgent = {
+        key,
+        label: String(p.label ?? old?.label ?? `Agent ${p.index}`),
+        state: String(p.state ?? old?.state ?? 'start'),
+        phase: p.phaseTitle ?? old?.phase,
+        model: p.model ?? old?.model,
+        tokens: p.tokens ?? old?.tokens,
+        toolCalls: p.toolCalls ?? old?.toolCalls,
+        durationMs: p.durationMs ?? old?.durationMs,
+        startedAt: p.startedAt ?? old?.startedAt,
+        result: p.resultPreview ?? old?.result,
+      }
+      if (i < 0) agents.push(v); else agents[i] = v
+    }
+  }
+  phases.sort((a, b) => a.index - b.index)
+  return { ...t, phases, agents }
+}
+
+export function applyTask(tasks: Task[], ev: any, now: number): Task[] {
+  if (ev?.type === 'hive_codex') {
+    if (ev.phase === 'start') return upsert(tasks, `codex:${ev.id}`, () => blank(`codex:${ev.id}`, now, { kind: 'codex', title: String(ev.task ?? 'Codex'), name: ev.model || undefined }), (t) => t)
+    if (ev.phase === 'line') return upsert(tasks, `codex:${ev.id}`, () => blank(`codex:${ev.id}`, now, { kind: 'codex', title: 'Codex' }), (t) => ({ ...t, lastTool: String(ev.line ?? '').slice(0, 200) }))
+    if (ev.phase === 'done') return upsert(tasks, `codex:${ev.id}`, () => blank(`codex:${ev.id}`, now, { kind: 'codex', title: 'Codex' }), (t) => ({
+      ...t, status: ev.ok ? 'completed' : 'failed', endedAt: now, durationMs: now - t.startedAt, summary: String(ev.answer ?? ''),
+    }))
+    return tasks
+  }
+  if (ev?.type === 'hive_closed') {
+    // the process ended: whatever it was running is gone (Codex runs stop with the tab too)
+    return tasks.map((t) => (t.status === 'running' ? { ...t, status: 'stopped', endedAt: now } : t))
+  }
+  if (ev?.type !== 'system') return tasks
+  const id = ev.task_id as string | undefined
+  switch (ev.subtype) {
+    case 'task_started':
+      return upsert(tasks, id!, () => blank(id!, now), (t) => ({
+        ...t,
+        kind: ev.task_type ?? (ev.subagent_type ? 'local_agent' : t.kind),
+        title: String(ev.description ?? t.title),
+        name: ev.workflow_name ?? ev.subagent_type ?? t.name,
+        status: 'running',
+      }))
+    case 'task_progress':
+      return upsert(tasks, id!, () => blank(id!, now), (t) => {
+        const u = ev.usage ?? {}
+        const next: Task = { ...t, tokens: u.total_tokens ?? t.tokens, toolUses: u.tool_uses ?? t.toolUses, durationMs: u.duration_ms ?? t.durationMs, lastTool: ev.last_tool_name ?? t.lastTool }
+        if (t.title === t.id && ev.summary) next.title = String(ev.summary)
+        return Array.isArray(ev.workflow_progress) ? mergeProgress(next, ev.workflow_progress) : next
+      })
+    case 'task_updated': {
+      const p = ev.patch ?? {}
+      return upsert(tasks, id!, () => blank(id!, now), (t) => ({
+        ...t,
+        status: p.status ? STATUS[p.status] ?? t.status : t.status,
+        title: p.description ?? t.title,
+        endedAt: p.end_time ?? t.endedAt,
+        error: p.error ?? t.error,
+      }))
+    }
+    case 'task_notification':
+      return upsert(tasks, id!, () => blank(id!, now), (t) => {
+        const u = ev.usage ?? {}
+        return {
+          ...t,
+          status: STATUS[ev.status] ?? 'completed',
+          summary: ev.summary ?? t.summary,
+          endedAt: t.endedAt ?? now,
+          tokens: u.total_tokens ?? t.tokens,
+          toolUses: u.tool_uses ?? t.toolUses,
+          durationMs: u.duration_ms ?? t.durationMs,
+        }
+      })
+    case 'background_tasks_changed':
+      // the in-flight list: add any we missed; finished ones are marked by their own notification
+      return (ev.tasks ?? []).reduce((all: Task[], b: any) => (all.some((t) => t.id === b.task_id) ? all
+        : [...all, blank(b.task_id, now, { kind: b.task_type ?? 'task', title: String(b.description ?? b.task_id) })]), tasks)
+  }
+  return tasks
+}
+
+// "local_workflow" -> "Workflow"
+export function kindLabel(kind: string): string {
+  if (kind === 'codex') return 'Codex'
+  if (/workflow/.test(kind)) return 'Workflow'
+  if (/agent/.test(kind)) return 'Subagent'
+  if (/bash|shell/.test(kind)) return 'Shell'
+  return kind.replace(/^local_/, '').replace(/_/g, ' ')
+}
+
+// Codex runs stop through Hive; every other task through the SDK's stopTask
+export const canStop = (t: Task) => t.status === 'running'

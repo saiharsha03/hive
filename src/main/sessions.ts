@@ -6,26 +6,33 @@ import { open, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 
-export type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string }
-type CacheEntry = SessionInfo & { size: number }
+export type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string; entrypoint: string }
+type CacheEntry = SessionInfo & { size: number; v?: number } // v: parser version; bump to re-read every file
 
 const ROOT = join(homedir(), '.claude', 'projects')
 const CHUNK = 32 * 1024
 const cacheFile = () => join(app.getPath('userData'), 'sessions-cache.json')
 
+// The head must reach the first real user message: many sessions open with long queue-operation /
+// attachment lines, so the head grows (32 KB, 128 KB, 512 KB, 2 MB) until a user turn with a cwd and
+// entrypoint appears or the file ends.
+const HEAD_STEPS = [CHUNK, 128 * 1024, 512 * 1024, 2 * 1024 * 1024]
+const headComplete = (t: string) => t.includes('"type":"user"') && t.includes('"cwd":') && t.includes('"entrypoint":')
+
 async function readEnds(path: string, size: number): Promise<string> {
   const fh = await open(path, 'r')
   try {
-    const head = Buffer.alloc(Math.min(CHUNK, size))
-    await fh.read(head, 0, head.length, 0)
-    if (size <= CHUNK * 2) {
-      const all = Buffer.alloc(size)
-      await fh.read(all, 0, size, 0)
-      return all.toString('utf8')
+    let head = ''
+    for (const step of HEAD_STEPS) {
+      const buf = Buffer.alloc(Math.min(step, size))
+      await fh.read(buf, 0, buf.length, 0)
+      head = buf.toString('utf8')
+      if (buf.length >= size || headComplete(head)) break
     }
+    if (head.length >= size - CHUNK) return head // the head already covers (almost) the whole file
     const tail = Buffer.alloc(CHUNK)
     await fh.read(tail, 0, CHUNK, size - CHUNK)
-    return head.toString('utf8') + '\n' + tail.toString('utf8')
+    return head + '\n' + tail.toString('utf8')
   } finally {
     await fh.close()
   }
@@ -40,7 +47,7 @@ function firstUserText(entry: any): string | null {
 }
 
 function parse(path: string, text: string, updated: number): SessionInfo | null {
-  let custom = '', ai = '', first = '', cwd = '', started = 0
+  let custom = '', ai = '', first = '', cwd = '', started = 0, entrypoint = ''
   for (const line of text.split('\n')) {
     if (!line.startsWith('{')) continue // cut-off line at a chunk edge
     let e: any
@@ -48,11 +55,12 @@ function parse(path: string, text: string, updated: number): SessionInfo | null 
     if (e.type === 'custom-title' && e.customTitle) custom = e.customTitle
     else if (e.type === 'ai-title' && e.aiTitle) ai = e.aiTitle
     if (!cwd && e.cwd) cwd = e.cwd
+    if (!entrypoint && e.entrypoint) entrypoint = e.entrypoint
     if (!started && e.timestamp) started = Date.parse(e.timestamp) || 0
     if (!first) first = firstUserText(e) ?? ''
   }
   if (!first && !custom && !ai) return null // empty session
-  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated, started: started || updated, path }
+  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated, started: started || updated, path, entrypoint }
 }
 
 export async function listSessions(): Promise<SessionInfo[]> {
@@ -71,15 +79,18 @@ export async function listSessions(): Promise<SessionInfo[]> {
     await Promise.all(files.slice(i, i + 32).map(async (path) => {
       const s = await stat(path)
       const hit = cache[path]
-      if (hit && hit.started && hit.size === s.size && hit.updated === s.mtimeMs) {
+      if (hit && hit.v === 2 && hit.size === s.size && hit.updated === s.mtimeMs) {
         next[path] = hit
       } else {
         const info = parse(path, await readEnds(path, s.size), s.mtimeMs)
-        if (info) next[path] = { ...info, size: s.size }
+        if (info) next[path] = { ...info, size: s.size, v: 2 }
       }
       const info = next[path]
       // sessions started inside temp/scratchpad folders are helpers, not real work
-      if (info && !/\\AppData\\Local\\Temp\\/i.test(info.cwd)) out.push(info)
+      // hidden: helper runs in temp/scratchpad folders, and sessions other programs start through the
+      // Python Agent SDK (the security plugin's background reviews, bots); the terminal is "cli",
+      // Hive's own sessions are "sdk-cli"
+      if (info && !/\\AppData\\Local\\Temp\\/i.test(info.cwd) && info.entrypoint !== 'sdk-py') out.push(info)
     }))
   }
 

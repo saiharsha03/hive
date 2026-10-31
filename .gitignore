@@ -3,3 +3,9 @@ out/
 dist/
 .env
 *.log
+scripts.json
+test-results/
+playwright-report/
+e2e-report/
+e2e-results/
+.claude/settings.local.json

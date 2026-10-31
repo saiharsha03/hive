@@ -1,17 +1,33 @@
 // Turns a session transcript into chat items, so a reopened session shows its conversation.
 import { readFile } from 'node:fs/promises'
+import { parseFromThread } from '../shared/threadTalkCore'
+import { isContinuation } from '../shared/summaryCore'
+import { appName } from '../shared/appName'
 
 export type Item =
   | { kind: 'user'; text: string; images: string[] } // images as data: URLs
   | { kind: 'assistant'; text: string }
-  | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error' }
+  | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown }
   | { kind: 'show'; path: string }
   | { kind: 'note'; text: string }
+  | { kind: 'summary'; text: string } // the compaction summary a continued session starts from, shown collapsed
+  | { kind: 'agent'; from: string; text: string }
+  | { kind: 'thread'; fromId: string; fromTitle: string; text: string }
+  | { kind: 'codex'; id: string; task: string; model: string; allowEdits: boolean; status: 'running' | 'done' | 'error'; lines: string[]; answer: string }
 
 const SHOW = 'mcp__hive__show_to_user'
+const CODEX = 'mcp__hive__codex'
+// "[Codex finished task ab12cd34]" / "... with an error]": the answer a background Codex run sent back
+const CODEX_DONE = /^\[Codex finished task (\w+)( with an error)?\]\s*/
 // Claude Code's own wrappers stored as user turns (slash commands, reminders, notifications),
 // not something the user typed; a message that merely starts with "<" (pasted HTML) is kept
 const WRAPPER = /^<(command-|local-command|system-reminder|task-notification|bash-|user-prompt|ide_)/
+
+// a message from another Hive thread carries its label (threadTalkCore); anything else the user typed
+function userItem(text: string, images: string[]): Item {
+  const t = parseFromThread(text)
+  return t ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.text } : { kind: 'user', text, images }
+}
 
 export async function loadHistory(path: string): Promise<Item[]> {
   let text: string
@@ -19,6 +35,8 @@ export async function loadHistory(path: string): Promise<Item[]> {
   const items: Item[] = []
   const tools = new Map<string, Extract<Item, { kind: 'tool' }>>()
   const seen = new Set<string>() // assistant content blocks repeat across streamed lines
+  const codexByCall = new Map<string, Extract<Item, { kind: 'codex' }>>() // tool_use id -> box
+  const codexByTask = new Map<string, Extract<Item, { kind: 'codex' }>>() // Codex task id -> box
 
   for (const line of text.split('\n')) {
     if (!line.startsWith('{')) continue
@@ -31,16 +49,44 @@ export async function loadHistory(path: string): Promise<Item[]> {
     }
     const c = e.message?.content
 
+    if (e.type === 'user' && e.origin?.kind === 'plugin') {
+      const text = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n') : ''
+      const from = String(e.origin.name ?? '').startsWith('codex') ? 'Codex' : (e.origin.name ?? 'Agent')
+      items.push({ kind: 'agent', from, text: text
+        .replace(/^The [\w-]+ plugin sent a message:\s*/, '')
+        .replace(/^\[from Codex, answering your codex message "[\s\S]*?"; reply with the codex tool only if needed\]\s*/, '')
+        .replace(/\n*This is how Claude Code surfaces a prompt a plugin submits[\s\S]*$/, '')
+        .trim() })
+      continue
+    }
+
     if (e.type === 'user') {
+      const plain = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n') : ''
+      if (e.isCompactSummary || isContinuation(plain)) { items.push({ kind: 'summary', text: plain }); continue }
       if (typeof c === 'string') {
-        if (!WRAPPER.test(c)) items.push({ kind: 'user', text: c, images: [] })
+        const done = c.match(CODEX_DONE)
+        const box = done && codexByTask.get(done[1])
+        if (box) { box.answer = c.replace(CODEX_DONE, '').replace(/^Below is the output of the Codex subagent[^\n]*\n/, '').replace(/<\/?codex_output(_\w+)?>/g, '').trim(); box.status = done![2] ? 'error' : 'done'; continue }
+        if (!WRAPPER.test(c)) items.push(userItem(c, []))
         continue
       }
       if (!Array.isArray(c)) continue
-      for (const b of c) if (b.type === 'tool_result') { const t = tools.get(b.tool_use_id); if (t) t.status = b.is_error ? 'error' : 'done' }
+      for (const b of c) if (b.type === 'tool_result') {
+        const t = tools.get(b.tool_use_id)
+        if (t) t.status = b.is_error ? 'error' : 'done'
+        // an Edit / MultiEdit / Write result carries the change as hunks with real line numbers
+        if (t && Array.isArray(e.toolUseResult?.structuredPatch) && e.toolUseResult.structuredPatch.length) t.patch = e.toolUseResult.structuredPatch
+        // the codex tool's result names the task id its answer will come back under
+        const box = codexByCall.get(b.tool_use_id)
+        const out = typeof b.content === 'string' ? b.content : JSON.stringify(b.content ?? '')
+        const task = out.match(/task (\w{8})/)?.[1]
+        if (box && task) codexByTask.set(task, box)
+        if (box && /^Codex failed/.test(out)) { box.status = 'error'; box.answer = out }
+        else if (box && !task) { box.status = 'done'; box.answer = out } // wait=true: the answer is the result
+      }
       const words = c.filter((b: any) => b.type === 'text' && !WRAPPER.test(b.text)).map((b: any) => b.text).join('\n')
       const images = c.filter((b: any) => b.type === 'image' && b.source?.type === 'base64').map((b: any) => `data:${b.source.media_type};base64,${b.source.data}`)
-      if (words || images.length) items.push({ kind: 'user', text: words, images })
+      if (words || images.length) items.push(userItem(words, images))
     } else if (e.type === 'assistant' && Array.isArray(c)) {
       for (const b of c) {
         const key = `${e.message.id}:${b.type}:${b.id ?? b.text}`
@@ -49,6 +95,11 @@ export async function loadHistory(path: string): Promise<Item[]> {
         if (b.type === 'text' && b.text.trim()) items.push({ kind: 'assistant', text: b.text })
         else if (b.type === 'tool_use') {
           if (b.name === SHOW) items.push({ kind: 'show', path: b.input?.path })
+          if (b.name === CODEX) {
+            const box = { kind: 'codex' as const, id: b.id, task: b.input?.task ?? '', model: b.input?.model ?? '', allowEdits: !!b.input?.allowEdits, status: 'running' as const, lines: [], answer: '' }
+            codexByCall.set(b.id, box)
+            items.push(box)
+          }
           const t = { kind: 'tool' as const, id: b.id, name: b.name, input: b.input, status: 'running' as const }
           tools.set(b.id, t)
           items.push(t)
@@ -58,5 +109,10 @@ export async function loadHistory(path: string): Promise<Item[]> {
   }
   // a tool with no result in the transcript was cut off
   for (const t of tools.values()) if (t.status === 'running') t.status = 'done'
+  // a background Codex run whose answer never came back was stopped (tab closed, Hive restarted)
+  for (const b of codexByCall.values()) if (b.status === 'running') {
+    b.status = 'error'
+    b.answer = `Stopped before Codex answered (the tab was closed or ${appName()} restarted).`
+  }
   return items
 }

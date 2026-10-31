@@ -67,9 +67,11 @@ export function handleScheme(): void {
     }
     if (!within(root, file)) return new Response('Outside the previewed folder', { status: 403 })
     const res = await net.fetch(pathToFileURL(file).toString())
-    if (!/\.html?$/i.test(file)) return res
     const headers = new Headers(res.headers)
-    headers.set('Content-Security-Policy', HTML_CSP)
+    headers.set('X-Content-Type-Options', 'nosniff')
+    // every document a preview can reach gets the policy (a page could navigate itself to an .svg or
+    // .xml in its folder); PDFs are the exception, the policy would block Chromium's PDF viewer
+    if (!/\.pdf$/i.test(file)) headers.set('Content-Security-Policy', HTML_CSP)
     return new Response(res.body, { status: res.status, headers })
   })
 }

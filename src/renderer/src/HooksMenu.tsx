@@ -51,7 +51,7 @@ export function HooksMenu({ folder, onClose }: { folder: string; onClose: () => 
                     <span className="hk-name">{h.name}</span>
                     <span className="hk-when">{h.event}{h.matcher && h.matcher !== '*' ? `: ${h.matcher}` : ''}</span>
                   </div>
-                  <button
+                  <button data-testid="hooks-button-1"
                     className={h.enabled ? 'switch on' : 'switch'}
                     disabled={busy === h.id}
                     onClick={() => toggle(h)}

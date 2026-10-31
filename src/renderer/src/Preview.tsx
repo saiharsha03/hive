@@ -58,8 +58,8 @@ export function Preview({ path, onClose }: { path: string; onClose: () => void }
     <aside className="preview">
       <div className="pv-head" title={pasted ? '' : path}>
         <span className="pv-name">{title}</span>
-        {!pasted && <button className="link" onClick={() => window.api.openExternal(path)}>Open outside</button>}
-        <button className="x pv-x" aria-label="Close preview" onClick={onClose}>×</button>
+        {!pasted && <button data-testid="preview-button-1" className="link" onClick={() => window.api.openExternal(path)}>Open outside</button>}
+        <button data-testid="preview-button-2" className="x pv-x" aria-label="Close preview" onClick={onClose}>×</button>
       </div>
       <div className={`pv-body ${kind}`}>
         {!url && kind !== 'text' && kind !== 'other' && <div className="pv-msg">Loading…</div>}

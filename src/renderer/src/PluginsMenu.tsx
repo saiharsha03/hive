@@ -1,6 +1,7 @@
 // Dropdown under the Plugins button: every installed plugin with an on/off switch,
 // grouped by where it came from, plus what it hooks into.
 import { useEffect, useRef, useState } from 'react'
+import { setClipboardOn, useClipboardOn } from './clipboardOffer'
 
 export function PluginsMenu({ onClose }: { onClose: () => void }) {
   const [plugins, setPlugins] = useState<PluginInfo[] | null>(null)
@@ -8,6 +9,7 @@ export function PluginsMenu({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+  const clipOn = useClipboardOn()
 
   const load = () => window.api.listPlugins().then(setPlugins).catch((e) => setError(String(e?.message ?? e)))
   useEffect(() => { load() }, [])
@@ -40,10 +42,20 @@ export function PluginsMenu({ onClose }: { onClose: () => void }) {
         <span>Plugins</span>
         <span className="dd-count">{plugins ? `${on} on, ${plugins.length - on} off` : ''}</span>
       </div>
-      <input className="search dd-search" placeholder="Filter plugins" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
+      <input data-testid="plugins-input-1" className="search dd-search" placeholder="Filter plugins" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
       {error && <div className="dd-error">{error}</div>}
       {!plugins && !error && <div className="dd-hint">Loading…</div>}
       <div className="dd-body">
+        <div className="dd-group">Hive</div>
+        <div className={clipOn ? 'hk' : 'hk off'}>
+          <div className="hk-text">
+            <span className="hk-name">Clipboard suggestions</span>
+            <span className="hk-desc">When Hive gains focus, offer a new screenshot or copied text above the message box. Applies right away.</span>
+          </div>
+          <button data-testid="plugins-button-2" className={clipOn ? 'switch on' : 'switch'} onClick={() => setClipboardOn(!clipOn)} aria-label={clipOn ? 'Turn off' : 'Turn on'}>
+            <i />
+          </button>
+        </div>
         {sources.map((source) => (
           <div key={source}>
             <div className="dd-group">{source}</div>
@@ -56,7 +68,7 @@ export function PluginsMenu({ onClose }: { onClose: () => void }) {
                     <span className="hk-when">{p.mod ? 'Hooks: registered in code (mod)' : `Hooks: ${p.events.join(', ')}`}</span>
                   )}
                 </div>
-                <button className={p.enabled ? 'switch on' : 'switch'} disabled={busy === p.key} onClick={() => toggle(p)} aria-label={p.enabled ? 'Turn off' : 'Turn on'}>
+                <button data-testid="plugins-button-3" className={p.enabled ? 'switch on' : 'switch'} disabled={busy === p.key} onClick={() => toggle(p)} aria-label={p.enabled ? 'Turn off' : 'Turn on'}>
                   <i />
                 </button>
               </div>

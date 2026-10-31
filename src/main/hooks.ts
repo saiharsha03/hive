@@ -5,6 +5,7 @@
 import { copyFile, readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { blocked, dataDir, TEST_MODE } from './testMode'
 
 export type HookRow = {
   id: string
@@ -18,7 +19,7 @@ export type HookRow = {
 }
 type Stashed = { file: string; event: string; matcher: string; hook: any }
 
-const STASH = join(homedir(), '.claude', 'hive-disabled-hooks.json')
+const STASH = join(dataDir(), 'hive-disabled-hooks.json')
 
 const settingsFiles = (folder: string) => [
   { scope: 'User' as const, file: join(homedir(), '.claude', 'settings.json') },
@@ -109,6 +110,7 @@ export async function listPlugins(): Promise<PluginInfo[]> {
 }
 
 export function setPlugin(key: string, on: boolean): Promise<void> {
+  if (TEST_MODE) return Promise.reject(new Error(blocked('switching plugins')))
   return serial(async () => {
     const s = await readJson(USER_SETTINGS, null)
     if (!s) throw new Error('Could not read ~/.claude/settings.json')
@@ -118,6 +120,7 @@ export function setPlugin(key: string, on: boolean): Promise<void> {
 }
 
 export function setHook(folder: string, id: string, enabled: boolean): Promise<void> {
+  if (TEST_MODE) return Promise.reject(new Error(blocked('switching hooks')))
   return serial(() => setHookNow(folder, id, enabled))
 }
 

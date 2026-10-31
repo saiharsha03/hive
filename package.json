@@ -1,32 +1,89 @@
 {
   "name": "hive",
-  "version": "0.0.1",
+  "productName": "Hive",
+  "version": "0.1.0",
   "private": true,
+  "description": "One desk, many agents: a desktop orchestrator for Claude Code agents",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "claude-agent-sdk",
+    "ai-agents",
+    "agents",
+    "electron",
+    "react",
+    "typescript",
+    "desktop",
+    "developer-tools"
+  ],
+  "homepage": "https://github.com/saiharsha03/hive#readme",
+  "bugs": {
+    "url": "https://github.com/saiharsha03/hive/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saiharsha03/hive.git"
+  },
   "license": "MIT",
-  "description": "Hive: a desktop home for Claude Code sessions and agents, built on the Claude Agent SDK",
+  "author": "saiharsha03",
   "main": "./out/main/index.js",
+  "engines": {
+    "node": ">=22.15"
+  },
   "scripts": {
-    "dev": "electron-vite dev --watch",
+    "dev": "electron-vite dev",
+    "dev:watch": "electron-vite dev --watch",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "npm run build && playwright test",
+    "e2e:only": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "icons": "node scripts/make-icons.mjs",
+    "dist": "npm run build && electron-builder --win",
+    "dist:dir": "npm run build && electron-builder --win --dir"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.314",
     "@fontsource-variable/inter": "^5.3.0",
+    "@huggingface/transformers": "^4.3.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "minisearch": "^7.2.0",
+    "node-pty": "^1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
+    "@resvg/resvg-js": "2.6.2",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.1.0",
+    "electron-builder": "26.18.0",
     "electron-vite": "^6.0.0",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "mdast-util-from-markdown": "^2.1.0",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-to-hast": "^13.2.1",
+    "micromark-extension-gfm": "^3.0.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "typescript-eslint": "8.72.1",
+    "typescript-for-lint": "npm:typescript@6.0.3",
+    "vite": "^8.3.5",
+    "vitest": "5.0.5"
+  },
+  "overrides": {
+    "typescript": "$typescript"
   }
 }
