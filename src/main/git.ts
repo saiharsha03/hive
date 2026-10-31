@@ -181,10 +181,12 @@ export async function gitFetch(dir: string): Promise<string> {
 // file's path inside it; null when Hive lists none
 export async function gitLocate(file: string): Promise<{ dir: string; name: string; path: string } | null> {
   const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
-  const f = norm(realDir(String(file)))
-  const find = () => known
+  const find = (f: string) => known
     .filter((t) => f.toLowerCase().startsWith(`${norm(t.dir).toLowerCase()}/`))
     .sort((a, b) => b.dir.length - a.dir.length)[0]
-  const hit = find() ?? (await targets(), find())
+  // the path as given first; only when no repo matches, its real long form (an 8.3 short name on Windows)
+  let f = norm(String(file))
+  let hit = find(f) ?? (await targets(), find(f))
+  if (!hit && process.platform === 'win32' && !/^[\\/]{2}/.test(String(file))) { f = norm(realDir(String(file))); hit = find(f) }
   return hit ? { dir: hit.dir, name: hit.name, path: f.slice(norm(hit.dir).length + 1) } : null
 }
