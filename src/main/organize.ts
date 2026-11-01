@@ -1,5 +1,5 @@
 // Input check for the organize_thread tool; pure so it can be tested without Electron.
-export const ORGANIZE_ACTIONS = ['pin', 'unpin', 'snooze', 'unsnooze', 'close', 'reopen', 'archive', 'unarchive', 'waiting'] as const
+export const ORGANIZE_ACTIONS = ['pin', 'unpin', 'snooze', 'unsnooze', 'close', 'reopen', 'archive', 'unarchive', 'waiting', 'resolved'] as const
 export type OrganizeAction = (typeof ORGANIZE_ACTIONS)[number]
 
 export const REASON_MAX = 140

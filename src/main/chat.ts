@@ -168,7 +168,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         'organize_thread',
         `Pin, snooze, close or archive THIS conversation's own thread in the ${appName()} sidebar (it cannot touch any other thread). Use your judgement, e.g. `
           + `"let's talk tomorrow" means snooze until tomorrow 9 AM local time; "keep this handy" means pin; "we're done" means close. `
-          + `Use action waiting when you are blocked on the user's decision or input, with a short reason; the sidebar then shows this session as waiting for them. `
+          + `Use action waiting when you are blocked on the user's decision or input, with a short reason; the sidebar then shows this session as waiting for them; action resolved clears that mark once it no longer needs them. `
           + `For snooze, turn the relative time into an ISO datetime from the user's current local date and time, which was ${localNow()} when this session started (check your environment date if the session has run long).`,
         {
           action: z.enum(ORGANIZE_ACTIONS),
@@ -179,8 +179,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const c = checkOrganize(action, until, undefined, reason)
           if (!c.ok) return { content: [{ type: 'text', text: c.error }], isError: true }
           if (action === 'waiting') s.waitingReason = c.reason || 'Needs your input'
+          if (action === 'resolved') s.waitingReason = undefined
           send({ type: 'hive_organize', action, until: c.until, reason: c.reason })
-          return { content: [{ type: 'text', text: action === 'snooze' ? `Thread snoozed until ${until}` : action === 'waiting' ? 'Thread marked as waiting for the user' : `Thread: ${action} done` }] }
+          return { content: [{ type: 'text', text: action === 'snooze' ? `Thread snoozed until ${until}` : action === 'waiting' ? 'Thread marked as waiting for the user' : action === 'resolved' ? 'Waiting mark cleared' : `Thread: ${action} done` }] }
         },
       ),
       tool(

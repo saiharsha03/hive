@@ -178,7 +178,7 @@ export function watcherHeader(a: {
     `Your SQLite database: ${f.db} (create it on your first run if it does not exist, and keep it maintained).`,
     `Reports folder (daily and weekly reports as .html or .md; ${appName()}'s Watchers view lists them): ${f.reports}`,
     `Findings file (${appName()}'s Watchers view lists it): ${f.findings}. Append one JSON object per line: {"at": ISO time, "title": one line, "why": why it matters, "kind": "good" | "bad" | "info", "link": optional URL or path}.`,
-    'When something needs the user\'s attention, also call mcp__hive__organize_thread with action "waiting" and a one-line reason; otherwise just end the run.',
+    'When something needs the user\'s attention, also call mcp__hive__organize_thread with action "waiting" and a one-line reason; call it with action "resolved" once that is no longer needed; otherwise just end the run.',
     prompt === null ? `Your instructions are in ${promptFile} (unchanged since you last got them in this thread).` : `Your instructions (from ${promptFile}):`,
     '',
     '---',

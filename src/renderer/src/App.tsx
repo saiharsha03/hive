@@ -244,6 +244,10 @@ export function App() {
         setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(s, ev.reason, Date.now(), activeIdRef.current === s.id && !s.background) : s)))
         return
       }
+      if (ev.action === 'resolved') {
+        setSessions((all) => all.map((s) => (s.id === tabId ? { ...s, waitingReason: undefined, waitingSince: undefined } : s)))
+        return
+      }
       if (cur?.sessionId) organize(cur.sessionId, ev.action, ev.until)
       return
     }
