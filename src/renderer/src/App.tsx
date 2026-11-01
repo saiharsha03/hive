@@ -105,7 +105,15 @@ export function App() {
   const [rightW, setRightW, saveRightW] = useSize(`${ui}.right`, ui === 'strip' ? 420 : ui === 'workbench' ? 440 : 520)
   const [bottomH, setBottomH, saveBottomH] = useSize(`${ui}.bottom`, 240)
 
-  const setPreview = (p: string | null) => { setPreviewPath(p); if (p) showView('preview') }
+  // a preview opens over the whole window (Esc or x closes it); "Side panel" docks it in the preview view instead
+  const [previewFull, setPreviewFull] = useState(false)
+  const setPreview = (p: string | null) => { setPreviewPath(p); setPreviewFull(!!p) }
+  useEffect(() => {
+    if (!previewFull) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreviewFull(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewFull])
   const showDiff = (d: DiffSpec | null) => { setDiff(d); if (d) showView('changes') }
   const scripts = useScripts((p) => setPreview(p))
 
@@ -732,6 +740,11 @@ export function App() {
             </tbody>
           </table>
         </Modal>
+      )}
+      {previewFull && preview && (
+        <div className="pv-full" data-testid="preview-full">
+          <Preview path={preview} onClose={() => setPreviewFull(false)} onSide={() => { setPreviewFull(false); showView('preview') }} />
+        </div>
       )}
       {allowFail !== null && (
         <Modal title="IP allowlist failed" onClose={() => setAllowFail(null)} testid="allow-result">
