@@ -13,6 +13,7 @@ import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, re
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
 import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
+import { cancelSwitch, switchAccount } from './account'
 import type { AllowStatus } from '../shared/allowCore'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail } from './watchers'
 import { gitDecorations, listDir } from './files'
@@ -242,6 +243,13 @@ handle('pull:run', (e, dry: boolean) => {
 })
 handle('allow:status', () => allowStatus())
 handle('allow:run', () => runAllowlist())
+// Switch account: the engine's browser sign-in; on success the app restarts so everything runs on the new login
+handle('account:switch', async (e, email: string) => {
+  const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
+  if (r.ok) setTimeout(() => { closeStatus(); closeAll(); stopAllScripts(); killAllTerminals(); app.relaunch(); app.exit(0) }, 1500)
+  return r
+})
+handle('account:cancel', () => cancelSwitch())
 // Git panel: plain git on the repos and worktrees Hive lists; the page names a folder from that list, never a command
 handle('git:list', () => gitPanel.gitList())
 handle('git:detail', (_e, dir: string) => gitPanel.gitDetail(String(dir)))

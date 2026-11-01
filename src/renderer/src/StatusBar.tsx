@@ -7,6 +7,7 @@ import { HiveMark } from './HiveMark'
 import { ModelBadge } from './ThreadStatus'
 import { getThemes, getUIs, useAppearance } from './appearance'
 import { Icon } from './ui'
+import { AccountSwitch } from './AccountSwitch'
 
 const left = (iso: string | null, now: number) => {
   if (!iso) return ''
@@ -35,6 +36,7 @@ type Props = {
 export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed, onWaiting, onWorking, onMcp, onAppearance, onBrand }: Props) {
   const [ctx, setCtx] = useState<{ total: number; max: number } | null>(null)
   const [status, setStatus] = useState<Status | null>(null)
+  const [switching, setSwitching] = useState(false)
   const [stats, setStats] = useState<SessionStats | null>(null)
   const [now, setNow] = useState(Date.now())
   const name = useAppName()
@@ -83,7 +85,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
       {status?.error && <Item testid="status-error" cls="s-fail" title={status.error}><Icon name="warning" />status error</Item>}
       <span className="sp" />
       {!status && <Item testid="status-connecting">Connecting…</Item>}
-      {status?.account && <Item testid="status-account" title={status.engine?.version ? `Claude Code ${status.engine.version}${status.engine.installed ? '' : ' (bundled with the SDK)'}` : undefined}><Icon name="account" />{status.account}{status.plan ? `, ${status.plan[0].toUpperCase()}${status.plan.slice(1)}` : ''}</Item>}
+      {status?.account && <Item testid="status-account" onClick={() => setSwitching(true)} title={`${status.engine?.version ? `Claude Code ${status.engine.version}${status.engine.installed ? '' : ' (bundled with the SDK)'}. ` : ''}Click to switch account`}><Icon name="account" />{status.account}{status.plan ? `, ${status.plan[0].toUpperCase()}${status.plan.slice(1)}` : ''}</Item>}
       {status && lim('5h', status.five, 'five')}
       {status && lim('7d', status.seven, 'seven')}
       {ctxTotal != null && (
@@ -103,6 +105,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
         </Item>
       )}
       <Item testid="status-appearance" title="UI and theme" onClick={onAppearance}><Icon name="layout" />{getUIs().find((u) => u.id === ui)?.label} UI, {getThemes(ui).find((t) => t.id === theme)?.label} theme</Item>
+      {switching && <AccountSwitch current={status?.account ?? null} working={working} onClose={() => setSwitching(false)} />}
     </footer>
   )
 }

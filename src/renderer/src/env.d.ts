@@ -157,6 +157,9 @@ interface Window {
     onPullRow: (cb: (row: { repo: string; result: string }) => void) => () => void
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
+    accountSwitch: (email: string) => Promise<{ ok: boolean; output: string }>
+    accountCancel: () => Promise<void>
+    onAccountOutput: (cb: (t: string) => void) => () => void
     onAllowStatus: (cb: (s: import('../../shared/allowCore').AllowStatus) => void) => () => void
     scriptsConfig: () => Promise<{ scripts: import('../../shared/scriptsCore').ScriptView[]; message: string; path: string }>
     scriptsState: () => Promise<import('../../shared/scriptsCore').ScriptRun[]>

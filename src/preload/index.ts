@@ -132,6 +132,13 @@ contextBridge.exposeInMainWorld('api', {
   },
   allowStatus: () => ipcRenderer.invoke('allow:status'),
   allowRun: () => ipcRenderer.invoke('allow:run'),
+  accountSwitch: (email: string) => ipcRenderer.invoke('account:switch', email),
+  accountCancel: () => ipcRenderer.invoke('account:cancel'),
+  onAccountOutput: (cb: (t: string) => void) => {
+    const fn = (_e: unknown, t: string) => cb(t)
+    ipcRenderer.on('account:output', fn)
+    return () => ipcRenderer.removeListener('account:output', fn)
+  },
   onAllowStatus: (cb: (s: unknown) => void) => {
     const fn = (_e: unknown, s: unknown) => cb(s)
     ipcRenderer.on('allow:status', fn)
