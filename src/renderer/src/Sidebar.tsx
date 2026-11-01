@@ -7,6 +7,7 @@ import { clickRow, flagActions, menuTargets, visibleOrder } from './selection'
 import { PRESETS, archive, buildSections, clearSnooze, close, pin, presetTime, snooze, stateLabel, untilLabel, useThreads } from './threads'
 import { getPref, setPref } from './prefs'
 import { Icon } from './ui'
+import { useWatchers } from './useWatchers'
 
 // start date: time for today, otherwise "Oct 28", with the year only when it isn't this year
 function started(t: number): string {
@@ -32,7 +33,13 @@ type Props = {
 }
 
 export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew, footer, title = 'Threads' }: Props) {
-  const [sessions, setSessions] = useState<SessionInfo[] | null>(null)
+  const [listed, setSessions] = useState<SessionInfo[] | null>(null)
+  // a watcher's thread shows under the watcher's name, not Claude's auto title
+  const { watchers } = useWatchers()
+  const sessions = useMemo(() => {
+    const names = new Map(watchers.flatMap((w) => (w.sessionId ? [[w.sessionId, w.name] as const] : [])))
+    return listed && listed.map((s) => (names.has(s.id) ? { ...s, title: names.get(s.id)! } : s))
+  }, [listed, watchers])
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [archiveView, setArchiveView] = useState(false)

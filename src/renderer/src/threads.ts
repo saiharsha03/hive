@@ -149,7 +149,8 @@ export const clearSnooze = (id: string) => { if (cache[id]?.snoozedUntil) patchT
 let onRetire: ((id: string) => void) | null = null
 export const setRetireHandler = (fn: ((id: string) => void) | null) => { onRetire = fn }
 
-export const reopen = (id: string) => { if (cache[id]?.closedAt) patchThread(id, { closedAt: undefined }) }
+// a watcher's thread: pinned, never closed or archived
+export const keepPinned = (id: string) => { const s = cache[id]; if (!s?.pinned || s.closedAt || s.archivedAt) patchThread(id, { pinned: s?.pinned ?? Date.now(), closedAt: undefined, archivedAt: undefined }) }
 export const close = (id: string, on: boolean) => { patchThread(id, { closedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
 export const archive = (id: string, on: boolean) => { patchThread(id, { archivedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
 
