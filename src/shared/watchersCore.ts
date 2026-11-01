@@ -9,7 +9,8 @@ import {
   type Finding, type NextRuns, type RunKind, type Tier, type WatchConfig, type WatchState,
 } from './watchCore'
 
-// the schedule as written in watcher.json: every = "adaptive" (weekly usage tiers), "60m" / "2h" / "1d", or "off"
+// the schedule as written in watcher.json: every = "adaptive" (weekly usage tiers), "60m" / "2h" / "1d", "off", or
+// "self" (the watcher plans its own wake-ups in its schedule table; daily / weekly are not used)
 export type Schedule = { every: string; tiers?: string; daily?: string | null; weekly?: string | null }
 export type WatcherFile = {
   name: string
@@ -50,7 +51,8 @@ export function normalizeSchedule(v: unknown): { schedule: Schedule; problems: s
   const every = String(o.every ?? '').trim()
   if (every) {
     if (every.toLowerCase() === 'adaptive') s.every = 'adaptive'
-    else if (parseEvery(every) === undefined) problems.push(`every: ${every} is not like 60m, 2h, 1d, off or adaptive`)
+    else if (every.toLowerCase() === 'self') s.every = 'self'
+    else if (parseEvery(every) === undefined) problems.push(`every: ${every} is not like 60m, 2h, 1d, off, adaptive or self`)
     else s.every = every
   }
   if (s.every !== 'adaptive') delete s.tiers
@@ -187,6 +189,19 @@ export function watcherHeader(a: {
   ].join('\n')
 }
 
+// a self-scheduled watcher's wake-up on a thread that already has its instructions: only why it is awake, no instructions.
+// due: the rows Hive woke it for (empty = nothing was pending, the fallback wake); prompt: the prompt file when it changed
+export function wakeMessage(a: { name: string; now: Date; due: { id: number; wake_at: string; purpose: string | null }[]; table: string; fallbackHours: number; promptFile: string; prompt: string | null }): string {
+  const { name, now, due, table, fallbackHours, promptFile, prompt } = a
+  return [
+    `[${appName()} wake-up: ${name}] Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localIso(now)}.`,
+    due.length
+      ? `You scheduled this in ${table}: ${due.map((r) => `#${r.id} at ${r.wake_at}${r.purpose ? ` (${r.purpose})` : ''}`).join('; ')}. ${appName()} marked ${due.length > 1 ? 'them' : 'it'} woken.`
+      : `Nothing was pending in ${table}, so ${appName()} woke you after ${fallbackHours} hours.`,
+    ...(prompt === null ? [] : ['', `Your instructions in ${promptFile} changed:`, '', '---', '', prompt]),
+  ].join('\n')
+}
+
 // the prompt create_watcher writes when none is given: goals, not procedures
 export function defaultPrompt(name: string, goal: string): string {
   return [
@@ -286,7 +301,8 @@ export type WatcherInput = { name?: string; goal?: string; prompt?: string; sche
 
 // ---- the schedule editor (a watcher's detail view): the form's draft, its checks, and the schedule it saves ----
 
-export type ScheduleMode = 'adaptive' | 'fixed' | 'reports' // reports = no sweeps, only the daily / weekly report runs
+// reports = no sweeps, only the daily / weekly report runs; self = the watcher plans its own wake-ups
+export type ScheduleMode = 'adaptive' | 'fixed' | 'reports' | 'self'
 export type TierRow = { below: string; every: string }
 export type ScheduleDraft = { mode: ScheduleMode; tiers: TierRow[]; every: string; daily: string; weeklyDay: string; weeklyTime: string }
 // field: 'tiers', 'tier-<i>-below', 'tier-<i>-every', 'every', 'daily', 'weekly', 'reports'
@@ -298,10 +314,10 @@ export const tierRows = (tiers: string): TierRow[] => tiers.split(',').map((x) =
 })
 
 export function draftOf(s: Schedule): ScheduleDraft {
-  const fixed = s.every !== 'adaptive' && !!parseEvery(s.every)
+  const fixed = s.every !== 'adaptive' && s.every !== 'self' && !!parseEvery(s.every)
   const w = s.weekly ? parseWeekly(s.weekly) : null
   return {
-    mode: s.every === 'adaptive' ? 'adaptive' : fixed ? 'fixed' : 'reports',
+    mode: s.every === 'adaptive' || s.every === 'self' ? s.every : fixed ? 'fixed' : 'reports',
     tiers: tierRows(s.tiers || DEFAULT_TIERS),
     every: fixed ? s.every : '1h',
     daily: s.daily ?? '',
@@ -334,6 +350,7 @@ export function checkDraft(d: ScheduleDraft): { errors: DraftError[]; schedule: 
   else if (!day && time) err('weekly', 'Pick a day for the weekly report')
   if (d.mode === 'reports' && !daily && !day) err('reports', 'Reports only needs a daily or a weekly report time')
   if (errors.length) return { errors, schedule: null }
+  if (d.mode === 'self') return { errors, schedule: { every: 'self', daily: null, weekly: null } }
   const schedule: Schedule = {
     every: d.mode === 'adaptive' ? 'adaptive' : d.mode === 'fixed' ? d.every.trim() : 'off',
     ...(d.mode === 'adaptive' ? { tiers: d.tiers.map((t) => `${t.below.trim()}:${t.every.trim()}`).join(',') } : {}),

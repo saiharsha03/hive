@@ -214,3 +214,31 @@ test('detail, list, soft delete', async () => {
   assert.ok(closed.length === 1)
   assert.ok(readdirSync(root).includes('_deleted'))
 })
+
+test('self-scheduled watcher wakes only for its own due rows, with just the wake reason, and after 6 h with none', async () => {
+  setup()
+  createWatcher({ name: 'Selfie', goal: 'plans itself', schedule: { every: 'self' } }, 't')
+  assert.equal(wfile('selfie').schedule.every, 'self')
+  assert.equal(calls.length, 1) // created on: the first run starts a fresh thread with the full header
+  const tab = calls[0].tabId
+  finish(tab)
+  const db = new DatabaseSync(join(root, 'selfie', 'schedule.db'))
+  db.exec(`CREATE TABLE IF NOT EXISTS wakeups (id INTEGER PRIMARY KEY, wake_at TEXT NOT NULL, purpose TEXT, status TEXT NOT NULL DEFAULT 'pending', woken_at TEXT, finished_at TEXT, result TEXT, created_at TEXT)`)
+  const iso = (ms: number) => new Date(ms).toISOString()
+  db.prepare('INSERT INTO wakeups (wake_at, purpose) VALUES (?, ?)').run(iso(Date.now() + 3_600_000), 'later')
+  await tick(); assert.equal(calls.length, 1) // nothing due, one pending: no fallback either
+  db.prepare('INSERT INTO wakeups (wake_at, purpose) VALUES (?, ?)').run(iso(Date.now() - 60_000), 'check n8n')
+  await tick()
+  assert.equal(calls.length, 2); assert.equal(calls[1].tabId, tab)
+  assert.match(calls[1].prompt, /You scheduled this in .*schedule\.db: #2 at .* \(check n8n\)/)
+  assert.doesNotMatch(calls[1].prompt, /Memory folder|Findings file|organize_thread/) // no instructions
+  assert.deepEqual(db.prepare('SELECT id, status FROM wakeups ORDER BY id').all().map((r) => ({ ...r })), [{ id: 1, status: 'pending' }, { id: 2, status: 'woken' }])
+  finish(tab)
+  await tick(); assert.equal(calls.length, 2) // woken rows are the watcher's to finish, never woken twice
+  // nothing pending and the last run 6 h ago: the fallback wake
+  db.exec(`UPDATE wakeups SET status = 'done'`)
+  const s = state('selfie'); s.runs.at(-1).startedAt = Date.now() - 7 * 3_600_000; writeFileSync(join(root, 'selfie', 'state.json'), JSON.stringify(s))
+  await tick()
+  assert.equal(calls.length, 3); assert.match(calls[2].prompt, /Nothing was pending .* after 6 hours/)
+  db.close()
+})

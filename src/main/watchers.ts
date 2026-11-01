@@ -8,15 +8,16 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { dueKind, markStarted, nextRuns, parseFindings, pickTier, type RunKind, type WatchConfig } from '../shared/watchCore'
+import { dueKind, localIso, markStarted, nextRuns, parseFindings, pickTier, type RunKind, type WatchConfig } from '../shared/watchCore'
 import { appName } from '../shared/appName'
 import {
   defaultPrompt, earliest, emptyState, foldersOf, reportsRootOf, legacyState, legacyWatcher, MAX_RUNS, normalizeSchedule, normalizeState,
-  normalizeWatcher, statusOf, textHash, watcherConfig, watcherHeader, watcherId,
+  normalizeWatcher, statusOf, textHash, wakeMessage, watcherConfig, watcherHeader, watcherId,
   type WatcherDetail, type WatcherFile, type WatcherInput, type WatcherState, type WatcherSummary, type WatchersList,
 } from '../shared/watchersCore'
 import { blocked, dataDir, TEST_MODE, testWeeklyPct } from './testMode'
 import { writeFileSafe } from './safeWrite'
+import { FALLBACK_MS, markWoken, readWakeups, scheduleFile, type Wakeup } from './selfSchedule'
 
 
 // starts the watcher's thread (resume = continue that Claude session) or, when its tab is live, adds a turn to it
@@ -160,6 +161,11 @@ export async function tick(): Promise<void> {
       const { s, running } = settle(id, readState(id))
       // report slots count as missed only after the watcher was first seen on; without this a report-only watcher never starts
       if (s.since === null) { s.since = Date.now(); saveState(id, s) }
+      if (cur.schedule.every === 'self') {
+        const wake = running ? null : selfWake(c.dir, s)
+        if (wake && !startRun(id, cur, c, s, 'sweep', wake)) started = true
+        continue
+      }
       const kind = dueKind(new Date(), c, { ...s, enabled: true }, running)
       if (kind && !startRun(id, cur, c, s, kind)) started = true
     }
@@ -169,11 +175,33 @@ export async function tick(): Promise<void> {
   }
 }
 
+// a self-scheduled watcher wakes for its due rows, or once FALLBACK_MS after its last run when nothing is pending.
+// A table that can't be read right now (the watcher is writing it) is tried again next tick.
+function selfWake(dir: string, s: WatcherState): { due: Wakeup[] } | null {
+  const now = Date.now()
+  try {
+    const { due, next } = readWakeups(dir, now)
+    if (due.length) return { due }
+    return next === null && now - (s.runs.at(-1)?.startedAt ?? 0) >= FALLBACK_MS ? { due: [] } : null
+  } catch {
+    return null
+  }
+}
+function selfNext(dir: string, s: WatcherState): number | null {
+  try {
+    const { due, next } = readWakeups(dir, Date.now())
+    return due.length ? Date.now() : next ?? (s.runs.at(-1)?.startedAt ?? Date.now()) + FALLBACK_MS
+  } catch {
+    return null
+  }
+}
+
 // the run kind's bookkeeping (since + last per kind), without the Watch-only enabled flag
 const started = (s: WatcherState, kind: RunKind, at: number) => { const m = markStarted({ ...s, enabled: true }, kind, at); return { since: m.since, last: m.last } }
 
 // one run: a new turn in the watcher's thread, or a new (or resumed) thread when none is live. '' = started
-function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind): string {
+// wake: a self-scheduled wake-up; an existing thread then gets only the wake message, not the run header
+function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind, wake?: { due: Wakeup[] }): string {
   const now = new Date()
   const f = foldersOf(id, c.dir, reportsRoot, w.name)
   const prev = s.runs.at(-1) ?? null
@@ -193,9 +221,13 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
   const fresh = !s.sessionId // no Claude session yet: a new thread
   const tabId = s.tabId && (live || s.sessionId) ? s.tabId : `watcher-${id}-${now.getTime()}`
   const hash = textHash(text)
-  const prompt = watcherHeader({ name: w.name, kind, now, lastRun: prev, s, f, promptFile: c.prompt, prompt: fresh || hash !== s.promptSent ? text : null, fresh })
+  const changed = fresh || hash !== s.promptSent ? text : null
+  const prompt = wake && !fresh
+    ? wakeMessage({ name: w.name, now, due: wake.due, table: scheduleFile(c.dir), fallbackHours: FALLBACK_MS / 3_600_000, promptFile: c.prompt, prompt: changed })
+    : watcherHeader({ name: w.name, kind, now, lastRun: prev, s, f, promptFile: c.prompt, prompt: changed, fresh })
   const resume = !live && s.sessionId ? s.sessionId : undefined
   if (!deps.runThread({ tabId, cwd: cwdOf(w), title: tabTitle(w), prompt, resume })) return `The ${appName()} window is not ready`
+  if (wake) { try { markWoken(c.dir, wake.due.map((r) => r.id), localIso(now)) } catch { /* the watcher sees them still pending */ } }
   const next: WatcherState = {
     ...s, ...started(s, kind, now.getTime()),
     tabId, sessionId: fresh ? null : s.sessionId, promptSent: hash,
@@ -338,7 +370,7 @@ function summary(id: string, w: WatcherFile, p: Plan, u: Awaited<ReturnType<Usag
     status: statusOf(w.enabled, t, last), waitingReason: t?.waitingReason ?? '',
     message: [...problems, last?.error ?? ''].filter(Boolean).join('. '),
     lastRun: last?.startedAt ?? null,
-    nextRun: w.enabled ? earliest(nextRuns(new Date(), p.c, { ...s, enabled: true })) : null,
+    nextRun: !w.enabled ? null : w.schedule.every === 'self' ? selfNext(p.c.dir, s) : earliest(nextRuns(new Date(), p.c, { ...s, enabled: true })),
     schedule: w.schedule, tier: p.tier,
     findings: findingsOf(join(p.c.dir, 'findings.jsonl')).length,
     tabId: s.tabId, sessionId: s.sessionId, dir: p.c.dir, prompt: p.c.prompt,

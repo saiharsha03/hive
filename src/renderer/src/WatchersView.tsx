@@ -19,7 +19,7 @@ export function plan(w: WatcherRow): string {
   const s = w.schedule
   const sweep = s.every === 'adaptive'
     ? `adaptive${w.tier ? `: every ${every(w.tier.everyMs)} (tier ${w.tier.index + 1}, weekly ${w.tier.pct === null ? '?' : `${Math.round(w.tier.pct)}%`})` : ''}`
-    : s.every === 'off' ? '' : `every ${s.every}`
+    : s.every === 'self' ? 'self-scheduled' : s.every === 'off' ? '' : `every ${s.every}`
   return [sweep, s.daily ? `daily ${s.daily}` : '', s.weekly ? `weekly ${s.weekly}` : ''].filter(Boolean).join(', ') || 'no schedule'
 }
 
@@ -117,7 +117,7 @@ function ScheduleEditor({ id, d, onSaved }: { id: string; d: WatcherDetail; onSa
     <div data-testid="schedule-section" className="wsched">
       <div className="drow">
         <span className="wlab">Schedule</span>
-        {mode('adaptive', 'Adaptive')}{mode('fixed', 'Fixed interval')}{mode('reports', 'Reports only')}
+        {mode('adaptive', 'Adaptive')}{mode('fixed', 'Fixed interval')}{mode('reports', 'Reports only')}{mode('self', 'Self-scheduled')}
         <span className="dspace" />
         <span className="dnote">next run <span data-testid="watcher-next" data-next={d.nextRun ?? ''}>{d.enabled ? when(d.nextRun) : 'off'}</span></span>
       </div>
@@ -151,7 +151,10 @@ function ScheduleEditor({ id, d, onSaved }: { id: string; d: WatcherDetail; onSa
           <input data-testid="schedule-every" className="sin num" style={bad('every')} value={draft.every} placeholder="1h" onChange={(e) => set({ every: e.target.value })} />
         </div>
       )}
-      <div className="drow">
+      {draft.mode === 'self' && (
+        <div className="drow"><span data-testid="schedule-self-note" className="dnote">The watcher plans its own wake-ups in schedule.db in its folder. With nothing pending it is woken after 6 hours.</span></div>
+      )}
+      {draft.mode !== 'self' && <div className="drow">
         <span className="wlab">Reports</span>
         <span className="dnote">daily</span>
         <input data-testid="schedule-daily" className="sin num" style={bad('daily')} value={draft.daily} placeholder="HH:MM" title="Daily report time (optional)" onChange={(e) => set({ daily: e.target.value })} />
@@ -161,7 +164,7 @@ function ScheduleEditor({ id, d, onSaved }: { id: string; d: WatcherDetail; onSa
           {DAYS.map((x) => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</option>)}
         </select>
         <input data-testid="schedule-weekly-time" className="sin num" style={bad('weekly')} value={draft.weeklyTime} placeholder="HH:MM" title="Weekly report time (optional)" onChange={(e) => set({ weeklyTime: e.target.value })} />
-      </div>
+      </div>}
       {errors.map((e, i) => <div key={i} data-testid="schedule-error" className="derr">{e.message}</div>)}
       <div className="drow">
         <button data-testid="schedule-save" className="dbtn primary" disabled={saving || !dirty || !schedule} onClick={save}>{saving ? 'Saving' : 'Save schedule'}</button>
