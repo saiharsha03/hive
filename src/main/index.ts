@@ -12,6 +12,7 @@ import { cleanupThread, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
 import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
+import { setWatcherPosts } from './readOnly'
 import type { AllowStatus } from '../shared/allowCore'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail } from './watchers'
 import { gitDecorations, listDir } from './files'
@@ -72,6 +73,7 @@ initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
 // IP allowlist button: on when the public IP changed since the configured command last succeeded
 const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('allow:status', st) }
 initAllowlist(appConfig.env, allowChanged)
+setWatcherPosts(appConfig.env)
 // Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.claude/hive/watchers);
 // the old single Watch (HIVE_WATCH_* settings) moves in as watcher "watch" on the first start. Dependabot shows in the same list.
 const watchersChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('watchers:changed') }
@@ -91,6 +93,7 @@ function applySettings() {
   initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
   configureWatchers(appConfig.config?.root ?? '', appConfig.env)
   initAllowlist(appConfig.env, allowChanged)
+  setWatcherPosts(appConfig.env)
 }
 const draftOf = (d: unknown): Draft => {
   const n = normalizeSettings(d) ?? normalizeSettings({})!

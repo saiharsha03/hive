@@ -1,6 +1,6 @@
 // Live Claude sessions, one per open tab. Each tab keeps one Claude Code process running
 // (streaming input mode), so every message continues the same conversation and reuses the cache.
-import { createSdkMcpServer, query, tool, type PermissionMode, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, query, tool, type Options, type PermissionMode, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -22,7 +22,17 @@ import { appName } from '../shared/appName'
 import { modeFor, modeSwitch } from '../shared/modeCore'
 import { threadDefaults } from './settings'
 import { boostForMessage, forgetTab, observe, sessionOptions } from './liveStatus'
+import { readOnlyOptions } from './readOnly'
+import { isWatcherTab } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
+
+// a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
+// worktrees) or runs services, so nothing it reaches through Hive escapes read-only
+const WATCHER_TOOLS = new Set(['show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread'])
+const forThread = <T extends { name: string }>(tabId: string, tools: T[]): T[] => (isWatcherTab(tabId) ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
+
+// a watcher's thread starts read-only (its own hooks merged with the read-only command check)
+const withReadOnly = (tabId: string, o: Partial<Options>): Partial<Options> => (isWatcherTab(tabId) ? { ...o, ...readOnlyOptions(o.hooks) } : o)
 
 // No permission prompts in the app yet, so foreground sessions run in bypass mode (shown under the message box).
 // Background sessions run in 'auto' (modeCore); a live session switches when it moves between the two.
@@ -119,7 +129,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   const hive = createSdkMcpServer({
     name: 'hive',
     version: '1.0.0',
-    tools: [
+    tools: forThread(tabId, [
       tool(
         'show_to_user',
         `Open a file (image, screenshot, HTML page, PDF, video, text) in the preview panel of the ${appName()} app, beside the chat. Use whenever you want the user to look at something.`,
@@ -413,7 +423,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           return ok(formatWait({ title, id, status, reply: t.lastReply, timedOut: r === 'timeout' }))
         },
       ),
-    ],
+    ]),
   })
 
   const { push, stream } = inbox()
@@ -432,8 +442,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       allowDangerouslySkipPermissions: true,
       // Settings > General: model and effort for threads started from now on ('' = Claude Code's default)
       ...threadDefaults(),
-      // hook events, Hive-only plugin switches, the Stop hook that reports loops and effort
-      ...sessionOptions(tabId, send),
+      // hook events, Hive-only plugin switches, the Stop hook that reports loops and effort; watcher threads read-only
+      ...withReadOnly(tabId, sessionOptions(tabId, send)),
     },
   })
   // messages queued while Claude works wait here until the turn's result (priority 'later' once handed over)
