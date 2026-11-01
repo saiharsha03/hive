@@ -617,6 +617,22 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
   return `Thread "${target.title}" was not running; resumed it in the background (id ${target.tabId}) with your message.`
 }
 
+// the usage answer of the first live thread that carries rate limits (only a process that has talked to the API does);
+// each one gets 5 s, so a stuck process does not hold up the status bar. null when no live thread has them
+export async function liveUsage(): Promise<any | null> {
+  for (const s of live.values()) {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const u: any = await Promise.race([
+        s.q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 5000) }),
+      ])
+      if (u?.rate_limits) return u
+    } catch { /* the next thread */ } finally { clearTimeout(timer) }
+  }
+  return null
+}
+
 // a thread's live state for Hive's own schedulers (watchers): working = a turn is running; null = no live process
 export function threadState(tabId: string): { working: boolean; sessionId: string | null; waitingReason?: string; lastOk: boolean | null } | null {
   const s = live.get(tabId)

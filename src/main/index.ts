@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
-import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
+import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { liveQuery, stopCodex } from './chat'
 import { registerStatusIpc } from './liveStatus'
 import { cleanupThread, threadLinks } from './threadWorktrees'
@@ -24,7 +24,7 @@ import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
-import { closeStatus, getStatus, weeklyUsage } from './status'
+import { closeStatus, getStatus, setLiveUsage, weeklyUsage } from './status'
 import { loadConfig, readDotEnv } from './devConfig'
 import { loadSettings, saveSettings, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
@@ -74,6 +74,8 @@ initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
 const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('allow:status', st) }
 initAllowlist(appConfig.env, allowChanged)
 setWatcherPosts(appConfig.env)
+// usage limits: the idle status process has none, so a live thread's answer stands in
+setLiveUsage(liveUsage)
 // Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.claude/hive/watchers);
 // the old single Watch (HIVE_WATCH_* settings) moves in as watcher "watch" on the first start. Dependabot shows in the same list.
 const watchersChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('watchers:changed') }

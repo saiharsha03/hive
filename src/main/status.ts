@@ -33,11 +33,24 @@ export const idle = (): Query => (q ??= idleQuery())
 
 const limit = (w: any): Limit => (w ? { pct: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null)
 
+// Rate limits come only from a process that has talked to the API, so the idle one answers without them. A live
+// thread's usage answer stands in (the app sets this to the chat's reader); the last good limits are kept for a while
+// so the bar does not go blank between runs.
+let liveUsage: () => Promise<any | null> = async () => null
+export const setLiveUsage = (f: () => Promise<any | null>) => { liveUsage = f }
+const KEEP_MS = 6 * 3_600_000
+let lastGood: { limits: any; at: number } | null = null
+async function withLimits(u: any): Promise<any> {
+  const limits = u?.rate_limits ?? (await liveUsage().catch(() => null))?.rate_limits
+  if (limits) { lastGood = { limits, at: Date.now() }; return { ...u, rate_limits: limits } }
+  return lastGood && Date.now() - lastGood.at < KEEP_MS ? { ...u, rate_limits: lastGood.limits } : u
+}
+
 export async function getStatus(): Promise<Status> {
   q ??= idleQuery()
   const [account, usage, mcp] = await Promise.allSettled([
     q.accountInfo(),
-    q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
+    q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }).then(withLimits),
     q.mcpServerStatus(),
   ])
   const a = account.status === 'fulfilled' ? account.value : null
@@ -79,7 +92,7 @@ export function weeklyUsage(maxAgeMs = 5 * 60_000): Promise<Weekly> {
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('the usage read timed out')), 20_000) })
     try {
-      remember(await Promise.race([q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }), timeout]), null)
+      remember(await Promise.race([q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }).then(withLimits), timeout]), null)
     } catch (e) {
       remember(null, e)
     } finally {
