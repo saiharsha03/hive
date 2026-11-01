@@ -72,9 +72,12 @@ type Item = { id: string; title: string; project: string; updated: number }
 // Sections in display order. `sessions` is expected newest first. A query searches every place, archived included;
 // archive view lists archived threads only.
 // groupBy 'project' lists active threads under their project (projects ordered by their newest thread), 'date' by day buckets
-export function buildSections<T extends Item>(sessions: T[], states: ThreadMap, now: number, query: string, archiveView: boolean, groupBy: 'date' | 'project' = 'date'): Section<T>[] {
+// watcherIds: watchers' threads, listed in their own Watchers section first
+export function buildSections<T extends Item>(sessions: T[], states: ThreadMap, now: number, query: string, archiveView: boolean, groupBy: 'date' | 'project' = 'date', watcherIds: ReadonlySet<string> = new Set()): Section<T>[] {
   const q = query.trim().toLowerCase()
-  const rows = sessions.filter((s) => !q || `${s.title} ${s.project}`.toLowerCase().includes(q))
+  const matched = sessions.filter((s) => !q || `${s.title} ${s.project}`.toLowerCase().includes(q))
+  const watching = archiveView ? [] : matched.filter((s) => watcherIds.has(s.id))
+  const rows = archiveView ? matched : matched.filter((s) => !watcherIds.has(s.id))
   const at = (s: T) => place(states[s.id], now)
   const of = (p: Place) => rows.filter((s) => at(s) === p)
 
@@ -83,6 +86,7 @@ export function buildSections<T extends Item>(sessions: T[], states: ThreadMap, 
   const out: Section<T>[] = []
   const add = (key: string, label: string, items: T[], extra: Partial<Section<T>> = {}) => { if (items.length) out.push({ key, label, items, ...extra }) }
 
+  add('watchers', 'Watchers', watching)
   add('pinned', 'Pinned', of('pinned').sort((a, b) => states[b.id].pinned! - states[a.id].pinned!))
   add('snoozed', 'Snoozed', of('snoozed').sort((a, b) => states[a.id].snoozedUntil! - states[b.id].snoozedUntil!), { fold: true, sub: 'snoozed' })
   add('returned', 'Returned', of('returned').sort((a, b) => states[b.id].snoozedUntil! - states[a.id].snoozedUntil!), { sub: 'returned' })
@@ -149,8 +153,8 @@ export const clearSnooze = (id: string) => { if (cache[id]?.snoozedUntil) patchT
 let onRetire: ((id: string) => void) | null = null
 export const setRetireHandler = (fn: ((id: string) => void) | null) => { onRetire = fn }
 
-// a watcher's thread: pinned, never closed or archived
-export const keepPinned = (id: string) => { const s = cache[id]; if (!s?.pinned || s.closedAt || s.archivedAt) patchThread(id, { pinned: s?.pinned ?? Date.now(), closedAt: undefined, archivedAt: undefined }) }
+// a watcher's thread is never closed or archived
+export const keepVisible = (id: string) => { const s = cache[id]; if (s?.closedAt || s?.archivedAt) patchThread(id, { closedAt: undefined, archivedAt: undefined }) }
 export const close = (id: string, on: boolean) => { patchThread(id, { closedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
 export const archive = (id: string, on: boolean) => { patchThread(id, { archivedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
 

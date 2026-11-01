@@ -40,6 +40,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     const names = new Map(watchers.flatMap((w) => (w.sessionId ? [[w.sessionId, w.name] as const] : [])))
     return listed && listed.map((s) => (names.has(s.id) ? { ...s, title: names.get(s.id)! } : s))
   }, [listed, watchers])
+  const watcherIds = useMemo(() => new Set(watchers.flatMap((w) => (w.sessionId ? [w.sessionId] : []))), [watchers])
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [archiveView, setArchiveView] = useState(false)
@@ -91,7 +92,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     const hide = new Set([...live.waiting, ...live.working].flatMap((r) => [r.id, r.sessionId ?? '']))
     return (sessions ?? []).filter((s) => !hide.has(s.id))
   }, [sessions, live, archiveView, q])
-  const sections = useMemo(() => buildSections(savedRows, states, now, query, archiveView, groupBy), [savedRows, states, now, query, archiveView, groupBy])
+  const sections = useMemo(() => buildSections(savedRows, states, now, query, archiveView, groupBy, watcherIds), [savedRows, states, now, query, archiveView, groupBy, watcherIds])
   const archived = useMemo(() => (sessions ?? []).filter((s) => states[s.id]?.archivedAt).length, [sessions, states])
   const searching = query.trim() !== ''
 

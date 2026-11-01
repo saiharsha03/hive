@@ -24,7 +24,7 @@ import { workingOn, type Session } from './chat'
 import { activateSession, findSession, liveRows, markWaiting, onSessionEvent, type LiveRow } from './background'
 import { TabMenu } from './TabMenu'
 import { tabsToClose, type TabCloseAction } from './tabs'
-import { keepPinned, organize, setRetireHandler } from './threads'
+import { keepVisible, organize, setRetireHandler } from './threads'
 import { DropPrompt } from './DropPrompt'
 import type { AllowStatus } from '../../shared/allowCore'
 import { DROP_TYPES, dropMessage, dropTitle, pickDropFile, type DropChoice } from '../../shared/dropCore'
@@ -507,11 +507,11 @@ export function App() {
   const termTargets = panes.panes.map((p) => sessions.find((s) => s.id === p.active)).filter((s): s is Session => !!s)
     .map((s) => ({ tabId: s.id, title: s.title, cwd: s.worktrees?.at(-1)?.path ?? s.cwd ?? '' }))
   // a watcher's thread is a (background) tab while it lives; after a reload it reopens from its transcript
-  // every watcher's thread is pinned in the sidebar
+  // every watcher's thread stays in the sidebar's Watchers section
   const watcherSessions = wc.sessions.join(' ')
-  useEffect(() => { for (const id of watcherSessions.split(' ')) if (id) keepPinned(id) }, [watcherSessions])
+  useEffect(() => { for (const id of watcherSessions.split(' ')) if (id) keepVisible(id) }, [watcherSessions])
   const openWatcherThread = (t: OpenThread) => {
-    if (t.sessionId) keepPinned(t.sessionId)
+    if (t.sessionId) keepVisible(t.sessionId)
     const s = (t.tabId ? sessions.find((x) => x.id === t.tabId) : undefined) ?? (t.sessionId ? findSession(sessions, t.sessionId) : undefined)
     if (s) activate(s.id)
     else if (t.sessionId && t.path) openSession({ id: t.sessionId, title: t.title, project: '', cwd: t.cwd, updated: t.at, started: t.at, path: t.path })
