@@ -135,7 +135,7 @@ export function ThreadStrip({ sessions, shown, focused, onActivate, onAll, onNew
   )
 }
 
-export type ToolRow = { id: string; label: string; icon: string; mk: string; status?: string; cls?: string }
+export type ToolRow = { id: string; label: string; icon: string; mk: string; status?: string; cls?: string; disabled?: boolean; title?: string }
 // a section under the threads whose header folds it; the fold is remembered
 export function Fold({ id, title, icon, count, children, testid }: { id: string; title: string; icon?: ReactNode; count?: ReactNode; children: ReactNode; testid: string }) {
   const [open, setOpen] = useState(() => getPref<boolean>(`fold.${id}`, true))
@@ -152,7 +152,7 @@ export function ToolList({ rows, onOpen }: { rows: ToolRow[]; onOpen: (id: strin
   return (
     <Fold id="tools" title="Tools" testid="tools-list">
       {rows.map((r) => (
-        <button key={r.id} className="trow" onClick={(e) => onOpen(r.id, e.currentTarget)} data-testid={`tool-${r.id}`}>
+        <button key={r.id} className="trow" onClick={(e) => onOpen(r.id, e.currentTarget)} disabled={r.disabled} title={r.title} data-testid={`tool-${r.id}`}>
           <Icon name={r.icon} className={r.mk} />
           <span className="tl-l">{r.label}</span>
           <span className={`tl-s ${r.cls ?? ''}`}>{r.status}</span>

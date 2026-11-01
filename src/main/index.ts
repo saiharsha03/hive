@@ -11,6 +11,8 @@ import { registerStatusIpc } from './liveStatus'
 import { cleanupThread, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
+import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
+import type { AllowStatus } from '../shared/allowCore'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail } from './watchers'
 import { gitDecorations, listDir } from './files'
 import { uiLoad, uiSave } from './uiStore'
@@ -67,6 +69,9 @@ function spawnThread(t: BackgroundThread) {
 // Dependabot reviewers: background threads in auto mode, like any other
 const startReview = (t: BackgroundThread) => { try { spawnThread(t); return true } catch { return false } }
 initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
+// IP allowlist button: on when the public IP changed since the configured command last succeeded
+const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('allow:status', st) }
+initAllowlist(appConfig.env, allowChanged)
 // Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.claude/hive/watchers);
 // the old single Watch (HIVE_WATCH_* settings) moves in as watcher "watch" on the first start. Dependabot shows in the same list.
 const watchersChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('watchers:changed') }
@@ -85,6 +90,7 @@ function applySettings() {
   gitPanel.initGit(appConfig)
   initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
   configureWatchers(appConfig.config?.root ?? '', appConfig.env)
+  initAllowlist(appConfig.env, allowChanged)
 }
 const draftOf = (d: unknown): Draft => {
   const n = normalizeSettings(d) ?? normalizeSettings({})!
@@ -229,6 +235,8 @@ handle('pull:run', (e, dry: boolean) => {
   if (!appConfig.config) throw new Error(appConfig.message)
   return pullAll(appConfig.config, !!dry, (row) => { if (!e.sender.isDestroyed()) e.sender.send('pull:row', row) })
 })
+handle('allow:status', () => allowStatus())
+handle('allow:run', () => runAllowlist())
 // Git panel: plain git on the repos and worktrees Hive lists; the page names a folder from that list, never a command
 handle('git:list', () => gitPanel.gitList())
 handle('git:detail', (_e, dir: string) => gitPanel.gitDetail(String(dir)))

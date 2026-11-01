@@ -155,6 +155,9 @@ interface Window {
     pullList: () => Promise<string[]>
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>
     onPullRow: (cb: (row: { repo: string; result: string }) => void) => () => void
+    allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
+    allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
+    onAllowStatus: (cb: (s: import('../../shared/allowCore').AllowStatus) => void) => () => void
     scriptsConfig: () => Promise<{ scripts: import('../../shared/scriptsCore').ScriptView[]; message: string; path: string }>
     scriptsState: () => Promise<import('../../shared/scriptsCore').ScriptRun[]>
     scriptsRun: (name: string, label: string) => Promise<string>

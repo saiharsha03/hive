@@ -870,3 +870,7 @@ button.sbi:hover { background: var(--hover); }
 .pulltab .pr-repo { white-space: nowrap; color: var(--ink); width: 1%; }
 .pulltab .pr-ok { color: var(--done); } .pulltab .pr-bad { color: var(--fail); } .pulltab .pr-warn { color: var(--wait); } .pulltab .pr-dim { color: var(--dim); }
 .dk:disabled { opacity: 1; cursor: progress; }
+
+/* IP allowlist: the failed command's output */
+.allowout { margin: 0; max-height: 55vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 var(--mono, ui-monospace, monospace); color: var(--ink); }
+.trow:disabled { opacity: .5; cursor: default; }

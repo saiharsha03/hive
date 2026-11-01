@@ -26,6 +26,7 @@ import { TabMenu } from './TabMenu'
 import { tabsToClose, type TabCloseAction } from './tabs'
 import { organize, setRetireHandler } from './threads'
 import { DropPrompt } from './DropPrompt'
+import type { AllowStatus } from '../../shared/allowCore'
 import { DROP_TYPES, dropMessage, dropTitle, pickDropFile, type DropChoice } from '../../shared/dropCore'
 import { HooksMenu } from './HooksMenu'
 import { PluginsMenu } from './PluginsMenu'
@@ -156,10 +157,38 @@ export function App() {
     </button>
   )
 
+  // IP allowlist (HIVE_ALLOWLIST_CMD): on when the public IP changed since the command last succeeded; a note when done,
+  // a popup with the command's output when it fails
+  const [allow, setAllow] = useState<AllowStatus | null>(null)
+  const [allowFail, setAllowFail] = useState<string | null>(null)
+  useEffect(() => { void window.api.allowStatus().then(setAllow); return window.api.onAllowStatus(setAllow) }, [])
+  const allowOn = !!allow?.changed && !allow.running
+  const allowTitle = !allow ? '' : allow.running ? 'Allowing your IP…'
+    : !allow.ip ? `IP allowlist: ${allow.error || 'public IP not read yet'}. Click to run it anyway`
+    : allow.changed ? `Your IP is now ${allow.ip} (last allowed: ${allow.lastIp ?? 'never'}). Click to allow it`
+    : `Your IP ${allow.ip} is already allowed`
+  const runAllow = async () => {
+    if (!allowOn) return
+    try {
+      const r = await window.api.allowRun()
+      if (r.ok) notice(r.ip ? `IP allowlist: ${r.ip} allowed` : `IP allowlist: ${r.output}`)
+      else setAllowFail(r.output)
+    } catch (e: any) {
+      setAllowFail(String(e?.message ?? e))
+    }
+  }
+  const allowButton = allow?.configured && (
+    <button className="dk" title={allowTitle} onClick={() => void runAllow()} disabled={!allowOn} data-testid="dock-allow">
+      <span className="dk-i"><Icon name={allow.running ? 'sync' : 'shield'} className={allow.running ? 'mk-other spin' : 'mk-other'} /></span>
+      <span className="dk-l">{allow.running ? 'Allowing…' : 'Allow my IP'}</span>
+    </button>
+  )
+
   function openTool(id: string, el?: HTMLElement | null) {
     if (id === 'deploy') return setModal('deploy')
     if (id === 'settings') return setModal('settings')
     if (id === 'pull') return void runPull()
+    if (id === 'allow') return void runAllow()
     if (id === 'mcp' || id === 'hooks' || id === 'plugins') return setPop({ kind: id, anchor: el ? anchorOf(el) : centre() })
     if (id === 'dev' && placeOf(ui, 'dev') === 'popover') return setPop({ kind: 'dev', anchor: el ? anchorOf(el) : centre() })
     if (id === 'terminal') { openTerminal(); return }
@@ -406,6 +435,7 @@ export function App() {
   const toolRows: ToolRow[] = [
     { id: 'deploy', label: 'Deploy', icon: 'rocket', mk: 'mk-deploy', status: deploy.liveRow ? deploy.liveRow.note || deploy.liveRow.title : '', cls: deploy.liveRow?.state === 'waiting' ? 's-wait' : deploy.liveRow ? 's-work' : '' },
     { id: 'pull', label: 'Pull latest', icon: pulling ? 'sync' : 'repo-pull', mk: pulling ? 'mk-pull spin' : 'mk-pull', status: pulling ? 'pulling…' : '' },
+    ...(allow?.configured ? [{ id: 'allow', label: 'Allow my IP', icon: allow.running ? 'sync' : 'shield', mk: allow.running ? 'mk-other spin' : 'mk-other', status: allow.running ? 'allowing…' : allow.changed ? 'IP changed' : '', cls: allowOn ? 's-wait' : '', disabled: !allowOn, title: allowTitle }] : []),
     { id: 'dev', label: 'Dev stack', icon: 'server-process', mk: 'mk-dev', status: dev.state?.configured ? `${devUp} up` : '', cls: devUp ? 's-done' : '' },
     { id: 'scripts', label: 'Scripts', icon: 'play', mk: 'mk-scripts', status: runningScripts ? `${runningScripts} running` : '', cls: runningScripts ? 's-work' : '' },
     { id: 'todos', label: 'To-dos', icon: 'checklist', mk: 'mk-todos', status: tb.open ? `${tb.late ? 'some late, ' : ''}${tb.open} open` : '', cls: tb.late ? 's-wait' : '' },
@@ -620,7 +650,7 @@ export function App() {
         <div className="main">
           {centreCol}
           {right}
-          <Dock items={arr.right} current={rightOpen ? rightView : null} onPick={pickDock} badges={badges} extra={pullButton} />
+          <Dock items={arr.right} current={rightOpen ? rightView : null} onPick={pickDock} badges={badges} extra={<>{pullButton}{allowButton}</>} />
         </div>
       </>
     )
@@ -637,6 +667,7 @@ export function App() {
     ...(arr.left.length ? [{ icon: leftOpen ? 'layout-sidebar-left' : 'layout-sidebar-left-off', on: leftOpen, title: 'Toggle side bar', onClick: () => toggleRegion('left'), testid: 'toggle-left' }] : []),
     ...(ui === 'focus' || ui === 'strip' ? [{ icon: 'list-unordered', on: pop?.kind === 'threads', title: 'Threads', onClick: () => setPop({ kind: 'threads', anchor: anchorOf(document.querySelector('[data-testid="toggle-threads"]')) }), testid: 'toggle-threads' }] : []),
     ...(ui === 'focus' ? [{ icon: pulling ? 'sync' : 'repo-pull', on: pulling, title: 'Pull latest', onClick: () => void runPull(), testid: 'toggle-pull' }] : []),
+    ...(ui === 'focus' && allow?.configured ? [{ icon: allow.running ? 'sync' : 'shield', on: allowOn, title: allowTitle, onClick: () => void runAllow(), testid: 'toggle-allow' }] : []),
     { icon: bottomOpen ? 'layout-panel' : 'layout-panel-off', on: bottomOpen, title: 'Toggle panel (Ctrl+J)', onClick: () => toggleRegion('bottom'), testid: 'toggle-bottom' },
     { icon: rightOpen ? 'layout-sidebar-right' : 'layout-sidebar-right-off', on: rightOpen, title: 'Toggle right side', onClick: () => toggleRegion('right'), testid: 'toggle-right' },
   ]
@@ -700,6 +731,11 @@ export function App() {
               ))}
             </tbody>
           </table>
+        </Modal>
+      )}
+      {allowFail !== null && (
+        <Modal title="IP allowlist failed" onClose={() => setAllowFail(null)} testid="allow-result">
+          <pre className="allowout">{allowFail}</pre>
         </Modal>
       )}
       {modal === 'settings' && <SettingsPanel onClose={() => setModal(null)} onWatchers={() => { setModal(null); showView('watchers') }} />}

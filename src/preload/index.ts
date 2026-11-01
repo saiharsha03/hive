@@ -130,6 +130,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('pull:row', fn)
     return () => ipcRenderer.removeListener('pull:row', fn)
   },
+  allowStatus: () => ipcRenderer.invoke('allow:status'),
+  allowRun: () => ipcRenderer.invoke('allow:run'),
+  onAllowStatus: (cb: (s: unknown) => void) => {
+    const fn = (_e: unknown, s: unknown) => cb(s)
+    ipcRenderer.on('allow:status', fn)
+    return () => ipcRenderer.removeListener('allow:status', fn)
+  },
   scriptsConfig: () => ipcRenderer.invoke('scripts:config'),
   scriptsState: () => ipcRenderer.invoke('scripts:state'),
   scriptsRun: (name: string, label: string) => ipcRenderer.invoke('scripts:run', name, label),
