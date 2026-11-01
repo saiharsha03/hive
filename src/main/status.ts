@@ -20,7 +20,12 @@ let q: Query | null = null
 function idleQuery(): Query {
   const never: AsyncIterable<any> = { [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) }) }
   // user + project + local settings, so MCP servers load exactly as in the terminal
-  return query({ prompt: never, options: { settingSources: ['user', 'project', 'local'], pathToClaudeCodeExecutable: claudeExecutable() } })
+  const idleQ = query({ prompt: never, options: { settingSources: ['user', 'project', 'local'], pathToClaudeCodeExecutable: claudeExecutable() } })
+  // drain its messages (hook and plugin system events): unread, the SDK queues them forever (268k / 40 MB in a day)
+  void (async () => { for await (const _ of idleQ) { /* nothing to show */ } })()
+    .catch(() => {})
+    .finally(() => { if (q === idleQ) q = null })
+  return idleQ
 }
 
 // the idle process, for lists a tab without its own running process asks for (commands, models, MCP servers)

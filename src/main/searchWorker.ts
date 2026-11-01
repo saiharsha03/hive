@@ -9,7 +9,8 @@ function load(): Promise<any> {
   return (pipe ??= (async () => {
     const tf = await import('@huggingface/transformers')
     tf.env.cacheDir = workerData.cacheDir
-    return tf.pipeline('feature-extraction', MODEL, { dtype: 'q8' })
+    // no CPU arena: with it ONNX keeps ~1 GB after a few batches of long chunks; without it ~180 MB, ~20% slower
+    return tf.pipeline('feature-extraction', MODEL, { dtype: 'q8', session_options: { enableCpuMemArena: false } })
   })())
 }
 
