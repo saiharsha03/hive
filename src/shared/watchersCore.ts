@@ -166,7 +166,7 @@ export function watcherHeader(a: {
   return [
     `[${appName()} watcher run: ${name}]`,
     `Run kind: ${kind}${kind === 'weekly' ? ' (also stands in for today\'s daily report)' : ''}`,
-    `Now: ${localIso(now)}`,
+    `Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localIso(now)} (local time; what is worth checking can depend on the day and hour)`,
     `Last run: ${lastRun ? `${lastRun.kind} started ${stamp(lastRun.startedAt)}${lastRun.endedAt ? `, ended ${stamp(lastRun.endedAt)}` : ''}${lastRun.error ? ` (${lastRun.error})` : ''}` : 'none, this is the first run'}`,
     `Last daily report run: ${stamp(s.last.daily)}. Last weekly report run: ${stamp(s.last.weekly)}.`,
     fresh

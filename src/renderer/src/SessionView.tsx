@@ -2,7 +2,7 @@
 // things Claude showed you, background work, and the message box (pasted / dropped images, the clipboard chip,
 // model and effort pickers, steer / queue). Scroll position is kept per thread, so switching UI or thread keeps it.
 import { getPref, setPref } from './prefs'
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toolLine, SHOW, CODEX, type Session } from './chat'
@@ -250,11 +250,11 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   }
 
   // take a queued message back into the message box to change it (only if it has not gone in yet)
-  const editQueued = async (it: Extract<Item, { kind: 'user' }>) => {
+  const editQueued = useCallback(async (it: Extract<Item, { kind: 'user' }>) => {
     if (!it.queue || !(await onDequeue(it.queue.id))) return
     setDraft((d) => (d.trim() ? `${d}\n${it.text}` : it.text))
     setImages((cur) => [...cur, ...it.images.map(attachmentOf)])
-  }
+  }, [onDequeue])
 
   const submit = (m: SendMode = sendMode) => {
     if (!draft.trim() && !images.length) return
@@ -304,30 +304,10 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     return () => { if (inserters.get(session.id) === insert) inserters.delete(session.id) }
   }, [session.id])
 
-  // the live session's own mode once it reports one; before that, the mode it will start in
-  const shownMode = session.mode ?? (session.background ? 'auto' : mode)
-  const running = session.items.filter((i) => i.kind === 'tool' && i.status === 'running').at(-1)
-  const wt = session.worktrees?.at(-1)
-  const folder = (session.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? ''
-
-  return (
-    <main className={focused ? 'session focused' : 'session'} onMouseDown={onFocus} onFocusCapture={onFocus} data-testid={`chat-${session.id}`}>
-      <div className={compactHead ? 'chead compact' : 'chead'}>
-        <div className="row1">
-          {!compactHead && <h1 title={session.title}>{session.title}</h1>}
-          {wt
-            ? <span className="br" title={wt.path}><Icon name="git-branch" />{wt.branch}<span className="br-sub">{wt.repo} worktree</span></span>
-            : folder && <span className="br" title={session.cwd}><Icon name="folder" />{folder}</span>}
-          <span className="acts">
-            <button onClick={onTerminal} title="This thread's terminal, in the bottom panel (Ctrl+`)" data-testid="terminal-toggle"><Icon name="terminal" />Terminal</button>
-            <button onClick={onChanges} title="Changed files and the split diff" data-testid="chat-changes"><Icon name="diff" />Changes</button>
-            {onSplit && <button onClick={onSplit} title="Open beside (split, up to four chats)" data-testid="chat-split"><Icon name="split-horizontal" />Split</button>}
-          </span>
-        </div>
-        <GoalLoop tabId={session.id} busy={session.busy} onSend={onSend} onInterrupt={async () => { await onStop() }} />
-      </div>
-
-      <div className="thread" ref={thread} onScroll={onScroll}>
+  // the conversation, built only when it changes: typing in the box re-renders this view on every key,
+  // and re-parsing every message's Markdown made typing lag in long threads
+  const transcript = useMemo(() => (
+      <>
         {!session.loaded && <div className="hint">Loading conversation…</div>}
         {session.loaded && !session.items.length && !session.streaming && <div className="chat-empty">New thread in {session.cwd || 'the workspace'}. Type below; drop or paste images.</div>}
         {session.items.map((it, i) => {
@@ -404,6 +384,34 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           )
           return <div key={i} className="msg err" data-testid="msg-error"><Icon name="error" className="s-fail" /> {it.text}</div>
         })}
+      </>
+  ), [session.loaded, session.items, session.streaming, session.cwd, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued])
+
+  // the live session's own mode once it reports one; before that, the mode it will start in
+  const shownMode = session.mode ?? (session.background ? 'auto' : mode)
+  const running = session.items.filter((i) => i.kind === 'tool' && i.status === 'running').at(-1)
+  const wt = session.worktrees?.at(-1)
+  const folder = (session.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? ''
+
+  return (
+    <main className={focused ? 'session focused' : 'session'} onMouseDown={onFocus} onFocusCapture={onFocus} data-testid={`chat-${session.id}`}>
+      <div className={compactHead ? 'chead compact' : 'chead'}>
+        <div className="row1">
+          {!compactHead && <h1 title={session.title}>{session.title}</h1>}
+          {wt
+            ? <span className="br" title={wt.path}><Icon name="git-branch" />{wt.branch}<span className="br-sub">{wt.repo} worktree</span></span>
+            : folder && <span className="br" title={session.cwd}><Icon name="folder" />{folder}</span>}
+          <span className="acts">
+            <button onClick={onTerminal} title="This thread's terminal, in the bottom panel (Ctrl+`)" data-testid="terminal-toggle"><Icon name="terminal" />Terminal</button>
+            <button onClick={onChanges} title="Changed files and the split diff" data-testid="chat-changes"><Icon name="diff" />Changes</button>
+            {onSplit && <button onClick={onSplit} title="Open beside (split, up to four chats)" data-testid="chat-split"><Icon name="split-horizontal" />Split</button>}
+          </span>
+        </div>
+        <GoalLoop tabId={session.id} busy={session.busy} onSend={onSend} onInterrupt={async () => { await onStop() }} />
+      </div>
+
+      <div className="thread" ref={thread} onScroll={onScroll}>
+        {transcript}
         {session.streaming && (
           <div className="msg">
             <div className="who claude"><Icon name="sparkle" className="mk-claude" />Claude</div>
