@@ -82,5 +82,8 @@ export function WatchersPopover({ onOpen, onOpenAll }: { onOpen: (id: string) =>
 
 export function useWatcherCounts() {
   const { watchers } = useWatchers()
-  return { on: watchers.filter((w) => w.enabled).length, total: watchers.length, waiting: watchers.some((w) => w.waiting), running: watchers.filter((w) => w.state === 'running').length }
+  return {
+    on: watchers.filter((w) => w.enabled).length, total: watchers.length, waiting: watchers.some((w) => w.waiting), running: watchers.filter((w) => w.state === 'running').length,
+    sessions: watchers.flatMap((w) => (w.sessionId ? [w.sessionId] : [])),
+  }
 }

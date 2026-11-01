@@ -149,6 +149,7 @@ export const clearSnooze = (id: string) => { if (cache[id]?.snoozedUntil) patchT
 let onRetire: ((id: string) => void) | null = null
 export const setRetireHandler = (fn: ((id: string) => void) | null) => { onRetire = fn }
 
+export const reopen = (id: string) => { if (cache[id]?.closedAt) patchThread(id, { closedAt: undefined }) }
 export const close = (id: string, on: boolean) => { patchThread(id, { closedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
 export const archive = (id: string, on: boolean) => { patchThread(id, { archivedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
 
