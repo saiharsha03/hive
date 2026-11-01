@@ -18,13 +18,14 @@ let threads = new Map<string, { working: boolean; sessionId: string | null; wait
 let closed: string[] = []
 let pct: number | null = 30
 let root = ''
+let deps: Parameters<typeof initWatchers>[2]
 
 function setup(env: Record<string, string> = {}) {
   const base = mkdtempSync(join(tmpdir(), 'hive-watchers-'))
   root = join(base, 'watchers')
   process.env.HIVE_WATCHERS_DIR = root
   calls = []; threads = new Map(); closed = []; pct = 30
-  initWatchers(env, base, {
+  initWatchers(env, base, deps = {
     runThread: (t) => { calls.push(t); threads.set(t.tabId, { working: true, sessionId: threads.get(t.tabId)?.sessionId ?? t.resume ?? `sess-${calls.length}` }); return true },
     threadState: (id) => threads.get(id) ?? null,
     closeThread: (id) => { closed.push(id); threads.delete(id) },
@@ -240,5 +241,15 @@ test('self-scheduled watcher wakes only for its own due rows, with just the wake
   const s = state('selfie'); s.runs.at(-1).startedAt = Date.now() - 7 * 3_600_000; writeFileSync(join(root, 'selfie', 'state.json'), JSON.stringify(s))
   await tick()
   assert.equal(calls.length, 3); assert.match(calls[2].prompt, /Nothing was pending .* after 6 hours/)
+  finish(tab)
+  // Hive restarts: the first tick always wakes it once to catch up, saying when Hive was last running; then only due rows
+  writeFileSync(join(root, '.heartbeat'), String(new Date('2026-11-01T09:00:00').getTime()))
+  initWatchers({}, join(root, '..'), deps)
+  await tick()
+  assert.equal(calls.length, 4)
+  assert.match(calls[3].prompt, /just started; it was last running at 2026-11-01T09:00:00.*Catch up on anything you missed/s)
+  assert.doesNotMatch(calls[3].prompt, /Nothing was pending/)
+  finish(tab)
+  await tick(); assert.equal(calls.length, 4)
   db.close()
 })

@@ -68,10 +68,20 @@ export function watcherIds(): string[] {
 const cfgOf = (id: string, w: WatcherFile) => watcherConfig(dirOf(id), w)
 const cwdOf = (w: WatcherFile) => w.cwd || workspace || homedir()
 
+// Hive's own heartbeat (written every tick) tells a self-scheduled watcher, on its first wake after a start, how long
+// Hive was closed; woke = the watchers that already had a run since this start
+const heartbeatFile = () => join(watchersRoot(), '.heartbeat')
+const readHeartbeat = (): number | null => { try { const t = Number(readFileSync(heartbeatFile(), 'utf8').trim()); return t > 0 ? t : null } catch { return null } }
+const beat = () => { try { mkdirSync(watchersRoot(), { recursive: true }); writeFileSync(heartbeatFile(), String(Date.now())) } catch { /* next tick */ } }
+let lastSeen: number | null = null
+let woke = new Set<string>()
+
 export function initWatchers(env: Record<string, string>, workspaceRoot: string, d: Deps, b: Builtin[] = []) {
   deps = d
   builtins = b
   workspace = workspaceRoot
+  woke = new Set()
+  lastSeen = readHeartbeat()
   if (TEST_MODE) return // never on its own in test mode, and the real Watch folder is never moved
   migration = migrateLegacyWatch(env)
   if (migration.length) console.warn(`Watchers: ${migration.join('; ')}`)
@@ -150,6 +160,7 @@ export async function tick(): Promise<void> {
   if (ticking || TEST_MODE) return
   ticking = true
   try {
+    beat()
     const ids = watcherIds()
     const ws = ids.map((id) => [id, readWatcher(id)] as const).filter((x): x is [string, WatcherFile] => !!x[1] && x[1].enabled)
     const u = ws.some(([, w]) => w.schedule.every === 'adaptive') ? await readUsage() : null
@@ -162,7 +173,7 @@ export async function tick(): Promise<void> {
       // report slots count as missed only after the watcher was first seen on; without this a report-only watcher never starts
       if (s.since === null) { s.since = Date.now(); saveState(id, s) }
       if (cur.schedule.every === 'self') {
-        const wake = running ? null : selfWake(c.dir, s)
+        const wake = running ? null : selfWake(c.dir, s, !woke.has(id))
         if (wake && !startRun(id, cur, c, s, 'sweep', wake)) started = true
         continue
       }
@@ -177,10 +188,13 @@ export async function tick(): Promise<void> {
 
 // a self-scheduled watcher wakes for its due rows, or once FALLBACK_MS after its last run when nothing is pending.
 // A table that can't be read right now (the watcher is writing it) is tried again next tick.
-function selfWake(dir: string, s: WatcherState): { due: Wakeup[] } | null {
+// boot: its first wake since Hive started, which always happens and says how long Hive was closed
+type Wake = { due: Wakeup[]; startup?: { lastSeen: number | null } }
+function selfWake(dir: string, s: WatcherState, boot: boolean): Wake | null {
   const now = Date.now()
   try {
     const { due, next } = readWakeups(dir, now)
+    if (boot) return { due, startup: { lastSeen } }
     if (due.length) return { due }
     return next === null && now - (s.runs.at(-1)?.startedAt ?? 0) >= FALLBACK_MS ? { due: [] } : null
   } catch {
@@ -201,7 +215,7 @@ const started = (s: WatcherState, kind: RunKind, at: number) => { const m = mark
 
 // one run: a new turn in the watcher's thread, or a new (or resumed) thread when none is live. '' = started
 // wake: a self-scheduled wake-up; an existing thread then gets only the wake message, not the run header
-function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind, wake?: { due: Wakeup[] }): string {
+function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind, wake?: Wake): string {
   const now = new Date()
   const f = foldersOf(id, c.dir, reportsRoot, w.name)
   const prev = s.runs.at(-1) ?? null
@@ -223,10 +237,11 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
   const hash = textHash(text)
   const changed = fresh || hash !== s.promptSent ? text : null
   const prompt = wake && !fresh
-    ? wakeMessage({ name: w.name, now, due: wake.due, table: scheduleFile(c.dir), fallbackHours: FALLBACK_MS / 3_600_000, promptFile: c.prompt, prompt: changed })
+    ? wakeMessage({ name: w.name, now, due: wake.due, table: scheduleFile(c.dir), fallbackHours: FALLBACK_MS / 3_600_000, promptFile: c.prompt, prompt: changed, startup: wake.startup })
     : watcherHeader({ name: w.name, kind, now, lastRun: prev, s, f, promptFile: c.prompt, prompt: changed, fresh })
   const resume = !live && s.sessionId ? s.sessionId : undefined
   if (!deps.runThread({ tabId, cwd: cwdOf(w), title: tabTitle(w), prompt, resume })) return `The ${appName()} window is not ready`
+  woke.add(id)
   if (wake) { try { markWoken(c.dir, wake.due.map((r) => r.id), localIso(now)) } catch { /* the watcher sees them still pending */ } }
   const next: WatcherState = {
     ...s, ...started(s, kind, now.getTime()),

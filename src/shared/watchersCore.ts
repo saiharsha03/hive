@@ -191,13 +191,14 @@ export function watcherHeader(a: {
 
 // a self-scheduled watcher's wake-up on a thread that already has its instructions: only why it is awake, no instructions.
 // due: the rows Hive woke it for (empty = nothing was pending, the fallback wake); prompt: the prompt file when it changed
-export function wakeMessage(a: { name: string; now: Date; due: { id: number; wake_at: string; purpose: string | null }[]; table: string; fallbackHours: number; promptFile: string; prompt: string | null }): string {
-  const { name, now, due, table, fallbackHours, promptFile, prompt } = a
+export function wakeMessage(a: { name: string; now: Date; due: { id: number; wake_at: string; purpose: string | null }[]; table: string; fallbackHours: number; promptFile: string; prompt: string | null; startup?: { lastSeen: number | null } }): string {
+  const { name, now, due, table, fallbackHours, promptFile, prompt, startup } = a
   return [
     `[${appName()} wake-up: ${name}] Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localIso(now)}.`,
+    ...(startup ? [`${appName()} just started${startup.lastSeen ? `; it was last running at ${localIso(new Date(startup.lastSeen))}` : ''}. Catch up on anything you missed while it was closed.`] : []),
     due.length
       ? `You scheduled this in ${table}: ${due.map((r) => `#${r.id} at ${r.wake_at}${r.purpose ? ` (${r.purpose})` : ''}`).join('; ')}. ${appName()} marked ${due.length > 1 ? 'them' : 'it'} woken.`
-      : `Nothing was pending in ${table}, so ${appName()} woke you after ${fallbackHours} hours.`,
+      : startup ? `Your schedule table: ${table}.` : `Nothing was pending in ${table}, so ${appName()} woke you after ${fallbackHours} hours.`,
     ...(prompt === null ? [] : ['', `Your instructions in ${promptFile} changed:`, '', '---', '', prompt]),
   ].join('\n')
 }
