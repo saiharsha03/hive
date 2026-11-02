@@ -159,6 +159,61 @@ created by asking any agent.
 - MCP server status (connected, needs sign-in, failed), hooks and plugins switches, a command palette (Ctrl+K), and a
   full-window preview for what Claude shows you.
 
+### Phone app
+
+An Android app (`mobile/`) for when you're away from the computer:
+- Claude's notifications reach your phone: the `notify_phone` tool, a thread waiting for you, a background thread finished.
+- You can read threads, send or steer, stop Claude, and start a new thread in any repo.
+- A fingerprint (or the screen lock) opens the app.
+
+The phone and Hive never talk directly. Both dial out to a small **relay** (`relay/relay.mjs`), so neither has to be
+reachable from the internet. The relay only passes blobs sealed with AES-256-GCM, using a key that only your computer
+and phone have. A relay that gets broken into can't read or send your messages; at most it can drop them.
+
+**1. Firebase (for notifications).** Create a free Firebase project and add an Android app with package name
+`dev.hive.mobile`. You need two files from it, and neither goes in git:
+- `google-services.json`: the app is built with it.
+- a service-account key (Project settings > Service accounts > Generate new private key): the relay sends pushes
+  with it.
+
+The pushes are data-only and still sealed: the app opens them on the phone, so Google never sees the text.
+
+**2. Run the relay**, in one of two ways (Node 20+; `cd relay && npm install`):
+
+- **On a server you have (VPS)**, behind a reverse proxy with TLS. With Caddy:
+
+  ```
+  hive.example.com {
+      reverse_proxy 127.0.0.1:8787
+  }
+  ```
+
+  and start it as a service, for example with systemd:
+
+  ```
+  HIVE_RELAY_ADMIN_TOKEN=<long random string> HIVE_RELAY_FCM_ACCOUNT=/path/service-account.json node relay.mjs
+  ```
+
+- **No server**: run the relay on your own computer and publish it with a free Cloudflare Tunnel:
+
+  ```
+  winget install Cloudflare.cloudflared        # or brew install cloudflared
+  node relay/relay.mjs                         # with the same environment variables as above
+  cloudflared tunnel --url http://127.0.0.1:8787
+  ```
+
+  cloudflared prints an `https://….trycloudflare.com` address; that is your relay URL. A quick tunnel gets a new
+  address every time it starts. For a fixed one, log in (`cloudflared tunnel login`) and create a named tunnel on
+  your own domain. The phone can reach Hive only while the computer is on, which is true of any setup.
+
+**3. Pair.** In Hive, open Settings > General and set the relay URL (`HIVE_MOBILE_RELAY`) and the same admin token
+(`HIVE_MOBILE_ADMIN_TOKEN`). Then use **Phone app > Pair**: Hive shows a QR code holding the relay URL, the pair id,
+the phone's token and the key. Scan it from the app (or paste it); it is shown once.
+
+**4. Build and install the app.** Put `google-services.json` in `../Hive-mobile/secrets/` next to the Hive checkout
+(or point `HIVE_FIREBASE_DIR` at it). Then run `cd mobile && ./gradlew assembleDebug` (JDK 17+, Android SDK 35), and
+install `app/build/outputs/apk/debug/app-debug.apk` with `adb install` or by copying it to the phone.
+
 ## How it works
 
 ```
