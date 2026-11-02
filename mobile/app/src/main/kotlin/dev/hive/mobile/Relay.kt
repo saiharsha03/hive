@@ -83,7 +83,7 @@ object Relay {
         val p = Pairing.load(c) ?: throw IllegalStateException("Not paired")
         val s = ws ?: throw IllegalStateException("Not connected")
         val id = rid.incrementAndGet()
-        val msg = JSONObject(extra).put("op", op).put("rid", id).put("seq", Pairing.nextSeq())
+        val msg = JSONObject(extra).put("op", op).put("rid", id).put("seq", Pairing.nextSeq(c))
         val d = CompletableDeferred<JSONObject>()
         waiting[id] = d
         s.send(JSONObject().put("blob", Seal.seal(p.key, p.pair, "p2d", msg)).toString())

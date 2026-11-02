@@ -22,8 +22,7 @@ type Deps = {
   folders: () => string[]
   changed: () => void
 }
-// seen: the phone request seq numbers taken in the last few minutes (with the freshness check, a replay is refused)
-type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; seen?: number[] }
+type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number }
 
 const file = () => join(dataDir(), 'hive-mobile.json')
 let relay = ''
@@ -114,20 +113,11 @@ function connect(): void {
 
 const FRESH_MS = 120_000
 
-// Replay protection for phone requests. seqIn: the highest seq that ran; seen: the seq numbers taken lately.
-// - replay: at or below the floor (seqIn minus 4 min), already seen, or (a record from before the seen list existed) at
-//   or below its high-water mark
-// - stale: new, but more than 2 minutes from this computer's clock (held back by the relay, or the phone clock is off):
-//   remembered so a replay of it is silent, without moving the floor (a phone clock far ahead cannot lock later ones out)
-// - ok: runs; the floor moves up. The seen list is pruned against the floor, never this computer's clock or a stale seq.
-export type SeqRecord = { seqIn: number; seen?: number[] }
-export function checkPhoneSeq(r: SeqRecord, seq: number, now: number): { verdict: 'replay' | 'stale' | 'ok'; next: { seqIn: number; seen: number[] } } {
-  const seen = r.seen ?? []
-  const keep = (top: number, list: number[]) => list.filter((s) => s > top - 2 * FRESH_MS)
-  if (seq <= r.seqIn - 2 * FRESH_MS || seen.includes(seq) || (r.seen === undefined && seq <= r.seqIn)) return { verdict: 'replay', next: { seqIn: r.seqIn, seen } }
-  if (Math.abs(now - seq) > FRESH_MS) return { verdict: 'stale', next: { seqIn: r.seqIn, seen: keep(r.seqIn, [...seen, seq]) } }
-  const top = Math.max(r.seqIn, seq)
-  return { verdict: 'ok', next: { seqIn: top, seen: keep(top, [...seen, seq]) } }
+// Replay protection for phone requests: a request runs only if its seq (the phone's own counter, never going back) is
+// above the last one that ran, and within 2 minutes of this computer's clock (so the relay cannot hold one back and
+// deliver it later). Anything else is dropped silently: no reply, no write, nothing that grows, whatever the relay sends.
+export function checkPhoneSeq(seqIn: number, seq: number, now: number): boolean {
+  return seq > seqIn && Math.abs(now - seq) <= FRESH_MS
 }
 // a notification small enough that, sealed (nonce + tag + base64), it rides in one push: FCM data is at most 4 KB and the
 // relay inlines blobs up to 3600 characters. Measured on the JSON (escaping can grow text a lot), with room for seq/at.
@@ -162,17 +152,11 @@ async function onMessage(raw: string): Promise<void> {
   if (!frame.blob) return
   const m = open(Buffer.from(pairing.key, 'base64'), pairing.pair, 'p2d', frame.blob)
   if (!m || typeof m.seq !== 'number') return // not from the paired phone
-  // the phone's seq is its clock (ms). A request runs only while fresh (within 2 minutes; the phone gives up after
-  // 20 s), so a relay cannot hold "merge the PR" back and deliver it hours later, and only once: the seq numbers taken in
-  // that window are kept on disk, so a replay is refused even after a restart (and a phone clock corrected backwards
-  // still works, unlike a high-water mark).
-  const c = checkPhoneSeq({ seqIn: pairing.seqIn ?? 0, seen: pairing.seen }, m.seq, Date.now())
-  if (c.verdict === 'replay') return // dropped silently: replaying a blob costs Hive nothing (no reply, no write)
-  pairing.seqIn = c.next.seqIn
-  pairing.seen = c.next.seen
-  const saved = store()
-  if (c.verdict === 'stale') return void sendToPhone({ re: m.rid, error: 'Request too old, or the phone clock is off by more than 2 minutes' })
-  if (!saved) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
+  // the phone's seq is its clock in ms, kept from going back on the phone; the phone gives up after 20 s, so a request
+  // older than 2 minutes was held back (see checkPhoneSeq)
+  if (!checkPhoneSeq(pairing.seqIn ?? 0, m.seq, Date.now())) return // a replay, or held back / clock off: dropped silently
+  pairing.seqIn = m.seq
+  if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
   const id = typeof m.id === 'string' ? m.id : ''
   const reply = (body: Record<string, unknown>) => sendToPhone({ re: m.rid, ...body })
   try {

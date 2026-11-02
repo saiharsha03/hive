@@ -48,7 +48,7 @@ data class Pairing(val relay: String, val pair: String, val token: String, val k
 
         fun load(ctx: Context): Pairing? = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("pairing", null)?.let { parse(it) }
 
-        fun save(ctx: Context, qr: String) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("pairing", qr.trim()).putLong("seqIn", 0).remove("seen").apply()
+        fun save(ctx: Context, qr: String) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("pairing", qr.trim()).putLong("seqIn", 0).putString("seen", "").putLong("floor", 0).apply()
 
         fun clear(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
 
@@ -61,8 +61,9 @@ data class Pairing(val relay: String, val pair: String, val token: String, val k
             synchronized(this) {
                 val top = p.getLong("seqIn", 0)
                 val seen = p.getString("seen", "")!!.split(',').mapNotNull { it.toLongOrNull() }.toMutableSet()
-                if (seq <= top - WINDOW || seq in seen) return false
-                if (!p.contains("seen") && seq <= top) return false // a record from before the seen list: its high-water mark holds
+                // a record from before the seen list: its high-water mark becomes a permanent floor
+                if (!p.contains("seen") && !p.contains("floor")) p.edit().putLong("floor", top).apply()
+                if (seq <= p.getLong("floor", 0) || seq <= top - WINDOW || seq in seen) return false
                 seen += seq
                 val newTop = maxOf(top, seq)
                 p.edit().putLong("seqIn", newTop).putString("seen", seen.filter { it > newTop - WINDOW }.joinToString(",")).apply()
@@ -70,9 +71,14 @@ data class Pairing(val relay: String, val pair: String, val token: String, val k
             }
         }
 
-        // the phone's own counter: the clock in ms, always above the last one sent, so nothing needs to be stored
-        private var lastOut = 0L
-        fun nextSeq(): Long = synchronized(this) { lastOut = maxOf(lastOut + 1, System.currentTimeMillis()); lastOut }
+        // the phone's own counter: the clock in ms, but never at or below the last one sent (kept across restarts), so a
+        // clock set back cannot make Hive refuse the phone's requests as replays
+        fun nextSeq(ctx: Context): Long = synchronized(this) {
+            val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val next = maxOf(p.getLong("lastOut", 0) + 1, System.currentTimeMillis())
+            p.edit().putLong("lastOut", next).commit()
+            next
+        }
     }
 
     val ws: String get() = relay.replaceFirst(Regex("^http"), "ws")
