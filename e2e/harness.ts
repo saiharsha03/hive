@@ -40,6 +40,7 @@ export function makeWorkspace(): void {
     writeFileSync(join(DEMO, 'untracked.txt'), 'new file\n')
     // a page for the preview, and a Python file for the editor and its language server (one deliberate type error)
     writeFileSync(join(DEMO, 'readme.md'), '# Demo\n\nA **markdown** page.\n')
+    writeFileSync(join(DEMO, 'pic.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="teal"/></svg>\n')
     writeFileSync(join(DEMO, 'app.py'), 'def greet(name: str) -> str:\n    return "hi " + name\n\n\ncount: int = "three"\n')
   }
   // the workspace .env: only the repos root (no Watch, Dependabot, deploy or stack keys)

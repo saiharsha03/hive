@@ -19,6 +19,7 @@ import { WatchersView, type OpenThread } from './WatchersView'
 import { SettingsPanel } from './SettingsPanel'
 import { TodoPanel } from './TodoPanel'
 import { NotesPanel } from './NotesPanel'
+import { setShowAgents } from './ThreadStatus'
 import { EditorView, openInEditor, setEditorShown } from './EditorView'
 import { kindOf } from './Preview'
 import { useTodos } from './useTodos'
@@ -131,9 +132,13 @@ export function App() {
   const visibleNow = () => sessionsRef.current.filter((s) => !s.background).map((s) => s.id)
 
   // ---- opening views wherever this UI keeps them ----
-  // a file from Files: code and other text opens in the editor, Markdown, pages, images and the rest in Preview
-  const openFile = (p: string) => (kindOf(p) === 'text' && !/\.(md|markdown)$/i.test(p) ? openInEditor(p) : setPreview(p))
+  // a file from Files: anything text (code, Markdown, pages) opens in the editor; images, PDFs and media in Preview
+  // the Default UI's sides: threads on the right and the tool panel on the left (on by default)
+  const [swapped, setSwappedState] = useState(() => getPref<boolean>('sidesSwapped', true))
+  const setSwapped = (on: boolean) => { setSwappedState(on); setPref('sidesSwapped', on) }
+  const openFile = (p: string) => (kindOf(p) === 'text' || kindOf(p) === 'html' ? openInEditor(p) : setPreview(p))
   useEffect(() => setEditorShown(() => showView('editor')))
+  useEffect(() => setShowAgents(() => showView('agents')))
   function showView(v: ViewId, el?: HTMLElement | null) {
     const at = placeOf(ui, v)
     if (at === 'left') { setLeftView(v); setLeftOpen(true) }
@@ -486,6 +491,7 @@ export function App() {
       ...getUIs().map((u, i): MenuItem => ({ label: `${u.label} UI`, checked: ui === u.id, onClick: () => setUI(u.id), testid: `menu-view-ui-${u.id}`, sep: i === 0 && false })),
       ...getThemes(ui).map((t, i): MenuItem => ({ label: `${t.label} theme`, checked: false, icon: 'symbol-color', onClick: () => setTheme(t.id), testid: `menu-view-theme-${t.id}`, sep: i === 0 })),
       { label: 'Command palette', hint: 'Ctrl+K', icon: 'search', onClick: () => setPalette(true), testid: 'menu-view-palette', sep: true },
+      ...(ui === 'default' ? [{ label: 'Threads on the right', checked: swapped, icon: 'arrow-swap', onClick: () => setSwapped(!swapped), testid: 'menu-view-swap' }] : []),
       ...(arr.left.length ? [{ label: leftOpen ? 'Hide side bar' : 'Show side bar', icon: 'layout-sidebar-left', onClick: () => toggleRegion('left'), testid: 'menu-view-left' }] : []),
       { label: bottomOpen ? 'Hide panel' : 'Show panel', hint: 'Ctrl+J', icon: 'layout-panel', onClick: () => toggleRegion('bottom'), testid: 'menu-view-bottom' },
       { label: rightOpen ? 'Hide right side' : 'Show right side', icon: 'layout-sidebar-right', onClick: () => toggleRegion('right'), testid: 'menu-view-right' },
@@ -616,14 +622,14 @@ export function App() {
       {bottom}
     </div>
   )
-  const right = rightOpen && (
-    <>
-      <Divider dir="v" size={rightW} setSize={setRightW} save={saveRightW} sign={-1} min={280} max={Math.round(innerWidth * 0.7)} testid="divider-right" />
-      <div className="rightwrap" style={{ width: rightW }}>
-        <SideTabs views={ui === 'strip' ? [arr.right.includes(rightView) ? rightView : arr.right[0]] : arr.right} current={rightView} onPick={setRightView} onClose={() => setRightOpen(false)} render={renderView} badges={badges} testid="right-side" />
-      </div>
-    </>
+  // the tool panel (Changes, Preview, Editor...): on the right, or on the left when the Default UI's sides are swapped
+  const toolPanel = (
+    <div className="rightwrap" style={{ width: rightW }}>
+      <SideTabs views={ui === 'strip' ? [arr.right.includes(rightView) ? rightView : arr.right[0]] : arr.right} current={rightView} onPick={setRightView} onClose={() => setRightOpen(false)} render={renderView} badges={badges} testid="right-side" />
+    </div>
   )
+  const rightDivider = (sign: 1 | -1) => <Divider dir="v" size={rightW} setSize={setRightW} save={saveRightW} sign={sign} min={280} max={Math.round(innerWidth * 0.7)} testid="divider-right" />
+  const right = rightOpen && <>{rightDivider(-1)}{toolPanel}</>
 
   const watchersTools = (
     <Fold id="watchers" title="Watchers" icon={<Icon name="eye" className="mk-watch" />} count={`${wc.on}/${wc.total} on`} testid="sidebar-watchers">
@@ -633,16 +639,17 @@ export function App() {
 
   let body: ReactNode
   if (ui === 'default') {
-    body = (
+    const threadsPane = <div className="leftwrap" style={{ width: leftW }}>{threadsList(<>{watchersTools}<ToolList rows={toolRows} onOpen={openTool} /></>, newSession)}</div>
+    const threadsDivider = (sign: 1 | -1) => <Divider dir="v" size={leftW} setSize={setLeftW} save={saveLeftW} sign={sign} min={200} max={600} testid="divider-left" />
+    body = swapped ? (
+      <div className="main swapped">
+        {rightOpen && <>{toolPanel}{rightDivider(1)}</>}
+        {centreCol}
+        {leftOpen && <>{threadsDivider(-1)}{threadsPane}</>}
+      </div>
+    ) : (
       <div className="main">
-        {leftOpen && (
-          <>
-            <div className="leftwrap" style={{ width: leftW }}>
-              {threadsList(<>{watchersTools}<ToolList rows={toolRows} onOpen={openTool} /></>, newSession)}
-            </div>
-            <Divider dir="v" size={leftW} setSize={setLeftW} save={saveLeftW} min={200} max={600} testid="divider-left" />
-          </>
-        )}
+        {leftOpen && <>{threadsPane}{threadsDivider(1)}</>}
         {centreCol}
         {right}
       </div>

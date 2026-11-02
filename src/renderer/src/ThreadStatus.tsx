@@ -121,10 +121,14 @@ export function GoalLoop({ tabId, busy, onSend, onInterrupt }: { tabId: string; 
   )
 }
 
-// the background-work list above the message box (also shown in the Agents view)
+// the app opens the Agents view (every thread's background work) in its side panel
+let showAgents: () => void = () => {}
+export const setShowAgents = (f: () => void) => { showAgents = f }
+
+// the background-work list above the message box: one folded line, the full list in the side panel's Agents view
 export function TaskList({ tabId }: { tabId: string }) {
   const st = useThreadStatus(tabId)
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   if (!st.tasks.length) return null
   const running = st.tasks.filter((t) => t.status === 'running').length
   return (
@@ -135,6 +139,7 @@ export function TaskList({ tabId }: { tabId: string }) {
           <Icon name="type-hierarchy" className="mk-agents" />
           {running ? `${running} running` : 'Background work'}{st.tasks.length > running ? `, ${st.tasks.length - running} finished` : ''}
         </button>
+        <button className="link" onClick={() => showAgents()} data-testid="thread-tasks-side">Side panel</button>
         {open && st.tasks.length > running && <button className="link" onClick={() => clearFinished(tabId)} data-testid="thread-tasks-clear">Clear finished</button>}
       </div>
       {open && <div className="tst-list">{st.tasks.map((t) => <TaskRow key={t.id} t={t} tabId={tabId} />)}</div>}

@@ -77,8 +77,8 @@ test.describe('panels', () => {
     await expect(file('tracked.txt')).toHaveClass(/g-modified/)
     await expect(file('untracked.txt')).toHaveClass(/g-(untracked|added)/)
     await shot(l.page, 'files-git-colours')
-    // a page opens in a full-window preview: Esc closes it, "Side panel" docks it instead
-    await file('readme.md').click()
+    // an image opens in a full-window preview: Esc closes it, "Side panel" docks it instead
+    await file('pic.svg').click()
     const full = h.id('preview-full')
     await expect(full).toBeVisible()
     const box = await full.boundingBox()
@@ -88,7 +88,7 @@ test.describe('panels', () => {
     await shot(l.page, 'preview-full')
     await l.page.keyboard.press('Escape')
     await expect(full).toHaveCount(0)
-    await file('readme.md').click()
+    await file('pic.svg').click()
     await h.id('preview-side').click()
     await expect(full).toHaveCount(0)
     await expect(l.page.locator('aside.preview')).toBeVisible()
