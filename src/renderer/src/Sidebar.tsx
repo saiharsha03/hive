@@ -50,28 +50,20 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const [snoozing, setSnoozing] = useState(false)
   const [hits, setHits] = useState<SearchResult | null>(null)
   const [status, setStatus] = useState<SearchStatus | null>(null)
-  const [flash, setFlash] = useState(false)
   const [groupBy, setGroupByState] = useState<GroupBy>(() => (getPref<string>('threadsGroupBy', 'project') === 'date' ? 'date' : 'project'))
   const setGroupBy = (g: GroupBy) => { setGroupByState(g); setPref('threadsGroupBy', g) }
-  const wasBusy = useRef(false)
   const anchor = useRef<string | null>(null)
   const side = useRef<HTMLElement>(null)
   const hover = useRef(false)
   const states = useThreads()
 
   useEffect(() => { window.api.listSessions().then(setSessions) }, [])
-  // indexing progress; "ready" shows briefly when a run that was busy finishes
+  // indexing progress
   useEffect(() => {
-    const set = (s: SearchStatus) => {
-      const busy = s.total > 0 && !s.done
-      if (wasBusy.current && !busy && s.model === 'ready') { setFlash(true); setTimeout(() => setFlash(false), 4000) }
-      wasBusy.current = busy
-      setStatus(s)
-    }
-    window.api.searchStatus().then(set).catch(() => {})
-    return window.api.onSearchProgress(set)
+    window.api.searchStatus().then(setStatus).catch(() => {})
+    return window.api.onSearchProgress(setStatus)
   }, [])
-  // hybrid search once the box holds 2+ characters; if it fails the instant title match stays
+  // keyword search once the box holds 2+ characters; if it fails the instant title match stays
   const text = query.trim()
   useEffect(() => {
     if (text.length < 2) { setHits(null); return }
@@ -194,10 +186,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     )
   }
 
-  const idxLine = status && status.total > 0 && !status.done ? `Indexing threads ${status.indexed}/${status.total}…`
-    : status?.model === 'loading' ? 'Loading search model…'
-    : status?.model === 'failed' ? 'Keyword search'
-    : flash ? 'Semantic search ready' : ''
+  const idxLine = status && status.total > 0 && !status.done ? `Indexing threads ${status.indexed}/${status.total}…` : ''
 
   const groupHead = (key: string, label: string, n: number, icon: string, opts: { fold?: boolean; folded?: boolean; items?: SessionInfo[] } = {}) => (
     <div className="ghead">

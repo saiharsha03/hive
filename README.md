@@ -27,7 +27,7 @@ It started as a personal replacement for an editor plus a terminal, and is share
 ## Highlights
 
 - **Many threads, one window.** Up to four chats side by side; drag a tab onto a chat's edge to split. Every past
-  session sits in a searchable sidebar (keyword plus local semantic search), grouped by date or project, with pin,
+  session sits in a searchable sidebar (keyword search), grouped by date or project, with pin,
   snooze, close and archive.
 - **Background agents that report back.** Start a thread in the background and keep working; it shows under
   *Working* or *Waiting for you* until it needs you.
@@ -208,8 +208,8 @@ CI runs typecheck, lint, unit tests and a build on Windows and Ubuntu for every 
 
 ## Tech stack
 
-Electron · React 19 · TypeScript · electron-vite · Claude Agent SDK · xterm.js and node-pty · MiniSearch and
-transformers.js (local semantic search) · Vitest · Playwright · electron-builder
+Electron · React 19 · TypeScript · electron-vite · Claude Agent SDK · xterm.js and node-pty · MiniSearch ·
+Vitest · Playwright · electron-builder
 
 ## Contributing
 

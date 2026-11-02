@@ -72,7 +72,7 @@ tools run inside Hive's main process with direct access to its state. The agent 
 | --- | --- |
 | `show_to_user` | Opens a file (image, HTML, PDF, video, text) in the preview panel and inline in the chat. |
 | `add_todo` | Adds an item to the user's to-do list, optionally with a due date and status. |
-| `search_sessions` | Hybrid search over past Claude Code sessions, or within one session. |
+| `search_sessions` | Keyword search over past Claude Code sessions, or within one session. |
 | `organize_thread` | Pins, snoozes, closes or archives the thread, or marks it as waiting for the user. |
 | `worktree` | Opens (or reuses) a git worktree of a repo for a branch or ticket; see below. |
 | `dev_stack`, `dev_stack_logs` | Starts, stops or reports a configured dev stack and reads one service's logs. |
@@ -129,12 +129,10 @@ approves or comments.
 
 ## Search
 
-`main/search.ts` indexes the user and assistant messages of every session the sidebar lists. Keyword search is
-BM25 (MiniSearch); semantic search uses `Xenova/all-MiniLM-L6-v2` through `@huggingface/transformers`, run in a
-worker thread (`main/searchWorker.ts`) so the UI never waits on it. Results are fused with reciprocal rank fusion.
-The model downloads on first use into the app's `userData/models`; the index lives in `userData/search` and is
-keyed by session path, size and mtime, so only changed sessions are re-read. If the model cannot load, search falls
-back to keywords only.
+`main/search.ts` indexes the user and assistant messages of every session the sidebar lists for keyword search:
+BM25 (MiniSearch). The index lives in `userData/search` and is keyed by session path, size and mtime, so only
+changed sessions are re-read. (An earlier local semantic search with an embedding model kept several cores busy on
+busy sessions and was removed.)
 
 ## State files
 
@@ -148,7 +146,7 @@ Hive keeps its own state as small JSON files; the settings store and UI state ar
 | `~/.claude/hive-todos.json` | The to-do list. |
 | `~/.claude/hive-disabled-hooks.json` | Hooks switched off in the Hooks menu (Claude Code has no per-hook off flag). Every settings write first saves a `.hive-bak` copy. |
 | `~/.claude/hive/watchers/` | One folder per watcher, see above. |
-| `userData/search`, `userData/models`, `userData/sessions-cache.json` | Search index, embedding model and the session list cache. |
+| `userData/search`, `userData/sessions-cache.json` | Search index and the session list cache. |
 | `.env`, `scripts.json` next to the app | Workspace-specific configuration and credentials; git-ignored. |
 
 Claude Code's own files (`~/.claude/projects/**.jsonl` transcripts, settings, plugins) are read, never rewritten,

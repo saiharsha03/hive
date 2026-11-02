@@ -6,7 +6,7 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     // the embedding worker is its own file, loaded by search.ts as a worker thread
-    build: { rollupOptions: { input: { index: resolve('src/main/index.ts'), searchWorker: resolve('src/main/searchWorker.ts') } } },
+    build: { rollupOptions: { input: { index: resolve('src/main/index.ts') } } },
   },
   preload: { plugins: [externalizeDepsPlugin()] },
   // no live reload: a reload restarts every running session, so the window only updates on Ctrl+R

@@ -2,8 +2,8 @@
 
 type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string }
 
-type SearchResult = { mode: 'hybrid' | 'bm25'; indexing: { indexed: number; total: number } | null; results: { sessionId: string; score: number; snippet: string }[] }
-type SearchStatus = { indexed: number; total: number; model: 'idle' | 'loading' | 'ready' | 'failed'; done: boolean }
+type SearchResult = { indexing: { indexed: number; total: number } | null; results: { sessionId: string; score: number; snippet: string }[] }
+type SearchStatus = { indexed: number; total: number; done: boolean }
 
 type Limit = { pct: number | null; resetsAt: string | null } | null
 type Status = {
