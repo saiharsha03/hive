@@ -13,3 +13,9 @@ test('which language server and colours a file gets', () => {
   assert.deepEqual(['b.tsx', 'c.mjs', 'd.ts'].map(languageIdOf), ['typescriptreact', 'javascript', 'typescript'])
   assert.deepEqual(['c.vue', 'Dockerfile', 'x.unknown'].map(monacoLanguageOf), ['html', 'dockerfile', 'plaintext'])
 })
+
+test('the editor refuses network paths, like Preview', async () => {
+  const { editorRead, editorWrite } = await import('../../src/main/editorFiles')
+  await assert.rejects(editorRead('\\\\server\\share\\x.py'), /local drive/)
+  await assert.rejects(editorWrite('//server/share/x.py', 'x'), /local drive/)
+})
