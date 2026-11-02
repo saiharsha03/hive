@@ -1,10 +1,12 @@
 // To-dos: the personal list in ~/.claude/hive-todos.json as a panel. Quick-add at the top (a trailing "fri", "tomorrow"
 // or "11/05" becomes the due date), date groups, then Talk about, Holding and a folded Done. No dialogs: a delete
 // can be undone for five seconds.
+import { Icon } from './ui'
 import { useEffect, useRef, useState } from 'react'
 import { dueLabel, groupTodos, parseQuickAdd } from '../../shared/todoCore'
 
-type Props = { todos: Todo[]; today: string; error: string; reload: () => void; onClose?: () => void }
+// onTalk: start a thread with Claude about this to-do
+type Props = { todos: Todo[]; today: string; error: string; reload: () => void; onClose?: () => void; onTalk?: (t: Todo) => void }
 const STATUSES: { s: TodoStatus; label: string }[] = [{ s: 'todo', label: 'To do' }, { s: 'talk', label: 'Talk' }, { s: 'holding', label: 'Hold' }]
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
@@ -24,7 +26,7 @@ function DatePick({ value, onPick, onClear, onCancel }: { value?: string; onPick
   )
 }
 
-export function TodoPanel({ todos, today, error, reload, onClose }: Props) {
+export function TodoPanel({ todos, today, error, reload, onClose, onTalk }: Props) {
   const [text, setText] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const editingRef = useRef<string | null>(null)
@@ -130,6 +132,7 @@ export function TodoPanel({ todos, today, error, reload, onClose }: Props) {
             ))}
           </span>
         )}
+        {onTalk && !done && <button data-testid="todo-talk" className="td-x td-talk" onClick={() => onTalk(t)} aria-label="Talk to Claude about this" title="Talk to Claude about this"><Icon name="comment-discussion" /></button>}
         <button data-testid="todo-delete" className="td-x" onClick={() => remove(t)} aria-label="Delete" title="Delete">×</button>
       </div>
     )

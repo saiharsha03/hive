@@ -412,6 +412,14 @@ export function App() {
   const live = useMemo(() => liveRows(sessions, [...(deploy.liveRow ? [deploy.liveRow] : []), ...dev.liveRows, ...scripts.liveRows], agentCounts), [sessions, deploy.liveRow, dev.liveRows, scripts.liveRows, agentCounts])
   const failedCount = live.waiting.filter((r) => liveLook(r).word === 'FAILED').length
 
+  // a to-do's "Talk to Claude about this": a new thread named after it, the opening line filled in for Enter (or more)
+  const talkAbout = (t: Todo) => {
+    const s = { ...makeSession(t.text.slice(0, 50)), cwd: folder }
+    setSessions((all) => [...all, s])
+    prefillDraft(s.id, `Let's talk about this to-do: ${t.text}${t.due ? ` (due ${t.due})` : ''}`)
+    setPaneState((p) => activateIn(p, s.id))
+  }
+
   // Diagnose: a new thread with the prompt filled in, not sent
   const diagnose = (prompt: string, cwd: string) => {
     const s = { ...makeSession('Diagnose deploy'), cwd: cwd || folder }
@@ -598,7 +606,7 @@ export function App() {
       case 'watchers': return watchersHome
       case 'deploy': return <DeployPanel cfg={deploy.cfg} w={deploy.w} out={deploy.out} act={deploy.act} onDiagnose={diagnose} />
       case 'scripts': return <ScriptsPanel runs={scripts.runs} onOpen={(p) => setPreview(p)} />
-      case 'todos': return <TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} />
+      case 'todos': return <TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} onTalk={talkAbout} />
       case 'notes': return <NotesPanel />
       case 'dev': return <DevPanel state={dev.state} setState={dev.setState} />
       case 'pull': return <PullPanel />

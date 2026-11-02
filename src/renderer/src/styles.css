@@ -265,7 +265,11 @@ kbd { font: 11px var(--mono); color: var(--faint); }
 .sc-kind { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--dim); }
 .sc-name { color: var(--hi); font-weight: 600; }
 .sc-open { color: var(--link); font-size: 12px; }
-.codexbox { border: 1px solid var(--line2); border-left: 2px solid var(--agent-edge); background: var(--panel); }
+.codexbox { }
+.codexbox.open { border: 1px solid var(--line2); border-left: 2px solid var(--agent-edge); background: var(--panel); }
+.cx-row { width: 100%; text-align: left; background: none; border: 0; cursor: pointer; }
+.cx-last { font: 11px var(--mono); color: var(--faint); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-body > :last-child { border-bottom: 0; }
 .codexbox.error { border-left-color: var(--fail); }
 .cx-head { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
 .cx-name { font-weight: 600; color: var(--hi); }
@@ -773,6 +777,7 @@ button.sbi:hover { background: var(--hover); }
 .td-x { flex-shrink: 0; width: 20px; height: 20px; border-radius: 3px; font-size: 16px; line-height: 1; color: var(--dim); visibility: hidden; }
 .td:hover .td-x, .td.cur .td-x, .td:focus-within .td-x { visibility: visible; }
 .td-x:hover { background: var(--line2); color: var(--ink); }
+.td-talk { font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
 .td-due { flex-shrink: 0; font-size: 11px; color: var(--dim); min-width: 64px; text-align: right; }
 .td-due.empty { color: var(--faint); }
 .td-due:hover { color: var(--ink); }

@@ -103,24 +103,29 @@ function CodexBox({ it }: { it: Extract<Item, { kind: 'codex' }> }) {
   const [open, setOpen] = useState(false)
   const log = useRef<HTMLDivElement>(null)
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight }, [it.lines.length])
-  const shown = open || it.status === 'running' ? it.lines : []
+  // one row like a Claude subagent's: who, the task's first line, its state; the task, live steps and answer fold open
+  const first = it.task.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
+  const last = [...it.lines].reverse().find(Boolean)
   return (
-    <div className={`codexbox ${it.status}`}>
-      <div className="cx-head">
+    <div className={`codexbox ${it.status}${open ? ' open' : ''}`}>
+      <button className={`toolrow cx-row ${it.status}`} onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="codex-steps" title={open ? 'Hide the details' : 'Show the task, steps and answer'}>
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} />
         <Icon name="hubot" className="mk-agents" />
-        <span className="cx-name">Codex</span>
-        {it.model && <span className="cx-meta">{it.model}</span>}
-        <span className="cx-meta">{it.allowEdits ? 'can edit' : 'read-only'}</span>
-        <span className={`cx-status ${it.status} ${it.status === 'running' ? 's-work' : it.status === 'done' ? 's-done' : 's-fail'}`}>{it.status === 'running' ? 'RUNNING' : it.status === 'done' ? 'DONE' : 'FAILED'}</span>
-        {it.status !== 'running' && it.lines.length > 0 && (
-          <button className="link" onClick={() => setOpen((o) => !o)} data-testid="codex-steps">{open ? 'Hide steps' : `Show ${it.lines.length} steps`}</button>
-        )}
-      </div>
-      <div className="cx-task">{it.task}</div>
-      {shown.length > 0 && (
-        <div className="cx-log" ref={log}>{shown.map((l, j) => <div key={j} className={l.startsWith('$') ? 'cmd' : ''}>{l}</div>)}</div>
+        <span className="tv mk-agents">Codex</span>
+        <span className="tw">{first}</span>
+        <span className="ts">
+          {it.status === 'running' && last && !open && <span className="cx-last">{last.slice(0, 80)}</span>}
+          <span className="cx-meta">{it.allowEdits ? 'can edit' : 'read-only'}</span>
+          {it.status === 'running' ? <span className="s-work">running</span> : it.status === 'error' ? <span className="s-fail">FAILED</span> : <span className="s-idle">done</span>}
+        </span>
+      </button>
+      {open && (
+        <div className="cx-body">
+          <div className="cx-task">{it.task}{it.model ? `\n\nModel: ${it.model}` : ''}</div>
+          {it.lines.length > 0 && <div className="cx-log" ref={log}>{it.lines.map((l, j) => <div key={j} className={l.startsWith('$') ? 'cmd' : ''}>{l}</div>)}</div>}
+          {it.answer && <div className="body md cx-answer"><Markdown remarkPlugins={[remarkGfm]}>{it.answer}</Markdown></div>}
+        </div>
       )}
-      {it.answer && <div className="body md cx-answer"><Markdown remarkPlugins={[remarkGfm]}>{it.answer}</Markdown></div>}
     </div>
   )
 }

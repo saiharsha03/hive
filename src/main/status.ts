@@ -3,6 +3,9 @@
 // it only answers the SDK's control questions.
 import { query, type Query } from '@anthropic-ai/claude-agent-sdk'
 import { claudeExecutable, engineInfo } from './engine'
+import { statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 export type Limit = { pct: number | null; resetsAt: string | null } | null
 export type Status = {
@@ -16,6 +19,17 @@ export type Status = {
 }
 
 let q: Query | null = null
+// the login the idle process started with: signing in again (claude /login in a terminal, another account) rewrites
+// the credentials file, and the process keeps answering for the old account until it is started again
+const credentials = () => join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), '.credentials.json')
+const loginStamp = () => { try { return statSync(credentials()).mtimeMs } catch { return 0 } }
+let startedOn = 0
+function current(): Query {
+  const stamp = loginStamp()
+  if (q && stamp !== startedOn) { q.close(); q = null; lastGood = null }
+  if (!q) { q = idleQuery(); startedOn = stamp }
+  return q
+}
 
 function idleQuery(): Query {
   const never: AsyncIterable<any> = { [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) }) }
@@ -29,7 +43,7 @@ function idleQuery(): Query {
 }
 
 // the idle process, for lists a tab without its own running process asks for (commands, models, MCP servers)
-export const idle = (): Query => (q ??= idleQuery())
+export const idle = (): Query => current()
 
 const limit = (w: any): Limit => (w ? { pct: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null)
 
@@ -47,7 +61,7 @@ async function withLimits(u: any): Promise<any> {
 }
 
 export async function getStatus(): Promise<Status> {
-  q ??= idleQuery()
+  const q = current()
   const [account, usage, mcp] = await Promise.allSettled([
     q.accountInfo(),
     q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }).then(withLimits),
@@ -88,7 +102,7 @@ let reading: Promise<Weekly> | null = null
 export function weeklyUsage(maxAgeMs = 5 * 60_000): Promise<Weekly> {
   if (weekly && Date.now() - weekly.readAt < maxAgeMs) return Promise.resolve(weekly)
   reading ??= (async () => {
-    q ??= idleQuery()
+    const q = current()
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('the usage read timed out')), 20_000) })
     try {

@@ -141,8 +141,11 @@ async function onMessage(raw: string): Promise<void> {
   // that window are kept on disk, so a replay is refused even after a restart (and a phone clock corrected backwards
   // still works, unlike a high-water mark).
   if (Math.abs(Date.now() - m.seq) > FRESH_MS) return void sendToPhone({ re: m.rid, error: 'Request too old, or the phone clock is off by more than 2 minutes' })
-  const seen = (pairing.seen ?? []).filter((s) => Math.abs(Date.now() - s) <= 2 * FRESH_MS)
-  if (seen.includes(m.seq)) return // a replay
+  // pruned against the highest seq taken, not this computer's clock, so changing the clock cannot bring old ones back
+  const top = Math.max(pairing.seqIn ?? 0, m.seq)
+  const seen = (pairing.seen ?? []).filter((s) => s > top - 2 * FRESH_MS)
+  if (m.seq <= top - 2 * FRESH_MS || seen.includes(m.seq)) return // a replay, or older than anything still remembered
+  pairing.seqIn = top
   pairing.seen = [...seen, m.seq]
   if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
   const id = typeof m.id === 'string' ? m.id : ''

@@ -12,6 +12,20 @@ test.describe('panels', () => {
   test.beforeAll(async () => { l = await launch(); h = new Hive(l.page) })
   test.afterAll(async () => { await close(l) })
 
+  test('to-dos: "talk to Claude about this" opens a thread with the to-do filled in', async () => {
+    await h.open('todos')
+    const text = `${TAG} call the insurer`
+    await h.id('todo-add').fill(text)
+    await h.id('todo-add').press('Enter')
+    const row = h.todoRows().filter({ hasText: text })
+    await row.hover()
+    await row.getByTestId('todo-talk').click()
+    await expect(h.composer()).toHaveValue(`Let's talk about this to-do: ${text}`)
+    await h.open('todos')
+    await row.hover()
+    await row.getByTestId('todo-delete').click()
+  })
+
   test('to-dos: add, tick, delete and undo', async () => {
     await h.open('todos')
     const text = `${TAG} buy milk`
