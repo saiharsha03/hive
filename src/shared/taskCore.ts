@@ -152,3 +152,17 @@ export function kindLabel(kind: string): string {
 
 // Codex runs stop through Hive; every other task through the SDK's stopTask
 export const canStop = (t: Task) => t.status === 'running'
+
+// The engine reports every shell command as a task, foreground ones too. Worth listing as background work: subagents,
+// workflows and Codex runs always; a shell only while it has been running a while (a quick command is already a row in
+// the chat), and a finished shell never (its output is in the chat, not a result waiting for anyone).
+export const SHELL_AFTER_MS = 15_000
+export function worthListing(t: Task, now: number): boolean {
+  if (t.kind !== 'local_bash') return true
+  return t.status === 'running' && now - t.startedAt >= SHELL_AFTER_MS
+}
+
+// a shell's name: the short description its command was run with, when the thread's tool rows have it
+export function shellName(t: Task, describe: (command: string) => string | undefined): string {
+  return t.kind === 'local_bash' ? describe(t.title) ?? t.title : t.title
+}

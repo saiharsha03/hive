@@ -3,7 +3,8 @@
 import type { LiveRow } from './background'
 import type { Session } from './chat'
 import { useAllStatus } from './statusStore'
-import { TaskRow } from './ThreadStatus'
+import { describer, TaskRow, useNow } from './ThreadStatus'
+import { shellName, worthListing } from '../../shared/taskCore'
 import { liveLook } from './Sidebar'
 import { Icon } from './ui'
 
@@ -15,9 +16,12 @@ export function AgentsView({ sessions, live, onActivate }: { sessions: Session[]
   const known = new Set(sessions.map((s) => s.id))
   const running: { tab: string; t: import('../../shared/taskCore').Task }[] = []
   const finished: typeof running = []
+  const now = useNow([...all.values()].some((st) => st.tasks.some((t) => t.status === 'running')))
+  // only real background work (quick and finished shells are rows in their chat), shells named by their description
   for (const [tab, st] of all) {
     if (!known.has(tab)) continue
-    for (const t of st.tasks) (t.status === 'running' ? running : finished).push({ tab, t })
+    const name = describer(sessions.find((s) => s.id === tab)?.items ?? [])
+    for (const t of st.tasks) if (worthListing(t, now)) (t.status === 'running' ? running : finished).push({ tab, t: { ...t, title: shellName(t, name) } })
   }
   const waiting = live.waiting
   const empty = !running.length && !finished.length && !live.working.length && !waiting.length
@@ -26,7 +30,7 @@ export function AgentsView({ sessions, live, onActivate }: { sessions: Session[]
       {empty && <div className="pane-empty">No agents running. Workflows, subagents and Codex runs from any thread show up here.</div>}
       {running.length > 0 && (
         <section>
-          <div className="cap"><Icon name="type-hierarchy" className="mk-agents" />Running agents <span className="n">{running.length}</span></div>
+          <div className="cap"><Icon name="type-hierarchy" className="mk-agents" />Running <span className="n">{running.length}</span></div>
           {running.map(({ tab, t }) => (
             <div key={`${tab}:${t.id}`} className="ag-item">
               <button className="ag-from" onClick={() => onActivate(tab)} title="Open the thread" data-testid={`agents-open-${tab}`}>from {title(tab)}</button>

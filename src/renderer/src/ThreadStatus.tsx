@@ -4,13 +4,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { describeCron, nextRun, untilText } from '../../shared/cronCore'
 import { EFFORTS, modelLabel } from '../../shared/statusCore'
-import { kindLabel, type Task } from '../../shared/taskCore'
+import { kindLabel, shellName, worthListing, type Task } from '../../shared/taskCore'
 import { clearFinished, dismissGoal, setPicked, useThreadStatus } from './statusStore'
 import { Icon, Popover, anchorOf, type Anchor } from './ui'
 
 type Send = (text: string, images: never[], mode?: 'steer' | 'queue') => void
 
-function useNow(on: boolean) {
+export function useNow(on: boolean) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     if (!on) return
@@ -121,14 +121,23 @@ export function GoalLoop({ tabId, busy, onSend, onInterrupt }: { tabId: string; 
   )
 }
 
+// a thread's shell commands by their short description (the Bash / PowerShell input), for naming its shell tasks
+export function describer(items: Item[]): (command: string) => string | undefined {
+  const m = new Map<string, string>()
+  for (const it of items) if (it.kind === 'tool' && typeof it.input?.command === 'string' && typeof it.input?.description === 'string') m.set(it.input.command, it.input.description)
+  return (c) => m.get(c)
+}
 // the app opens the Agents view (every thread's background work) in its side panel
 let showAgents: () => void = () => {}
 export const setShowAgents = (f: () => void) => { showAgents = f }
 
 // the background-work list above the message box: one folded line, the full list in the side panel's Agents view
-export function TaskList({ tabId }: { tabId: string }) {
-  const st = useThreadStatus(tabId)
+export function TaskList({ tabId, items = [] }: { tabId: string; items?: Item[] }) {
+  const all = useThreadStatus(tabId)
   const [open, setOpen] = useState(false)
+  const now = useNow(all.tasks.some((t) => t.status === 'running'))
+  const name = describer(items)
+  const st = { ...all, tasks: all.tasks.filter((t) => worthListing(t, now)).map((t) => ({ ...t, title: shellName(t, name) })) }
   if (!st.tasks.length) return null
   const running = st.tasks.filter((t) => t.status === 'running').length
   return (

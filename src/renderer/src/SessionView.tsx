@@ -441,7 +441,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
         )}
       </div>
 
-      <TaskList tabId={session.id} />
+      <TaskList tabId={session.id} items={session.items} />
 
       {btws.map((b, i) => (
         <div key={i} className="btw" data-testid="btw-answer">
