@@ -65,7 +65,8 @@ if os.environ.get("HIVE_READONLY") == "1":
     _READ_POSTS = [
         (r"[\w-]+\.atlassian\.net", r"/rest/api/\d+/search(/jql)?"),  # Jira search
         (r"([\w-]+\.)?api\.gong\.io", r"/v2/(calls/(extensive|transcript)|users/extensive)"),  # Gong call details
-        (r"api\.(\w+\.)?datadoghq\.(com|eu)", r"/api/v\d/((logs|rum|spans)/(events/)?(search|aggregate)|logs-queries/list)"),  # Datadog search
+        (r"api\.(\w+\.)?datadoghq\.(com|eu)", r"/api/v\d/((logs|rum|spans)/(events/|analytics/)?(search|aggregate)|logs-queries/list)"),  # Datadog search and counts
+        (r"(login|test|[\w-]+\.my)\.salesforce\.com", r"/services/(Soap/u/[\d.]+|oauth2/token)"),  # Salesforce sign-in (needed before any read)
     ]
     _POSTS = {x.strip().lower() for x in os.environ.get("HIVE_READONLY_POST_SHA256", "").split(",") if x.strip()}
 

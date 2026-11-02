@@ -38,12 +38,15 @@ test('the Python guard blocks HTTP writes before they leave, allows reads and re
     '    print(a("POST", "acme.atlassian.net", "/rest/api/3/search/jql"), a("POST", "acme.atlassian.net", "/rest/api/3/issue"),',
     '          a("POST", "evil.example.com", "/rest/api/3/search"), a("POST", "api.gong.io", "/v2/calls/extensive"), a("POST", "hooks.slack.com", "/services/x"),',
     '          a("POST", "hooks.slack.com", "/services/alerts"), a("POST", "hooks.slack.com", "/services/alerts?x=1".split("?")[1]))',
+    '    print(a("POST", "login.salesforce.com", "/services/Soap/u/59.0"), a("POST", "acme.my.salesforce.com", "/services/oauth2/token"),',
+    '          a("POST", "acme.my.salesforce.com", "/services/data/v59.0/sobjects/Account"), a("POST", "api.datadoghq.com", "/api/v2/rum/analytics/aggregate"))',
   ].join('\n'))
   // the allowed alert channel, by fingerprint only
   const alerts = createHash('sha256').update('hooks.slack.com/services/alerts').digest('hex')
   const run = (ro: string) => execFileSync('python', [probe], { env: { ...process.env, HIVE_READONLY: ro, HIVE_READONLY_POST_SHA256: `abc, ${alerts}`, PYTHONPATH: [dir, process.env.PYTHONPATH].filter(Boolean).join(delimiter) } }).toString().trim().replace(/\r/g, '')
-  // a read-only search POST passes only to its own host, never because the path merely contains it; Slack only to the allowed channel
-  assert.equal(run('1'), 'sent blocked blocked blocked\ny n n y n y n')
+  // a read-only search POST passes only to its own host, never because the path merely contains it; Slack only to the allowed channel;
+  // the Salesforce sign-in (SOAP or OAuth) and Datadog counts pass, a Salesforce record write does not
+  assert.equal(run('1'), 'sent blocked blocked blocked\ny n n y n y n\ny y n y')
   assert.equal(run(''), 'sent sent sent sent')
   for (const c of ['gh api -XPOST repos/o/r/issues', 'gh api -X=POST x', 'gh api -iXPOST x', 'gh api --method=PATCH x', 'gh api -fbody=x x', 'gh api --field=x x'])
     assert.ok(blockedCommand(c), c)
