@@ -35,3 +35,9 @@ test('tasks: Codex runs, subagents, stop, process end', () => {
   assert.deepEqual([ts[0].status, ts[0].summary], ['completed', 'fine'])
   assert.equal(applyTask(ts, { type: 'assistant' }, 80), ts)
 })
+
+test('a task started by a tool call remembers that call, so its row can follow the task', () => {
+  const ts = applyTask([], { type: 'system', subtype: 'task_started', task_id: 'b1', description: 'review', subagent_type: 'general-purpose', tool_use_id: 'toolu_9' }, 0)
+  assert.equal(ts[0].toolUseId, 'toolu_9')
+  assert.equal(applyTask([], { type: 'system', subtype: 'task_started', task_id: 'b2', description: 'x' }, 0)[0].toolUseId, undefined)
+})

@@ -30,6 +30,7 @@ export type Task = {
   error?: string
   phases: TaskPhase[]
   agents: TaskAgent[]
+  toolUseId?: string // the tool call that started it (an Agent call sent to the background), to show its real state on that row
 }
 
 const STATUS: Record<string, Task['status']> = {
@@ -101,6 +102,7 @@ export function applyTask(tasks: Task[], ev: any, now: number): Task[] {
         kind: ev.task_type ?? (ev.subagent_type ? 'local_agent' : t.kind),
         title: String(ev.description ?? t.title),
         name: ev.workflow_name ?? ev.subagent_type ?? t.name,
+        ...(ev.tool_use_id ? { toolUseId: String(ev.tool_use_id) } : {}),
         status: 'running',
       }))
     case 'task_progress':

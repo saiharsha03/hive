@@ -14,6 +14,7 @@ import type { ClipOffer } from '../../shared/clipboardCore'
 import { clearOffer, textHash, useClipboardOn, useClipOffer } from './clipboardOffer'
 import { MdBody } from './MdBody'
 import { GoalLoop, ModelEffort, TaskList } from './ThreadStatus'
+import { useThreadStatus } from './statusStore'
 import { SummaryRow, WarningRow } from './ChatRows'
 import { useSlashMenu } from './SlashMenu'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
@@ -336,6 +337,9 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
 
   // the conversation, built only when it changes: typing in the box re-renders this view on every key,
   // and re-parsing every message's Markdown made typing lag in long threads
+  // a tool call that went to the background (an Agent with run_in_background) returns at once; its row follows the task
+  const tasks = useThreadStatus(session.id).tasks
+  const bgOf = useMemo(() => new Map(tasks.filter((t) => t.toolUseId).map((t) => [t.toolUseId!, t.status])), [tasks])
   const transcript = useMemo(() => (
       <>
         {!session.loaded && <div className="hint">Loading conversation…</div>}
@@ -382,8 +386,10 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             const c = hunks ? counts(hunks) : null
             const label = file ? shortPath(file, session.cwd) : ''
             const [icon, tm] = toolMark(it.name)
+            const bg = bgOf.get(it.id) // its background task: running until that ends, not "done" when the call returned
+            const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
             return (
-              <div key={i} className={`toolrow ${it.status}`}>
+              <div key={i} className={`toolrow ${status}`}>
                 <Icon name={icon} className={tm} />
                 <span className={`tv ${tm}`}>{verb}</span>
                 {file && hunks && c
@@ -392,8 +398,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
                   </button>
                   : <span className="tw">{what}</span>}
                 <span className="ts">
-                  {it.status === 'running' && <button className="bg" onClick={() => onBackground(it.id)} title="Move to the background (Ctrl+B for all)" data-testid="tool-background">Background</button>}
-                  {it.status === 'running' ? <span className="s-work">running</span> : it.status === 'error' ? <span className="s-fail">FAILED</span> : <span className="s-idle">done</span>}
+                  {it.status === 'running' && !bg && <button className="bg" onClick={() => onBackground(it.id)} title="Move to the background (Ctrl+B for all)" data-testid="tool-background">Background</button>}
+                  {bg === 'running' ? <span className="s-work">running in the background</span> : status === 'running' ? <span className="s-work">running</span> : status === 'error' ? <span className="s-fail">FAILED</span> : bg === 'stopped' ? <span className="s-idle">stopped</span> : <span className="s-idle">done</span>}
                 </span>
               </div>
             )
@@ -421,7 +427,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           return <div key={i} className="msg err" data-testid="msg-error"><Icon name="error" className="s-fail" /> {it.text}</div>
         })}
       </>
-  ), [session.loaded, session.items, session.streaming, session.cwd, session.history?.more, limit, onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued])
+  ), [session.loaded, session.items, session.streaming, session.cwd, session.history?.more, limit, onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued, bgOf])
 
   // the live session's own mode once it reports one; before that, the mode it will start in
   const shownMode = session.mode ?? (session.background ? 'auto' : mode)
