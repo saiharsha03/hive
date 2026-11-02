@@ -65,6 +65,16 @@ export function watcherIds(): string[] {
   return names.filter((n) => validId(n) && existsSync(join(watchersRoot(), n, 'watcher.json'))).sort()
 }
 
+// the tab a watcher's Claude session runs in ("watcher-..."), so resuming it from elsewhere (the phone, a resent
+// message) keeps it read-only; null when the session is no watcher's
+export function watcherTabFor(sessionId: string): string | null {
+  for (const id of watcherIds()) {
+    const st = readState(id)
+    if (st.sessionId === sessionId) return st.tabId ?? `watcher-${id}-${Date.now()}`
+  }
+  return null
+}
+
 const cfgOf = (id: string, w: WatcherFile) => watcherConfig(dirOf(id), w)
 const cwdOf = (w: WatcherFile) => w.cwd || workspace || homedir()
 

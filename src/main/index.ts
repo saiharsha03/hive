@@ -22,7 +22,7 @@ import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
 import { editorMtime, editorRead, editorWrite, vsCodeUrl } from './editorFiles'
 import { lspChange, lspClose, lspOpen, lspRequest, lspSaved, setDiagnosticsSink, stopLanguageServers } from './lsp'
 import type { AllowStatus } from '../shared/allowCore'
-import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail } from './watchers'
+import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail, watcherTabFor } from './watchers'
 import { gitDecorations, listDir } from './files'
 import { uiLoad, uiSave } from './uiStore'
 import { loadHistory, loadRecentHistory } from './history'
@@ -126,7 +126,8 @@ const mobileDeps = () => ({
     if (l) { runInThread({ tabId: l.tabId, cwd: l.cwd, title: l.title, prompt: text }, w.webContents); return 'sent' }
     const s = (await listSessions()).find((x) => x.id === id)
     if (!s) throw new Error('That thread is gone')
-    runInThread({ tabId: s.id, cwd: s.cwd, title: s.title, prompt: text, resume: s.id }, w.webContents)
+    // a watcher's session resumes in the watcher's own tab, so it stays read-only
+    runInThread({ tabId: watcherTabFor(s.id) ?? s.id, cwd: s.cwd, title: s.title, prompt: text, resume: s.id }, w.webContents)
     return 'sent'
   },
   start: async (folder: string, text: string) => {
@@ -436,7 +437,8 @@ function createWindow(): void {
   // messages that had not reached Claude when Hive last closed go to their threads again, once the window is up
   web.once('did-finish-load', () => setTimeout(() => {
     for (const p of TEST_MODE ? [] : takePending()) {
-      try { runInThread({ tabId: p.sessionId ?? p.tabId, cwd: p.cwd, title: p.title, prompt: p.text, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
+      // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
+      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: p.text, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
     }
   }, 4000))
 
