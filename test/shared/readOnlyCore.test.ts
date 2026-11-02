@@ -39,7 +39,8 @@ test('the Python guard blocks HTTP writes before they leave, allows reads and re
     '          a("POST", "evil.example.com", "/rest/api/3/search"), a("POST", "api.gong.io", "/v2/calls/extensive"), a("POST", "hooks.slack.com", "/services/x"),',
     '          a("POST", "hooks.slack.com", "/services/alerts"), a("POST", "hooks.slack.com", "/services/alerts?x=1".split("?")[1]))',
     '    print(a("POST", "login.salesforce.com", "/services/Soap/u/59.0"), a("POST", "acme.my.salesforce.com", "/services/oauth2/token"),',
-    '          a("POST", "acme.my.salesforce.com", "/services/data/v59.0/sobjects/Account"), a("POST", "api.datadoghq.com", "/api/v2/rum/analytics/aggregate"))',
+    '          a("POST", "acme.my.salesforce.com", "/services/data/v59.0/sobjects/Account"), a("POST", "api.datadoghq.com", "/api/v2/rum/analytics/aggregate"),',
+    '          a("POST", "acme.my.salesforce.com", "/services/Soap/u/59.0"))',
   ].join('\n'))
   // the allowed alert channel, by fingerprint only
   const alerts = createHash('sha256').update('hooks.slack.com/services/alerts').digest('hex')
