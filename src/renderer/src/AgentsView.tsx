@@ -27,18 +27,19 @@ export function AgentsView({ sessions, live, onActivate }: { sessions: Session[]
   const empty = !running.length && !finished.length && !live.working.length && !waiting.length
   return (
     <div className="agents" data-testid="agents-view">
-      {empty && <div className="pane-empty">No agents running. Workflows, subagents and Codex runs from any thread show up here.</div>}
-      {running.length > 0 && (
-        <section>
-          <div className="cap"><Icon name="type-hierarchy" className="mk-agents" />Running <span className="n">{running.length}</span></div>
-          {running.map(({ tab, t }) => (
+      {empty && <div className="pane-empty">Nothing running. Subagents, workflows and Codex runs, long commands, and working threads show up here.</div>}
+      {/* three kinds, each its own group: agents (subagents, workflows, Codex), long-running commands, then threads */}
+      {([['agents', 'Agents', 'type-hierarchy', running.filter(({ t }) => t.kind !== 'local_bash')], ['commands', 'Commands', 'terminal', running.filter(({ t }) => t.kind === 'local_bash')]] as const).map(([key, label, icon, rows]) => rows.length > 0 && (
+        <section key={key} data-testid={`agents-section-${key}`}>
+          <div className="cap"><Icon name={icon} className="mk-agents" />{label} <span className="n">{rows.length} running</span></div>
+          {rows.map(({ tab, t }) => (
             <div key={`${tab}:${t.id}`} className="ag-item">
               <button className="ag-from" onClick={() => onActivate(tab)} title="Open the thread" data-testid={`agents-open-${tab}`}>from {title(tab)}</button>
               <TaskRow t={t} tabId={tab} open={t.phases.length > 0} />
             </div>
           ))}
         </section>
-      )}
+      ))}
       {(live.working.length > 0 || waiting.length > 0) && (
         <section>
           <div className="cap"><Icon name="pulse" />Threads <span className="n">{live.working.length} working, {waiting.length} waiting</span></div>
@@ -57,7 +58,7 @@ export function AgentsView({ sessions, live, onActivate }: { sessions: Session[]
       )}
       {finished.length > 0 && (
         <section>
-          <div className="cap"><Icon name="pass" />Finished, results waiting for you <span className="n">{finished.length}</span></div>
+          <div className="cap"><Icon name="pass" />Finished agents <span className="n">{finished.length}</span></div>
           {finished.map(({ tab, t }) => (
             <div key={`${tab}:${t.id}`} className="ag-item">
               <button className="ag-from" onClick={() => onActivate(tab)} data-testid={`agents-open-done-${tab}`}>from {title(tab)}</button>
