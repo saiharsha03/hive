@@ -75,7 +75,9 @@ describe.skipIf(!PY)('scripts runner (real python)', () => {
     const distinct = () => new Set(updates.map((u) => u.find((r) => r.name === 'Loop')?.output ?? '').filter(Boolean)).size
     await until(() => distinct() >= 3)
     assert.match(latest('Loop').output, /err \d/) // stderr too
-    const pid = Number(latest('Loop').output.match(/pid (\d+)/)![1])
+    // the pid is the first line: read it from the log, which keeps everything (on a slow runner it can leave the panel's tail)
+    await until(() => /pid \d+/.test(readFileSync(latest('Loop').log, 'utf8')))
+    const pid = Number(readFileSync(latest('Loop').log, 'utf8').match(/pid (\d+)/)![1])
     const alive = () => { try { process.kill(pid, 0); return true } catch { return false } }
     assert.ok(alive(), 'python child is running before Stop')
     sc.stopScript('Loop')
