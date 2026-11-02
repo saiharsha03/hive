@@ -570,8 +570,8 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   const m = { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null } as SDKUserMessage
   const cur = s
   // sent while Claude works (steer) or queued: kept on disk until it reaches Claude, so closing Hive loses nothing
-  if (msg.text && !msg.images.length && (msg.mode === 'queue' || cur.turns.isBusy())) {
-    addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, mode: msg.mode === 'queue' ? 'queue' : 'steer' })
+  if ((msg.text || msg.images.length) && (msg.mode === 'queue' || cur.turns.isBusy())) {
+    addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer' })
   }
   const go = () => {
     if (msg.mode === 'queue' && msg.queueId) return cur.turns.submit(msg.queueId, m)

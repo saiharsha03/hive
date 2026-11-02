@@ -453,8 +453,9 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
       {session.busy && (
         <div className="working" data-testid="working">
           <Icon name="loading" className="spin s-work" />
-          <span className="verb s-work">Working</span>
-          {running?.kind === 'tool' && <span className="what">{Object.values(toolLine(running.name, running.input)).join(' ')}</span>}
+          <span className="verb s-work">{session.compacting ? 'Compacting the conversation' : 'Working'}</span>
+          {session.compacting && <span className="what">to free up context; this can take a few minutes</span>}
+          {!session.compacting && running?.kind === 'tool' && <span className="what">{Object.values(toolLine(running.name, running.input)).join(' ')}</span>}
           <span className="r">
             <button onClick={onRunInBackground} title="Hide this thread and keep Claude running (Ctrl+Shift+B)" data-testid="chat-run-background">Run in background</button>
             <button onClick={() => onBackground()} data-testid="chat-background-tasks">Background tasks (Ctrl+B)</button>

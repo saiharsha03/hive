@@ -24,6 +24,8 @@ export class Hive {
     const view = panel === 'watch' ? 'watchers' : panel
     const shown: Record<string, string> = { files: 'file-tree', deploy: 'deploy-panel', git: 'git-panel', scripts: 'scripts-panel', watchers: 'watchers-panel', mcp: 'mcp-menu', todos: 'todos-panel', notes: 'notes-panel' }
     if (await this.id(shown[view]).first().isVisible()) return
+    // views with a top-bar button open from it; the rest from the Tools menu
+    if (['files', 'git', 'todos', 'notes', 'scripts', 'deploy'].includes(view)) { await this.id(`top-view-${view}`).click(); return }
     await this.id('menu-tools').click()
     await this.id(`menu-tools-${view}`).click()
   }

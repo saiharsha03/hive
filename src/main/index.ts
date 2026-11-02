@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { liveQuery, liveThreads, stopCodex } from './chat'
-import { takePending } from './pending'
+import { resendText, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
 import { cleanupThread, threadLinks } from './threadWorktrees'
@@ -438,7 +438,7 @@ function createWindow(): void {
   web.once('did-finish-load', () => setTimeout(() => {
     for (const p of TEST_MODE ? [] : takePending()) {
       // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
-      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: p.text, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
+      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: resendText(p), ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
     }
   }, 4000))
 

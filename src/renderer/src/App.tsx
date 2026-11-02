@@ -498,7 +498,10 @@ export function App() {
     { id: 'mcp', label: 'MCP servers', icon: 'plug', mk: 'mk-other' },
   ]
 
-  const viewItems = (prefix: string): MenuItem[] => (Object.keys(VIEW) as ViewId[]).filter((v) => v !== 'threads' || placeOf(ui, 'threads') !== 'left').map((v) => ({
+  // the Tools menu lists only views with no button of their own (the top bar has Files, Git, To-dos, Notes, Scripts,
+  // Deploy; the bottom panel has Agents and Terminal)
+  const ownButton = new Set<ViewId>(['files', 'git', 'todos', 'notes', 'scripts', 'deploy', 'agents', 'terminal'])
+  const viewItems = (prefix: string): MenuItem[] => (Object.keys(VIEW) as ViewId[]).filter((v) => !ownButton.has(v) && (v !== 'threads' || placeOf(ui, 'threads') !== 'left')).map((v) => ({
     label: VIEW[v].label, icon: VIEW[v].icon, onClick: (el) => openTool(v, el), testid: `${prefix}-${v}`, hint: v === 'deploy' ? 'wizard' : undefined,
   }))
   const menus: Menu[] = [

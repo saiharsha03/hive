@@ -13,6 +13,8 @@ export type Session = {
   items: Item[]
   streaming: string // text of the reply being written right now
   busy: boolean
+  compacting?: boolean // the engine is summarising the conversation to free context (can take minutes)
+  turnOpen?: boolean // during a compaction: a turn is still running underneath it
   loaded: boolean // history read (reopened sessions)
   // a reopened thread shows its recent end first: earlier = how many items came from its transcript, more = there is
   // earlier conversation not loaded yet
@@ -123,10 +125,18 @@ export function applyEvent(s: Session, ev: any): Session {
     }
     case 'system':
       if (ev.subtype === 'init' && ev.permissionMode) return { ...s, mode: ev.permissionMode }
+      // compaction starting: shown as working, with its own label, so minutes of silence never look like a hang
+      // (turnOpen: a turn is still running under it, so the thread stays busy after; otherwise it goes idle)
+      if (ev.subtype === 'status') {
+        const on = ev.status === 'compacting'
+        if (on === !!s.compacting) return s
+        return on ? { ...s, compacting: true, turnOpen: s.busy, busy: true } : { ...s, compacting: false, busy: !!s.turnOpen }
+      }
       // auto-compact (or /compact): the engine summarised the conversation to free context
       if (ev.subtype === 'compact_boundary') {
         const how = ev.compact_metadata?.trigger === 'manual' ? 'compacted' : 'auto-compacted'
-        return { ...s, items: [...s.items, { kind: 'note', text: `Conversation ${how} to free up context` }] }
+        const ended = s.compacting ? { compacting: false, busy: !!s.turnOpen } : {}
+        return { ...s, ...ended, items: [...s.items, { kind: 'note', text: `Conversation ${how} to free up context` }] }
       }
       // a hook said something to the user (security warning on an edit, a blocked call); empty output stays hidden
       {
@@ -185,9 +195,12 @@ export function applyEvent(s: Session, ev: any): Session {
       const items: Item[] = settle(s.items, ev.is_error ? 'error' : 'done')
       if (ev.is_error) {
         const why = [...(ev.errors ?? []), ev.result].filter(Boolean).join('\n')
-        items.push({ kind: 'error', text: why || `The turn ended: ${ev.subtype ?? 'error'}` })
+        // the engine's internal end-of-turn diagnostic: say what it means, keep the raw line for reference
+        const text = why.startsWith('[ede_diagnostic]') ? `The turn stopped before Claude finished (usually a full context: it compacts and carries on). ${why}` : why
+        items.push({ kind: 'error', text: text || `The turn ended: ${ev.subtype ?? 'error'}` })
       }
-      return { ...s, items, busy: false, streaming: '' }
+      // still busy while a compaction runs after the turn
+      return { ...s, items, busy: !!s.compacting, turnOpen: false, streaming: '' }
     }
     case 'hive_error':
       return { ...s, busy: false, streaming: '', items: [...settle(s.items, 'error'), { kind: 'error', text: ev.message }] }
