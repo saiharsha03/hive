@@ -34,9 +34,14 @@ test('phone requests: run once, in order, while fresh; others dropped; future-da
   const r = run(0, now + hour)
   assert.deepEqual([r.run, r.refused], [false, [now + hour]])
   assert.equal(run(0, now + hour, now + hour, r.refused).run, false)
-  // the list is bounded and forgets entries once they are in the past
+  assert.equal(r.future, true) // the phone is told its clock is ahead (once)
+  // full list: nothing is evicted (an evicted one could be replayed later); everything is refused until entries expire
   let list: number[] = []
   for (let i = 1; i <= 80; i++) list = run(0, now + hour + i, now, list).refused
   assert.equal(list.length, 50)
-  assert.deepEqual(run(0, now - 100, now + 2 * hour, list).refused, [])
+  assert.equal(run(0, now - 100, now, list).run, false)
+  assert.ok(list.includes(now + hour + 1))
+  // once they are in the past they leave, and requests run again
+  const later = run(0, now + 2 * hour - 100, now + 2 * hour, list)
+  assert.deepEqual([later.run, later.refused], [true, []])
 })

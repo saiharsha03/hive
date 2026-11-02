@@ -49,6 +49,8 @@ export function initMobile(env: Record<string, string>, d: Deps): void {
   deps = d
   pairing = load()
   if (pairing && !pairing.pair) pairing = null
+  if (pairing && 'seen' in pairing) delete (pairing as { seen?: unknown }).seen // left by an earlier version
+
   if (TEST_MODE) return
   connect()
 }
@@ -117,13 +119,16 @@ const FRESH_MS = 120_000
 // Replay protection for phone requests: a request runs only if its seq (the phone's own counter, never going back) is
 // above the last one that ran, and within 2 minutes of this computer's clock (so the relay cannot hold one back and
 // deliver it later). Anything else is dropped silently: no reply, no write, nothing that grows, whatever the relay sends.
-// One exception is remembered: a request dated in the future (the phone clock ahead) is refused now and kept in a short
-// list, so a relay holding it until it looks fresh cannot run it later. At most FUTURE_KEEP of them, dropped once passed.
+// One exception is remembered: a request dated in the future (the phone clock ahead) is refused now and kept in a list,
+// so a relay holding it until it looks fresh cannot run it later. Entries leave only once they are in the past (then the
+// freshness check refuses them anyway), never to make room: with FUTURE_KEEP of them waiting, every request is refused
+// until some expire (fail closed; it takes a phone clock that stays far ahead).
 const FUTURE_KEEP = 50
-export function checkPhoneSeq(seqIn: number, seq: number, now: number, refused: number[] = []): { run: boolean; refused: number[] } {
-  const still = refused.filter((s) => s > seqIn && s > now - FRESH_MS)
+export function checkPhoneSeq(seqIn: number, seq: number, now: number, refused: number[] = []): { run: boolean; future?: boolean; refused: number[] } {
+  const still = refused.filter((s) => s > now - FRESH_MS)
   if (seq <= seqIn || still.includes(seq)) return { run: false, refused: still }
-  if (seq > now + FRESH_MS) return { run: false, refused: [...still, seq].slice(-FUTURE_KEEP) }
+  if (still.length >= FUTURE_KEEP) return { run: false, refused: still }
+  if (seq > now + FRESH_MS) return { run: false, future: true, refused: [...still, seq] }
   return { run: Math.abs(now - seq) <= FRESH_MS, refused: still }
 }
 // a notification small enough that, sealed (nonce + tag + base64), it rides in one push: FCM data is at most 4 KB and the
@@ -164,6 +169,8 @@ async function onMessage(raw: string): Promise<void> {
   const c = checkPhoneSeq(pairing.seqIn ?? 0, m.seq, Date.now(), pairing.future)
   if (!c.run) { // a replay, held back, or the phone clock off: dropped silently (a future-dated one is remembered)
     if (c.refused.length !== (pairing.future ?? []).length || c.refused.some((s, i) => s !== pairing!.future![i])) { pairing.future = c.refused; store() }
+    // said once per such request (a replay of it is in the list, so silent)
+    if (c.future) sendToPhone({ re: m.rid, error: 'The phone clock is ahead of the computer by more than 2 minutes. Fix the clock and try again.' })
     return
   }
   pairing.future = c.refused

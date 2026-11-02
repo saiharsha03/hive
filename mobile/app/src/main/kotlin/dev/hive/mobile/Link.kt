@@ -71,8 +71,8 @@ data class Pairing(val relay: String, val pair: String, val token: String, val k
             }
         }
 
-        // the phone's own counter: the clock in ms, but never at or below the last one sent (kept across restarts), so a
-        // clock set back cannot make Hive refuse the phone's requests as replays
+        // the phone's own counter: the clock in ms, never at or below the last one sent (kept across restarts, so Hive
+        // never sees a number go back); a counter left far ahead by a clock that was wrong starts again from the clock
         fun nextSeq(ctx: Context): Long = synchronized(this) {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val now = System.currentTimeMillis()

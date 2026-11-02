@@ -16,7 +16,6 @@ import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 object Relay {
     enum class State { Off, Connecting, RelayOnly, Online }
@@ -27,8 +26,9 @@ object Relay {
     private val http = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
     private var ws: WebSocket? = null
     private var ctx: Context? = null
-    private val waiting = ConcurrentHashMap<Int, CompletableDeferred<JSONObject>>()
-    private val rid = AtomicInteger(0)
+    // requests waiting for their reply, by rid = the request's seq (unique across app restarts, so a reply the relay
+    // held back can never answer a later request)
+    private val waiting = ConcurrentHashMap<Long, CompletableDeferred<JSONObject>>()
 
     // at most one attempt every 5 s: with no network a failed attempt comes back at once, and the screens ask again
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
@@ -72,7 +72,7 @@ object Relay {
         val m = Seal.open(p.key, p.pair, "d2p", blob) ?: return
         if (!Pairing.takeSeq(c, m.optLong("seq"))) return
         state.value = State.Online
-        if (m.has("re")) { waiting.remove(m.optInt("re"))?.complete(m); return }
+        if (m.has("re")) { waiting.remove(m.optLong("re"))?.complete(m); return }
         if (m.optString("op") == "notify") Notes.show(c, m)
         changed.value += 1
     }
@@ -82,8 +82,8 @@ object Relay {
         val c = ctx ?: throw IllegalStateException("Not paired")
         val p = Pairing.load(c) ?: throw IllegalStateException("Not paired")
         val s = ws ?: throw IllegalStateException("Not connected")
-        val id = rid.incrementAndGet()
-        val msg = JSONObject(extra).put("op", op).put("rid", id).put("seq", Pairing.nextSeq(c))
+        val id = Pairing.nextSeq(c)
+        val msg = JSONObject(extra).put("op", op).put("rid", id).put("seq", id)
         val d = CompletableDeferred<JSONObject>()
         waiting[id] = d
         s.send(JSONObject().put("blob", Seal.seal(p.key, p.pair, "p2d", msg)).toString())
