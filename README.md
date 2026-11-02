@@ -152,7 +152,8 @@ created by asking any agent.
 
 ### Also
 
-- **To-dos** and **Notes** (markdown files in `~/.claude/hive/notes`, searchable, saved as you type).
+- **To-dos** and **Notes** (markdown files in `~/.claude/hive/notes`, searchable, saved as you type). Ask any thread
+  to note something and it writes to Notes (`add_note`: adds to the note with that title, or makes one).
 - **Account and usage** in the status bar: 5-hour and 7-day limits, and **Switch account** (Claude Code's own
   browser sign-in, then the app restarts on the new login).
 - **Allow my IP**: a button for your own allowlist command (`HIVE_ALLOWLIST_CMD`), lit when your public IP changes.

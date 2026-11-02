@@ -15,6 +15,7 @@ import { searchInSession, searchSessions, sessionMeta } from './search'
 import { formatChunks, formatSessions } from './searchCore'
 import { turnQueue } from './queueCore'
 import { addTodo } from './todos'
+import { addToNote } from './notes'
 import { listSessions } from './sessions'
 import { formatThreads, formatWait, labelFromThread, listThreads, resolveThread, statusOf, waitIdle, type From } from '../shared/threadTalkCore'
 import { agentStack, ensureWorktree, logs as devLogs, releaseThread, setThreadTitle } from './devStack'
@@ -51,6 +52,7 @@ const append = () => [
   'You can add an item to the user\'s personal to-do list with mcp__hive__add_todo when the user asks, or when something clearly needs the user\'s follow-up later.',
   'add_todo can also set a due date (YYYY-MM-DD; turn words like "Monday" or "next week" into a date using the current date) and a status:',
   '"talk" when the user needs to talk to someone about it ("need to talk"), "holding" to hold it off for now, otherwise leave it as "todo".',
+  'When the user asks you to note or save something to their Notes, use mcp__hive__add_note (it adds to the note with that title, or makes one).',
   'mcp__hive__organize_thread pins, snoozes, closes or archives this conversation in the sidebar (e.g. "talk tomorrow", "keep this handy", "we are done"); use your judgement.',
   'Claude can search the user\'s past Claude Code sessions with mcp__hive__search_sessions when the user refers to earlier work ("like we did last week", "the CSV import").',
   'To work on code in one of the user\'s repos, call mcp__hive__worktree with the repo and a branch or a ticket (key plus a few words) and do all the work in the folder it returns,',
@@ -155,6 +157,19 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           await addTodo(text, 'claude', { due, status })
           send({ type: 'hive_todos_changed' })
           return { content: [{ type: 'text', text: `Added to the user's to-do list: ${text}${due ? ` (due ${due})` : ''}${status ? ` [${status}]` : ''}` }] }
+        },
+      ),
+      tool(
+        'add_note',
+        `Write to the user's Notes in ${appName()} (Notes in the top bar; markdown files in ~/.claude/hive/notes). Use when the user asks you to note, jot down or save something. `
+          + 'A note whose title matches (any case) gets the text appended at its end; otherwise a new note with that title is made.',
+        {
+          title: z.string().min(1).describe('The note\'s title: an existing note to add to, or the new note\'s name'),
+          text: z.string().min(1).describe('What to write, in markdown'),
+        },
+        async ({ title, text }) => {
+          const r = await addToNote(title, text)
+          return { content: [{ type: 'text', text: `${r.created ? 'Created the note' : 'Added to the note'} "${title.trim()}" in Notes.` }] }
         },
       ),
       tool(

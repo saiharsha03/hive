@@ -36,6 +36,14 @@ export async function saveNote(id: string | null, text: string): Promise<string>
   return nid
 }
 
+// Claude's add_note: the note with this title (any case) gets the text appended under it; no such note, a new one
+export async function addToNote(title: string, text: string): Promise<{ id: string; created: boolean }> {
+  const t = title.trim()
+  const found = (await listNotes()).find((n) => n.title.toLowerCase() === t.toLowerCase())
+  if (found) return { id: await saveNote(found.id, `${found.text.replace(/\s+$/, '')}\n\n${text.trim()}\n`), created: false }
+  return { id: await saveNote(null, `# ${t}\n\n${text.trim()}\n`), created: true }
+}
+
 export async function deleteNote(id: string): Promise<void> {
   const bin = join(notesDir(), '_deleted')
   mkdirSync(bin, { recursive: true })
