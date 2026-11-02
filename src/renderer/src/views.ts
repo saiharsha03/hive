@@ -30,20 +30,21 @@ export type Arrangement = {
   closed: Region[]
 }
 
-const BOTTOM: ViewId[] = ['agents', 'terminal', 'watchers', 'deploy', 'scripts', 'todos', 'notes']
+// the bottom panel holds only what runs: Agents and the terminal; the tools are side panel views picked from the top bar
+const BOTTOM: ViewId[] = ['agents', 'terminal']
 
 export const ARRANGE: Record<UIId, Arrangement> = {
-  default: { left: ['threads'], right: ['files', 'git', 'agents'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
+  default: { left: ['threads'], right: ['files', 'git', 'todos', 'notes', 'scripts', 'deploy', 'watchers'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
   workbench: {
-    left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['git'], bottom: BOTTOM,
+    left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['git', 'deploy'], bottom: BOTTOM,
     chat: 'grid', tabs: 'full', closed: [],
   },
   strip: {
     left: [], right: ['agents', 'watchers', 'git', 'dev', 'scripts', 'todos', 'notes', 'files', 'deploy'],
-    bottom: ['terminal', 'agents', 'watchers', 'deploy', 'scripts', 'todos', 'notes'], chat: 'columns', tabs: 'title', closed: ['right'],
+    bottom: ['terminal', 'agents'], chat: 'columns', tabs: 'title', closed: ['right'],
   },
   focus: {
-    left: [], right: ['files', 'git', 'agents', 'watchers', 'scripts', 'todos', 'notes', 'dev'], bottom: BOTTOM,
+    left: [], right: ['files', 'git', 'todos', 'notes', 'scripts', 'deploy', 'watchers', 'dev'], bottom: BOTTOM,
     chat: 'single', tabs: 'none', closed: ['right', 'bottom'],
   },
 }

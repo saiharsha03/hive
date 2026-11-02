@@ -726,7 +726,8 @@ export function App() {
     { icon: rightOpen ? 'layout-sidebar-right' : 'layout-sidebar-right-off', on: rightOpen, title: 'Toggle right side', onClick: () => toggleRegion('right'), testid: 'toggle-right' },
   ]
   // the side panel's views, picked from the top bar (the panel shows only the picked one); the open one closes it
-  const viewButtons = arr.right.map((v) => ({
+  // (Watchers has its own button with the running count, so it is not repeated here)
+  const viewButtons = arr.right.filter((v) => v !== 'watchers').map((v) => ({
     icon: VIEW[v].icon, on: rightOpen && rv === v, title: VIEW[v].label, testid: `top-view-${v}`,
     onClick: () => { if (rightOpen && rv === v) setRightOpen(false); else { setRightView(v); setRightOpen(true) } },
   }))

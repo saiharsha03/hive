@@ -27,21 +27,28 @@ It started as a personal replacement for an editor plus a terminal, and is share
 ## Highlights
 
 - **Many threads, one window.** Up to four chats side by side; drag a tab onto a chat's edge to split. Every past
-  session sits in a searchable sidebar (keyword search), grouped by date or project, with pin,
-  snooze, close and archive.
+  session sits in a searchable sidebar (keyword search), grouped by date or project, with pin, snooze, close and
+  archive. Threads name themselves after what you are doing, and long ones open at once (newest messages first).
+- **A real code editor.** Files open as tabs next to your threads, like VS Code: Monaco with the same language
+  servers VS Code runs (Pyright for Python and Django, TypeScript, Vue), so completions, hover, go-to-definition,
+  rename and error squiggles work. HTML and Markdown open rendered, with a Code switch. Open in VS Code is one click
+  away for debugging.
 - **Background agents that report back.** Start a thread in the background and keep working; it shows under
   *Working* or *Waiting for you* until it needs you.
 - **Agents that talk to each other.** Through Hive's own MCP server, an agent can start a new thread, message
   another one, wait for its answer, or hand work to Codex.
 - **A worktree per thread.** Any thread can ask for its own git worktree, so parallel agents never edit the same
   checkout. Closing or archiving the thread cleans the worktree up.
-- **Watchers.** Persistent background agents on a schedule, each with its own thread, prompt, SQLite memory,
-  reports and findings. Schedules can be fixed or adaptive: sweep less often as your weekly usage climbs.
-- **Your tools, built in.** Git panel with split or unified diffs, terminal drawer, file tree, preview panel, to-dos,
-  Pull latest, Dev stack, a Deploy wizard that drives your own scripts, a Scripts panel and a Dependabot reviewer.
+- **Watchers.** Persistent background agents, each with its own thread, prompt, SQLite memory, reports and
+  findings. Schedules can be fixed, adaptive (sweep less often as your weekly usage climbs) or self-scheduled: the
+  agent plans its own wake-ups in a table. Watcher threads are read-only by default.
+- **Your tools, built in.** Files, Git (with the open thread's changes on top), To-dos, Notes, Scripts and Deploy
+  each one click away in the top bar; Agents and the terminal in the bottom panel; Pull latest, Dev stack and a
+  Dependabot reviewer.
 - **Four layouts, five themes.** Default, Workbench, Thread strip & dock, and Focus, each with its own colour theme
-  (Default, Monochrome, Colourful, Light, High Contrast). Tools open as popovers, modals or the bottom panel, never
-  as a strip that pushes the chat down.
+  (Default, Monochrome, Colourful, Light, High Contrast). In Default the threads can sit on the right and the tool
+  panel on the left (View menu). Tools open in the side panel, popovers, modals or the bottom panel, never as a strip
+  that pushes the chat down.
 - **Everything editable in the app.** One Settings tab covers repos, stacks, deploy targets, scripts, watchers,
   appearance, and even the app's name and tagline.
 
@@ -52,13 +59,17 @@ It started as a personal replacement for an editor plus a terminal, and is share
 - Streaming replies, one-line tool rows, and file edits shown as `+12 −3 src/foo.ts` rows that open the diff.
 - **Steer or queue**: send while a turn is running to steer it, or queue the message for after.
 - Paste or drop images and files. A clipboard chip offers the latest screenshot or copied text as an attachment.
-- The **`/` menu** lists every slash command the engine supports, including `/goal`, `/loop`, `/clear` and your
-  own skills.
+- The **`/` menu** lists every slash command the engine supports, including `/goal`, `/loop`, `/clear`,
+  `/insights` and your own skills.
+- **`/btw <question>`** asks a quick side question about the thread. The answer shows above the message box and
+  stays out of the conversation (a throwaway fork answers it, without tools).
 - **Model and effort pickers** switch the running session live. `ultrathink` is highlighted as you type.
 - A **status strip** shows an active goal and its running time, loops, subagents, live workflow progress and
   background tasks, each with a Stop button.
 - **Clean copy** puts a reply on the clipboard as both HTML and plain text, so tables paste properly.
 - Security warnings from hooks and plugins show in the thread, not just in a log.
+- **★ Insight** boxes from the Learning and Explanatory output styles render as callouts.
+- Background work folds to one line above the message box; the full list is in the Agents view.
 
 ### Threads and agents
 
@@ -67,17 +78,18 @@ The `hive` MCP server is attached to every session Hive starts and gives the age
 | Tool | What it does |
 |------|--------------|
 | `start_thread`, `message_thread`, `wait_for_thread`, `list_threads` | Start, message and wait on other threads |
-| `organize_thread` | Pin, snooze, close or archive a thread |
+| `organize_thread` | Pin, snooze, close or archive a thread; mark it waiting for the user, or resolved |
+| `rename_thread` | Name the thread after what the user is doing (stored like Claude Code's `/rename`) |
 | `worktree` | Give the thread its own git worktree |
 | `codex` | Run a task with the Codex CLI as a subagent |
 | `create_watcher`, `update_watcher`, `run_watcher_now`, `list_watchers`, `enable_watcher`, `disable_watcher`, `delete_watcher` | Manage watchers from any chat |
 | `search_sessions` | Search past sessions |
-| `show_to_user` | Open a file, image, page or PDF in the preview panel |
+| `show_to_user` | Open a file, image, page or PDF in a full-window preview |
 | `add_todo` | Add to the to-do list |
 | `dev_stack`, `dev_stack_logs` | Start, stop and read logs from the local dev stack |
 
-Background threads run in plain auto mode. Hive adds no allow-lists or guards on top of what Claude Code itself
-does.
+Your own threads and background threads run in plain auto mode: Hive adds no allow-lists or guards on top of what
+Claude Code itself does. Watcher threads are the exception (see below).
 
 ### Watchers
 
@@ -88,16 +100,39 @@ A watcher is a scheduled agent with a durable home under `~/.claude/hive/watcher
 - `memory/*.db`: SQLite memory the agent reads and writes between runs
 - `reports/` and `findings.jsonl`: what it produced, listed in the Watchers view
 
-Each watcher keeps one persistent thread, so every sweep continues the same conversation. Schedules are `every`
-intervals, daily and weekly report times, or **adaptive** tiers keyed to your 7-day usage. The default,
-`50:1h,60:3h,70:6h,100:1d`, means hourly below 50%, every 3 hours up to 60%, every 6 hours up to 70%, and daily
-above that. Watchers can be toggled from the sidebar, managed from the top bar, or created by asking any agent.
+Each watcher keeps one persistent thread, so every run continues the same conversation, and its thread sits in its
+own Watchers section of the sidebar. Schedules are:
+
+- `every` intervals, with daily and weekly report times;
+- **adaptive** tiers keyed to your 7-day usage. The default, `50:1h,60:3h,70:6h,100:1d`, means hourly below 50%,
+  every 3 hours up to 60%, every 6 hours up to 70%, and daily above that;
+- **self-scheduled**: the agent plans its own wake-ups in a `wakeups` table in `schedule.db`, marks them done and
+  finishes anything it missed. Hive only wakes it, with a one-line note and no instructions; with nothing pending it
+  wakes after 6 hours. Every time Hive starts, each self-scheduled watcher gets a catch-up wake that says when Hive
+  was last running.
+
+**Watcher threads are read-only.** Shell commands that write (`gh` writes, `git push`, curl or PowerShell sending
+data) are refused; Python HTTP calls other than reads raise an error (a few read-only search POSTs are allowed:
+Jira, Gong, Datadog, the Salesforce sign-in); Postgres sessions open read-only; and watchers get only the Hive tools
+that cannot start or steer other threads. Alert channels you allow (Settings > General, by the SHA-256 fingerprint
+of the webhook, so the URL itself is never stored) are the one way they can post. This is best-effort, not a
+sandbox: read-only credentials are the only airtight guarantee.
+
+Watchers can be toggled from the sidebar, managed from the Watchers view (the Watchers button in the top bar), or
+created by asking any agent.
 
 ### Code
 
-- **Git panel**: repos under your workspace root and their worktrees, with branch, ahead and behind. Stage,
-  unstage, commit (the repo's hooks run), switch or create a branch, see recent commits, and push only when you
-  click Push. There are deliberately no discard, reset or force buttons.
+- **Editor**: any file from the file tree opens as a tab next to the threads. Monaco (the editor inside VS Code),
+  with tabs you can drag and split like threads, an unsaved dot, Ctrl+S, and a prompt when the file changes on disk
+  while you edit it. Closing a tab with unsaved changes asks Save / Discard / Cancel.
+- **Language servers**, one per language per repo, started on the first file you open there: Pyright (Python and
+  Django, using the repo's `.venv` / `venv`), typescript-language-server (using the repo's own TypeScript) and Volar
+  (Vue). Completions, hover, go-to-definition across files, references, rename and diagnostics.
+- **HTML and Markdown** open rendered, with a **Rendered | Code** switch; images, PDFs and media are shown.
+- **Git**: the open thread's changed files on top, then the repos under your workspace root and their worktrees,
+  with branch, ahead and behind. Stage, unstage, commit (the repo's hooks run), switch or create a branch, see recent
+  commits, and push only when you click Push. There are deliberately no discard, reset or force buttons.
 - **Diff viewer**, split or unified, switchable.
 - **Terminal drawer** (xterm.js and node-pty) in the bottom panel.
 - **File tree** with git status colours, following the open thread's repo.
@@ -117,8 +152,12 @@ above that. Watchers can be toggled from the sidebar, managed from the top bar, 
 
 ### Also
 
-To-dos panel, MCP server status (connected, needs sign-in, failed), hooks and plugins switches, account and usage
-limits in the status bar, a command palette (Ctrl+K), and a preview panel for images, HTML, PDFs, video and text.
+- **To-dos** and **Notes** (markdown files in `~/.claude/hive/notes`, searchable, saved as you type).
+- **Account and usage** in the status bar: 5-hour and 7-day limits, and **Switch account** (Claude Code's own
+  browser sign-in, then the app restarts on the new login).
+- **Allow my IP**: a button for your own allowlist command (`HIVE_ALLOWLIST_CMD`), lit when your public IP changes.
+- MCP server status (connected, needs sign-in, failed), hooks and plugins switches, a command palette (Ctrl+K), and a
+  full-window preview for what Claude shows you.
 
 ## How it works
 
@@ -190,6 +229,9 @@ The app name and tagline are settings too (Settings > General), so Hive can be r
 - **The hooks and plugins switches change your real Claude Code settings.** Every write saves a `.hive-bak` copy
   first.
 - Don't continue the same session in Hive and in a terminal at the same time: both write to one transcript.
+- **The editor's language servers run code from the repo you open**: its own TypeScript and its virtualenv's Python,
+  as VS Code does for a trusted folder. Open only repos you trust.
+- **Watcher threads' read-only guard is best-effort** (see Watchers), not a sandbox.
 
 ## Development
 
@@ -208,8 +250,8 @@ CI runs typecheck, lint, unit tests and a build on Windows and Ubuntu for every 
 
 ## Tech stack
 
-Electron · React 19 · TypeScript · electron-vite · Claude Agent SDK · xterm.js and node-pty · MiniSearch ·
-Vitest · Playwright · electron-builder
+Electron · React 19 · TypeScript · electron-vite · Claude Agent SDK · Monaco · Pyright, typescript-language-server and
+Volar · xterm.js and node-pty · MiniSearch · Vitest · Playwright · electron-builder
 
 ## Contributing
 

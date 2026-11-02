@@ -770,7 +770,7 @@ button.sbi:hover { background: var(--hover); }
 .td-edit { flex: 1; margin: 0; }
 .td-from { flex-shrink: 0; font-size: 11px; color: var(--faint); }
 .td-x { flex-shrink: 0; width: 20px; height: 20px; border-radius: 3px; font-size: 16px; line-height: 1; color: var(--dim); visibility: hidden; }
-.td:hover .td-x { visibility: visible; }
+.td:hover .td-x, .td.cur .td-x, .td:focus-within .td-x { visibility: visible; }
 .td-x:hover { background: var(--line2); color: var(--ink); }
 .td-due { flex-shrink: 0; font-size: 11px; color: var(--dim); min-width: 64px; text-align: right; }
 .td-due.empty { color: var(--faint); }
