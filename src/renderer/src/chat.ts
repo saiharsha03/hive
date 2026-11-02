@@ -14,6 +14,7 @@ export type Session = {
   // earlier conversation not loaded yet
   history?: { count: number; more: boolean }
   file?: string // a file tab (id "file:<path>"): the editor, not a conversation
+  tool?: 'todos' | 'notes' // a tool tab (id "tool:todos" / "tool:notes"): that panel, full size
   background: boolean // live but hidden from the tab bar
   waitingReason?: string // why the user is needed (Claude's words, or Finished / Failed + first line)
   waitingSince?: number

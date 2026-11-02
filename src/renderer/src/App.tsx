@@ -147,7 +147,16 @@ export function App() {
     setPaneState((p) => activateIn(p, id))
   }), [])
   useEffect(() => setShowAgents(() => showView('agents')))
+  // To-dos and Notes open as tabs in the main window, like threads and files (one tab each)
+  const openToolTab = (tool: 'todos' | 'notes') => {
+    const id = `tool:${tool}`
+    setSessions((all) => (all.some((s) => s.id === id) ? all : [...all, {
+      id, tool, title: tool === 'todos' ? 'To-dos' : 'Notes', items: [], streaming: '', busy: false, loaded: true, background: false,
+    }]))
+    setPaneState((p) => activateIn(p, id))
+  }
   function showView(v: ViewId, el?: HTMLElement | null) {
+    if (v === 'todos' || v === 'notes') return openToolTab(v)
     const at = placeOf(ui, v)
     if (at === 'left') { setLeftView(v); setLeftOpen(true) }
     else if (at === 'right') { setRightView(v); setRightOpen(true) }
@@ -382,7 +391,7 @@ export function App() {
     closing = closing.filter((id) => { const f = fileOfTab(id); if (!f || releaseFile(f)) return true; setPaneState((p) => activateIn(p, id)); return false })
     if (!closing.length) return
     setSessions((all) => all.filter((s) => !closing.includes(s.id)))
-    closing.forEach((id) => { if (!fileOfTab(id)) void window.api.chatClose(id) })
+    closing.forEach((id) => { if (!fileOfTab(id) && !id.startsWith('tool:')) void window.api.chatClose(id) })
   }
   const closeSession = (id: string) => (id.startsWith('script:') ? void window.api.scriptsStop(id.slice(7)) : id.startsWith('dev:') ? void (id !== 'dev:docker' && window.api.devStop(id.slice(4))) : id === 'deploy' ? (deploy.w.phase !== 'deploying' && deploy.act({ t: 'stop' })) : closeTabs([id]))
   const paneTabsOf = (id: string) => panes.panes.find((p) => p.tabs.includes(id))?.tabs ?? [id]
@@ -588,7 +597,9 @@ export function App() {
     }
   }
 
-  const renderChat = (s: Session, _pane: unknown, focused: boolean) => s.file ? <FileEditor key={s.id} path={s.file} onClosed={() => closeTabs([s.id])} /> : (
+  const renderChat = (s: Session, _pane: unknown, focused: boolean) => s.tool === 'todos' ? <div className="tooltab"><TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} /></div>
+    : s.tool === 'notes' ? <div className="tooltab"><NotesPanel /></div>
+    : s.file ? <FileEditor key={s.id} path={s.file} onClosed={() => closeTabs([s.id])} /> : (
     <SessionView key={s.id} session={s} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
       onSend={(text, images, m) => send(s, text, images, m)} onDequeue={(id) => window.api.chatDequeue(s.id, id)} onPromote={(id) => void window.api.chatPromote(s.id, id)}
       onStop={() => window.api.chatInterrupt(s.id)} onBackground={(toolUseId) => void window.api.chatBackground(s.id, toolUseId)} onRunInBackground={() => moveToBackground(s.id)}
@@ -727,6 +738,9 @@ export function App() {
   ]
   // the side panel's views, picked from the top bar (the panel shows only the picked one); the open one closes it
   // (Watchers has its own button with the running count, so it is not repeated here)
+  const toolTabButtons = (['todos', 'notes'] as const).map((t) => ({
+    icon: VIEW[t].icon, on: activeId === `tool:${t}`, title: VIEW[t].label, testid: `top-view-${t}`, onClick: () => openToolTab(t),
+  }))
   const viewButtons = arr.right.filter((v) => v !== 'watchers').map((v) => ({
     icon: VIEW[v].icon, on: rightOpen && rv === v, title: VIEW[v].label, testid: `top-view-${v}`,
     onClick: () => { if (rightOpen && rv === v) setRightOpen(false); else { setRightView(v); setRightOpen(true) } },
@@ -749,7 +763,7 @@ export function App() {
 
   return (
     <div className={`app ui-${ui}`} onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
-      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} views={viewButtons} toggles={toggles} onSettings={() => setModal('settings')} />
+      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} views={[...viewButtons.slice(0, 2), ...toolTabButtons, ...viewButtons.slice(2)]} toggles={toggles} onSettings={() => setModal('settings')} />
       {body}
       <StatusBar sessionPath={active?.path ?? null} tabId={active?.id ?? null} branch={active ? (active.worktrees?.at(-1)?.branch ?? (active.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? null) : null}
         waiting={live.waiting.length - failedCount} working={live.working.length} failed={failedCount}
