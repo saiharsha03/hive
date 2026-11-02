@@ -23,7 +23,7 @@ type Deps = {
   changed: () => void
 }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
-type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; future?: number[] }
+type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; future?: number[]; floor?: number }
 
 const file = () => join(dataDir(), 'hive-mobile.json')
 let relay = ''
@@ -122,14 +122,22 @@ const FRESH_MS = 120_000
 // One exception is remembered: a request dated in the future (the phone clock ahead) is refused now and kept in a list,
 // so a relay holding it until it looks fresh cannot run it later. Entries leave only once they are in the past (then the
 // freshness check refuses them anyway), never to make room: with FUTURE_KEEP of them waiting, every request is refused
-// until some expire (fail closed; it takes a phone clock that stays far ahead).
+// until some expire (fail closed; it takes a phone clock that stays far ahead). A future-dated one that finds the list
+// full raises floor instead: nothing at or below it ever runs (it stops mattering once the clock passes it).
 const FUTURE_KEEP = 50
-export function checkPhoneSeq(seqIn: number, seq: number, now: number, refused: number[] = []): { run: boolean; future?: boolean; refused: number[] } {
-  const still = refused.filter((s) => s > now - FRESH_MS)
-  if (seq <= seqIn || still.includes(seq)) return { run: false, refused: still }
-  if (still.length >= FUTURE_KEEP) return { run: false, refused: still }
-  if (seq > now + FRESH_MS) return { run: false, future: true, refused: [...still, seq] }
-  return { run: Math.abs(now - seq) <= FRESH_MS, refused: still }
+export type SeqState = { seqIn: number; refused?: number[]; floor?: number }
+export function checkPhoneSeq(st: SeqState, seq: number, now: number): { run: boolean; future?: boolean; next: Required<SeqState> } {
+  // an entry that expires raises the floor, so a refused request can never run after it leaves the list
+  const all = st.refused ?? []
+  const refused = all.filter((s) => s > now - FRESH_MS)
+  const next = { seqIn: st.seqIn, refused, floor: Math.max(st.floor ?? 0, ...all.filter((s) => s <= now - FRESH_MS)) }
+  if (seq <= st.seqIn || seq <= next.floor || refused.includes(seq)) return { run: false, next }
+  if (seq > now + FRESH_MS) {
+    if (refused.length >= FUTURE_KEEP) return { run: false, future: true, next: { ...next, floor: seq } }
+    return { run: false, future: true, next: { ...next, refused: [...refused, seq] } }
+  }
+  if (refused.length >= FUTURE_KEEP || Math.abs(now - seq) > FRESH_MS) return { run: false, next }
+  return { run: true, next: { ...next, seqIn: seq } }
 }
 // a notification small enough that, sealed (nonce + tag + base64), it rides in one push: FCM data is at most 4 KB and the
 // relay inlines blobs up to 3600 characters. Measured on the JSON (escaping can grow text a lot), with room for seq/at.
@@ -166,15 +174,17 @@ async function onMessage(raw: string): Promise<void> {
   if (!m || typeof m.seq !== 'number') return // not from the paired phone
   // the phone's seq is its clock in ms, kept from going back on the phone; the phone gives up after 20 s, so a request
   // older than 2 minutes was held back (see checkPhoneSeq)
-  const c = checkPhoneSeq(pairing.seqIn ?? 0, m.seq, Date.now(), pairing.future)
+  const c = checkPhoneSeq({ seqIn: pairing.seqIn ?? 0, refused: pairing.future, floor: pairing.floor }, m.seq, Date.now())
+  const changed = JSON.stringify([c.next.refused, c.next.floor]) !== JSON.stringify([pairing.future ?? [], pairing.floor ?? 0])
+  pairing.future = c.next.refused
+  pairing.floor = c.next.floor
   if (!c.run) { // a replay, held back, or the phone clock off: dropped silently (a future-dated one is remembered)
-    if (c.refused.length !== (pairing.future ?? []).length || c.refused.some((s, i) => s !== pairing!.future![i])) { pairing.future = c.refused; store() }
-    // said once per such request (a replay of it is in the list, so silent)
+    if (changed) store()
+    // said once per such request (a replay of it is remembered, so silent)
     if (c.future) sendToPhone({ re: m.rid, error: 'The phone clock is ahead of the computer by more than 2 minutes. Fix the clock and try again.' })
     return
   }
-  pairing.future = c.refused
-  pairing.seqIn = m.seq
+  pairing.seqIn = c.next.seqIn
   if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
   const id = typeof m.id === 'string' ? m.id : ''
   const reply = (body: Record<string, unknown>) => sendToPhone({ re: m.rid, ...body })
