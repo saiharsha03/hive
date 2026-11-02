@@ -1,6 +1,6 @@
 // The threads list: live threads waiting for you or working at the top, then saved threads grouped by project
 // (or by date), pinned / snoozed / returned / closed sections, search across every thread, bulk selection.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ThreadMenu } from './ThreadMenu'
 import type { LiveRow } from './background'
 import { clickRow, flagActions, menuTargets, visibleOrder } from './selection'
@@ -89,12 +89,15 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
 
   // live threads are listed in Waiting / Working at the top, so they leave the saved list below (a search still finds them)
   const q = query.trim().toLowerCase()
-  const liveShown = (rows: LiveRow[]) => rows.filter((r) => !q || r.title.toLowerCase().includes(q))
+  // a watcher's thread stays in the Watchers section (always on top) even while it works or waits, with its live state
+  const isWatcherRow = useCallback((r: LiveRow) => watcherIds.has(r.sessionId ?? '') || watcherIds.has(r.id) || r.id.startsWith('watcher-'), [watcherIds])
+  const liveShown = (rows: LiveRow[]) => rows.filter((r) => !isWatcherRow(r) && (!q || r.title.toLowerCase().includes(q)))
+  const watcherLive = useMemo(() => new Map([...live.waiting, ...live.working].filter(isWatcherRow).map((r) => [r.sessionId ?? r.id, r])), [live, isWatcherRow])
   const savedRows = useMemo(() => {
     if (archiveView || q) return sessions ?? []
-    const hide = new Set([...live.waiting, ...live.working].flatMap((r) => [r.id, r.sessionId ?? '']))
+    const hide = new Set([...live.waiting, ...live.working].filter((r) => !isWatcherRow(r)).flatMap((r) => [r.id, r.sessionId ?? '']))
     return (sessions ?? []).filter((s) => !hide.has(s.id))
-  }, [sessions, live, archiveView, q])
+  }, [sessions, live, archiveView, q, isWatcherRow])
   const sections = useMemo(() => buildSections(savedRows, states, now, query, archiveView, groupBy, watcherIds), [savedRows, states, now, query, archiveView, groupBy, watcherIds])
   const archived = useMemo(() => (sessions ?? []).filter((s) => states[s.id]?.archivedAt).length, [sessions, states])
   const searching = query.trim() !== ''
@@ -174,7 +177,8 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   }
 
   const row = (s: SessionInfo, section: string, snippet?: string) => {
-    const label = note(s.id, section)
+    const lr = section === 'watchers' ? watcherLive.get(s.id) : undefined
+    const label = lr ? lr.note : note(s.id, section)
     const meta = [groupBy === 'date' || searching || archiveView || !section.startsWith('project:') ? s.project : '', label].filter(Boolean).join(', ')
     return (
       <div
@@ -183,9 +187,9 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
         onContextMenu={(e) => { e.preventDefault(); openMenu(s.id, e.clientX, e.clientY) }}
         data-testid="thread-row" data-id={s.id}
       >
-        <Icon name={placeIcon(s.id, section)} className="s-idle" />
+        {lr ? <Icon name={liveLook(lr).icon} className={liveLook(lr).cls} /> : <Icon name={placeIcon(s.id, section)} className="s-idle" />}
         <span className="t">{s.title}</span>
-        <span className="tm">{started(s.started)}</span>
+        {lr ? <span className={`st ${liveLook(lr).cls.replace(' spin', '')}`}>{liveLook(lr).word}</span> : <span className="tm">{started(s.started)}</span>}
         {meta && <span className="m">{meta}</span>}
         {snippet && <span className="snip">{snippet}</span>}
         <button
@@ -252,6 +256,12 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
             {!found.length && <div className="hint">No matches.</div>}
           </div>
         )}
+        {!found && sections.filter((sec) => sec.key === 'watchers').map((sec) => (
+          <div key={sec.key} data-testid="section-watchers">
+            {groupHead(sec.key, sec.label, sec.items.length, 'eye')}
+            {sec.items.map((s) => row(s, 'watchers'))}
+          </div>
+        ))}
         {!found && !archiveView && ([['waiting', 'Waiting for you', live.waiting, 'bell'], ['working', 'Working', live.working, 'loading']] as const).map(([key, label, rows, icon]) => liveShown(rows).length > 0 && (
           <div key={key} data-testid={`section-${key}`}>
             {groupHead(key, label, liveShown(rows).length, icon)}
@@ -259,7 +269,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
           </div>
         ))}
         {!found && sessions && !sections.length && <div className="hint">{archiveView ? 'Nothing archived.' : 'No threads yet.'}</div>}
-        {!found && sections.map((sec) => {
+        {!found && sections.filter((sec) => sec.key !== 'watchers').map((sec) => {
           // a search opens every fold so no match stays hidden
           const folded = !!sec.fold && !searching && !open.has(sec.key)
           const icon = sec.key.startsWith('project:') ? 'folder' : sec.key === 'pinned' ? 'pinned' : sec.key === 'returned' ? 'bell' : 'calendar'
