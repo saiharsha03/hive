@@ -75,7 +75,10 @@ data class Pairing(val relay: String, val pair: String, val token: String, val k
         // clock set back cannot make Hive refuse the phone's requests as replays
         fun nextSeq(ctx: Context): Long = synchronized(this) {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val next = maxOf(p.getLong("lastOut", 0) + 1, System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            // a counter left far ahead by a clock that was wrong and has been corrected starts again from the clock
+            val last = p.getLong("lastOut", 0).let { if (it > now + 120_000) 0L else it }
+            val next = maxOf(last + 1, now)
             p.edit().putLong("lastOut", next).commit()
             next
         }

@@ -22,7 +22,8 @@ type Deps = {
   folders: () => string[]
   changed: () => void
 }
-type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number }
+// future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
+type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; future?: number[] }
 
 const file = () => join(dataDir(), 'hive-mobile.json')
 let relay = ''
@@ -116,8 +117,14 @@ const FRESH_MS = 120_000
 // Replay protection for phone requests: a request runs only if its seq (the phone's own counter, never going back) is
 // above the last one that ran, and within 2 minutes of this computer's clock (so the relay cannot hold one back and
 // deliver it later). Anything else is dropped silently: no reply, no write, nothing that grows, whatever the relay sends.
-export function checkPhoneSeq(seqIn: number, seq: number, now: number): boolean {
-  return seq > seqIn && Math.abs(now - seq) <= FRESH_MS
+// One exception is remembered: a request dated in the future (the phone clock ahead) is refused now and kept in a short
+// list, so a relay holding it until it looks fresh cannot run it later. At most FUTURE_KEEP of them, dropped once passed.
+const FUTURE_KEEP = 50
+export function checkPhoneSeq(seqIn: number, seq: number, now: number, refused: number[] = []): { run: boolean; refused: number[] } {
+  const still = refused.filter((s) => s > seqIn && s > now - FRESH_MS)
+  if (seq <= seqIn || still.includes(seq)) return { run: false, refused: still }
+  if (seq > now + FRESH_MS) return { run: false, refused: [...still, seq].slice(-FUTURE_KEEP) }
+  return { run: Math.abs(now - seq) <= FRESH_MS, refused: still }
 }
 // a notification small enough that, sealed (nonce + tag + base64), it rides in one push: FCM data is at most 4 KB and the
 // relay inlines blobs up to 3600 characters. Measured on the JSON (escaping can grow text a lot), with room for seq/at.
@@ -154,7 +161,12 @@ async function onMessage(raw: string): Promise<void> {
   if (!m || typeof m.seq !== 'number') return // not from the paired phone
   // the phone's seq is its clock in ms, kept from going back on the phone; the phone gives up after 20 s, so a request
   // older than 2 minutes was held back (see checkPhoneSeq)
-  if (!checkPhoneSeq(pairing.seqIn ?? 0, m.seq, Date.now())) return // a replay, or held back / clock off: dropped silently
+  const c = checkPhoneSeq(pairing.seqIn ?? 0, m.seq, Date.now(), pairing.future)
+  if (!c.run) { // a replay, held back, or the phone clock off: dropped silently (a future-dated one is remembered)
+    if (c.refused.length !== (pairing.future ?? []).length || c.refused.some((s, i) => s !== pairing!.future![i])) { pairing.future = c.refused; store() }
+    return
+  }
+  pairing.future = c.refused
   pairing.seqIn = m.seq
   if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
   const id = typeof m.id === 'string' ? m.id : ''

@@ -19,15 +19,24 @@ test('a notification fits one push even when JSON escaping grows it (quotes, new
   assert.equal(fitNotification('Hi', 'short', 't').body, 'short')
 })
 
-test('phone requests: run once, in order, while fresh; everything else dropped (and nothing is kept for it)', async () => {
+test('phone requests: run once, in order, while fresh; others dropped; future-dated ones remembered (bounded)', async () => {
   const { checkPhoneSeq } = await import('../../src/main/mobile')
   const now = 1_000_000_000
-  assert.equal(checkPhoneSeq(0, now - 1000, now), true)
-  assert.equal(checkPhoneSeq(now - 1000, now - 1000, now), false) // the same request again
-  assert.equal(checkPhoneSeq(now - 1000, now - 1500, now), false) // an older one (relay reordering or replaying)
-  assert.equal(checkPhoneSeq(now - 1000, now - 500, now), true)
-  assert.equal(checkPhoneSeq(0, now - 3 * 60_000, now), false) // held back three minutes by the relay
-  assert.equal(checkPhoneSeq(0, now + 3 * 60_000, now), false) // phone clock far ahead: refused, and seqIn does not move
-  // an upgrade keeps the same record (a high-water mark), so nothing at or below it ever runs again
-  assert.equal(checkPhoneSeq(now, now - 10, now), false)
+  const run = (seqIn: number, seq: number, at = now, refused: number[] = []) => checkPhoneSeq(seqIn, seq, at, refused)
+  assert.equal(run(0, now - 1000).run, true)
+  assert.equal(run(now - 1000, now - 1000).run, false) // the same request again
+  assert.equal(run(now - 1000, now - 1500).run, false) // an older one
+  assert.equal(run(now - 1000, now - 500).run, true)
+  assert.equal(run(0, now - 3 * 60_000).run, false) // held back three minutes
+  assert.equal(run(now, now - 10).run, false) // an older record's high-water mark holds (upgrades keep it)
+  // phone clock an hour ahead: refused and remembered, so the relay cannot deliver it an hour later
+  const hour = 3_600_000
+  const r = run(0, now + hour)
+  assert.deepEqual([r.run, r.refused], [false, [now + hour]])
+  assert.equal(run(0, now + hour, now + hour, r.refused).run, false)
+  // the list is bounded and forgets entries once they are in the past
+  let list: number[] = []
+  for (let i = 1; i <= 80; i++) list = run(0, now + hour + i, now, list).refused
+  assert.equal(list.length, 50)
+  assert.deepEqual(run(0, now - 100, now + 2 * hour, list).refused, [])
 })
