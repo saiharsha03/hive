@@ -36,6 +36,9 @@ object Notes {
             .setStyle(android.app.Notification.BigTextStyle().bigText(m.optString("body")))
             .setContentIntent(tap)
             .setAutoCancel(true)
+            // on the lock screen only "Claude sent you something"; the text shows once the phone is unlocked
+            .setVisibility(android.app.Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(android.app.Notification.Builder(ctx, CHANNEL).setSmallIcon(R.drawable.ic_hive).setContentTitle("Hive").setContentText("Claude sent you something").build())
             .build()
         ctx.getSystemService(NotificationManager::class.java).notify((m.optLong("seq") % Int.MAX_VALUE).toInt(), n)
     }
