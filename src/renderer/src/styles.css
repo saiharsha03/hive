@@ -916,3 +916,7 @@ button.sbi:hover { background: var(--hover); }
 .gitview-thread { max-height: 45%; overflow: auto; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .ptab .tdot { color: var(--ink); margin-left: 2px; }
 .ed-seg { margin-right: 10px; }
+/* the side panel's views, named, after the menus */
+.tviews { display: flex; align-items: center; gap: 2px; margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--line2); }
+.tbtn.tview { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 0 9px; font-size: 13px; color: var(--dim); }
+.tbtn.tview.on { color: var(--hi); background: var(--sel); }

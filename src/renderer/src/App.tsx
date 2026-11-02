@@ -742,7 +742,7 @@ export function App() {
 
   return (
     <div className={`app ui-${ui}`} onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
-      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} toggles={[...viewButtons, ...toggles]} onSettings={() => setModal('settings')} />
+      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} views={viewButtons} toggles={toggles} onSettings={() => setModal('settings')} />
       {body}
       <StatusBar sessionPath={active?.path ?? null} tabId={active?.id ?? null} branch={active ? (active.worktrees?.at(-1)?.branch ?? (active.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? null) : null}
         waiting={live.waiting.length - failedCount} working={live.working.length} failed={failedCount}

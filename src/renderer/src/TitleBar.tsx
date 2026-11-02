@@ -24,8 +24,10 @@ export function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => v
   )
 }
 
-export function TitleBar({ menus, onPalette, onWatchers, toggles, onSettings }: {
-  menus: Menu[]; onPalette: () => void; onWatchers: (el: HTMLElement) => void
+type Toggle = { icon: string; on: boolean; title: string; onClick: () => void; testid: string }
+// views: the side panel's views (Files, Git, Agents), shown with their names right after the menus
+export function TitleBar({ menus, views = [], onPalette, onWatchers, toggles, onSettings }: {
+  menus: Menu[]; views?: Toggle[]; onPalette: () => void; onWatchers: (el: HTMLElement) => void
   toggles: { icon: string; on: boolean; title: string; onClick: () => void; testid: string }[]; onSettings: () => void
 }) {
   const name = useAppName()
@@ -43,6 +45,7 @@ export function TitleBar({ menus, onPalette, onWatchers, toggles, onSettings }: 
               onMouseEnter={() => { if (open && open.i !== i) setOpen({ i, anchor: anchorOf(refs.current[i]) }) }}>{m.label}</button>
           ))}
         </nav>
+        {views.length > 0 && <nav className="tviews">{views.map((v) => <button key={v.testid} className={v.on ? 'tbtn tview on' : 'tbtn tview'} title={v.title} onClick={v.onClick} data-testid={v.testid}><Icon name={v.icon} />{v.title}</button>)}</nav>}
       </div>
       <button className="find" onClick={onPalette} data-testid="titlebar-search"><Icon name="search" />Search threads, tools and files<kbd>Ctrl K</kbd></button>
       <div className="tr">
