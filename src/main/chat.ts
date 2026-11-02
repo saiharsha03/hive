@@ -4,6 +4,7 @@ import { createSdkMcpServer, query, tool, type Options, type PermissionMode, typ
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { appendFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -40,6 +41,7 @@ export const PERMISSION_MODE = 'bypassPermissions' as const
 
 const append = () => [
   `You are running inside ${appName()}, the user's desktop app for Claude Code.`,
+  'Keep this thread named after what the user is doing: once the task is clear (usually after your first reply), call mcp__hive__rename_thread with a short title (3 to 6 words), and again only when the work clearly moves to something else. Do not mention it.',
   'To show the user an image, screenshot, HTML mockup, PDF or any file, call mcp__hive__show_to_user with its absolute path.',
   'It opens in a preview panel beside the chat and shows inline in the conversation. Use it instead of opening files in other apps (Start-Process, start, open).',
   'mcp__hive__codex runs OpenAI Codex as a subagent on one task (a second opinion, a review, research, or an implementation). It runs in the background',
@@ -172,6 +174,21 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
             return { content: [{ type: 'text', text: formatChunks(r, sessionMeta(sessionId)?.title ?? sessionId, sessionId) }] }
           }
           return { content: [{ type: 'text', text: formatSessions(await searchSessions(query, n), sessionMeta) }] }
+        },
+      ),
+      tool(
+        'rename_thread',
+        `Name THIS thread in the ${appName()} sidebar and its tab: a short title (3 to 6 words) that says what the user is working on, e.g. "Hive editor file tabs" or "CSV import cleanup". Stored like Claude Code's /rename, so the terminal shows it too.`,
+        { title: z.string().describe('The new title, 3 to 6 words, no quotes') },
+        async ({ title }) => {
+          const t = title.replace(/\s+/g, ' ').replace(/^["']|["']$/g, '').trim().slice(0, 80)
+          if (!t) return { content: [{ type: 'text', text: 'The title is empty' }], isError: true }
+          if (!s.sessionId) return { content: [{ type: 'text', text: 'This thread has no session yet: rename it after your first reply' }], isError: true }
+          await appendFile(transcriptPath(cwd, s.sessionId), JSON.stringify({ type: 'custom-title', customTitle: t, sessionId: s.sessionId }) + '\n')
+          tabTitles.set(tabId, t)
+          setThreadTitle(tabId, t)
+          send({ type: 'hive_title', title: t })
+          return { content: [{ type: 'text', text: `Thread renamed: ${t}` }] }
         },
       ),
       tool(

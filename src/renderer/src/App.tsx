@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileTree } from './FileTree'
 import { Preview } from './Preview'
-import { Sidebar, liveLook } from './Sidebar'
+import { Sidebar, liveLook, refreshThreadList } from './Sidebar'
 import { StatusBar } from './StatusBar'
 import { SessionView, draftEmpty, prefillDraft, insertIntoComposer, type Attachment } from './SessionView'
 import { DeployPanel } from './DeployPanel'
@@ -258,6 +258,12 @@ export function App() {
   useEffect(() => window.api.onChatEvent((tabId, ev) => {
     const cur = sessionsRef.current.find((s) => s.id === tabId)
     if (ev.type === 'hive_show' && ev.path && !cur?.background) setPreview(ev.path)
+    if (ev.type === 'hive_title' && ev.title) {
+      setSessions((all) => all.map((s) => (s.id === tabId ? { ...s, title: ev.title } : s)))
+      refreshThreadList()
+      return
+    }
+    if (ev.type === 'result') refreshThreadList() // a new thread is saved after its first turn
     if (ev.type === 'hive_organize') {
       if (ev.action === 'waiting') {
         setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(s, ev.reason, Date.now(), activeIdRef.current === s.id && !s.background) : s)))

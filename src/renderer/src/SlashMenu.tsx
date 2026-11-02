@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { commandGroup, filterCommands, insertCommand, slashQuery, type Command } from '../../shared/composerCore'
 
+// /btw is Hive's own (the engine's is terminal-only): a side question that stays out of the conversation
+const BTW: Command = { name: 'btw', description: 'Ask a quick side question about this thread; the answer stays out of the conversation', argumentHint: '<question>', builtin: true }
+
 export function useSlashMenu(tabId: string, draft: string, setDraft: (s: string) => void) {
   const q = slashQuery(draft)
   const [cmds, setCmds] = useState<Command[] | null>(null)
@@ -16,7 +19,7 @@ export function useSlashMenu(tabId: string, draft: string, setDraft: (s: string)
   useEffect(() => {
     if (!open) return
     let live = true
-    window.api.chatCommands(tabId).then((c) => { if (live) setCmds(c) }).catch(() => { if (live) setCmds([]) })
+    window.api.chatCommands(tabId).then((c) => { if (live) setCmds([...c.filter((x) => x.name !== 'btw'), BTW]) }).catch(() => { if (live) setCmds([]) })
     return () => { live = false }
   }, [open, tabId])
   useEffect(() => { setSel(0) }, [q])

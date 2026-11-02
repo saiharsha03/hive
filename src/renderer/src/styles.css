@@ -920,3 +920,12 @@ button.sbi:hover { background: var(--hover); }
 .tviews { display: flex; align-items: center; gap: 2px; margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--line2); }
 .tbtn.tview { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 0 9px; font-size: 13px; color: var(--dim); }
 .tbtn.tview.on { color: var(--hi); background: var(--sel); }
+/* /btw side answers above the message box (not part of the conversation) */
+.btw { margin: 0 16px 8px; border: 1px solid var(--line2); border-left: 2px solid var(--accent); background: var(--panel); max-height: 40vh; overflow: auto; }
+.btw-q { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; font-size: 12.5px; color: var(--dim); border-bottom: 1px solid var(--line); }
+.btw-q .x { margin-left: auto; color: var(--dim); }
+.btw-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
+.btw-a { padding: 6px 12px; }
+/* ★ Insight callouts (Learning / Explanatory output styles) */
+.md blockquote.insight { border-left: 3px solid var(--accent); background: var(--hover); padding: 6px 12px; margin: 10px 0; color: var(--ink); }
+.md blockquote.insight > p:first-child { margin-top: 0; color: var(--accent); }

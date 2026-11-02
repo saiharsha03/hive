@@ -14,6 +14,7 @@ import { dependabotSummary, initDependabot, setDependabotEnabled } from './depen
 import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
 import { cancelSwitch, switchAccount } from './account'
+import { askBtw } from './btw'
 import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
 import { editorMtime, editorRead, editorWrite, vsCodeUrl } from './editorFiles'
 import { lspChange, lspClose, lspOpen, lspRequest, lspSaved, setDiagnosticsSink, stopLanguageServers } from './lsp'
@@ -290,6 +291,8 @@ handle('dev:stop', (_e, name: string) => dev.stopService(name, dev.USER))
 handle('dev:stopAll', () => dev.stopAll(dev.USER))
 handle('dev:logs', (_e, name: string) => dev.logs(name, 1000))
 handle('history:load', (_e, path: string) => loadHistory(path))
+// /btw: a side question about a thread, answered by a throwaway fork (nothing goes into the thread)
+handle('chat:btw', (_e, cwd: string, sessionId: string | null, question: string) => askBtw(String(cwd ?? ''), sessionId ? String(sessionId) : null, String(question)))
 // a reopened thread: its recent end first (more = there is earlier conversation to load)
 handle('history:recent', (_e, path: string) => loadRecentHistory(path))
 handle('fs:readText', (_e, path: string) => readText(path))

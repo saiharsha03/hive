@@ -182,6 +182,14 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   const ultra = hasUltrathink(draft)
   const mirror = useRef<HTMLDivElement>(null)
   const pickMode = (m: SendMode) => { setSendMode(m); setPref(MODE_KEY, m) }
+  // /btw answers, shown above the message box until dismissed (never part of the conversation)
+  const [btws, setBtws] = useState<{ q: string; a: string | null }[]>([])
+  const askBtw = (question: string) => {
+    setBtws((b) => [...b, { q: question, a: null }])
+    void window.api.askBtw(session.cwd ?? '', session.sessionId ?? null, question)
+      .catch((e) => `Could not answer: ${String(e?.message ?? e)}`)
+      .then((a) => setBtws((b) => b.map((x) => (x.q === question && x.a === null ? { ...x, a } : x))))
+  }
 
   // scroll: back where this thread was, then keep the newest message in view while it was at the bottom
   useLayoutEffect(() => {
@@ -263,6 +271,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
 
   const submit = (m: SendMode = sendMode) => {
     if (!draft.trim() && !images.length) return
+    const btw = draft.trim().match(/^\/btw\s+([\s\S]+)/)
+    if (btw) { askBtw(btw[1]); setDraft(''); return }
     onSend(draft.trim(), images, m)
     setDraft('')
     setImages([])
@@ -432,6 +442,13 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
       </div>
 
       <TaskList tabId={session.id} />
+
+      {btws.map((b, i) => (
+        <div key={i} className="btw" data-testid="btw-answer">
+          <div className="btw-q"><span className="btw-tag">btw</span>{b.q}<button className="x" aria-label="Dismiss" onClick={() => setBtws((all) => all.filter((_, j) => j !== i))} data-testid="btw-dismiss">×</button></div>
+          {b.a === null ? <div className="btw-a dnote">Thinking…</div> : <div className="btw-a"><MdBody text={b.a} copy={false} /></div>}
+        </div>
+      ))}
 
       {session.busy && (
         <div className="working" data-testid="working">

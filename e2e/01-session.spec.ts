@@ -113,6 +113,25 @@ test.describe.serial('session', () => {
     await l.page.keyboard.press('Escape')
   })
 
+  // (the sidebar list hides sessions under the temp folder, where test threads run, so only the tab is checked)
+  test('rename_thread names the thread: its tab shows the new title', async () => {
+    const title = `${TAG} renamed thread`
+    await h.sendAndWait(`Call the rename_thread tool of the hive MCP server with title "${title}". Then reply with the word ok.`)
+    await expect(h.id('tab').filter({ hasText: title })).toHaveCount(1, { timeout: 30_000 })
+    await shot(l.page, 'session-renamed')
+  })
+
+  test('/btw answers above the message box and stays out of the conversation', async () => {
+    const before = await h.userMsgs().count()
+    await h.composer().fill('/btw what did we just do?')
+    await h.composer().press('Enter')
+    await expect(h.id('btw-answer')).toContainText('what did we just do?')
+    await expect(h.id('btw-answer')).toContainText(/test mode/i) // test mode never asks Claude
+    expect(await h.userMsgs().count()).toBe(before)
+    await h.id('btw-dismiss').click()
+    await expect(h.id('btw-answer')).toHaveCount(0)
+  })
+
   test('start_thread from a session creates a background thread', async () => {
     const title = `${TAG}-bg`
     await h.sendAndWait(`Call the start_thread tool of the hive MCP server with title "${title}" and prompt "Reply with the word ok and nothing else." Then reply with the word started.`)

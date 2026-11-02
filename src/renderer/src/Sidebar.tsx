@@ -32,6 +32,11 @@ type Props = {
   onNew?: () => void; footer?: ReactNode; title?: string
 }
 
+// the app asks every sidebar to re-read the saved threads (new threads, new titles), at most every 2 s
+const refreshers = new Set<() => void>()
+let refreshTimer: ReturnType<typeof setTimeout> | undefined
+export const refreshThreadList = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refreshers.forEach((f) => f()), 2000) }
+
 export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew, footer, title = 'Threads' }: Props) {
   const [listed, setSessions] = useState<SessionInfo[] | null>(null)
   // a watcher's thread shows under the watcher's name, not Claude's auto title
@@ -57,7 +62,13 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const hover = useRef(false)
   const states = useThreads()
 
-  useEffect(() => { window.api.listSessions().then(setSessions) }, [])
+  // the saved threads: at start, and again whenever the app says one changed (a turn ended, a thread renamed itself)
+  useEffect(() => {
+    const load = () => { void window.api.listSessions().then(setSessions) }
+    load()
+    refreshers.add(load)
+    return () => { refreshers.delete(load) }
+  }, [])
   // indexing progress
   useEffect(() => {
     window.api.searchStatus().then(setStatus).catch(() => {})

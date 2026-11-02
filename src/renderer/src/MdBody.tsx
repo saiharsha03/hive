@@ -1,6 +1,7 @@
 // A rendered markdown message with clean copies for Teams / Outlook / Word / Excel / plain boxes: a Copy button for the whole
 // message (rich HTML + the original markdown), one per table (HTML + TSV) and one per code block (just the code), and Ctrl+C
 // on a selection in the conversation gives light HTML instead of Chromium's copy with the dark theme's colors inline.
+import { INSIGHT, insightCallouts } from '../../shared/insightCore'
 import { useRef, useState, type ComponentProps } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -63,7 +64,10 @@ function CodeBox(props: ComponentProps<'pre'>) {
   )
 }
 
+// a quote that starts with the ★ Insight marker is a Learning-style insight: shown as a callout
+const isInsight = (children: unknown): boolean => JSON.stringify(children ?? '').includes(INSIGHT)
 const COMPONENTS = {
+  blockquote: ({ node: _n, children, ...p }: ComponentProps<'blockquote'> & { node?: unknown }) => <blockquote {...p} className={isInsight(children) ? 'insight' : undefined}>{children}</blockquote>,
   table: ({ node: _n, ...p }: ComponentProps<'table'> & { node?: unknown }) => <TableBox {...p} />,
   pre: ({ node: _n, ...p }: ComponentProps<'pre'> & { node?: unknown }) => <CodeBox {...p} />,
 }
@@ -74,7 +78,7 @@ export function MdBody({ text, copy = true }: { text: string; copy?: boolean }) 
   return (
     <div className="mdmsg">
       {copy && <CopyButton className="msgcopy" title="Copy the message (formatted for Teams / Outlook / Word, markdown for plain text)" onCopy={copyAll} />}
-      <div className="body md" ref={ref}><Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>{text}</Markdown></div>
+      <div className="body md" ref={ref}><Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>{insightCallouts(text)}</Markdown></div>
     </div>
   )
 }
