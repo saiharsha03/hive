@@ -21,10 +21,17 @@ import { Icon } from './ui'
 
 export type Attachment = { url: string; mediaType: string; data: string }
 
-type SendMode = 'steer' | 'queue'
+type SendMode = 'steer' | 'queue' | 'interrupt'
+const MODES: SendMode[] = ['steer', 'queue', 'interrupt']
 const MODE_KEY = 'sendMode'
-const loadMode = (): SendMode => (getPref<string>(MODE_KEY, 'steer') === 'queue' ? 'queue' : 'steer')
+const loadMode = (): SendMode => { const m = getPref<string>(MODE_KEY, 'steer'); return MODES.includes(m as SendMode) ? (m as SendMode) : 'steer' }
 const other = (m: SendMode): SendMode => (m === 'steer' ? 'queue' : 'steer')
+const MODE_LABEL: Record<SendMode, string> = { steer: 'Steer', queue: 'Queue', interrupt: 'Interrupt' }
+const MODE_HINT: Record<SendMode, string> = {
+  steer: "Delivered at Claude's next step, inside the running turn",
+  queue: 'Held until Claude finishes, then starts a new turn',
+  interrupt: 'Stops what Claude is doing now and sends this as the next turn (Ctrl+Enter)',
+}
 const attachmentOf = (url: string): Attachment => ({ url, mediaType: url.slice(5, url.indexOf(';')), data: url.slice(url.indexOf(',') + 1) })
 
 // unsent text and images per thread, so switching threads or UI doesn't lose them
@@ -287,8 +294,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
       if (draft.trim() || images.length || session.busy) { submit(); onRunInBackground() }
       return
     }
-    // Alt+Enter sends this one message the other way while Claude works
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(e.altKey ? other(sendMode) : sendMode) }
+    // Ctrl+Enter interrupts Claude and sends; Alt+Enter sends this one message the other way (steer / queue)
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(e.ctrlKey ? 'interrupt' : e.altKey ? other(sendMode) : sendMode) }
     if (e.key === 'Escape' && session.busy) { e.preventDefault(); onStop() }
   }
 
@@ -337,7 +344,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
               <div className="who you">You
                 {it.steer && <span className="steer">steered while Claude worked{it.during ? ` (${it.during})` : ''}</span>}
                 {it.queue?.pending && (
-                  <span className="steer">queued, sends when Claude finishes
+                  <span className="steer">{it.interrupt ? 'interrupting Claude, sends next' : 'queued, sends when Claude finishes'}
                     <button className="link" onClick={() => onPromote(it.queue!.id)} data-testid="queued-send-now">send now</button>
                     <button className="link" onClick={() => void editQueued(it)} data-testid="queued-edit">edit</button>
                     <button className="link" onClick={() => void onDequeue(it.queue!.id)} data-testid="queued-remove">remove</button>
@@ -485,7 +492,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
               ref={box}
               className={ultra ? 'ultra' : undefined}
               onScroll={(e) => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop }}
-              placeholder={session.busy ? `Claude is working. Enter to ${sendMode}, Alt+Enter to ${other(sendMode)}, Esc to stop` : 'Message Claude, paste or drop images, / for commands'}
+              placeholder={session.busy ? `Claude is working. Enter to ${sendMode}, Alt+Enter to ${other(sendMode)}, Ctrl+Enter to interrupt and send, Esc to stop` : 'Message Claude, paste or drop images, / for commands'}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onKey}
@@ -503,15 +510,14 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             <span className="sp" />
             {session.busy && (
               <div className="seg" role="group" aria-label="Send mode while Claude works">
-                {(['steer', 'queue'] as const).map((m) => (
-                  <button key={m} className={sendMode === m ? 'on' : ''} aria-pressed={sendMode === m} onClick={() => pickMode(m)} data-testid={`send-mode-${m}`}
-                    title={m === 'steer' ? 'Delivered at Claude\'s next step, inside the running turn' : 'Held until Claude finishes, then starts a new turn'}>
-                    {m === 'steer' ? 'Steer' : 'Queue'}
+                {MODES.map((m) => (
+                  <button key={m} className={sendMode === m ? 'on' : ''} aria-pressed={sendMode === m} onClick={() => pickMode(m)} data-testid={`send-mode-${m}`} title={MODE_HINT[m]}>
+                    {MODE_LABEL[m]}
                   </button>
                 ))}
               </div>
             )}
-            <button className="sendb" onClick={() => submit()} data-testid="send"><Icon name="send" />{session.busy ? (sendMode === 'steer' ? 'Steer' : 'Queue') : 'Send'}</button>
+            <button className="sendb" onClick={() => submit()} data-testid="send"><Icon name="send" />{session.busy ? MODE_LABEL[sendMode] : 'Send'}</button>
           </div>
         </div>
         <div className="cmeta">

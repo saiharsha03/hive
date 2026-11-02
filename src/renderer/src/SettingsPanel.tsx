@@ -61,7 +61,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   // values kept outside the settings file: two page preferences
   const clipOn = useClipboardOn()
   const [clip, setClip] = useState(clipOn)
-  const [sendMode, setSendMode] = useState(getPref<string>('sendMode', 'steer') === 'queue' ? 'queue' : 'steer')
+  const [sendMode, setSendMode] = useState(['queue', 'interrupt'].includes(getPref<string>('sendMode', 'steer')) ? getPref<string>('sendMode', 'steer') : 'steer')
   const [newKey, setNewKey] = useState('')
 
   const load = () => window.api.settingsGet(true).then((v) => {
@@ -105,7 +105,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
       if (!r.ok) { setNotes([]); return }
       const extra: string[] = []
       if (clip !== clipOn) setClipboardOn(clip)
-      if (sendMode !== getPref<string>('sendMode', 'steer')) { setPref('sendMode', sendMode); extra.push('Steer or queue: used by threads you open or switch to from now on.') }
+      if (sendMode !== getPref<string>('sendMode', 'steer')) { setPref('sendMode', sendMode); extra.push('Steer, queue or interrupt: used by threads you open or switch to from now on.') }
       applyGeneral(draft.general)
       setNotes(['Saved. Dependabot, Deploy, Dev stack, Pull latest, Scripts, the app name, tagline and appearance use it now.', ...r.notes, ...extra])
       await load()
@@ -315,7 +315,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
         {field('HIVE_ALLOWLIST_CMD', 'IP allowlist command', 'Runs from the "Allow my IP" button, which turns on when your public IP changes. It should add the current IP wherever it must be allowed. Empty = no button.', '')}
         <Row label="Clipboard suggestions"><label className="scheck"><input type="checkbox" checked={clip} onChange={(e) => setClip(e.target.checked)} /> Offer copied text and images to the active thread</label></Row>
         <Row label="While Claude works" hint="What Enter does; Alt+Enter does the other.">
-          <select className="sin" value={sendMode} onChange={(e) => setSendMode(e.target.value as 'steer' | 'queue')}><option value="steer">Steer the running turn</option><option value="queue">Queue for the next turn</option></select>
+          <select className="sin" value={sendMode} onChange={(e) => setSendMode(e.target.value)}><option value="steer">Steer the running turn</option><option value="queue">Queue for the next turn</option><option value="interrupt">Interrupt Claude and send now</option></select>
         </Row>
         <Row label="Terminal shell" hint="Empty = the system default. Used by terminals opened after saving." problems={of('general.shell')}><input className="sin wide" value={g.shell} spellCheck={false} onChange={(e) => setGeneral({ shell: e.target.value })} /></Row>
         <Row label="Default model" hint="Empty = Claude Code's default. Used by threads started after saving." problems={of('general.model')}><input className="sin" value={g.model} spellCheck={false} placeholder="(default)" onChange={(e) => setGeneral({ model: e.target.value })} /></Row>

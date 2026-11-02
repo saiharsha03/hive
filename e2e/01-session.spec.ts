@@ -105,6 +105,22 @@ test.describe.serial('session', () => {
     await h.sendMode('steer').click().catch(() => {}) // back to the default for later runs (only shown while busy)
   })
 
+  test('interrupt stops the running turn and sends at once', async () => {
+    await h.send('Use the Bash tool to run exactly this command: sleep 90. After it finishes, reply with the word done.')
+    await expect(h.working()).toBeVisible({ timeout: 60_000 })
+    await expect(h.id('chat-stop')).toBeVisible()
+    await h.sendMode('interrupt').click()
+    const t0 = Date.now()
+    await h.send('interrupt note: forget the sleep and reply with only the word pivot')
+    await expect(h.userMsgs().filter({ hasText: 'interrupting Claude, sends next' })).toHaveCount(1)
+    // handed over as soon as the stopped turn ends, long before the 90 s sleep would have
+    await expect(h.userMsgs().filter({ hasText: 'interrupting Claude, sends next' })).toHaveCount(0, { timeout: 60_000 })
+    await h.waitIdle(120_000)
+    expect(Date.now() - t0).toBeLessThan(85_000)
+    await expect(h.replies().last()).toContainText(/pivot/i)
+    await h.sendMode('steer').click().catch(() => {})
+  })
+
   test('the MCP servers menu lists servers', async () => {
     await h.open('mcp')
     await expect(h.id('mcp-server').first()).toBeVisible({ timeout: 60_000 })

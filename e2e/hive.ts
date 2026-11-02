@@ -85,7 +85,7 @@ export class Hive {
     await this.effortPicker().click()
     await this.id(`effort-list-${level}`).click()
   }
-  sendMode = (m: 'steer' | 'queue') => this.id(`send-mode-${m}`)
+  sendMode = (m: 'steer' | 'queue' | 'interrupt') => this.id(`send-mode-${m}`)
 
   // ---- sidebar threads ----
   sidebar = () => this.id('sidebar')

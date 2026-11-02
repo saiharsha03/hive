@@ -556,9 +556,10 @@ export function setBackground(tabId: string, background: boolean, web: WebConten
   syncMode(s, (ev) => { if (live.get(tabId) === s && !web.isDestroyed()) web.send('chat:event', tabId, ev) })
 }
 
-// While a turn runs: steer = delivered at Claude's next step inside it; queue = held until the turn ends, then starts a new one.
+// While a turn runs: steer = delivered at Claude's next step inside it; queue = held until the turn ends, then starts a new one;
+// interrupt = queued, and the running turn is stopped now, so it goes in straight away as the next turn.
 // background: the tab is not on screen (or Hive started it on its own), so a new process starts in auto mode
-export type Outgoing = { title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean }
+export type Outgoing = { title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
 
 export function sendMessage(tabId: string, cwd: string, resume: string | undefined, msg: Outgoing, web: WebContents): void {
   if (msg.title) { tabTitles.set(tabId, msg.title); setThreadTitle(tabId, msg.title) }
@@ -582,6 +583,7 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   const boost = boostForMessage(tabId, s.q, msg.text, msg.mode === 'queue')
   if (boost) void boost.finally(go)
   else go()
+  if (msg.interrupt && msg.mode === 'queue' && cur.turns.isBusy()) void cur.q.interrupt().catch(() => { /* turn already over */ })
 }
 
 // the tab's running process, for the status IPC (model, effort, commands, MCP servers, stopping tasks)

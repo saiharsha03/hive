@@ -417,18 +417,21 @@ export function App() {
     setModal(null)
   }
 
-  const send = (target: Session, text: string, images: Attachment[], mode?: 'steer' | 'queue') => {
-    // while Claude works, a message either steers the running turn or waits in the queue for the next one
-    const busyMode = target.busy ? (mode ?? 'steer') : undefined
+  const send = (target: Session, text: string, images: Attachment[], mode?: 'steer' | 'queue' | 'interrupt') => {
+    // while Claude works, a message steers the running turn, waits in the queue for the next one, or (interrupt) is
+    // queued while the running turn is stopped, so it goes in at once
+    const interrupt = !!target.busy && mode === 'interrupt'
+    const busyMode = target.busy ? (interrupt ? 'queue' : mode === 'interrupt' ? 'steer' : (mode ?? 'steer')) : undefined
     const queueId = busyMode === 'queue' ? crypto.randomUUID() : undefined
     const item: Item = {
       kind: 'user', text, images: images.map((i) => i.url),
       ...(busyMode === 'steer' ? { steer: true, during: workingOn(target.items) } : {}),
       ...(queueId ? { queue: { id: queueId, pending: true } } : {}),
+      ...(interrupt ? { interrupt: true } : {}),
     }
     setSessions((all) => all.map((s) => (s.id === target.id ? { ...s, busy: true, items: [...s.items, item] } : s)))
     void window.api.chatSend(target.id, target.cwd || folder, target.sessionId, {
-      title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background,
+      title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background, ...(interrupt ? { interrupt: true } : {}),
     })
   }
 
