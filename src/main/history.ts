@@ -1,5 +1,5 @@
 // Turns a session transcript into chat items, so a reopened session shows its conversation.
-import { readFile } from 'node:fs/promises'
+import { open, readFile } from 'node:fs/promises'
 import { parseFromThread } from '../shared/threadTalkCore'
 import { isContinuation } from '../shared/summaryCore'
 import { appName } from '../shared/appName'
@@ -32,6 +32,33 @@ function userItem(text: string, images: string[]): Item {
 export async function loadHistory(path: string): Promise<Item[]> {
   let text: string
   try { text = await readFile(path, 'utf8') } catch { return [] }
+  return parseHistory(text)
+}
+
+// The end of a long transcript only, so a reopened thread shows at once: the last `bytes` from the first whole line on,
+// doubled until it holds `minItems` (tool output makes some lines huge). more = earlier lines were left out
+// (loadHistory reads them all when asked).
+export async function loadRecentHistory(path: string, bytes = RECENT_BYTES, minItems = RECENT_ITEMS): Promise<{ items: Item[]; more: boolean }> {
+  let fh
+  try { fh = await open(path, 'r') } catch { return { items: [], more: false } }
+  try {
+    const { size } = await fh.stat()
+    for (let n = bytes; ; n *= 2) {
+      if (size <= n) return { items: parseHistory(await fh.readFile('utf8')), more: false }
+      const buf = Buffer.alloc(n)
+      await fh.read(buf, 0, n, size - n)
+      const text = buf.toString('utf8')
+      const items = parseHistory(text.slice(text.indexOf('\n') + 1))
+      if (items.length >= minItems) return { items, more: true }
+    }
+  } finally {
+    await fh.close()
+  }
+}
+export const RECENT_BYTES = 2 * 1024 * 1024
+const RECENT_ITEMS = 150
+
+function parseHistory(text: string): Item[] {
   const items: Item[] = []
   const tools = new Map<string, Extract<Item, { kind: 'tool' }>>()
   const seen = new Set<string>() // assistant content blocks repeat across streamed lines

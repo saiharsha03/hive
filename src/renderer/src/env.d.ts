@@ -125,6 +125,7 @@ interface Window {
     settingsSave: (draft: import('../../shared/settingsCore').Draft) => Promise<{ ok: boolean; problems: import('../../shared/settingsCore').Problem[]; notes: string[] }>
     homeDir: () => Promise<string>
     loadHistory: (path: string) => Promise<Item[]>
+    loadRecentHistory: (path: string) => Promise<{ items: Item[]; more: boolean }>
     onChatEvent: (cb: (tabId: string, event: any) => void) => () => void
     gitList: () => Promise<import('../../shared/gitCore').GitRow[]>
     gitDetail: (dir: string) => Promise<import('../../shared/gitCore').Detail>

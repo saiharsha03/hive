@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('api', {
   settingsSave: (draft: unknown) => ipcRenderer.invoke('settings:save', draft),
   homeDir: () => ipcRenderer.invoke('app:home'),
   loadHistory: (path: string) => ipcRenderer.invoke('history:load', path),
+  loadRecentHistory: (path: string) => ipcRenderer.invoke('history:recent', path),
   // every event from every live session: (tabId, event)
   onChatEvent: (cb: (tabId: string, event: any) => void) => {
     const fn = (_e: unknown, tabId: string, event: any) => cb(tabId, event)

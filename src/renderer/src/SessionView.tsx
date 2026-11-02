@@ -161,10 +161,15 @@ type Props = {
   onTerminal: () => void
   onChanges: () => void
   onSplit?: () => void
+  onLoadEarlier?: () => void // a reopened thread's conversation before its recent end
   compactHead?: boolean
 }
 
-export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, compactHead }: Props) {
+const WINDOW = 150
+
+export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, compactHead }: Props) {
+  // only the newest items are drawn at first, so a long thread opens at once; Show earlier adds more
+  const [limit, setLimit] = useState(WINDOW)
   const [draft, setDraft] = useState(() => drafts.get(session.id)?.text ?? '')
   const [images, setImages] = useState<Attachment[]>(() => drafts.get(session.id)?.images ?? [])
   useEffect(() => { drafts.set(session.id, { text: draft, images }) }, [session.id, draft, images])
@@ -310,7 +315,13 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
       <>
         {!session.loaded && <div className="hint">Loading conversation…</div>}
         {session.loaded && !session.items.length && !session.streaming && <div className="chat-empty">New thread in {session.cwd || 'the workspace'}. Type below; drop or paste images.</div>}
+        {(session.items.length > limit || session.history?.more) && (
+          <button className="dlink earlier" data-testid="chat-earlier" onClick={() => { if (session.items.length > limit) setLimit((n) => n + WINDOW); else onLoadEarlier?.() }}>
+            {session.items.length > limit ? `Show ${Math.min(WINDOW, session.items.length - limit)} earlier` : 'Load the earlier conversation'}
+          </button>
+        )}
         {session.items.map((it, i) => {
+          if (i < session.items.length - limit) return null
           if (it.kind === 'user') return (
             <div key={i} className={`msg user${it.queue?.pending ? ' queued' : ''}`} data-testid="msg-user">
               <div className="who you">You
@@ -385,7 +396,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           return <div key={i} className="msg err" data-testid="msg-error"><Icon name="error" className="s-fail" /> {it.text}</div>
         })}
       </>
-  ), [session.loaded, session.items, session.streaming, session.cwd, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued])
+  ), [session.loaded, session.items, session.streaming, session.cwd, session.history?.more, limit, onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued])
 
   // the live session's own mode once it reports one; before that, the mode it will start in
   const shownMode = session.mode ?? (session.background ? 'auto' : mode)

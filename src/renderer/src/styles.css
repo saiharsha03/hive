@@ -894,3 +894,4 @@ button.sbi:hover { background: var(--hover); }
 
 /* a preview over the whole window; menus, popups, notices and modals stay above it */
 .pv-full { position: fixed; inset: 0; z-index: 65; display: flex; background: var(--bg); }
+.thread .earlier { display: block; margin: 4px auto 12px; }

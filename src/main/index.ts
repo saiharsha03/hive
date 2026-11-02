@@ -19,7 +19,7 @@ import type { AllowStatus } from '../shared/allowCore'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail } from './watchers'
 import { gitDecorations, listDir } from './files'
 import { uiLoad, uiSave } from './uiStore'
-import { loadHistory } from './history'
+import { loadHistory, loadRecentHistory } from './history'
 import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
 import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
@@ -288,6 +288,8 @@ handle('dev:stop', (_e, name: string) => dev.stopService(name, dev.USER))
 handle('dev:stopAll', () => dev.stopAll(dev.USER))
 handle('dev:logs', (_e, name: string) => dev.logs(name, 1000))
 handle('history:load', (_e, path: string) => loadHistory(path))
+// a reopened thread: its recent end first (more = there is earlier conversation to load)
+handle('history:recent', (_e, path: string) => loadRecentHistory(path))
 handle('fs:readText', (_e, path: string) => readText(path))
 handle('preview:url', (_e, path: string) => previewUrl(path))
 handle('shell:open', (_e, path: string) => openExternal(path))

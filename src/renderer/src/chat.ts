@@ -10,6 +10,9 @@ export type Session = {
   streaming: string // text of the reply being written right now
   busy: boolean
   loaded: boolean // history read (reopened sessions)
+  // a reopened thread shows its recent end first: earlier = how many items came from its transcript, more = there is
+  // earlier conversation not loaded yet
+  history?: { count: number; more: boolean }
   background: boolean // live but hidden from the tab bar
   waitingReason?: string // why the user is needed (Claude's words, or Finished / Failed + first line)
   waitingSince?: number

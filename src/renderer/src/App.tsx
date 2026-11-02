@@ -261,8 +261,8 @@ export function App() {
     setSessions((all) => (all.some((s) => s.id === t.tabId) ? all.map((s) => (s.id === t.tabId ? { ...s, busy: true, items: [...s.items, first] } : s)) : [...all, {
       id: t.tabId, title: t.title, cwd: t.cwd, sessionId: t.sessionId, path: t.path, items: [first], streaming: '', busy: true, loaded: !t.path, background: true,
     }]))
-    if (t.path) window.api.loadHistory(t.path).then((items) =>
-      setSessions((all) => all.map((s) => (s.id === t.tabId && !s.loaded ? { ...s, items: [...items, ...s.items], loaded: true } : s))))
+    if (t.path) window.api.loadRecentHistory(t.path).then(({ items, more }) =>
+      setSessions((all) => all.map((s) => (s.id === t.tabId && !s.loaded ? { ...s, items: [...items, ...s.items], loaded: true, history: { count: items.length, more } } : s))))
   }), [])
   const active = sessions.find((s) => s.id === activeId)
 
@@ -341,8 +341,15 @@ export function App() {
     setPaneState((p) => activateIn(p, info.id))
     window.api.worktreeLinks(info.id).then((links) => links.length && setSessions((all) => all.map((s) => (s.id === info.id
       ? { ...s, worktrees: links.map(({ repo, path, branch }) => ({ repo, path, branch })) } : s)))).catch(() => {})
-    window.api.loadHistory(info.path).then((items) =>
-      setSessions((all) => all.map((s) => (s.id === info.id ? { ...s, items: [...items, ...s.items], loaded: true } : s))))
+    window.api.loadRecentHistory(info.path).then(({ items, more }) =>
+      setSessions((all) => all.map((s) => (s.id === info.id ? { ...s, items: [...items, ...s.items], loaded: true, history: { count: items.length, more } } : s))))
+  }
+  // the rest of a long thread's transcript, on request: the full history replaces the recent part, live items stay
+  const loadEarlier = (id: string) => {
+    const s = sessionsRef.current.find((x) => x.id === id)
+    if (!s?.path || !s.history?.more) return
+    void window.api.loadHistory(s.path).then((items) => setSessions((all) => all.map((x) => (x.id === id && x.history?.more
+      ? { ...x, items: [...items, ...x.items.slice(x.history.count)], history: { count: items.length, more: false } } : x))))
   }
 
   // close sessions (each stops its live process); each pane picks its nearest tab
@@ -558,7 +565,7 @@ export function App() {
     <SessionView key={s.id} session={s} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
       onSend={(text, images, m) => send(s, text, images, m)} onDequeue={(id) => window.api.chatDequeue(s.id, id)} onPromote={(id) => void window.api.chatPromote(s.id, id)}
       onStop={() => window.api.chatInterrupt(s.id)} onBackground={(toolUseId) => void window.api.chatBackground(s.id, toolUseId)} onRunInBackground={() => moveToBackground(s.id)}
-      onOpen={(p) => setPreview(p)} onDiff={showDiff} onTerminal={() => { if (bottomOpen && bottomView === 'terminal' && termTab === s.id) setBottomOpen(false); else openTerminal(s.id) }} onChanges={() => { setDiff(null); showView('changes') }}
+      onOpen={(p) => setPreview(p)} onDiff={showDiff} onLoadEarlier={() => loadEarlier(s.id)} onTerminal={() => { if (bottomOpen && bottomView === 'terminal' && termTab === s.id) setBottomOpen(false); else openTerminal(s.id) }} onChanges={() => { setDiff(null); showView('changes') }}
       onSplit={arr.chat !== 'single' && panes.panes.length < 4 ? () => newBeside(panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? panes.focus) : undefined}
       compactHead={arr.tabs === 'title'} />
   )
