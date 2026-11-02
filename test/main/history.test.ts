@@ -23,3 +23,13 @@ test('recent history: the last bytes from a whole line on, and whether there is 
   assert.deepEqual(await loadRecentHistory(file, 10 * 1024 * 1024), { items: all, more: false })
   assert.deepEqual(await loadRecentHistory(join(tmpdir(), 'no-such-file.jsonl')), { items: [], more: false })
 })
+
+test('messages carry when they were sent / written, from the transcript timestamps', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'hive-history-')), 't.jsonl')
+  writeFileSync(file, [
+    JSON.stringify({ type: 'user', timestamp: '2026-11-02T15:01:00.000Z', message: { role: 'user', content: 'hi' } }),
+    JSON.stringify({ type: 'assistant', timestamp: '2026-11-02T15:02:30.000Z', message: { id: 'm1', role: 'assistant', content: [{ type: 'text', text: 'hello' }] } }),
+  ].join('\n'))
+  const items = await loadHistory(file)
+  assert.deepEqual(items.map((i) => [i.kind, (i as { at?: number }).at]), [['user', Date.parse('2026-11-02T15:01:00.000Z')], ['assistant', Date.parse('2026-11-02T15:02:30.000Z')]])
+})

@@ -44,12 +44,18 @@ export function activity(s: Session): string {
   return Object.values(toolLine(t.name, t.input)).filter(Boolean).join(' ')
 }
 
-export function liveRows(all: Session[], extra: LiveRow[] = []): { waiting: LiveRow[]; working: LiveRow[] } {
+// agents: per tab, how many of its subagents / workflows / Codex runs are still running. A thread whose turn ended
+// but which still has some running is working (waiting on them), not idle or "Finished"; a question for the user wins.
+export function liveRows(all: Session[], extra: LiveRow[] = [], agents: Map<string, number> = new Map()): { waiting: LiveRow[]; working: LiveRow[] } {
   const rows: LiveRow[] = [...extra]
   for (const s of all) {
-    const state = stateOf(s)
+    let state = stateOf(s)
+    const n = agents.get(s.id) ?? 0
+    const onAgents = n > 0 && !s.busy && (!state || (s.waitingReason ?? '').startsWith('Finished'))
+    if (onAgents) state = 'working'
     if (!state) continue
-    rows.push({ id: s.id, sessionId: s.sessionId, title: s.title, state, note: state === 'waiting' ? s.waitingReason ?? '' : activity(s), since: s.waitingSince ?? 0 })
+    const note = onAgents ? `Waiting on ${n} agent${n === 1 ? '' : 's'}` : state === 'waiting' ? s.waitingReason ?? '' : activity(s)
+    rows.push({ id: s.id, sessionId: s.sessionId, title: s.title, state, note, since: s.waitingSince ?? 0 })
   }
   return {
     waiting: rows.filter((r) => r.state === 'waiting').sort((a, b) => a.since - b.since),

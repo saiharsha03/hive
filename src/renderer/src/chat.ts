@@ -157,7 +157,7 @@ export function applyEvent(s: Session, ev: any): Session {
     case 'assistant': {
       const items = [...s.items]
       for (const b of ev.message?.content ?? []) {
-        if (b.type === 'text' && b.text.trim()) items.push({ kind: 'assistant', text: b.text })
+        if (b.type === 'text' && b.text.trim()) items.push({ kind: 'assistant', text: b.text, at: Date.now() })
         else if (b.type === 'tool_use') {
           if (b.name === SHOW) items.push({ kind: 'show', path: b.input?.path })
           items.push({ kind: 'tool', id: b.id, name: b.name, input: b.input, status: 'running' })

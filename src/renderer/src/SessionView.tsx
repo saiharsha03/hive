@@ -174,6 +174,14 @@ type Props = {
 
 const WINDOW = 150
 
+// when a message was sent or written: the time today, the date too for older ones; the full date on hover
+function When({ at }: { at: number }) {
+  const d = new Date(at)
+  const today = d.toDateString() === new Date().toDateString()
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return <span className="when" title={d.toLocaleString()}>{today ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`}</span>
+}
+
 export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, compactHead }: Props) {
   // only the newest items are drawn at first, so a long thread opens at once; Show earlier adds more
   const [limit, setLimit] = useState(WINDOW)
@@ -341,7 +349,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           if (i < session.items.length - limit) return null
           if (it.kind === 'user') return (
             <div key={i} className={`msg user${it.queue?.pending ? ' queued' : ''}`} data-testid="msg-user">
-              <div className="who you">You
+              <div className="who you">You{it.at ? <When at={it.at} /> : null}
                 {it.steer && <span className="steer">steered while Claude worked{it.during ? ` (${it.during})` : ''}</span>}
                 {it.queue?.pending && (
                   <span className="steer">{it.interrupt ? 'interrupting Claude, sends next' : 'queued, sends when Claude finishes'}
@@ -362,7 +370,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           )
           if (it.kind === 'assistant') return (
             <div key={i} className="msg" data-testid="msg-assistant">
-              <div className="who claude"><Icon name="sparkle" className="mk-claude" />Claude</div>
+              <div className="who claude"><Icon name="sparkle" className="mk-claude" />Claude{it.at ? <When at={it.at} /> : null}</div>
               <MdBody text={it.text} />
             </div>
           )

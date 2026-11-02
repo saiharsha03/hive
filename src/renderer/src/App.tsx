@@ -24,6 +24,7 @@ import { FileEditor, fileOfTab, fileTabId, openInEditor, releaseFile, setFileOpe
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
 import { TOOL_TABS, workingOn, type Session, type ToolTab } from './chat'
+import { useAllStatus } from './statusStore'
 import { activateSession, findSession, liveRows, markWaiting, onSessionEvent, type LiveRow } from './background'
 import { TabMenu } from './TabMenu'
 import { tabsToClose, type TabCloseAction } from './tabs'
@@ -405,7 +406,10 @@ export function App() {
     setSessions((all) => all.map((s) => (s.id === id ? { ...s, background: true } : s)))
   }
 
-  const live = useMemo(() => liveRows(sessions, [...(deploy.liveRow ? [deploy.liveRow] : []), ...dev.liveRows, ...scripts.liveRows]), [sessions, deploy.liveRow, dev.liveRows, scripts.liveRows])
+  // threads still waiting on their own subagents / workflows / Codex runs count as working
+  const statuses = useAllStatus()
+  const agentCounts = useMemo(() => new Map([...statuses].map(([tab, st]) => [tab, st.tasks.filter((t) => t.status === 'running' && t.kind !== 'local_bash').length])), [statuses])
+  const live = useMemo(() => liveRows(sessions, [...(deploy.liveRow ? [deploy.liveRow] : []), ...dev.liveRows, ...scripts.liveRows], agentCounts), [sessions, deploy.liveRow, dev.liveRows, scripts.liveRows, agentCounts])
   const failedCount = live.waiting.filter((r) => liveLook(r).word === 'FAILED').length
 
   // Diagnose: a new thread with the prompt filled in, not sent
@@ -424,7 +428,7 @@ export function App() {
     const busyMode = target.busy ? (interrupt ? 'queue' : mode === 'interrupt' ? 'steer' : (mode ?? 'steer')) : undefined
     const queueId = busyMode === 'queue' ? crypto.randomUUID() : undefined
     const item: Item = {
-      kind: 'user', text, images: images.map((i) => i.url),
+      kind: 'user', text, images: images.map((i) => i.url), at: Date.now(),
       ...(busyMode === 'steer' ? { steer: true, during: workingOn(target.items) } : {}),
       ...(queueId ? { queue: { id: queueId, pending: true } } : {}),
       ...(interrupt ? { interrupt: true } : {}),
