@@ -23,7 +23,7 @@ import { setShowAgents } from './ThreadStatus'
 import { FileEditor, fileOfTab, fileTabId, openInEditor, releaseFile, setFileOpener } from './EditorView'
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
-import { workingOn, type Session } from './chat'
+import { TOOL_TABS, workingOn, type Session, type ToolTab } from './chat'
 import { activateSession, findSession, liveRows, markWaiting, onSessionEvent, type LiveRow } from './background'
 import { TabMenu } from './TabMenu'
 import { tabsToClose, type TabCloseAction } from './tabs'
@@ -112,7 +112,9 @@ export function App() {
 
   // a preview opens over the whole window (Esc or x closes it); "Side panel" docks it in the preview view instead
   const [previewFull, setPreviewFull] = useState(false)
-  const setPreview = (p: string | null) => { setPreviewPath(p); setPreviewFull(!!p) }
+  // anything shown (a watcher's report, a file Claude shows you) opens as a tab next to the threads; only a pasted image
+  // (no file behind it) still opens over the window
+  const setPreview = (p: string | null) => { if (p && !p.startsWith('data:')) { openInEditor(p); return } setPreviewPath(p); setPreviewFull(!!p) }
   useEffect(() => {
     if (!previewFull) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreviewFull(false) }
@@ -148,15 +150,15 @@ export function App() {
   }), [])
   useEffect(() => setShowAgents(() => showView('agents')))
   // To-dos and Notes open as tabs in the main window, like threads and files (one tab each)
-  const openToolTab = (tool: 'todos' | 'notes') => {
+  const openToolTab = (tool: ToolTab) => {
     const id = `tool:${tool}`
     setSessions((all) => (all.some((s) => s.id === id) ? all : [...all, {
-      id, tool, title: tool === 'todos' ? 'To-dos' : 'Notes', items: [], streaming: '', busy: false, loaded: true, background: false,
+      id, tool, title: VIEW[tool].label, items: [], streaming: '', busy: false, loaded: true, background: false,
     }]))
     setPaneState((p) => activateIn(p, id))
   }
   function showView(v: ViewId, el?: HTMLElement | null) {
-    if (v === 'todos' || v === 'notes') return openToolTab(v)
+    if ((TOOL_TABS as string[]).includes(v)) return openToolTab(v as ToolTab)
     const at = placeOf(ui, v)
     if (at === 'left') { setLeftView(v); setLeftOpen(true) }
     else if (at === 'right') { setRightView(v); setRightOpen(true) }
@@ -487,17 +489,12 @@ export function App() {
     deploy: deploy.liveRow ? { n: deploy.liveRow.state === 'waiting' ? '!' : '1', cls: deploy.liveRow.state === 'waiting' ? 'wait' : '' } : undefined,
     dev: devUp ? { n: devUp } : undefined,
   }
+  // the sidebar's Tools: only what has no button of its own (the top bar has Files, Git, To-dos, Notes, Scripts, Deploy;
+  // the bottom panel has Agents)
   const toolRows: ToolRow[] = [
-    { id: 'deploy', label: 'Deploy', icon: 'rocket', mk: 'mk-deploy', status: deploy.liveRow ? deploy.liveRow.note || deploy.liveRow.title : '', cls: deploy.liveRow?.state === 'waiting' ? 's-wait' : deploy.liveRow ? 's-work' : '' },
     { id: 'pull', label: 'Pull latest', icon: pulling ? 'sync' : 'repo-pull', mk: pulling ? 'mk-pull spin' : 'mk-pull', status: pulling ? 'pulling…' : '' },
     ...(allow?.configured ? [{ id: 'allow', label: 'Allow my IP', icon: allow.running ? 'sync' : 'shield', mk: allow.running ? 'mk-other spin' : 'mk-other', status: allow.running ? 'allowing…' : allow.changed ? 'IP changed' : '', cls: allowOn ? 's-wait' : '', disabled: !allowOn, title: allowTitle }] : []),
     { id: 'dev', label: 'Dev stack', icon: 'server-process', mk: 'mk-dev', status: dev.state?.configured ? `${devUp} up` : '', cls: devUp ? 's-done' : '' },
-    { id: 'scripts', label: 'Scripts', icon: 'play', mk: 'mk-scripts', status: runningScripts ? `${runningScripts} running` : '', cls: runningScripts ? 's-work' : '' },
-    { id: 'todos', label: 'To-dos', icon: 'checklist', mk: 'mk-todos', status: tb.open ? `${tb.late ? 'some late, ' : ''}${tb.open} open` : '', cls: tb.late ? 's-wait' : '' },
-    { id: 'notes', label: 'Notes', icon: 'note', mk: 'mk-todos' },
-    { id: 'agents', label: 'Agents', icon: 'type-hierarchy', mk: 'mk-agents', status: agentsRunning ? `${agentsRunning} working` : '', cls: agentsRunning ? 's-work' : '' },
-    { id: 'git', label: 'Git', icon: 'source-control', mk: 'mk-git' },
-    { id: 'files', label: 'Files', icon: 'files', mk: 'mk-files' },
     { id: 'mcp', label: 'MCP servers', icon: 'plug', mk: 'mk-other' },
   ]
 
@@ -597,8 +594,7 @@ export function App() {
     }
   }
 
-  const renderChat = (s: Session, _pane: unknown, focused: boolean) => s.tool === 'todos' ? <div className="tooltab"><TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} /></div>
-    : s.tool === 'notes' ? <div className="tooltab"><NotesPanel /></div>
+  const renderChat = (s: Session, _pane: unknown, focused: boolean) => s.tool ? <div className="tooltab">{renderView(s.tool)}</div>
     : s.file ? <FileEditor key={s.id} path={s.file} onClosed={() => closeTabs([s.id])} /> : (
     <SessionView key={s.id} session={s} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
       onSend={(text, images, m) => send(s, text, images, m)} onDequeue={(id) => window.api.chatDequeue(s.id, id)} onPromote={(id) => void window.api.chatPromote(s.id, id)}
@@ -738,7 +734,7 @@ export function App() {
   ]
   // the side panel's views, picked from the top bar (the panel shows only the picked one); the open one closes it
   // (Watchers has its own button with the running count, so it is not repeated here)
-  const toolTabButtons = (['todos', 'notes'] as const).map((t) => ({
+  const toolTabButtons = TOOL_TABS.filter((t) => t !== 'watchers').map((t) => ({
     icon: VIEW[t].icon, on: activeId === `tool:${t}`, title: VIEW[t].label, testid: `top-view-${t}`, onClick: () => openToolTab(t),
   }))
   const viewButtons = arr.right.filter((v) => v !== 'watchers').map((v) => ({
@@ -763,7 +759,7 @@ export function App() {
 
   return (
     <div className={`app ui-${ui}`} onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
-      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} views={[...viewButtons.slice(0, 2), ...toolTabButtons, ...viewButtons.slice(2)]} toggles={toggles} onSettings={() => setModal('settings')} />
+      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} views={[...viewButtons, ...toolTabButtons]} toggles={toggles} onSettings={() => setModal('settings')} />
       {body}
       <StatusBar sessionPath={active?.path ?? null} tabId={active?.id ?? null} branch={active ? (active.worktrees?.at(-1)?.branch ?? (active.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? null) : null}
         waiting={live.waiting.length - failedCount} working={live.working.length} failed={failedCount}

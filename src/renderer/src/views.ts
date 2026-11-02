@@ -34,7 +34,7 @@ export type Arrangement = {
 const BOTTOM: ViewId[] = ['agents', 'terminal']
 
 export const ARRANGE: Record<UIId, Arrangement> = {
-  default: { left: ['threads'], right: ['files', 'git', 'scripts', 'deploy', 'watchers'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
+  default: { left: ['threads'], right: ['files', 'git'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
   workbench: {
     left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['git', 'deploy'], bottom: BOTTOM,
     chat: 'grid', tabs: 'full', closed: [],

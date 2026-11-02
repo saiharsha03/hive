@@ -1,5 +1,9 @@
 // Chat state for one tab, and how each SDK event changes it.
 import { hookWarning, isContinuation } from '../../shared/summaryCore'
+// tools that open as tabs in the main window, like threads and files
+export type ToolTab = 'todos' | 'notes' | 'watchers' | 'scripts' | 'deploy'
+export const TOOL_TABS: ToolTab[] = ['todos', 'notes', 'scripts', 'deploy', 'watchers']
+
 export type Session = {
   id: string // tab id
   title: string
@@ -14,7 +18,7 @@ export type Session = {
   // earlier conversation not loaded yet
   history?: { count: number; more: boolean }
   file?: string // a file tab (id "file:<path>"): the editor, not a conversation
-  tool?: 'todos' | 'notes' // a tool tab (id "tool:todos" / "tool:notes"): that panel, full size
+  tool?: ToolTab // a tool tab (id "tool:<name>"): that panel, full size
   background: boolean // live but hidden from the tab bar
   waitingReason?: string // why the user is needed (Claude's words, or Finished / Failed + first line)
   waitingSince?: number
