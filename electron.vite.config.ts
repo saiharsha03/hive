@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    // the embedding worker is its own file, loaded by search.ts as a worker thread
+
     build: { rollupOptions: { input: { index: resolve('src/main/index.ts') } } },
   },
   preload: { plugins: [externalizeDepsPlugin()] },

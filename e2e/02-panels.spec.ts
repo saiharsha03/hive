@@ -1,7 +1,7 @@
 // Panels with no Claude turns: to-dos, terminal, files, git, scripts, Watch, Settings. Git work happens only in the
 // throwaway repo; commit and push must report test mode.
 import { expect, test } from '@playwright/test'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { close, DEMO, gitOut, launch, SCRIPT_CWD, shot, TAG, type Launched } from './harness'
 import { Hive } from './hive'
@@ -77,8 +77,8 @@ test.describe('panels', () => {
     await expect(file('tracked.txt')).toHaveClass(/g-modified/)
     await expect(file('untracked.txt')).toHaveClass(/g-(untracked|added)/)
     await shot(l.page, 'files-git-colours')
-    // a file opens in a full-window preview: Esc closes it, "Side panel" docks it instead
-    await file('tracked.txt').click()
+    // a page opens in a full-window preview: Esc closes it, "Side panel" docks it instead
+    await file('readme.md').click()
     const full = h.id('preview-full')
     await expect(full).toBeVisible()
     const box = await full.boundingBox()
@@ -88,11 +88,40 @@ test.describe('panels', () => {
     await shot(l.page, 'preview-full')
     await l.page.keyboard.press('Escape')
     await expect(full).toHaveCount(0)
-    await file('tracked.txt').click()
+    await file('readme.md').click()
     await h.id('preview-side').click()
     await expect(full).toHaveCount(0)
     await expect(l.page.locator('aside.preview')).toBeVisible()
     await h.open('files')
+  })
+
+  test('editor: a Python file opens from Files, Pyright hovers and flags the type error, Ctrl+S saves', async () => {
+    await h.open('files')
+    const tree = h.id('file-tree')
+    if (!(await tree.locator('[data-testid="file-row"][data-name="app.py"]').isVisible())) await tree.locator('[data-testid="file-dir"][data-name="demo"]').click()
+    await tree.locator('[data-testid="file-row"][data-name="app.py"]').click()
+    const editor = h.id('editor-view')
+    await expect(editor).toBeVisible()
+    await expect(h.id('editor-tab').filter({ hasText: 'app.py' })).toHaveCount(1)
+    await expect(editor).toContainText('Pyright language server')
+    // the deliberate type error gets a squiggle from Pyright
+    await expect(editor.locator('.squiggly-error')).not.toHaveCount(0, { timeout: 60_000 })
+    // hover on greet shows its signature
+    await editor.locator('.view-lines').click()
+    await l.page.keyboard.press('Control+Home')
+    for (let i = 0; i < 6; i++) await l.page.keyboard.press('ArrowRight') // into "greet"
+    await l.page.keyboard.press('Control+k')
+    await l.page.keyboard.press('Control+i')
+    await expect(l.page.locator('.monaco-hover').filter({ hasText: '(name: str) -> str' }).first()).toBeVisible({ timeout: 30_000 })
+    await shot(l.page, 'editor-python')
+    // type, see the unsaved dot, Ctrl+S writes the file
+    await editor.locator('.view-lines').click()
+    await l.page.keyboard.press('Control+End')
+    await l.page.keyboard.type('\nprint(greet("e2e"))')
+    await expect(h.id('editor-tab-close').first()).toHaveText('●')
+    await l.page.keyboard.press('Control+s')
+    await expect(h.id('editor-tab-close').first()).toHaveText('×')
+    expect(readFileSync(join(DEMO, 'app.py'), 'utf8')).toContain('print(greet("e2e"))')
   })
 
   test('git panel: stage and split diff work; commit and push are blocked in test mode', async () => {

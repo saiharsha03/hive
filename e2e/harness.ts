@@ -38,6 +38,9 @@ export function makeWorkspace(): void {
     writeFileSync(join(DEMO, 'tracked.txt'), 'one\nTWO\nthree\nfour\n')
     writeFileSync(join(DEMO, 'second.txt'), 'alpha\nbeta\n')
     writeFileSync(join(DEMO, 'untracked.txt'), 'new file\n')
+    // a page for the preview, and a Python file for the editor and its language server (one deliberate type error)
+    writeFileSync(join(DEMO, 'readme.md'), '# Demo\n\nA **markdown** page.\n')
+    writeFileSync(join(DEMO, 'app.py'), 'def greet(name: str) -> str:\n    return "hi " + name\n\n\ncount: int = "three"\n')
   }
   // the workspace .env: only the repos root (no Watch, Dependabot, deploy or stack keys)
   writeFileSync(join(RUN, 'workspace.env'), `HIVE_REPOS_ROOT=${REPOS}\n`)

@@ -49,7 +49,7 @@ export function usePreviewUrl(path: string): string | null {
   return url
 }
 
-export function Preview({ path, onClose, onSide }: { path: string; onClose: () => void; onSide?: () => void }) {
+export function Preview({ path, onClose, onSide, onEdit }: { path: string; onClose: () => void; onSide?: () => void; onEdit?: (path: string) => void }) {
   const kind = kindOf(path)
   const pasted = path.startsWith('data:')
   const url = usePreviewUrl(path) ?? ''
@@ -58,6 +58,7 @@ export function Preview({ path, onClose, onSide }: { path: string; onClose: () =
     <aside className="preview">
       <div className="pv-head" title={pasted ? '' : path}>
         <span className="pv-name">{title}</span>
+        {onEdit && !pasted && (kind === 'text' || kind === 'html') && <button data-testid="preview-edit" className="link" onClick={() => onEdit(path)}>Edit</button>}
         {onSide && <button data-testid="preview-side" className="link" onClick={onSide}>Side panel</button>}
         {!pasted && <button data-testid="preview-button-1" className="link" onClick={() => window.api.openExternal(path)}>Open outside</button>}
         <button data-testid="preview-button-2" className="x pv-x" aria-label="Close preview" onClick={onClose}>×</button>

@@ -24,6 +24,20 @@ contextBridge.exposeInMainWorld('api', {
   setHook: (folder: string, id: string, enabled: boolean) => ipcRenderer.invoke('hooks:set', folder, id, enabled),
   listPlugins: () => ipcRenderer.invoke('plugins:list'),
   setPlugin: (key: string, on: boolean) => ipcRenderer.invoke('plugins:set', key, on),
+  editorRead: (path: string) => ipcRenderer.invoke('editor:read', path),
+  editorMtime: (path: string) => ipcRenderer.invoke('editor:mtime', path),
+  editorWrite: (path: string, text: string) => ipcRenderer.invoke('editor:write', path, text),
+  openInVsCode: (path: string, line: number) => ipcRenderer.invoke('editor:vscode', path, line),
+  lspOpen: (file: string, text: string) => ipcRenderer.invoke('lsp:open', file, text),
+  lspChange: (file: string, text: string, version: number) => ipcRenderer.invoke('lsp:change', file, text, version),
+  lspSaved: (file: string) => ipcRenderer.invoke('lsp:saved', file),
+  lspClose: (file: string) => ipcRenderer.invoke('lsp:close', file),
+  lspRequest: (file: string, method: string, params: unknown) => ipcRenderer.invoke('lsp:request', file, method, params),
+  onLspDiagnostics: (cb: (d: { uri: string; diagnostics: unknown[] }) => void) => {
+    const fn = (_e: unknown, d: { uri: string; diagnostics: unknown[] }) => cb(d)
+    ipcRenderer.on('lsp:diagnostics', fn)
+    return () => ipcRenderer.removeListener('lsp:diagnostics', fn)
+  },
   listNotes: () => ipcRenderer.invoke('notes:list'),
   saveNote: (id: string | null, text: string) => ipcRenderer.invoke('notes:save', id, text),
   deleteNote: (id: string) => ipcRenderer.invoke('notes:delete', id),

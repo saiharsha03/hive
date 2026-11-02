@@ -895,3 +895,18 @@ button.sbi:hover { background: var(--hover); }
 /* a preview over the whole window; menus, popups, notices and modals stay above it */
 .pv-full { position: fixed; inset: 0; z-index: 65; display: flex; background: var(--bg); }
 .thread .earlier { display: block; margin: 4px auto 12px; }
+/* editor */
+.tool.editor { position: relative; }
+.tool.editor.ed-full { position: fixed; inset: 0; z-index: 65; }
+.ed-tabs { display: flex; align-items: center; gap: 2px; padding: 0 8px; min-height: 32px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.ed-tab { display: flex; align-items: center; border-bottom: 2px solid transparent; flex-shrink: 0; }
+.ed-tab.cur { border-bottom-color: var(--accent); }
+.ed-name { padding: 6px 4px 6px 10px; color: var(--dim); white-space: nowrap; }
+.ed-tab.cur .ed-name { color: var(--hi); }
+.ed-x { width: 20px; height: 20px; border-radius: 3px; color: var(--dim); }
+.ed-x:hover { background: var(--line2); color: var(--ink); }
+.ed-lang { margin-right: 8px; white-space: nowrap; }
+.ed-tabs .dlink { white-space: nowrap; margin-left: 8px; }
+.ed-bar { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--hover); border-bottom: 1px solid var(--line); }
+.ed-err { padding: 6px 12px; }
+.ed-host { flex: 1; min-height: 0; }

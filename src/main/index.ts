@@ -15,6 +15,8 @@ import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
 import { cancelSwitch, switchAccount } from './account'
 import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
+import { editorMtime, editorRead, editorWrite, vsCodeUrl } from './editorFiles'
+import { lspChange, lspClose, lspOpen, lspRequest, lspSaved, setDiagnosticsSink, stopLanguageServers } from './lsp'
 import type { AllowStatus } from '../shared/allowCore'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail } from './watchers'
 import { gitDecorations, listDir } from './files'
@@ -252,7 +254,7 @@ handle('allow:run', () => runAllowlist())
 // Switch account: the engine's browser sign-in; on success the app restarts so everything runs on the new login
 handle('account:switch', async (e, email: string) => {
   const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
-  if (r.ok) setTimeout(() => { closeStatus(); closeAll(); stopAllScripts(); killAllTerminals(); app.relaunch(); app.exit(0) }, 1500)
+  if (r.ok) setTimeout(() => { closeStatus(); stopLanguageServers(); closeAll(); stopAllScripts(); killAllTerminals(); app.relaunch(); app.exit(0) }, 1500)
   return r
 })
 handle('account:cancel', () => cancelSwitch())
@@ -291,6 +293,17 @@ handle('history:load', (_e, path: string) => loadHistory(path))
 // a reopened thread: its recent end first (more = there is earlier conversation to load)
 handle('history:recent', (_e, path: string) => loadRecentHistory(path))
 handle('fs:readText', (_e, path: string) => readText(path))
+// The editor: files, and the language servers (Pyright, TypeScript, Vue) its open files talk to
+handle('editor:read', (_e, path: string) => editorRead(String(path)))
+handle('editor:mtime', (_e, path: string) => editorMtime(String(path)))
+handle('editor:write', (_e, path: string, text: string) => editorWrite(String(path), String(text)))
+handle('editor:vscode', (_e, path: string, line: number) => shell.openExternal(vsCodeUrl(String(path), Number(line) || 1)))
+handle('lsp:open', (_e, file: string, text: string) => lspOpen(String(file), String(text)))
+handle('lsp:change', (_e, file: string, text: string, version: number) => lspChange(String(file), String(text), Number(version)))
+handle('lsp:saved', (_e, file: string) => lspSaved(String(file)))
+handle('lsp:close', (_e, file: string) => lspClose(String(file)))
+handle('lsp:request', (_e, file: string, method: string, params: unknown) => lspRequest(String(file), String(method), params))
+setDiagnosticsSink((d) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('lsp:diagnostics', d) })
 handle('preview:url', (_e, path: string) => previewUrl(path))
 handle('shell:open', (_e, path: string) => openExternal(path))
 // Clipboard suggestions: the page's switch, the click that takes the item, the x that dismisses it
@@ -358,6 +371,7 @@ app.whenReady().then(() => {
 })
 app.on('window-all-closed', () => {
   closeStatus()
+  stopLanguageServers()
   closeAll()
   stopAllScripts()
   killAllTerminals()

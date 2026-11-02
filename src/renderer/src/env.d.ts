@@ -84,6 +84,16 @@ interface Window {
     setHook: (folder: string, id: string, enabled: boolean) => Promise<void>
     listPlugins: () => Promise<PluginInfo[]>
     setPlugin: (key: string, on: boolean) => Promise<void>
+    editorRead: (path: string) => Promise<{ text: string; mtime: number }>
+    editorMtime: (path: string) => Promise<number | null>
+    editorWrite: (path: string, text: string) => Promise<number>
+    openInVsCode: (path: string, line: number) => Promise<void>
+    lspOpen: (file: string, text: string) => Promise<boolean>
+    lspChange: (file: string, text: string, version: number) => Promise<void>
+    lspSaved: (file: string) => Promise<void>
+    lspClose: (file: string) => Promise<void>
+    lspRequest: (file: string, method: string, params: unknown) => Promise<any>
+    onLspDiagnostics: (cb: (d: { uri: string; diagnostics: any[] }) => void) => () => void
     listNotes: () => Promise<import('../../shared/notesCore').NoteInfo[]>
     saveNote: (id: string | null, text: string) => Promise<string>
     deleteNote: (id: string) => Promise<void>

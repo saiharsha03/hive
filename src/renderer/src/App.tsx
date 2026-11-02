@@ -19,6 +19,8 @@ import { WatchersView, type OpenThread } from './WatchersView'
 import { SettingsPanel } from './SettingsPanel'
 import { TodoPanel } from './TodoPanel'
 import { NotesPanel } from './NotesPanel'
+import { EditorView, openInEditor, setEditorShown } from './EditorView'
+import { kindOf } from './Preview'
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
 import { workingOn, type Session } from './chat'
@@ -129,6 +131,9 @@ export function App() {
   const visibleNow = () => sessionsRef.current.filter((s) => !s.background).map((s) => s.id)
 
   // ---- opening views wherever this UI keeps them ----
+  // a file from Files: code and other text opens in the editor, Markdown, pages, images and the rest in Preview
+  const openFile = (p: string) => (kindOf(p) === 'text' && !/\.(md|markdown)$/i.test(p) ? openInEditor(p) : setPreview(p))
+  useEffect(() => setEditorShown(() => showView('editor')))
   function showView(v: ViewId, el?: HTMLElement | null) {
     const at = placeOf(ui, v)
     if (at === 'left') { setLeftView(v); setLeftOpen(true) }
@@ -538,7 +543,7 @@ export function App() {
     switch (v) {
       case 'threads': return threadsList(undefined, newSession)
       case 'changes': return <ChangesView session={active ?? null} diff={diff} onDiff={setDiff} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => showView('git')} />
-      case 'preview': return preview ? <Preview path={preview} onClose={() => setPreviewPath(null)} /> : <div className="pane-empty">Files Claude shows you, and files you open from Files or Changes, preview here.</div>
+      case 'preview': return preview ? <Preview path={preview} onClose={() => setPreviewPath(null)} onEdit={(p) => openInEditor(p)} /> : <div className="pane-empty">Files Claude shows you, and files you open from Files or Changes, preview here.</div>
       case 'git': return (
         <div className="gitview">
           <div className="gitview-top"><GitPanel onDiff={setGitDiff} focus={gitFocus} /></div>
@@ -548,7 +553,7 @@ export function App() {
           </>}
         </div>
       )
-      case 'files': return folder ? <FileTree root={folder} onOpenFolder={() => window.api.pickFolder().then((f) => f && setFolder(f))} selected={preview} onOpenFile={(p) => setPreview(p)} /> : <div className="pane-empty">Loading…</div>
+      case 'files': return folder ? <FileTree root={folder} onOpenFolder={() => window.api.pickFolder().then((f) => f && setFolder(f))} selected={preview} onOpenFile={openFile} /> : <div className="pane-empty">Loading…</div>
       case 'agents': return <AgentsView sessions={sessions} live={live} onActivate={activate} />
       case 'terminal': return <TerminalView targets={termTargets} current={termTab} onPick={setTermTab} focus={termFocus} onSendToChat={(id, text) => insertIntoComposer(id, text)} />
       case 'watchers': return watchersHome
@@ -556,6 +561,7 @@ export function App() {
       case 'scripts': return <ScriptsPanel runs={scripts.runs} onOpen={(p) => setPreview(p)} />
       case 'todos': return <TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} />
       case 'notes': return <NotesPanel />
+      case 'editor': return <EditorView />
       case 'dev': return <DevPanel state={dev.state} setState={dev.setState} />
       case 'pull': return <PullPanel />
     }
@@ -761,7 +767,7 @@ export function App() {
       )}
       {previewFull && preview && (
         <div className="pv-full" data-testid="preview-full">
-          <Preview path={preview} onClose={() => setPreviewFull(false)} onSide={() => { setPreviewFull(false); showView('preview') }} />
+          <Preview path={preview} onClose={() => setPreviewFull(false)} onSide={() => { setPreviewFull(false); showView('preview') }} onEdit={(p) => { setPreviewFull(false); openInEditor(p) }} />
         </div>
       )}
       {allowFail !== null && (
