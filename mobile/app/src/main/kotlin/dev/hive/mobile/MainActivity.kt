@@ -97,12 +97,26 @@ private fun App(openThread: MutableState<String?>) {
     // Android 13+ asks before an app may show notifications
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) { if (android.os.Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
-    Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+    val list = @Composable { Threads(onOpen = { newThread = false; openThread.value = it }, onNew = { newThread = true }, onUnpair = { Relay.disconnect(); Pairing.clear(ctx); paired = false }) }
+    BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+        val wide = maxWidth
         when {
             !paired -> PairScreen { paired = true; Relay.connect(ctx); Notes.registerPush(ctx) }
+            // unfolded or a tablet: the threads on the left, the open thread (or a new one) on the right
+            wide >= 600.dp -> Row(Modifier.fillMaxSize()) {
+                Box(Modifier.width(minOf(360.dp, wide * 0.4f)).fillMaxHeight()) { list() }
+                VerticalDivider(color = Color(0x22FFFFFF))
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    when {
+                        newThread -> NewThread(onDone = { newThread = false })
+                        openThread.value != null -> key(openThread.value) { ThreadScreen(openThread.value!!) { openThread.value = null } }
+                        else -> Text("Pick a thread", Modifier.align(Alignment.Center), color = Color.Gray)
+                    }
+                }
+            }
             newThread -> NewThread(onDone = { newThread = false })
             openThread.value != null -> ThreadScreen(openThread.value!!) { openThread.value = null }
-            else -> Threads(onOpen = { openThread.value = it }, onNew = { newThread = true }, onUnpair = { Relay.disconnect(); Pairing.clear(ctx); paired = false })
+            else -> list()
         }
     }
 }
