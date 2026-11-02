@@ -20,8 +20,8 @@ const PORT = Number(process.env.HIVE_RELAY_PORT ?? 8787)
 const HOST = process.env.HIVE_RELAY_HOST ?? '127.0.0.1'
 const STATE = process.env.HIVE_RELAY_STATE ?? './relay-state.json'
 const FCM_ACCOUNT = process.env.HIVE_RELAY_FCM_ACCOUNT ?? ''
-const MAX_MESSAGE = 512 * 1024 // a thread's recent messages, sealed
-const PUSH_INLINE = 3000 // a sealed blob this small rides in the push itself; bigger ones push a wake-up only
+const MAX_MESSAGE = 2 * 1024 * 1024 // a thread's recent messages, sealed (Hive keeps them well under this)
+const PUSH_INLINE = 3600 // FCM data is at most 4 KB: a sealed blob this small rides in the push (Hive keeps notifications under it)
 if (ADMIN.length < 24) { console.error('HIVE_RELAY_ADMIN_TOKEN must be set (24+ characters)'); process.exit(1) }
 
 // ---- state: pair id -> { desk, phone: sha256 hex of their tokens, fcm: the phone's push token } ----
@@ -128,6 +128,7 @@ function attach(ws, pair, role) {
   room.set(role, ws)
   if (role === 'desk') sendJson(room.get('phone'), { desk: 'online' })
   if (role === 'phone') sendJson(ws, { desk: room.get('desk')?.readyState === 1 ? 'online' : 'offline' })
+  ws.on('error', (e) => console.error(`${role} socket error:`, e.message)) // an oversized frame must not end the relay
   ws.isAlive = true
   ws.on('pong', () => { ws.isAlive = true })
   ws.on('message', (raw) => {
@@ -136,7 +137,10 @@ function attach(ws, pair, role) {
     if (typeof m.blob !== 'string') return
     const peer = room.get(peerOf(role))
     if (peer?.readyState === 1) peer.send(JSON.stringify({ blob: m.blob }))
-    else if (role === 'desk' && m.push) void push(pair, m.blob)
+    // a notification is pushed too: an open-looking phone socket can be half dead for a minute (Doze, lost Wi-Fi);
+    // the app shows each message once (it keeps the seq numbers it has seen)
+    if (role === 'desk' && m.push) void push(pair, m.blob)
+    else if (peer?.readyState === 1) { /* delivered */ }
     else if (role === 'phone') sendJson(ws, { desk: 'offline' })
   })
   ws.on('close', () => {

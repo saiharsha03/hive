@@ -489,7 +489,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   // messages queued while Claude works wait here until the turn's result (priority 'later' once handed over)
   const turns = turnQueue<SDKUserMessage>(
     (m, priority) => s.push(priority ? ({ ...m, priority } as SDKUserMessage) : m),
-    (id, phase) => { if (phase === 'sent' || phase === 'removed') pendingDelivered(id); send({ type: 'hive_queue', id, phase }) },
+    (id, phase) => { if (phase === 'sent' || phase === 'steered' || phase === 'removed') pendingDelivered(id); send({ type: 'hive_queue', id, phase }) },
   )
   s = {
     q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(),
@@ -587,18 +587,19 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   const cur = s
   // sent while Claude works (steer) or queued: kept on disk until it reaches Claude, so closing Hive loses nothing
   if ((msg.text || msg.images.length) && (msg.mode === 'queue' || cur.turns.isBusy())) {
-    addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer' })
+    addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer', background: cur.background })
   }
   const go = () => {
-    if (msg.mode === 'queue' && msg.queueId) return cur.turns.submit(msg.queueId, m)
+    if (msg.mode === 'queue' && msg.queueId) return cur.turns.submit(msg.queueId, m, !!msg.interrupt) // an interrupt goes ahead of older queued messages
     cur.turns.markBusy()
     cur.push(msg.mode === 'steer' ? ({ ...m, priority: 'next' } as SDKUserMessage) : m)
   }
   // "ultrathink": max effort for this message's turn, set before the message goes in
   const boost = boostForMessage(tabId, s.q, msg.text, msg.mode === 'queue')
+  const interrupt = !!msg.interrupt && msg.mode === 'queue' && cur.turns.isBusy() // decided before the message goes in
   if (boost) void boost.finally(go)
   else go()
-  if (msg.interrupt && msg.mode === 'queue' && cur.turns.isBusy()) void cur.q.interrupt().catch(() => { /* turn already over */ })
+  if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
 }
 
 // the tab's running process, for the status IPC (model, effort, commands, MCP servers, stopping tasks)
@@ -616,17 +617,18 @@ export function stopCodex(id: string): boolean {
 // then the fixed prompt goes in. It runs in auto mode like any background thread.
 // from: another thread started it (start_thread, or message_thread resuming a stopped one), so the prompt goes in labelled;
 // resume: the Claude session to continue
-export type BackgroundThread = { tabId: string; cwd: string; title: string; prompt: string; from?: From; resume?: string }
+// foreground: opened as a normal tab (its usual permission mode), e.g. messages resent after a restart from a tab
+export type BackgroundThread = { tabId: string; cwd: string; title: string; prompt: string; from?: From; resume?: string; foreground?: boolean }
 export function startBackgroundThread(t: BackgroundThread, web: WebContents): void {
   if (live.has(t.tabId)) throw new Error(`Thread ${t.tabId} is already running`)
   if (web.isDestroyed()) throw new Error('No window to show the thread in')
   web.send('hive:thread', {
-    tabId: t.tabId, title: t.title, cwd: t.cwd, prompt: t.prompt,
+    tabId: t.tabId, title: t.title, cwd: t.cwd, prompt: t.prompt, ...(t.foreground ? { foreground: true } : {}),
     ...(t.from ? { from: t.from } : {}), ...(t.resume ? { sessionId: t.resume, path: transcriptPath(t.cwd, t.resume) } : {}),
   })
   tabTitles.set(t.tabId, t.title)
   setThreadTitle(t.tabId, t.title)
-  const s = start({ tabId: t.tabId, cwd: t.cwd, resume: t.resume, web, background: true })
+  const s = start({ tabId: t.tabId, cwd: t.cwd, resume: t.resume, web, background: !t.foreground })
   live.set(t.tabId, s)
   gone.delete(t.tabId)
   s.turns.markBusy()

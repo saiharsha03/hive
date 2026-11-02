@@ -43,3 +43,10 @@ test('add_note: appends to the note with that title (any case), else makes one',
   const n = (await store.listNotes()).find((x) => x.id === a.id)!
   assert.equal(n.text, '# Hive ideas\n\nphone app\n\n- foldable layout\n')
 })
+
+test('add_note: two threads adding to the same note at once both land', async () => {
+  await store.addToNote('Race', 'start')
+  await Promise.all([store.addToNote('Race', 'one'), store.addToNote('Race', 'two')])
+  const n = (await store.listNotes()).find((x) => x.title === 'Race')!
+  assert.ok(n.text.includes('one') && n.text.includes('two'))
+})

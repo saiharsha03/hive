@@ -101,7 +101,7 @@ const phoneItems = (items: Awaited<ReturnType<typeof loadRecentHistory>>['items'
   if (it.kind === 'tool') { const i = it.input ?? {}; return [{ k: 'tool', t: `${it.name.replace(/^mcp__\w+?__/, '')} ${i.description ?? i.file_path ?? i.pattern ?? i.command ?? i.url ?? ''}`.trim().slice(0, 200) }] }
   if (it.kind === 'note' || it.kind === 'summary') return [{ k: 'note', t: it.kind === 'summary' ? 'Earlier conversation compacted' : it.text }]
   return []
-}).slice(-120).map((p) => ({ ...p, t: p.t.length > 6000 ? `${p.t.slice(0, 6000)}…` : p.t }))
+}).slice(-80).map((p) => ({ ...p, t: p.t.length > 4000 ? `${p.t.slice(0, 4000)}…` : p.t })) // well under the relay's frame limit
 const mobileDeps = () => ({
   threads: async (): Promise<PhoneThread[]> => {
     const live = liveThreads().filter((t) => !t.tabId.startsWith('watcher-') || t.sessionId)
@@ -438,7 +438,7 @@ function createWindow(): void {
   web.once('did-finish-load', () => setTimeout(() => {
     for (const p of TEST_MODE ? [] : takePending()) {
       // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
-      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: resendText(p), ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
+      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: resendText(p), foreground: p.background === false, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
     }
   }, 4000))
 

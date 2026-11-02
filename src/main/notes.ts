@@ -37,7 +37,14 @@ export async function saveNote(id: string | null, text: string): Promise<string>
 }
 
 // Claude's add_note: the note with this title (any case) gets the text appended under it; no such note, a new one
-export async function addToNote(title: string, text: string): Promise<{ id: string; created: boolean }> {
+// one at a time, so two threads adding to the same note both land
+let noteChain: Promise<unknown> = Promise.resolve()
+export function addToNote(title: string, text: string): Promise<{ id: string; created: boolean }> {
+  const run = noteChain.then(() => appendNote(title, text))
+  noteChain = run.catch(() => {})
+  return run
+}
+async function appendNote(title: string, text: string): Promise<{ id: string; created: boolean }> {
   const t = title.trim()
   const found = (await listNotes()).find((n) => n.title.toLowerCase() === t.toLowerCase())
   if (found) return { id: await saveNote(found.id, `${found.text.replace(/\s+$/, '')}\n\n${text.trim()}\n`), created: false }

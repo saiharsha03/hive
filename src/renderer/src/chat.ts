@@ -203,10 +203,10 @@ export function applyEvent(s: Session, ev: any): Session {
       return { ...s, items, busy: !!s.compacting, turnOpen: false, streaming: '' }
     }
     case 'hive_error':
-      return { ...s, busy: false, streaming: '', items: [...settle(s.items, 'error'), { kind: 'error', text: ev.message }] }
+      return { ...s, busy: false, compacting: false, turnOpen: false, streaming: '', items: [...settle(s.items, 'error'), { kind: 'error', text: ev.message }] }
     case 'hive_closed':
       // queued messages died with the process
-      return { ...s, busy: false, streaming: '', items: settle(s.items, 'error').filter((it) => !((it.kind === 'user' || it.kind === 'thread') && it.queue?.pending)) }
+      return { ...s, busy: false, compacting: false, turnOpen: false, streaming: '', items: settle(s.items, 'error').filter((it) => !((it.kind === 'user' || it.kind === 'thread') && it.queue?.pending)) }
   }
   return s
 }

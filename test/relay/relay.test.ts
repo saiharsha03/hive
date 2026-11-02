@@ -55,11 +55,18 @@ test('relay: pair, forward sealed blobs both ways, offline notice, wrong token r
     await wait(150)
     assert.deepEqual(open(key, pair, 'd2p', p.got.at(-1).blob), { re: 1, threads: [] })
 
+    // an oversized frame drops that socket, never the relay
+    p.ws.send('x'.repeat(3 * 1024 * 1024))
+    await wait(300)
+    assert.ok((await fetch(`${base}/healthz`)).ok)
+    const p2 = await client('phone', pair, phone)
+    await wait(150)
+
     // the computer goes away: the phone hears it
     d.ws.close()
     await wait(200)
-    assert.deepEqual(p.got.at(-1), { desk: 'offline' })
-    p.ws.close()
+    assert.deepEqual(p2.got.at(-1), { desk: 'offline' })
+    p2.ws.close()
   } finally {
     relay.kill()
   }

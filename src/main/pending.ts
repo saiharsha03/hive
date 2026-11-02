@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { writeFileSafe } from './safeWrite'
 import { dataDir } from './testMode'
 
-export type Pending = { key: string; tabId: string; cwd: string; sessionId: string | null; title: string; text: string; images?: string[]; mode: 'steer' | 'queue'; at: number }
+export type Pending = { key: string; tabId: string; cwd: string; sessionId: string | null; title: string; text: string; images?: string[]; mode: 'steer' | 'queue'; background?: boolean; at: number }
 export type Picture = { mediaType: string; data: string }
 
 const file = () => join(dataDir(), 'hive-pending.json')
@@ -44,9 +44,10 @@ export function pendingSession(tabId: string, sessionId: string): void {
   const all = read()
   if (all.some((p) => p.tabId === tabId && p.sessionId !== sessionId)) write(all.map((p) => (p.tabId === tabId ? { ...p, sessionId } : p)))
 }
-// everything left from the last run, oldest first, and the file emptied
+// everything left from the last run, oldest first, to send again. They stay on disk, now as steers of their thread, so
+// they go only when that thread's turn ends: Hive closing again before then loses none of them.
 export function takePending(): Pending[] {
   const all = read()
-  if (all.length) write([])
+  if (all.some((p) => p.mode !== 'steer')) write(all.map((p) => ({ ...p, mode: 'steer' as const })))
   return all.sort((a, b) => a.at - b.at)
 }

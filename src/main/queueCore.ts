@@ -17,9 +17,11 @@ export function turnQueue<T>(deliver: (msg: T, priority?: Priority) => void, not
     // a turn is running or about to (queued messages wait behind it)
     isBusy: () => busy,
     // Claude is idle: the message goes straight in; otherwise it waits for the turn's result
-    submit(id: string, msg: T) {
+    // first: ahead of the messages already waiting (an interrupt)
+    submit(id: string, msg: T, first = false) {
       if (!busy && !waiting.length) { busy = true; deliver(msg); notify(id, 'sent'); return }
-      waiting.push({ id, msg })
+      if (first) waiting.unshift({ id, msg })
+      else waiting.push({ id, msg })
     },
     // false when it was already delivered
     remove(id: string): boolean {

@@ -128,7 +128,7 @@ contextBridge.exposeInMainWorld('api', {
   deployConfig: () => ipcRenderer.invoke('deploy:config'),
   deployDiffs: (suite: string, fetch?: boolean) => ipcRenderer.invoke('deploy:diffs', suite, fetch),
   // a background thread Hive started by itself (Dependabot reviewer)
-  onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string }) => void) => {
+  onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean }) => void) => {
     const fn = (_e: unknown, t: { tabId: string; title: string; cwd: string; prompt: string }) => cb(t)
     ipcRenderer.on('hive:thread', fn)
     return () => ipcRenderer.removeListener('hive:thread', fn)

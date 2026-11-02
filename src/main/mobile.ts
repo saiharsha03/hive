@@ -22,7 +22,8 @@ type Deps = {
   folders: () => string[]
   changed: () => void
 }
-type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number }
+// seen: the phone request seq numbers taken in the last few minutes (with the freshness check, a replay is refused)
+type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; seen?: number[] }
 
 const file = () => join(dataDir(), 'hive-mobile.json')
 let relay = ''
@@ -111,6 +112,15 @@ function connect(): void {
   }
 }
 
+const FRESH_MS = 120_000
+// at most n UTF-8 bytes, cut on a character boundary
+export function byteCap(s: string, n: number): string {
+  if (Buffer.byteLength(s) <= n) return s
+  let out = ''
+  for (const ch of s) { if (Buffer.byteLength(out + ch + '…') > n) break; out += ch }
+  return `${out}…`
+}
+
 function sendToPhone(msg: Record<string, unknown>, push = false): void {
   if (!pairing || !ws || ws.readyState !== WebSocket.OPEN) return
   pairing.seqOut += 1
@@ -125,9 +135,16 @@ async function onMessage(raw: string): Promise<void> {
   try { frame = JSON.parse(raw) } catch { return }
   if (!frame.blob) return
   const m = open(Buffer.from(pairing.key, 'base64'), pairing.pair, 'p2d', frame.blob)
-  if (!m || typeof m.seq !== 'number' || m.seq <= pairing.seqIn) return // not from the paired phone, or a replay
-  pairing.seqIn = m.seq
-  store()
+  if (!m || typeof m.seq !== 'number') return // not from the paired phone
+  // the phone's seq is its clock (ms). A request is taken only while fresh (within 2 minutes; the phone gives up after
+  // 20 s), so a relay cannot hold "merge the PR" back and deliver it hours later, and only once: the seq numbers taken in
+  // that window are kept on disk, so a replay is refused even after a restart (and a phone clock corrected backwards
+  // still works, unlike a high-water mark).
+  if (Math.abs(Date.now() - m.seq) > FRESH_MS) return void sendToPhone({ re: m.rid, error: 'Request too old, or the phone clock is off by more than 2 minutes' })
+  const seen = (pairing.seen ?? []).filter((s) => Math.abs(Date.now() - s) <= 2 * FRESH_MS)
+  if (seen.includes(m.seq)) return // a replay
+  pairing.seen = [...seen, m.seq]
+  if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
   const id = typeof m.id === 'string' ? m.id : ''
   const reply = (body: Record<string, unknown>) => sendToPhone({ re: m.rid, ...body })
   try {
@@ -149,6 +166,7 @@ export function notifyPhone(title: string, body: string, thread?: string): strin
   if (TEST_MODE) return blocked('phone notifications')
   if (!pairing) return 'No phone is paired with Hive (Settings > General > Phone app).'
   if (!connected) return 'Hive is not connected to the relay right now, so the phone was not notified.'
-  sendToPhone({ op: 'notify', title: title.slice(0, 120), body: body.slice(0, 600), thread: thread ?? '' }, true)
+  // sized in bytes, so the sealed notification fits in one push (FCM data is at most 4 KB) whatever the script
+  sendToPhone({ op: 'notify', title: byteCap(title, 240), body: byteCap(body, 1500), thread: thread ?? '' }, true)
   return 'Sent to the phone.'
 }

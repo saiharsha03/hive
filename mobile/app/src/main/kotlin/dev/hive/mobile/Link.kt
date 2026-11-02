@@ -48,16 +48,23 @@ data class Pairing(val relay: String, val pair: String, val token: String, val k
 
         fun load(ctx: Context): Pairing? = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("pairing", null)?.let { parse(it) }
 
-        fun save(ctx: Context, qr: String) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("pairing", qr.trim()).putLong("seqIn", 0).apply()
+        fun save(ctx: Context, qr: String) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("pairing", qr.trim()).putLong("seqIn", 0).remove("seen").apply()
 
         fun clear(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
 
-        // Hive's counter: a message (over the socket or in a push) is taken only if its seq is above the last one seen
+        // Hive's counter: each message (over the socket or in a push) is taken once. The two channels arrive out of order
+        // (a push can land after later socket replies, and a notification can come both ways), so it keeps the seq
+        // numbers seen within the last WINDOW and refuses repeats and anything older than that
+        private const val WINDOW = 500L
         fun takeSeq(ctx: Context, seq: Long): Boolean {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             synchronized(this) {
-                if (seq <= p.getLong("seqIn", 0)) return false
-                p.edit().putLong("seqIn", seq).apply()
+                val top = p.getLong("seqIn", 0)
+                val seen = p.getString("seen", "")!!.split(',').mapNotNull { it.toLongOrNull() }.toMutableSet()
+                if (seq <= top - WINDOW || seq in seen) return false
+                seen += seq
+                val newTop = maxOf(top, seq)
+                p.edit().putLong("seqIn", newTop).putString("seen", seen.filter { it > newTop - WINDOW }.joinToString(",")).apply()
                 return true
             }
         }

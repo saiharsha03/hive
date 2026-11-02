@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
@@ -76,7 +77,9 @@ class MainActivity : FragmentActivity() {
                 if (Pairing.load(this@MainActivity) != null) Notes.registerPush(this@MainActivity)
             }
         })
-        prompt.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle("Open Hive").setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL).build())
+        // Android 10 does not take a strong biometric with the screen lock as fallback; weak (any fingerprint) with it does
+        val kinds = if (android.os.Build.VERSION.SDK_INT >= 30) BIOMETRIC_STRONG or DEVICE_CREDENTIAL else BIOMETRIC_WEAK or DEVICE_CREDENTIAL
+        prompt.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle("Open Hive").setAllowedAuthenticators(kinds).build())
     }
 }
 
@@ -217,7 +220,9 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
     var tick by remember { mutableStateOf(0) }
     val list = rememberLazyListState()
     androidx.activity.compose.BackHandler(onBack = onBack)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(id, state, changed, tick) {
+        if (state == Relay.State.Off) Relay.connect(ctx) // the connection dropped while this thread was open
         if (state != Relay.State.Online) return@LaunchedEffect
         err = runCatching {
             val t = Relay.ask("thread", mapOf("id" to id)).optJSONObject("thread") ?: throw IllegalStateException("That thread is gone")

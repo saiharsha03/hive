@@ -54,10 +54,9 @@ class Push : FirebaseMessagingService() {
     override fun onMessageReceived(msg: RemoteMessage) {
         val p = Pairing.load(this) ?: return
         val blob = msg.data["blob"]
-        if (blob == null) { // too big to ride in the push: just say there is something
-            Notes.show(this, JSONObject().put("title", "Hive").put("body", "Claude sent you something; open Hive to see it").put("seq", System.currentTimeMillis()))
-            return
-        }
+        // only sealed notifications are shown: a push without one is not from Hive (Hive keeps every notification small
+        // enough to ride in the push), so a relay cannot make the phone show anything
+        if (blob == null) return
         val m = Seal.open(p.key, p.pair, "d2p", blob) ?: return
         if (!Pairing.takeSeq(this, m.optLong("seq"))) return
         if (m.optString("op") == "notify") Notes.show(this, m)

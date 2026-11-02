@@ -161,7 +161,7 @@ interface Window {
     gitLocate: (file: string) => Promise<{ dir: string; name: string; path: string } | null>
     deployConfig: () => Promise<{ config: import('../../shared/deployCore').DeployConfig | null; message: string }>
     deployDiffs: (suite: string, fetch?: boolean) => Promise<DeployDiffs>
-    onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; from?: { id: string; title: string }; sessionId?: string; path?: string }) => void) => () => void
+    onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean; from?: { id: string; title: string }; sessionId?: string; path?: string }) => void) => () => void
     deployStatus: () => Promise<DeployEnvStatus[]>
     deployRun: (repo: string, target: 'staging' | 'prod') => Promise<{ runId: string }>
     deployRewatch: (repo: string, target: 'staging' | 'prod', sha: string) => Promise<string>
