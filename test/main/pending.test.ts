@@ -51,3 +51,22 @@ test('pictures are kept as files, named in the resent text, and removed once del
   assert.ok(pic.endsWith('k2-0.jpg') && readFileSync(pic, 'utf8') === 'jpg!')
   assert.equal(p.resendText(left), `(Attached images, saved when Hive closed: ${pic})`)
 })
+
+test('resend: one prompt per thread with all its messages, in order', () => {
+  clear()
+  const base = { cwd: 'C:/repo', title: 'T', sessionId: null, mode: 'queue' as const }
+  p.addPending({ ...base, key: 'g1', tabId: 'x', text: 'first' })
+  p.addPending({ ...base, key: 'g2', tabId: 'y', text: 'other' })
+  p.addPending({ ...base, key: 'g3', tabId: 'x', text: 'second' })
+  const g = p.resendGroups(p.takePending())
+  assert.deepEqual(g.map((x) => [x.tabId, x.prompt]), [['x', 'first\n\n---\n\nsecond'], ['y', 'other']])
+})
+
+test('"Send now" keeps the message until the turn it rides ends', () => {
+  clear()
+  p.addPending({ cwd: 'C:/repo', title: 'T', sessionId: null, key: 's1', tabId: 's', text: 'now please', mode: 'queue' })
+  p.pendingIsSteer('s1')
+  assert.deepEqual(p.takePending().map((x) => [x.key, x.mode]), [['s1', 'steer']])
+  p.steersDelivered('s')
+  assert.deepEqual(p.takePending(), [])
+})

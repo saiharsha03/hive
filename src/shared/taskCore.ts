@@ -30,7 +30,8 @@ export type Task = {
   error?: string
   phases: TaskPhase[]
   agents: TaskAgent[]
-  toolUseId?: string // the tool call that started it (an Agent call sent to the background), to show its real state on that row
+  toolUseId?: string // the tool call that started it
+  backgrounded?: boolean // in the background (that tool call returned at once), so its row follows this task's state
 }
 
 const STATUS: Record<string, Task['status']> = {
@@ -103,6 +104,7 @@ export function applyTask(tasks: Task[], ev: any, now: number): Task[] {
         title: String(ev.description ?? t.title),
         name: ev.workflow_name ?? ev.subagent_type ?? t.name,
         ...(ev.tool_use_id ? { toolUseId: String(ev.tool_use_id) } : {}),
+        ...(ev.is_backgrounded === true ? { backgrounded: true } : {}),
         status: 'running',
       }))
     case 'task_progress':
@@ -120,6 +122,7 @@ export function applyTask(tasks: Task[], ev: any, now: number): Task[] {
         title: p.description ?? t.title,
         endedAt: p.end_time ?? t.endedAt,
         error: p.error ?? t.error,
+        ...(p.is_backgrounded === true ? { backgrounded: true } : {}), // moved to the background later (Ctrl+B)
       }))
     }
     case 'task_notification':

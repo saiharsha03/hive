@@ -30,10 +30,21 @@ object Relay {
     private val waiting = ConcurrentHashMap<Int, CompletableDeferred<JSONObject>>()
     private val rid = AtomicInteger(0)
 
+    // at most one attempt every 5 s: with no network a failed attempt comes back at once, and the screens ask again
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var lastTry = 0L
+    private var later = false
+
     fun connect(context: Context) {
         val p = Pairing.load(context) ?: return
         ctx = context.applicationContext
         if (ws != null) return
+        val wait = lastTry + 5_000 - android.os.SystemClock.elapsedRealtime()
+        if (wait > 0) {
+            if (!later) { later = true; main.postDelayed({ later = false; connect(context) }, wait) }
+            return
+        }
+        lastTry = android.os.SystemClock.elapsedRealtime()
         state.value = State.Connecting
         val req = Request.Builder().url("${p.ws}/v1/ws?pair=${p.pair}&role=phone").header("Authorization", "Bearer ${p.token}").build()
         ws = http.newWebSocket(req, object : WebSocketListener() {

@@ -41,3 +41,11 @@ test('a task started by a tool call remembers that call, so its row can follow t
   assert.equal(ts[0].toolUseId, 'toolu_9')
   assert.equal(applyTask([], { type: 'system', subtype: 'task_started', task_id: 'b2', description: 'x' }, 0)[0].toolUseId, undefined)
 })
+
+test('only tasks in the background follow their tool row (started there, or moved there later)', () => {
+  let ts = applyTask([], { type: 'system', subtype: 'task_started', task_id: 'f', description: 'fg', tool_use_id: 'toolu_f', is_backgrounded: false }, 0)
+  assert.ok(!ts[0].backgrounded)
+  ts = applyTask(ts, { type: 'system', subtype: 'task_updated', task_id: 'f', patch: { is_backgrounded: true } }, 1)
+  assert.ok(ts[0].backgrounded)
+  assert.ok(applyTask([], { type: 'system', subtype: 'task_started', task_id: 'b', description: 'bg', tool_use_id: 'toolu_b', is_backgrounded: true }, 0)[0].backgrounded)
+})

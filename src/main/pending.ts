@@ -34,9 +34,21 @@ const drop = (keep: (p: Pending) => boolean) => {
   for (const p of all) if (!keep(p)) for (const f of p.images ?? []) rmSync(f, { force: true })
   write(next)
 }
+// what goes again after a restart: per thread, all its messages as one prompt (one turn), so that turn's result clears
+// exactly the messages it delivered. Order kept; each with its pictures as files.
+export function resendGroups(all: Pending[]): (Pending & { prompt: string })[] {
+  const by = new Map<string, Pending[]>()
+  for (const p of all) by.set(p.tabId, [...(by.get(p.tabId) ?? []), p])
+  return [...by.values()].map((ps) => ({ ...ps[0], prompt: ps.map(resendText).join('\n\n---\n\n') }))
+}
 // the text sent again after a restart: the pictures as files Claude can open
 export const resendText = (p: Pending) => (p.images?.length ? `${p.text}${p.text ? '\n\n' : ''}(Attached images, saved when Hive closed: ${p.images.join(', ')})` : p.text)
 export const pendingDelivered = (key: string) => drop((p) => p.key !== key)
+// "Send now" on a queued message: it now rides the running turn, so it goes when that turn ends (like any steer)
+export function pendingIsSteer(key: string): void {
+  const all = read()
+  if (all.some((p) => p.key === key && p.mode !== 'steer')) write(all.map((p) => (p.key === key ? { ...p, mode: 'steer' as const } : p)))
+}
 export const steersDelivered = (tabId: string) => drop((p) => !(p.tabId === tabId && p.mode === 'steer'))
 export const threadClosed = (tabId: string) => drop((p) => p.tabId !== tabId) // closed on purpose: its unsent messages go too
 // a new thread learns its Claude session id after its first message: its pending messages can then resume it

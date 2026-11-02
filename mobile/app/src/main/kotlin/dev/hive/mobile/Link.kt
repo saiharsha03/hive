@@ -62,6 +62,7 @@ data class Pairing(val relay: String, val pair: String, val token: String, val k
                 val top = p.getLong("seqIn", 0)
                 val seen = p.getString("seen", "")!!.split(',').mapNotNull { it.toLongOrNull() }.toMutableSet()
                 if (seq <= top - WINDOW || seq in seen) return false
+                if (!p.contains("seen") && seq <= top) return false // a record from before the seen list: its high-water mark holds
                 seen += seq
                 val newTop = maxOf(top, seq)
                 p.edit().putLong("seqIn", newTop).putString("seen", seen.filter { it > newTop - WINDOW }.joinToString(",")).apply()

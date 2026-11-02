@@ -188,6 +188,9 @@ function When({ at }: { at: number }) {
   return <span className="when" title={d.toLocaleString()}>{today ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`}</span>
 }
 
+// background tool calls' tasks that ended (tool use id -> state), kept for the app's life
+const bgEnded = new Map<string, import('../../shared/taskCore').Task['status']>()
+
 export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, compactHead }: Props) {
   // only the newest items are drawn at first, so a long thread opens at once; Show earlier adds more
   const [limit, setLimit] = useState(WINDOW)
@@ -344,7 +347,12 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   // and re-parsing every message's Markdown made typing lag in long threads
   // a tool call that went to the background (an Agent with run_in_background) returns at once; its row follows the task
   const tasks = useThreadStatus(session.id).tasks
-  const bgOf = useMemo(() => new Map(tasks.filter((t) => t.toolUseId).map((t) => [t.toolUseId!, t.status])), [tasks])
+  // (an ended one's state is remembered, so "Clear finished" in the task list does not turn a failed row back to done)
+  const bgOf = useMemo(() => {
+    for (const t of tasks) if (t.toolUseId && t.backgrounded && t.status !== 'running') bgEnded.set(t.toolUseId, t.status)
+    const now = new Map(tasks.filter((t) => t.toolUseId && t.backgrounded).map((t) => [t.toolUseId!, t.status]))
+    return new Map([...bgEnded, ...now])
+  }, [tasks])
   const transcript = useMemo(() => (
       <>
         {!session.loaded && <div className="hint">Loading conversation…</div>}

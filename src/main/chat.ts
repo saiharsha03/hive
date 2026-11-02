@@ -28,7 +28,7 @@ import { readOnlyOptions } from './readOnly'
 import { isWatcherTab } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
 import { notifyPhone } from './mobile'
-import { addPending, pendingDelivered, pendingSession, steersDelivered, threadClosed } from './pending'
+import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
 // worktrees) or runs services, so nothing it reaches through Hive escapes read-only
@@ -489,7 +489,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   // messages queued while Claude works wait here until the turn's result (priority 'later' once handed over)
   const turns = turnQueue<SDKUserMessage>(
     (m, priority) => s.push(priority ? ({ ...m, priority } as SDKUserMessage) : m),
-    (id, phase) => { if (phase === 'sent' || phase === 'steered' || phase === 'removed') pendingDelivered(id); send({ type: 'hive_queue', id, phase }) },
+    (id, phase) => { if (phase === 'sent' || phase === 'removed') pendingDelivered(id); else if (phase === 'steered') pendingIsSteer(id); // kept until that turn ends
+      send({ type: 'hive_queue', id, phase }) },
   )
   s = {
     q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(),
@@ -597,8 +598,8 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   // "ultrathink": max effort for this message's turn, set before the message goes in
   const boost = boostForMessage(tabId, s.q, msg.text, msg.mode === 'queue')
   const interrupt = !!msg.interrupt && msg.mode === 'queue' && cur.turns.isBusy() // decided before the message goes in
-  if (boost) void boost.finally(go)
-  else go()
+  if (boost && !interrupt) void boost.finally(go)
+  else go() // an interrupt takes its place in the queue now (its effort is still being set meanwhile)
   if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
 }
 

@@ -68,19 +68,36 @@ class MainActivity : FragmentActivity() {
         if (unlocked.value) Relay.connect(this)
     }
 
+    private fun opened() {
+        unlocked.value = true
+        Relay.connect(this)
+        if (Pairing.load(this) != null) Notes.registerPush(this)
+    }
+
+    // Android 10: the screen lock (PIN, pattern, password) through the system's own confirm screen
+    private val screenLock = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == RESULT_OK) opened()
+    }
+
+    @Suppress("DEPRECATION") // createConfirmDeviceCredentialIntent is the Android 10 way; newer ones use the prompt
+    private fun useScreenLock() {
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        km.createConfirmDeviceCredentialIntent("Open Hive", null)?.let { screenLock.launch(it) }
+    }
+
     private fun unlock() {
         val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                unlocked.value = true
-                Relay.connect(this@MainActivity)
-                if (Pairing.load(this@MainActivity) != null) Notes.registerPush(this@MainActivity)
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = opened()
+            // Android 10: no strong fingerprint enrolled, or "Use screen lock" pressed: the screen lock instead
+            override fun onAuthenticationError(code: Int, msg: CharSequence) {
+                if (android.os.Build.VERSION.SDK_INT < 30 && code != BiometricPrompt.ERROR_USER_CANCELED && code != BiometricPrompt.ERROR_CANCELED) useScreenLock()
             }
         })
-        // a strong biometric, with the screen lock as fallback; Android 10 cannot combine the two, so there it is the
-        // strong biometric alone (never a weak one)
+        // a strong biometric, with the screen lock as fallback. Android 10 cannot combine the two in one prompt, so
+        // there the prompt is the strong biometric alone and its button (or no fingerprint at all) opens the screen lock
         val info = BiometricPrompt.PromptInfo.Builder().setTitle("Open Hive")
         if (android.os.Build.VERSION.SDK_INT >= 30) info.setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
-        else info.setAllowedAuthenticators(BIOMETRIC_STRONG).setNegativeButtonText("Cancel")
+        else info.setAllowedAuthenticators(BIOMETRIC_STRONG).setNegativeButtonText("Use screen lock")
         prompt.authenticate(info.build())
     }
 }

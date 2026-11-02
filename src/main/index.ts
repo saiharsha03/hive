@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { liveQuery, liveThreads, stopCodex } from './chat'
-import { resendText, takePending } from './pending'
+import { resendGroups, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
 import { cleanupThread, threadLinks } from './threadWorktrees'
@@ -436,9 +436,9 @@ function createWindow(): void {
 
   // messages that had not reached Claude when Hive last closed go to their threads again, once the window is up
   web.once('did-finish-load', () => setTimeout(() => {
-    for (const p of TEST_MODE ? [] : takePending()) {
+    for (const p of TEST_MODE ? [] : resendGroups(takePending())) {
       // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
-      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: resendText(p), foreground: p.background === false, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
+      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: p.prompt, foreground: p.background === false, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
     }
   }, 4000))
 
