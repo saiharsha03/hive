@@ -102,7 +102,9 @@ export function App() {
   const [rightOpen, setRightOpen] = usePerUI('open.right', ui, !arr.closed.includes('right'))
   const [bottomOpen, setBottomOpen] = usePerUI('open.bottom', ui, !arr.closed.includes('bottom'))
   const [leftView, setLeftView] = usePerUI<ViewId>('view.left', ui, arr.left[0] ?? 'threads')
-  const [rightView, setRightView] = usePerUI<ViewId>('view.right', ui, arr.right[0] ?? 'changes')
+  const [rightView, setRightView] = usePerUI<ViewId>('view.right', ui, arr.right[0] ?? 'files')
+  // a view saved before the panel's views were merged (Changes, Preview) falls back to the first one
+  const rv: ViewId = arr.right.includes(rightView) ? rightView : arr.right[0]
   const [bottomView, setBottomView] = usePerUI<ViewId>('view.bottom', ui, arr.bottom[0] ?? 'agents')
   const [bottomMax, setBottomMax] = useState(false)
   const [leftW, setLeftW, saveLeftW] = useSize(`${ui}.left`, ui === 'workbench' ? 280 : 300)
@@ -118,7 +120,7 @@ export function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [previewFull])
-  const showDiff = (d: DiffSpec | null) => { setDiff(d); if (d) showView('changes') }
+  const showDiff = (d: DiffSpec | null) => { setDiff(d); if (d) showView('git') }
   const scripts = useScripts((p) => setPreview(p))
 
   const sessionsRef = useRef(sessions)
@@ -132,11 +134,11 @@ export function App() {
   const visibleNow = () => sessionsRef.current.filter((s) => !s.background).map((s) => s.id)
 
   // ---- opening views wherever this UI keeps them ----
-  // a file from Files: anything text (code, Markdown, pages) opens in the editor; images, PDFs and media in Preview
+  // a file from Files opens in the Open file view: code and text editable, images, PDFs and media shown
   // the Default UI's sides: threads on the right and the tool panel on the left (on by default)
   const [swapped, setSwappedState] = useState(() => getPref<boolean>('sidesSwapped', true))
   const setSwapped = (on: boolean) => { setSwappedState(on); setPref('sidesSwapped', on) }
-  const openFile = (p: string) => (kindOf(p) === 'text' || kindOf(p) === 'html' ? openInEditor(p) : setPreview(p))
+  const openFile = (p: string) => openInEditor(p)
   useEffect(() => setEditorShown(() => showView('editor')))
   useEffect(() => setShowAgents(() => showView('agents')))
   function showView(v: ViewId, el?: HTMLElement | null) {
@@ -548,10 +550,10 @@ export function App() {
   const renderView = (v: ViewId): ReactNode => {
     switch (v) {
       case 'threads': return threadsList(undefined, newSession)
-      case 'changes': return <ChangesView session={active ?? null} diff={diff} onDiff={setDiff} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => showView('git')} />
-      case 'preview': return preview ? <Preview path={preview} onClose={() => setPreviewPath(null)} onEdit={(p) => openInEditor(p)} /> : <div className="pane-empty">Files Claude shows you, and files you open from Files or Changes, preview here.</div>
+      // Git: the focused thread's changes first, then the repos (status, stage, commit, push)
       case 'git': return (
         <div className="gitview">
+          {active && <div className="gitview-thread"><ChangesView session={active} diff={diff} onDiff={setDiff} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => document.querySelector('[data-testid="git-panel"]')?.scrollIntoView()} /></div>}
           <div className="gitview-top"><GitPanel onDiff={setGitDiff} focus={gitFocus} /></div>
           {gitDiff && <>
             <Divider dir="h" size={gitDiffH} setSize={setGitDiffH} save={saveGitDiffH} sign={-1} min={120} max={1200} testid="divider-git-diff" />
@@ -577,7 +579,7 @@ export function App() {
     <SessionView key={s.id} session={s} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
       onSend={(text, images, m) => send(s, text, images, m)} onDequeue={(id) => window.api.chatDequeue(s.id, id)} onPromote={(id) => void window.api.chatPromote(s.id, id)}
       onStop={() => window.api.chatInterrupt(s.id)} onBackground={(toolUseId) => void window.api.chatBackground(s.id, toolUseId)} onRunInBackground={() => moveToBackground(s.id)}
-      onOpen={(p) => setPreview(p)} onDiff={showDiff} onLoadEarlier={() => loadEarlier(s.id)} onTerminal={() => { if (bottomOpen && bottomView === 'terminal' && termTab === s.id) setBottomOpen(false); else openTerminal(s.id) }} onChanges={() => { setDiff(null); showView('changes') }}
+      onOpen={(p) => setPreview(p)} onDiff={showDiff} onLoadEarlier={() => loadEarlier(s.id)} onTerminal={() => { if (bottomOpen && bottomView === 'terminal' && termTab === s.id) setBottomOpen(false); else openTerminal(s.id) }} onChanges={() => { setDiff(null); showView('git') }}
       onSplit={arr.chat !== 'single' && panes.panes.length < 4 ? () => newBeside(panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? panes.focus) : undefined}
       compactHead={arr.tabs === 'title'} />
   )
@@ -625,7 +627,7 @@ export function App() {
   // the tool panel (Changes, Preview, Editor...): on the right, or on the left when the Default UI's sides are swapped
   const toolPanel = (
     <div className="rightwrap" style={{ width: rightW }}>
-      <SideTabs views={ui === 'strip' ? [arr.right.includes(rightView) ? rightView : arr.right[0]] : arr.right} current={rightView} onPick={setRightView} onClose={() => setRightOpen(false)} render={renderView} badges={badges} testid="right-side" />
+      <SideTabs views={[rv]} current={rv} onPick={setRightView} onClose={() => setRightOpen(false)} render={renderView} badges={badges} testid="right-side" />
     </div>
   )
   const rightDivider = (sign: 1 | -1) => <Divider dir="v" size={rightW} setSize={setRightW} save={saveRightW} sign={sign} min={280} max={Math.round(innerWidth * 0.7)} testid="divider-right" />
@@ -710,6 +712,11 @@ export function App() {
     { icon: bottomOpen ? 'layout-panel' : 'layout-panel-off', on: bottomOpen, title: 'Toggle panel (Ctrl+J)', onClick: () => toggleRegion('bottom'), testid: 'toggle-bottom' },
     { icon: rightOpen ? 'layout-sidebar-right' : 'layout-sidebar-right-off', on: rightOpen, title: 'Toggle right side', onClick: () => toggleRegion('right'), testid: 'toggle-right' },
   ]
+  // the side panel's views, picked from the top bar (the panel shows only the picked one); the open one closes it
+  const viewButtons = arr.right.map((v) => ({
+    icon: VIEW[v].icon, on: rightOpen && rv === v, title: VIEW[v].label, testid: `top-view-${v}`,
+    onClick: () => { if (rightOpen && rv === v) setRightOpen(false); else { setRightView(v); setRightOpen(true) } },
+  }))
 
   const liveMenu = (rows: LiveRow[]) => (
     <div className="poplist" data-testid="live-list">
@@ -728,7 +735,7 @@ export function App() {
 
   return (
     <div className={`app ui-${ui}`} onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
-      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} toggles={toggles} onSettings={() => setModal('settings')} />
+      <TitleBar menus={menus} onPalette={() => setPalette(true)} onWatchers={(el) => setPop({ kind: 'watchers', anchor: anchorOf(el) })} toggles={[...viewButtons, ...toggles]} onSettings={() => setModal('settings')} />
       {body}
       <StatusBar sessionPath={active?.path ?? null} tabId={active?.id ?? null} branch={active ? (active.worktrees?.at(-1)?.branch ?? (active.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? null) : null}
         waiting={live.waiting.length - failedCount} working={live.working.length} failed={failedCount}
@@ -774,7 +781,7 @@ export function App() {
       )}
       {previewFull && preview && (
         <div className="pv-full" data-testid="preview-full">
-          <Preview path={preview} onClose={() => setPreviewFull(false)} onSide={() => { setPreviewFull(false); showView('preview') }} onEdit={(p) => { setPreviewFull(false); openInEditor(p) }} />
+          <Preview path={preview} onClose={() => setPreviewFull(false)} onSide={() => { setPreviewFull(false); openInEditor(preview) }} onEdit={(p) => { setPreviewFull(false); openInEditor(p) }} />
         </div>
       )}
       {allowFail !== null && (

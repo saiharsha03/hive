@@ -910,3 +910,7 @@ button.sbi:hover { background: var(--hover); }
 .ed-bar { display: flex; align-items: center; gap: 12px; padding: 6px 12px; background: var(--hover); border-bottom: 1px solid var(--line); }
 .ed-err { padding: 6px 12px; }
 .ed-host { flex: 1; min-height: 0; }
+.ed-shown { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.ed-shown .preview { flex: 1; }
+/* the Git view: this thread's changes above the repos */
+.gitview-thread { max-height: 45%; overflow: auto; border-bottom: 1px solid var(--line); flex-shrink: 0; }

@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { monaco } from './monacoSetup'
 import { attach, registerLanguageFeatures, saved, setEnsureModel } from './lspBridge'
 import { langOf, monacoLanguageOf } from '../../shared/editorCore'
+import { kindOf, Preview } from './Preview'
+import { MdBody } from './MdBody'
 
 type Doc = { model: monaco.editor.ITextModel; savedVersion: number; mtime: number; sync: monaco.IDisposable; viewState: monaco.editor.ICodeEditorViewState | null }
 
@@ -35,6 +37,9 @@ const useOpenFiles = () => useSyncExternalStore((l) => { listeners.add(l); retur
 const docs = new Map<string, Doc>()
 const base = (p: string) => p.split(/[\\/]/).pop() ?? p
 const SERVER: Record<string, string> = { python: 'Pyright', typescript: 'TypeScript', vue: 'Vue' }
+// images, PDFs and media are shown, not edited; Markdown and HTML can be shown rendered too
+const shownOnly = (p: string) => !['text', 'html'].includes(kindOf(p))
+const renderable = (p: string) => kindOf(p) === 'html' || /\.(md|markdown)$/i.test(p)
 
 async function load(path: string): Promise<Doc> {
   const have = docs.get(path)
@@ -98,7 +103,7 @@ export function EditorView() {
   useEffect(() => {
     const e = ed.current
     if (!e) return
-    if (!cur) { e.setModel(null); return }
+    if (!cur || shownOnly(cur)) { e.setModel(null); return }
     let stale = false
     load(cur).then((d) => {
       if (stale) return
@@ -117,7 +122,7 @@ export function EditorView() {
     const check = async () => {
       const path = curRef.current
       const d = path && docs.get(path)
-      if (!path || !d) return
+      if (!path || !d || shownOnly(path)) return
       const m = await window.api.editorMtime(path)
       if (m === null || m === d.mtime) return
       if (dirty(path)) { setChanged(path); return }
@@ -150,6 +155,9 @@ export function EditorView() {
   }
 
   const lang = cur ? langOf(cur) : null
+  const [rendered, setRendered] = useState(false)
+  useEffect(() => setRendered(false), [cur])
+  const showing = !!cur && (shownOnly(cur) || (rendered && renderable(cur)))
   return (
     <section className={full ? 'tool editor ed-full' : 'tool editor'} data-testid="editor-view">
       <div className="ed-tabs">
@@ -160,7 +168,8 @@ export function EditorView() {
           </div>
         ))}
         <span className="dspace" />
-        {cur && <span className="dnote ed-lang">{lang ? `${SERVER[lang]} language server` : monacoLanguageOf(cur)}</span>}
+        {cur && renderable(cur) && <button className="dlink" onClick={() => setRendered((r) => !r)} data-testid="editor-render">{rendered ? 'Edit' : 'Preview'}</button>}
+        {cur && !shownOnly(cur) && <span className="dnote ed-lang">{lang ? `${SERVER[lang]} language server` : monacoLanguageOf(cur)}</span>}
         {cur && <button className="dlink" onClick={() => void window.api.openInVsCode(cur, ed.current?.getPosition()?.lineNumber ?? 1)} data-testid="editor-vscode">Open in VS Code</button>}
         <button className="dlink" onClick={() => setFull((f) => !f)} data-testid="editor-full">{full ? 'Exit full window' : 'Full window'}</button>
       </div>
@@ -180,8 +189,9 @@ export function EditorView() {
         </div>
       )}
       {error && <div className="derr ed-err" data-testid="editor-error">{error}</div>}
-      {!open.length && <div className="pane-empty">Open a file from Files, Preview or Changes to edit it here.</div>}
-      <div ref={host} className="ed-host" style={open.length ? undefined : { display: 'none' }} data-testid="editor-host" />
+      {!open.length && <div className="pane-empty">Open a file from Files or Git: code and text to edit, images, PDFs and pages to look at.</div>}
+      {showing && cur && <div className="ed-shown">{/\.(md|markdown)$/i.test(cur) ? <div className="nt-preview md"><MdBody text={docs.get(cur)?.model.getValue() ?? ''} copy={false} /></div> : <Preview key={cur} path={cur} onClose={() => askClose(cur)} />}</div>}
+      <div ref={host} className="ed-host" style={open.length && !showing ? undefined : { display: 'none' }} data-testid="editor-host" />
     </section>
   )
 }
