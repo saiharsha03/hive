@@ -84,6 +84,10 @@ interface Window {
     setHook: (folder: string, id: string, enabled: boolean) => Promise<void>
     listPlugins: () => Promise<PluginInfo[]>
     setPlugin: (key: string, on: boolean) => Promise<void>
+    listNotes: () => Promise<import('../../shared/notesCore').NoteInfo[]>
+    saveNote: (id: string | null, text: string) => Promise<string>
+    deleteNote: (id: string) => Promise<void>
+    onNotesChanged: (cb: () => void) => () => void
     listTodos: () => Promise<Todo[]>
     addTodo: (text: string, due?: string) => Promise<Todo>
     setTodoDone: (id: string, done: boolean) => Promise<void>

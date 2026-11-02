@@ -34,6 +34,27 @@ test.describe('panels', () => {
     await h.open('todos')
   })
 
+  test('notes: write one, find it by search, preview, delete', async () => {
+    await h.open('notes')
+    await h.id('notes-new').click()
+    const title = `${TAG} meeting notes`
+    await h.id('notes-text').fill(`# ${title}\n\n- **ship** the notes panel`)
+    const row = h.id('note-row').filter({ hasText: title })
+    await expect(row).toHaveCount(1, { timeout: 10_000 }) // saved on its own, listed from the folder
+    await h.id('notes-search').fill('ship notes')
+    await expect(row).toHaveCount(1)
+    await h.id('notes-search').fill('nothing like this')
+    await expect(row).toHaveCount(0)
+    await h.id('notes-search').fill('')
+    await row.click()
+    await h.id('notes-preview').click()
+    await expect(h.id('notes-rendered').locator('strong')).toHaveText('ship')
+    await shot(l.page, 'notes')
+    await h.id('notes-delete').click()
+    await expect(row).toHaveCount(0)
+    await h.open('notes')
+  })
+
   test('the terminal drawer runs echo hi', async () => {
     await h.newSession()
     await h.id('terminal-toggle').click()

@@ -24,6 +24,14 @@ contextBridge.exposeInMainWorld('api', {
   setHook: (folder: string, id: string, enabled: boolean) => ipcRenderer.invoke('hooks:set', folder, id, enabled),
   listPlugins: () => ipcRenderer.invoke('plugins:list'),
   setPlugin: (key: string, on: boolean) => ipcRenderer.invoke('plugins:set', key, on),
+  listNotes: () => ipcRenderer.invoke('notes:list'),
+  saveNote: (id: string | null, text: string) => ipcRenderer.invoke('notes:save', id, text),
+  deleteNote: (id: string) => ipcRenderer.invoke('notes:delete', id),
+  onNotesChanged: (cb: () => void) => {
+    const fn = () => cb()
+    ipcRenderer.on('notes:changed', fn)
+    return () => ipcRenderer.removeListener('notes:changed', fn)
+  },
   listTodos: () => ipcRenderer.invoke('todos:list'),
   addTodo: (text: string, due?: string) => ipcRenderer.invoke('todos:add', text, due),
   setTodoDone: (id: string, done: boolean) => ipcRenderer.invoke('todos:done', id, done),

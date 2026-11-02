@@ -12,7 +12,7 @@ export class Hive {
   topModel = () => this.id('top-model')
   // panels live in regions now (Default UI): the threads list is the left side bar, tools open from the Tools menu
   // into the bottom panel, the right side, a popover or a modal. Calling open() again for the same panel is harmless.
-  async open(panel: 'sessions' | 'files' | 'deploy' | 'git' | 'scripts' | 'watch' | 'mcp' | 'todos' | 'settings'): Promise<void> {
+  async open(panel: 'sessions' | 'files' | 'deploy' | 'git' | 'scripts' | 'watch' | 'mcp' | 'todos' | 'notes' | 'settings'): Promise<void> {
     if (panel === 'sessions') {
       if (!(await this.sidebar().isVisible())) await this.id('toggle-left').click()
       return
@@ -22,7 +22,7 @@ export class Hive {
       return
     }
     const view = panel === 'watch' ? 'watchers' : panel
-    const shown: Record<string, string> = { files: 'file-tree', deploy: 'deploy-panel', git: 'git-panel', scripts: 'scripts-panel', watchers: 'watchers-panel', mcp: 'mcp-menu', todos: 'todos-panel' }
+    const shown: Record<string, string> = { files: 'file-tree', deploy: 'deploy-panel', git: 'git-panel', scripts: 'scripts-panel', watchers: 'watchers-panel', mcp: 'mcp-menu', todos: 'todos-panel', notes: 'notes-panel' }
     if (await this.id(shown[view]).first().isVisible()) return
     await this.id('menu-tools').click()
     await this.id(`menu-tools-${view}`).click()

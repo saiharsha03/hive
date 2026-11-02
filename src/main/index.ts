@@ -14,6 +14,7 @@ import { dependabotSummary, initDependabot, setDependabotEnabled } from './depen
 import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
 import { cancelSwitch, switchAccount } from './account'
+import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
 import type { AllowStatus } from '../shared/allowCore'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail } from './watchers'
 import { gitDecorations, listDir } from './files'
@@ -177,6 +178,11 @@ handle('hooks:list', (_e, folder: string) => listHooks(folder))
 handle('hooks:set', (_e, folder: string, id: string, enabled: boolean) => setHook(folder, id, enabled))
 handle('plugins:list', () => listPlugins())
 handle('plugins:set', (_e, key: string, on: boolean) => setPlugin(key, on))
+// Notes: markdown files in ~/.claude/hive/notes
+handle('notes:list', () => listNotes())
+handle('notes:save', (_e, id: string | null, text: string) => saveNote(id ? String(id) : null, String(text ?? '')))
+handle('notes:delete', (_e, id: string) => deleteNote(String(id)))
+watchNotes(() => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('notes:changed') })
 handle('todos:list', () => listTodos())
 handle('todos:add', (_e, text: string, due?: string) => addTodo(text, 'user', due ? { due } : {}))
 handle('todos:done', (_e, id: string, done: boolean) => setDone(id, done))

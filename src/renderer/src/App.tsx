@@ -18,6 +18,7 @@ import { useScripts } from './useScripts'
 import { WatchersView, type OpenThread } from './WatchersView'
 import { SettingsPanel } from './SettingsPanel'
 import { TodoPanel } from './TodoPanel'
+import { NotesPanel } from './NotesPanel'
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
 import { workingOn, type Session } from './chat'
@@ -451,6 +452,7 @@ export function App() {
     { id: 'dev', label: 'Dev stack', icon: 'server-process', mk: 'mk-dev', status: dev.state?.configured ? `${devUp} up` : '', cls: devUp ? 's-done' : '' },
     { id: 'scripts', label: 'Scripts', icon: 'play', mk: 'mk-scripts', status: runningScripts ? `${runningScripts} running` : '', cls: runningScripts ? 's-work' : '' },
     { id: 'todos', label: 'To-dos', icon: 'checklist', mk: 'mk-todos', status: tb.open ? `${tb.late ? 'some late, ' : ''}${tb.open} open` : '', cls: tb.late ? 's-wait' : '' },
+    { id: 'notes', label: 'Notes', icon: 'note', mk: 'mk-todos' },
     { id: 'agents', label: 'Agents', icon: 'type-hierarchy', mk: 'mk-agents', status: agentsRunning ? `${agentsRunning} working` : '', cls: agentsRunning ? 's-work' : '' },
     { id: 'git', label: 'Git', icon: 'source-control', mk: 'mk-git' },
     { id: 'files', label: 'Files', icon: 'files', mk: 'mk-files' },
@@ -546,6 +548,7 @@ export function App() {
       case 'deploy': return <DeployPanel cfg={deploy.cfg} w={deploy.w} out={deploy.out} act={deploy.act} onDiagnose={diagnose} />
       case 'scripts': return <ScriptsPanel runs={scripts.runs} onOpen={(p) => setPreview(p)} />
       case 'todos': return <TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} />
+      case 'notes': return <NotesPanel />
       case 'dev': return <DevPanel state={dev.state} setState={dev.setState} />
       case 'pull': return <PullPanel />
     }

@@ -2,7 +2,7 @@
 // is reachable in every UI, through its region, a popover, a modal or Ctrl+K.
 import type { UIId } from './appearance'
 
-export type ViewId = 'threads' | 'changes' | 'preview' | 'git' | 'files' | 'agents' | 'terminal' | 'watchers' | 'deploy' | 'scripts' | 'todos' | 'dev' | 'pull'
+export type ViewId = 'threads' | 'changes' | 'preview' | 'git' | 'files' | 'agents' | 'terminal' | 'watchers' | 'deploy' | 'scripts' | 'todos' | 'notes' | 'dev' | 'pull'
 
 export const VIEW: Record<ViewId, { label: string; icon: string; mk: string }> = {
   threads: { label: 'Threads', icon: 'comment-discussion', mk: 'mk-threads' },
@@ -16,6 +16,7 @@ export const VIEW: Record<ViewId, { label: string; icon: string; mk: string }> =
   deploy: { label: 'Deploy', icon: 'rocket', mk: 'mk-deploy' },
   scripts: { label: 'Scripts', icon: 'play', mk: 'mk-scripts' },
   todos: { label: 'To-dos', icon: 'checklist', mk: 'mk-todos' },
+  notes: { label: 'Notes', icon: 'note', mk: 'mk-todos' },
   dev: { label: 'Dev stack', icon: 'server-process', mk: 'mk-dev' },
   pull: { label: 'Pull latest', icon: 'repo-pull', mk: 'mk-pull' },
 }
@@ -31,20 +32,20 @@ export type Arrangement = {
   closed: Region[]
 }
 
-const BOTTOM: ViewId[] = ['agents', 'terminal', 'watchers', 'deploy', 'scripts', 'todos']
+const BOTTOM: ViewId[] = ['agents', 'terminal', 'watchers', 'deploy', 'scripts', 'todos', 'notes']
 
 export const ARRANGE: Record<UIId, Arrangement> = {
   default: { left: ['threads'], right: ['changes', 'preview', 'git', 'files'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
   workbench: {
-    left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'watchers', 'agents'], right: ['preview', 'changes'], bottom: BOTTOM,
+    left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['preview', 'changes'], bottom: BOTTOM,
     chat: 'grid', tabs: 'full', closed: [],
   },
   strip: {
-    left: [], right: ['agents', 'watchers', 'git', 'dev', 'scripts', 'todos', 'preview', 'changes', 'files', 'deploy'],
-    bottom: ['terminal', 'agents', 'watchers', 'deploy', 'scripts', 'todos'], chat: 'columns', tabs: 'title', closed: ['right'],
+    left: [], right: ['agents', 'watchers', 'git', 'dev', 'scripts', 'todos', 'notes', 'preview', 'changes', 'files', 'deploy'],
+    bottom: ['terminal', 'agents', 'watchers', 'deploy', 'scripts', 'todos', 'notes'], chat: 'columns', tabs: 'title', closed: ['right'],
   },
   focus: {
-    left: [], right: ['changes', 'preview', 'git', 'files', 'agents', 'watchers', 'scripts', 'todos', 'dev'], bottom: BOTTOM,
+    left: [], right: ['changes', 'preview', 'git', 'files', 'agents', 'watchers', 'scripts', 'todos', 'notes', 'dev'], bottom: BOTTOM,
     chat: 'single', tabs: 'none', closed: ['right', 'bottom'],
   },
 }
