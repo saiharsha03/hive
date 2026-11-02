@@ -46,8 +46,8 @@ test('the Python guard blocks HTTP writes before they leave, allows reads and re
   const alerts = createHash('sha256').update('hooks.slack.com/services/alerts').digest('hex')
   const run = (ro: string) => execFileSync('python', [probe], { env: { ...process.env, HIVE_READONLY: ro, HIVE_READONLY_POST_SHA256: `abc, ${alerts}`, PYTHONPATH: [dir, process.env.PYTHONPATH].filter(Boolean).join(delimiter) } }).toString().trim().replace(/\r/g, '')
   // a read-only search POST passes only to its own host, never because the path merely contains it; Slack only to the allowed channel;
-  // the Salesforce sign-in (SOAP or OAuth) and Datadog counts pass, a Salesforce record write does not
-  assert.equal(run('1'), 'sent blocked blocked blocked\ny n n y n y n\ny y n y')
+  // the Salesforce sign-in (SOAP on the login host, OAuth) and Datadog counts pass; a record write and SOAP on the org's own host do not
+  assert.equal(run('1'), 'sent blocked blocked blocked\ny n n y n y n\ny y n y n')
   assert.equal(run(''), 'sent sent sent sent')
   for (const c of ['gh api -XPOST repos/o/r/issues', 'gh api -X=POST x', 'gh api -iXPOST x', 'gh api --method=PATCH x', 'gh api -fbody=x x', 'gh api --field=x x'])
     assert.ok(blockedCommand(c), c)
