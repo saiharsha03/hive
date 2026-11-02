@@ -508,6 +508,7 @@ export function App() {
       { label: 'All threads…', icon: 'list-unordered', onClick: (el) => showView('threads', el), testid: 'menu-thread-all' },
       { label: 'Move to background', hint: 'Ctrl+Shift+B', icon: 'eye-closed', onClick: () => activeId && moveToBackground(activeId), testid: 'menu-thread-background', disabled: !activeId, sep: true },
       { label: 'Close thread', icon: 'close', onClick: () => activeId && closeTabs([activeId]), testid: 'menu-thread-close', disabled: !activeId },
+      { label: `Quit ${appName}`, hint: 'Ctrl+Q', icon: 'sign-out', onClick: () => void window.api.quitApp(), testid: 'menu-thread-quit', sep: true },
     ] },
     { label: 'View', items: [
       ...getUIs().map((u, i): MenuItem => ({ label: `${u.label} UI`, checked: ui === u.id, onClick: () => setUI(u.id), testid: `menu-view-ui-${u.id}`, sep: i === 0 && false })),

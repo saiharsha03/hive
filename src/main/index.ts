@@ -1,12 +1,15 @@
 // Electron main process. The Agent SDK runs here.
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
-import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
+import { basename, join } from 'node:path'
+import QRCode from 'qrcode'
+import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { liveQuery, stopCodex } from './chat'
+import { liveQuery, liveThreads, stopCodex } from './chat'
+import { takePending } from './pending'
+import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
 import { cleanupThread, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
@@ -89,6 +92,61 @@ initWatchers(appConfig.env, appConfig.config?.root ?? '', {
   threadState, closeThread: closeTab, transcript: transcriptPath, usage: () => weeklyUsage(), changed: watchersChanged,
 }, [{ id: 'dependabot', summary: dependabotSummary, setEnabled: setDependabotEnabled }])
 
+// The phone app (through the relay): its requests map onto the same threads the window shows
+const mobileChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('mobile:status', mobileStatus()) }
+const phoneItems = (items: Awaited<ReturnType<typeof loadRecentHistory>>['items']): PhoneItem[] => items.flatMap((it): PhoneItem[] => {
+  if (it.kind === 'user') return [{ k: 'you', t: it.text }]
+  if (it.kind === 'assistant') return [{ k: 'claude', t: it.text }]
+  if (it.kind === 'thread' || it.kind === 'agent') return [{ k: 'you', t: it.text }]
+  if (it.kind === 'tool') { const i = it.input ?? {}; return [{ k: 'tool', t: `${it.name.replace(/^mcp__\w+?__/, '')} ${i.description ?? i.file_path ?? i.pattern ?? i.command ?? i.url ?? ''}`.trim().slice(0, 200) }] }
+  if (it.kind === 'note' || it.kind === 'summary') return [{ k: 'note', t: it.kind === 'summary' ? 'Earlier conversation compacted' : it.text }]
+  return []
+}).slice(-120).map((p) => ({ ...p, t: p.t.length > 6000 ? `${p.t.slice(0, 6000)}…` : p.t }))
+const mobileDeps = () => ({
+  threads: async (): Promise<PhoneThread[]> => {
+    const live = liveThreads().filter((t) => !t.tabId.startsWith('watcher-') || t.sessionId)
+    const liveIds = new Set(live.flatMap((t) => [t.tabId, t.sessionId ?? '']))
+    const saved = (await listSessions()).filter((s) => !liveIds.has(s.id)).slice(0, 40)
+    return [
+      ...live.map((t) => ({ id: t.tabId, title: t.title, folder: basename(t.cwd), state: (t.busy ? 'working' : t.waitingReason ? 'waiting' : 'idle') as PhoneThread['state'], note: t.waitingReason ?? '', updated: Date.now() })),
+      ...saved.map((s) => ({ id: s.id, title: s.title, folder: s.project, state: 'idle' as const, note: '', updated: s.updated })),
+    ]
+  },
+  read: async (id: string) => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    const path = l?.sessionId ? transcriptPath(l.cwd, l.sessionId) : (await listSessions()).find((s) => s.id === id)?.path
+    if (!path) return l ? { title: l.title, items: [], working: l.busy } : null
+    const { items } = await loadRecentHistory(path)
+    return { title: l?.title ?? (await listSessions()).find((s) => s.id === id)?.title ?? id, items: phoneItems(items), working: !!l?.busy }
+  },
+  send: async (id: string, text: string) => {
+    const w = appWindow()
+    if (!w) throw new Error(`The ${appName()} window is not open`)
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    if (l) { runInThread({ tabId: l.tabId, cwd: l.cwd, title: l.title, prompt: text }, w.webContents); return 'sent' }
+    const s = (await listSessions()).find((x) => x.id === id)
+    if (!s) throw new Error('That thread is gone')
+    runInThread({ tabId: s.id, cwd: s.cwd, title: s.title, prompt: text, resume: s.id }, w.webContents)
+    return 'sent'
+  },
+  start: async (folder: string, text: string) => {
+    const w = appWindow()
+    if (!w) throw new Error(`The ${appName()} window is not open`)
+    const cwd = folder || appConfig.config?.root || homedir()
+    runInThread({ tabId: `phone-${Date.now()}`, cwd, title: text.replace(/\s+/g, ' ').slice(0, 50), prompt: text }, w.webContents)
+    return 'started'
+  },
+  stop: async (id: string) => { const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id); if (l) await interrupt(l.tabId) },
+  // the folders a new thread can start in: the workspace root and the git repos directly under it
+  folders: () => {
+    const root = appConfig.config?.root
+    if (!root) return []
+    try { return [root, ...readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(join(root, d.name, '.git'))).map((d) => join(root, d.name))] } catch { return [root] }
+  },
+  changed: mobileChanged,
+})
+initMobile(appConfig.env, mobileDeps())
+
 // every consumer picks up saved settings without a restart (running dev services keep theirs until restarted)
 function applySettings() {
   setAppName(settings.general.appName, settings.general.appTagline)
@@ -101,6 +159,7 @@ function applySettings() {
   configureWatchers(appConfig.config?.root ?? '', appConfig.env)
   initAllowlist(appConfig.env, allowChanged)
   setWatcherPosts(appConfig.env)
+  initMobile(appConfig.env, mobileDeps())
 }
 const draftOf = (d: unknown): Draft => {
   const n = normalizeSettings(d) ?? normalizeSettings({})!
@@ -297,6 +356,13 @@ handle('chat:btw', (_e, cwd: string, sessionId: string | null, question: string)
 handle('history:recent', (_e, path: string) => loadRecentHistory(path))
 handle('fs:readText', (_e, path: string) => readText(path))
 // The editor: files, and the language servers (Pyright, TypeScript, Vue) its open files talk to
+// the phone app: pairing shows a QR code (made here, so the key never goes through the page as text it could log)
+// Quit from the app's own menu (the window's × only hides it to the tray)
+handle('app:quit', () => { quitting = true; app.quit() })
+handle('mobile:status', () => mobileStatus())
+handle('mobile:pair', async () => { const { qr } = await pairPhone(); return { image: await QRCode.toDataURL(qr, { margin: 1, width: 320, errorCorrectionLevel: 'M' }) } })
+handle('mobile:unpair', () => unpairPhone())
+handle('mobile:test', () => notifyPhone(`Test from ${appName()}`, 'Notifications reach this phone.'))
 handle('editor:read', (_e, path: string) => editorRead(String(path)))
 handle('editor:mtime', (_e, path: string) => editorMtime(String(path)))
 handle('editor:write', (_e, path: string, text: string) => editorWrite(String(path), String(text)))
@@ -360,16 +426,55 @@ function createWindow(): void {
     const key = input.key.toLowerCase()
     if ((input.control && key === 'r') || key === 'f5') { e.preventDefault(); web.reload() }
     else if (input.control && input.shift && key === 'i') { e.preventDefault(); web.toggleDevTools() }
+    else if (input.control && !input.shift && key === 'q') { e.preventDefault(); quitting = true; app.quit() } // Quit (the × only hides to the tray)
   })
+
+  // closing the window hides it to the tray (like Slack or Teams): threads, watchers and the phone link keep running.
+  // Quit is in the tray menu. Test mode closes for real, so the tests can end the app.
+  win.on('close', (e) => { if (!quitting && !TEST_MODE) { e.preventDefault(); win.hide() } })
+
+  // messages that had not reached Claude when Hive last closed go to their threads again, once the window is up
+  web.once('did-finish-load', () => setTimeout(() => {
+    for (const p of TEST_MODE ? [] : takePending()) {
+      try { runInThread({ tabId: p.sessionId ?? p.tabId, cwd: p.cwd, title: p.title, prompt: p.text, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
+    }
+  }, 4000))
 
   if (DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(APP_HTML)
 }
 
+let quitting = false
+let tray: Tray | null = null
+const showWindow = () => {
+  const w = BrowserWindow.getAllWindows()[0]
+  if (!w) { createWindow(); return }
+  if (w.isMinimized()) w.restore()
+  w.show()
+  w.focus()
+}
+function makeTray(): void {
+  if (TEST_MODE || tray) return
+  tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
+  tray.setToolTip(appName())
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: `Open ${appName()}`, click: showWindow },
+    { type: 'separator' },
+    { label: `Quit ${appName()}`, click: () => { quitting = true; app.quit() } },
+  ]))
+  tray.on('click', showWindow)
+}
+app.on('before-quit', () => { quitting = true })
+
+// one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one
+if (!TEST_MODE && !app.requestSingleInstanceLock()) app.quit()
+app.on('second-instance', showWindow)
+
 Menu.setApplicationMenu(null)
 app.whenReady().then(() => {
   handleScheme()
   createWindow()
+  makeTray()
   startSearch()
 })
 app.on('window-all-closed', () => {

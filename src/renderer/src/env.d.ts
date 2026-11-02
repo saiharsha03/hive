@@ -94,6 +94,12 @@ interface Window {
     lspClose: (file: string) => Promise<void>
     lspRequest: (file: string, method: string, params: unknown) => Promise<any>
     onLspDiagnostics: (cb: (d: { uri: string; diagnostics: any[] }) => void) => () => void
+    quitApp: () => Promise<void>
+    mobileStatus: () => Promise<{ configured: boolean; paired: boolean; connected: boolean; error: string }>
+    mobilePair: () => Promise<{ image: string }>
+    mobileUnpair: () => Promise<void>
+    mobileTest: () => Promise<string>
+    onMobileStatus: (cb: (s: { configured: boolean; paired: boolean; connected: boolean; error: string }) => void) => () => void
     listNotes: () => Promise<import('../../shared/notesCore').NoteInfo[]>
     saveNote: (id: string | null, text: string) => Promise<string>
     deleteNote: (id: string) => Promise<void>

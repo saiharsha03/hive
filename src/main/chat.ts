@@ -26,10 +26,12 @@ import { boostForMessage, forgetTab, observe, sessionOptions } from './liveStatu
 import { readOnlyOptions } from './readOnly'
 import { isWatcherTab } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
+import { notifyPhone } from './mobile'
+import { addPending, pendingDelivered, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
 // worktrees) or runs services, so nothing it reaches through Hive escapes read-only
-const WATCHER_TOOLS = new Set(['show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread'])
+const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread'])
 const forThread = <T extends { name: string }>(tabId: string, tools: T[]): T[] => (isWatcherTab(tabId) ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
 
 // a watcher's thread starts read-only (its own hooks merged with the read-only command check)
@@ -177,6 +179,12 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         },
       ),
       tool(
+        'notify_phone',
+        `Send a notification to the user's phone (the ${appName()} app), shown even when the app is closed. Use it when the user asked to be told, or for something they would want to know right away when away from the desk: a long job finished or failed, a decision only they can make, an alert. Keep it short; tapping it opens this thread.`,
+        { title: z.string().describe('One short line'), body: z.string().optional().describe('A sentence or two') },
+        async ({ title, body }) => ({ content: [{ type: 'text', text: notifyPhone(title, body ?? '', tabId) }] }),
+      ),
+      tool(
         'rename_thread',
         `Name THIS thread in the ${appName()} sidebar and its tab: a short title (3 to 6 words) that says what the user is working on, e.g. "Hive editor file tabs" or "CSV import cleanup". Stored like Claude Code's /rename, so the terminal shows it too.`,
         { title: z.string().describe('The new title, 3 to 6 words, no quotes') },
@@ -205,7 +213,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ action, until, reason }) => {
           const c = checkOrganize(action, until, undefined, reason)
           if (!c.ok) return { content: [{ type: 'text', text: c.error }], isError: true }
-          if (action === 'waiting') s.waitingReason = c.reason || 'Needs your input'
+          if (action === 'waiting') { s.waitingReason = c.reason || 'Needs your input'; notifyPhone(`Waiting: ${titleOf(tabId)}`, s.waitingReason, tabId) }
           if (action === 'resolved') s.waitingReason = undefined
           send({ type: 'hive_organize', action, until: c.until, reason: c.reason })
           return { content: [{ type: 'text', text: action === 'snooze' ? `Thread snoozed until ${until}` : action === 'waiting' ? 'Thread marked as waiting for the user' : action === 'resolved' ? 'Waiting mark cleared' : `Thread: ${action} done` }] }
@@ -466,7 +474,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   // messages queued while Claude works wait here until the turn's result (priority 'later' once handed over)
   const turns = turnQueue<SDKUserMessage>(
     (m, priority) => s.push(priority ? ({ ...m, priority } as SDKUserMessage) : m),
-    (id, phase) => send({ type: 'hive_queue', id, phase }),
+    (id, phase) => { if (phase === 'sent' || phase === 'removed') pendingDelivered(id); send({ type: 'hive_queue', id, phase }) },
   )
   s = {
     q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(),
@@ -479,6 +487,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       for await (const m of q as AsyncIterable<SDKMessage>) {
         if (m.type === 'system' && (m as any).subtype === 'init') {
           s.sessionId = (m as any).session_id
+          pendingSession(tabId, s.sessionId!)
           send({ type: 'hive_session', sessionId: s.sessionId, path: transcriptPath(cwd, s.sessionId!) })
           // the mode the process really started in; a foreground/background move made before this point is applied now
           s.mode = (m as any).permissionMode ?? modeFor(background, PERMISSION_MODE)
@@ -497,7 +506,12 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           s.lastReply = r.subtype === 'success' ? (r.result || lastText) : `The turn ended with an error (${r.subtype}). ${(r.errors ?? []).join('; ')}`.trim()
           lastText = ''
           s.turns.turnEnded()
+          steersDelivered(tabId) // a message steered into this turn went in with it
           if (!s.turns.isBusy()) wake(s)
+          // a background thread (not a watcher: they say themselves when they need you) finished: tell the phone
+          if (s.background && !tabId.startsWith('watcher-') && !s.turns.isBusy()) {
+            notifyPhone(s.lastOk ? `Finished: ${titleOf(tabId)}` : `Failed: ${titleOf(tabId)}`, (s.lastReply ?? '').split('\n').find((l) => l.trim()) ?? '', tabId)
+          }
         }
       }
     } catch (e: any) {
@@ -555,6 +569,10 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   if (msg.text) content.push({ type: 'text', text: msg.text })
   const m = { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null } as SDKUserMessage
   const cur = s
+  // sent while Claude works (steer) or queued: kept on disk until it reaches Claude, so closing Hive loses nothing
+  if (msg.text && !msg.images.length && (msg.mode === 'queue' || cur.turns.isBusy())) {
+    addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, mode: msg.mode === 'queue' ? 'queue' : 'steer' })
+  }
   const go = () => {
     if (msg.mode === 'queue' && msg.queueId) return cur.turns.submit(msg.queueId, m)
     cur.turns.markBusy()
@@ -599,6 +617,8 @@ export function startBackgroundThread(t: BackgroundThread, web: WebContents): vo
 }
 
 const threadInfo = (id: string, t: Live) => ({ sessionId: t.sessionId, title: titleOf(id), cwd: t.cwd, busy: t.turns.isBusy(), waitingReason: t.waitingReason, background: t.background })
+// every live thread, for the phone app's list
+export const liveThreads = () => [...live.entries()].map(([id, t]) => ({ tabId: id, ...threadInfo(id, t) }))
 
 // One thread's message into another: the receiving tab shows it as from that thread; a busy receiver gets it queued
 // (or steered in); a thread that is not running is resumed from its Claude session.
@@ -695,7 +715,8 @@ export async function interrupt(tabId: string): Promise<void> {
   await live.get(tabId)?.q.interrupt()
 }
 
-export function closeTab(tabId: string): void {
+// quitting: the app closes every thread at once, and their unsent messages are kept for the next start
+export function closeTab(tabId: string, quitting = false): void {
   for (const p of codexRuns.get(tabId) ?? []) p.kill()
   codexRuns.delete(tabId)
   forgetTab(tabId)
@@ -703,6 +724,7 @@ export function closeTab(tabId: string): void {
   const s = live.get(tabId)
   if (s?.sessionId) gone.set(tabId, { tabId, sessionId: s.sessionId, cwd: s.cwd, title: titleOf(tabId), lastReply: s.lastReply, tabOpen: false })
   tabTitles.delete(tabId)
+  if (!quitting) threadClosed(tabId)
   s?.turns.clear()
   s?.q.close()
   live.delete(tabId)
@@ -710,5 +732,5 @@ export function closeTab(tabId: string): void {
 }
 
 export function closeAll(): void {
-  for (const id of [...live.keys()]) closeTab(id)
+  for (const id of [...live.keys()]) closeTab(id, true)
 }

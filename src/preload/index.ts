@@ -38,6 +38,16 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('lsp:diagnostics', fn)
     return () => ipcRenderer.removeListener('lsp:diagnostics', fn)
   },
+  quitApp: () => ipcRenderer.invoke('app:quit'),
+  mobileStatus: () => ipcRenderer.invoke('mobile:status'),
+  mobilePair: () => ipcRenderer.invoke('mobile:pair'),
+  mobileUnpair: () => ipcRenderer.invoke('mobile:unpair'),
+  mobileTest: () => ipcRenderer.invoke('mobile:test'),
+  onMobileStatus: (cb: (s: unknown) => void) => {
+    const fn = (_e: unknown, s: unknown) => cb(s)
+    ipcRenderer.on('mobile:status', fn)
+    return () => ipcRenderer.removeListener('mobile:status', fn)
+  },
   listNotes: () => ipcRenderer.invoke('notes:list'),
   saveNote: (id: string | null, text: string) => ipcRenderer.invoke('notes:save', id, text),
   deleteNote: (id: string) => ipcRenderer.invoke('notes:delete', id),
