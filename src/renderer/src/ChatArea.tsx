@@ -5,6 +5,7 @@ import { useRef, useState, type DragEvent, type ReactNode } from 'react'
 import type { Session } from './chat'
 import { MAX_PANES, type Pane, type PaneState } from './panes'
 import { FracDivider, Icon, useFraction } from './ui'
+import { isDirty, useDirtyVersion } from './EditorView'
 
 export const TAB_MIME = 'application/x-hive-tab'
 
@@ -25,13 +26,14 @@ type Props = {
   empty: ReactNode
 }
 
-const stateIcon = (s: Session): [string, string] => (s.busy ? ['loading', 'spin s-work'] : s.waitingSince ? ['bell-dot', 's-wait blink']
+const stateIcon = (s: Session): [string, string] => (s.file ? ['file-code', 's-idle'] : s.busy ? ['loading', 'spin s-work'] : s.waitingSince ? ['bell-dot', 's-wait blink']
   : s.items.at(-1)?.kind === 'error' ? ['error', 's-fail'] : ['comment-discussion', 's-idle'])
 
 function PaneView({ pane, sessions, focused, tabs, canSplit, render, onActivate, onFocusPane, onClose, onTabMenu, onMove, onSplit, onNew, solo }: {
   pane: Pane; sessions: Session[]; focused: boolean; tabs: Props['tabs']; canSplit: boolean; solo: boolean
 } & Pick<Props, 'render' | 'onActivate' | 'onFocusPane' | 'onClose' | 'onTabMenu' | 'onMove' | 'onSplit' | 'onNew'>) {
   const [zone, setZone] = useState<Zone | null>(null)
+  useDirtyVersion() // a file tab's unsaved dot
   const byId = new Map(sessions.map((s) => [s.id, s]))
   const active = pane.active ? byId.get(pane.active) : undefined
   const zoneAt = (e: DragEvent<HTMLDivElement>): Zone => {
@@ -81,6 +83,7 @@ function PaneView({ pane, sessions, focused, tabs, canSplit, render, onActivate,
                 data-testid="tab" data-id={id}>
                 <Icon name={icon} className={cls} />
                 <span className="tt">{s.title}</span>
+                {s.file && isDirty(s.file) && <span className="tdot" data-testid="tab-dirty">●</span>}
                 <button className="x" aria-label="Close" onClick={(e) => { e.stopPropagation(); onClose(id) }} data-testid={`tab-close-${id}`}><Icon name="close" /></button>
               </div>
             )

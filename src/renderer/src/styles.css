@@ -914,3 +914,5 @@ button.sbi:hover { background: var(--hover); }
 .ed-shown .preview { flex: 1; }
 /* the Git view: this thread's changes above the repos */
 .gitview-thread { max-height: 45%; overflow: auto; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.ptab .tdot { color: var(--ink); margin-left: 2px; }
+.ed-seg { margin-right: 10px; }

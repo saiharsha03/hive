@@ -13,6 +13,7 @@ export type Session = {
   // a reopened thread shows its recent end first: earlier = how many items came from its transcript, more = there is
   // earlier conversation not loaded yet
   history?: { count: number; more: boolean }
+  file?: string // a file tab (id "file:<path>"): the editor, not a conversation
   background: boolean // live but hidden from the tab bar
   waitingReason?: string // why the user is needed (Claude's words, or Finished / Failed + first line)
   waitingSince?: number

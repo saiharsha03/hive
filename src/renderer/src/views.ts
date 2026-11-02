@@ -2,13 +2,12 @@
 // is reachable in every UI, through its region, a popover, a modal or Ctrl+K.
 import type { UIId } from './appearance'
 
-export type ViewId = 'threads' | 'git' | 'files' | 'agents' | 'terminal' | 'watchers' | 'deploy' | 'scripts' | 'todos' | 'notes' | 'editor' | 'dev' | 'pull'
+export type ViewId = 'threads' | 'git' | 'files' | 'agents' | 'terminal' | 'watchers' | 'deploy' | 'scripts' | 'todos' | 'notes' | 'dev' | 'pull'
 
 export const VIEW: Record<ViewId, { label: string; icon: string; mk: string }> = {
   threads: { label: 'Threads', icon: 'comment-discussion', mk: 'mk-threads' },
   git: { label: 'Git', icon: 'source-control', mk: 'mk-git' },
   files: { label: 'Files', icon: 'files', mk: 'mk-files' },
-  editor: { label: 'Open file', icon: 'code', mk: 'mk-files' },
   agents: { label: 'Agents', icon: 'type-hierarchy', mk: 'mk-agents' },
   terminal: { label: 'Terminal', icon: 'terminal', mk: 'mk-terminal' },
   watchers: { label: 'Watchers', icon: 'eye', mk: 'mk-watch' },
@@ -34,17 +33,17 @@ export type Arrangement = {
 const BOTTOM: ViewId[] = ['agents', 'terminal', 'watchers', 'deploy', 'scripts', 'todos', 'notes']
 
 export const ARRANGE: Record<UIId, Arrangement> = {
-  default: { left: ['threads'], right: ['files', 'editor', 'git', 'agents'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
+  default: { left: ['threads'], right: ['files', 'git', 'agents'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
   workbench: {
-    left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['editor', 'git'], bottom: BOTTOM,
+    left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['git'], bottom: BOTTOM,
     chat: 'grid', tabs: 'full', closed: [],
   },
   strip: {
-    left: [], right: ['agents', 'watchers', 'git', 'dev', 'scripts', 'todos', 'notes', 'editor', 'files', 'deploy'],
+    left: [], right: ['agents', 'watchers', 'git', 'dev', 'scripts', 'todos', 'notes', 'files', 'deploy'],
     bottom: ['terminal', 'agents', 'watchers', 'deploy', 'scripts', 'todos', 'notes'], chat: 'columns', tabs: 'title', closed: ['right'],
   },
   focus: {
-    left: [], right: ['files', 'editor', 'git', 'agents', 'watchers', 'scripts', 'todos', 'notes', 'dev'], bottom: BOTTOM,
+    left: [], right: ['files', 'git', 'agents', 'watchers', 'scripts', 'todos', 'notes', 'dev'], bottom: BOTTOM,
     chat: 'single', tabs: 'none', closed: ['right', 'bottom'],
   },
 }

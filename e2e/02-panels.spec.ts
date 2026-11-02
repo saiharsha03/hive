@@ -77,18 +77,20 @@ test.describe('panels', () => {
     await expect(file('tracked.txt')).toHaveClass(/g-modified/)
     await expect(file('untracked.txt')).toHaveClass(/g-(untracked|added)/)
     await shot(l.page, 'files-git-colours')
-    // an image opens in Open file, shown (not editable); Markdown opens editable with a Preview toggle
+    // files open as tabs next to the threads: an image is shown; Markdown opens rendered, Code shows the source
     await file('pic.svg').click()
+    await expect(h.id('tab').filter({ hasText: 'pic.svg' })).toHaveCount(1)
     await expect(h.id('editor-view').locator('aside.preview img')).toBeVisible()
-    await expect(h.id('editor-host')).toBeHidden()
-    await h.id('top-view-files').click()
-    if (!(await file('readme.md').isVisible())) await tree.locator('[data-testid="file-dir"][data-name="demo"]').click()
     await file('readme.md').click()
-    await expect(h.id('editor-host')).toBeVisible()
-    await h.id('editor-render').click()
+    await expect(h.id('tab').filter({ hasText: 'readme.md' })).toHaveCount(1)
     await expect(h.id('editor-view').locator('.md strong')).toHaveText('markdown')
-    await shot(l.page, 'open-file-markdown')
-    await h.id('top-view-files').click()
+    await shot(l.page, 'file-tab-markdown')
+    await h.id('editor-code').click()
+    await expect(h.id('editor-host')).toBeVisible()
+    await expect(h.id('editor-view').locator('.view-lines')).toContainText('A **markdown** page.')
+    for (const n of ['pic.svg', 'readme.md']) await h.id('tab').filter({ hasText: n }).click({ button: 'middle' })
+    await expect(h.id('tab').filter({ hasText: 'readme.md' })).toHaveCount(0)
+    await h.open('files')
   })
 
   test('editor: a Python file opens from Files, Pyright hovers and flags the type error, Ctrl+S saves', async () => {
@@ -98,7 +100,8 @@ test.describe('panels', () => {
     await tree.locator('[data-testid="file-row"][data-name="app.py"]').click()
     const editor = h.id('editor-view')
     await expect(editor).toBeVisible()
-    await expect(h.id('editor-tab').filter({ hasText: 'app.py' })).toHaveCount(1)
+    const tab = h.id('tab').filter({ hasText: 'app.py' })
+    await expect(tab).toHaveCount(1)
     await expect(editor).toContainText('Pyright language server')
     // the deliberate type error gets a squiggle from Pyright
     await expect(editor.locator('.squiggly-error')).not.toHaveCount(0, { timeout: 60_000 })
@@ -114,10 +117,17 @@ test.describe('panels', () => {
     await editor.locator('.view-lines').click()
     await l.page.keyboard.press('Control+End')
     await l.page.keyboard.type('\nprint(greet("e2e"))')
-    await expect(h.id('editor-tab').filter({ hasText: 'app.py' }).getByTestId('editor-tab-close')).toHaveText('●')
+    await expect(tab.getByTestId('tab-dirty')).toHaveCount(1)
+    // closing it with unsaved edits asks instead of closing
+    await tab.click({ button: 'middle' })
+    await expect(h.id('editor-unsaved')).toBeVisible()
+    await h.id('editor-unsaved').getByRole('button', { name: 'Cancel' }).click()
+    await editor.locator('.view-lines').click()
     await l.page.keyboard.press('Control+s')
-    await expect(h.id('editor-tab').filter({ hasText: 'app.py' }).getByTestId('editor-tab-close')).toHaveText('×')
+    await expect(tab.getByTestId('tab-dirty')).toHaveCount(0)
     expect(readFileSync(join(DEMO, 'app.py'), 'utf8')).toContain('print(greet("e2e"))')
+    await tab.click({ button: 'middle' })
+    await expect(tab).toHaveCount(0)
   })
 
   test('git panel: stage and split diff work; commit and push are blocked in test mode', async () => {

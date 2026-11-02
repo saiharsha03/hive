@@ -20,7 +20,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { TodoPanel } from './TodoPanel'
 import { NotesPanel } from './NotesPanel'
 import { setShowAgents } from './ThreadStatus'
-import { EditorView, openInEditor, setEditorShown } from './EditorView'
+import { FileEditor, fileOfTab, fileTabId, openInEditor, releaseFile, setFileOpener } from './EditorView'
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
 import { workingOn, type Session } from './chat'
@@ -138,7 +138,14 @@ export function App() {
   const [swapped, setSwappedState] = useState(() => getPref<boolean>('sidesSwapped', true))
   const setSwapped = (on: boolean) => { setSwappedState(on); setPref('sidesSwapped', on) }
   const openFile = (p: string) => openInEditor(p)
-  useEffect(() => setEditorShown(() => showView('editor')))
+  // a file opens as a tab next to the threads, in the focused pane (one tab per file)
+  useEffect(() => setFileOpener((path) => {
+    const id = fileTabId(path)
+    setSessions((all) => (all.some((s) => s.id === id) ? all : [...all, {
+      id, file: path, title: path.split(/[\\/]/).pop() ?? path, cwd: path.replace(/[\\/][^\\/]*$/, ''), items: [], streaming: '', busy: false, loaded: true, background: false,
+    }]))
+    setPaneState((p) => activateIn(p, id))
+  }), [])
   useEffect(() => setShowAgents(() => showView('agents')))
   function showView(v: ViewId, el?: HTMLElement | null) {
     const at = placeOf(ui, v)
@@ -365,9 +372,11 @@ export function App() {
 
   // close sessions (each stops its live process); each pane picks its nearest tab
   const closeTabs = (closing: string[]) => {
+    // a file tab with unsaved edits stays open and asks in its editor (Save / Discard / Cancel)
+    closing = closing.filter((id) => { const f = fileOfTab(id); if (!f || releaseFile(f)) return true; setPaneState((p) => activateIn(p, id)); return false })
     if (!closing.length) return
     setSessions((all) => all.filter((s) => !closing.includes(s.id)))
-    closing.forEach((id) => void window.api.chatClose(id))
+    closing.forEach((id) => { if (!fileOfTab(id)) void window.api.chatClose(id) })
   }
   const closeSession = (id: string) => (id.startsWith('script:') ? void window.api.scriptsStop(id.slice(7)) : id.startsWith('dev:') ? void (id !== 'dev:docker' && window.api.devStop(id.slice(4))) : id === 'deploy' ? (deploy.w.phase !== 'deploying' && deploy.act({ t: 'stop' })) : closeTabs([id]))
   const paneTabsOf = (id: string) => panes.panes.find((p) => p.tabs.includes(id))?.tabs ?? [id]
@@ -552,7 +561,7 @@ export function App() {
       // Git: the focused thread's changes first, then the repos (status, stage, commit, push)
       case 'git': return (
         <div className="gitview">
-          {active && <div className="gitview-thread"><ChangesView session={active} diff={diff} onDiff={setDiff} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => document.querySelector('[data-testid="git-panel"]')?.scrollIntoView()} /></div>}
+          {active && !active.file && <div className="gitview-thread"><ChangesView session={active} diff={diff} onDiff={setDiff} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => document.querySelector('[data-testid="git-panel"]')?.scrollIntoView()} /></div>}
           <div className="gitview-top"><GitPanel onDiff={setGitDiff} focus={gitFocus} /></div>
           {gitDiff && <>
             <Divider dir="h" size={gitDiffH} setSize={setGitDiffH} save={saveGitDiffH} sign={-1} min={120} max={1200} testid="divider-git-diff" />
@@ -568,13 +577,12 @@ export function App() {
       case 'scripts': return <ScriptsPanel runs={scripts.runs} onOpen={(p) => setPreview(p)} />
       case 'todos': return <TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} />
       case 'notes': return <NotesPanel />
-      case 'editor': return <EditorView />
       case 'dev': return <DevPanel state={dev.state} setState={dev.setState} />
       case 'pull': return <PullPanel />
     }
   }
 
-  const renderChat = (s: Session, _pane: unknown, focused: boolean) => (
+  const renderChat = (s: Session, _pane: unknown, focused: boolean) => s.file ? <FileEditor key={s.id} path={s.file} onClosed={() => closeTabs([s.id])} /> : (
     <SessionView key={s.id} session={s} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
       onSend={(text, images, m) => send(s, text, images, m)} onDequeue={(id) => window.api.chatDequeue(s.id, id)} onPromote={(id) => void window.api.chatPromote(s.id, id)}
       onStop={() => window.api.chatInterrupt(s.id)} onBackground={(toolUseId) => void window.api.chatBackground(s.id, toolUseId)} onRunInBackground={() => moveToBackground(s.id)}

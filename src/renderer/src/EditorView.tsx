@@ -1,6 +1,7 @@
-// The code editor: Monaco with tabs, Ctrl+S, and the language servers (Python/Django, TS/JS, Vue) through lspBridge.
-// Files open from Files, Preview, Changes or a go-to-definition. A file changed on disk reloads by itself when it has
-// no unsaved edits, and asks when it has. Debugging and the rest go to VS Code (Open in VS Code).
+// Files open as tabs next to the threads (tab id "file:<path>"), like VS Code. Each tab is a FileEditor: Monaco with
+// the language servers (Python/Django, TS/JS, Vue) for code and text, a rendered view for images, PDFs and media, and
+// a Preview toggle for Markdown and HTML. Models live here, so a tab keeps its edits, cursor and scroll while it is
+// hidden. A file changed on disk reloads by itself when it has no unsaved edits, and asks when it has.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { monaco } from './monacoSetup'
 import { attach, registerLanguageFeatures, saved, setEnsureModel } from './lspBridge'
@@ -10,36 +11,31 @@ import { MdBody } from './MdBody'
 
 type Doc = { model: monaco.editor.ITextModel; savedVersion: number; mtime: number; sync: monaco.IDisposable; viewState: monaco.editor.ICodeEditorViewState | null }
 
-// ---- the open files (a small store, so Files, Preview and Changes can open a file from anywhere) ----
-let tabs: string[] = []
-let active: string | null = null
-let reveal: { path: string; line: number; column: number } | null = null
-let onOpen: () => void = () => {}
-const listeners = new Set<() => void>()
-const emit = () => { snapshot = { tabs, active }; listeners.forEach((l) => l()) }
-let snapshot: { tabs: string[]; active: string | null } = { tabs, active }
-export const setEditorShown = (f: () => void) => { onOpen = f }
-export function openInEditor(path: string, line?: number, column = 1): void {
-  if (!tabs.includes(path)) tabs = [...tabs, path]
-  active = path
-  if (line) reveal = { path, line, column }
-  emit()
-  onOpen()
-}
-const closeTab = (path: string) => {
-  const i = tabs.indexOf(path)
-  tabs = tabs.filter((t) => t !== path)
-  if (active === path) active = tabs[Math.min(i, tabs.length - 1)] ?? null
-  emit()
-}
-const useOpenFiles = () => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l) } }, () => snapshot)
-
-const docs = new Map<string, Doc>()
+export const FILE_TAB = 'file:'
+export const fileTabId = (path: string) => `${FILE_TAB}${path}`
+export const fileOfTab = (id: string) => (id.startsWith(FILE_TAB) ? id.slice(FILE_TAB.length) : null)
 const base = (p: string) => p.split(/[\\/]/).pop() ?? p
 const SERVER: Record<string, string> = { python: 'Pyright', typescript: 'TypeScript', vue: 'Vue' }
 // images, PDFs and media are shown, not edited; Markdown and HTML can be shown rendered too
 const shownOnly = (p: string) => !['text', 'html'].includes(kindOf(p))
 const renderable = (p: string) => kindOf(p) === 'html' || /\.(md|markdown)$/i.test(p)
+
+// ---- opening a file (the app turns it into a tab) and where to put the cursor ----
+let opener: (path: string) => void = () => {}
+export const setFileOpener = (f: (path: string) => void) => { opener = f }
+const reveals = new Map<string, { line: number; column: number }>()
+export function openInEditor(path: string, line?: number, column = 1): void {
+  if (line) reveals.set(path, { line, column })
+  opener(path)
+}
+
+// ---- models, and which files have unsaved edits (the tab bar shows a dot) ----
+const docs = new Map<string, Doc>()
+let dirtyVersion = 0
+const dirtyListeners = new Set<() => void>()
+const dirtyChanged = () => { dirtyVersion++; dirtyListeners.forEach((l) => l()) }
+export const isDirty = (path: string) => { const d = docs.get(path); return !!d && d.model.getAlternativeVersionId() !== d.savedVersion }
+export const useDirtyVersion = () => useSyncExternalStore((l) => { dirtyListeners.add(l); return () => { dirtyListeners.delete(l) } }, () => dirtyVersion)
 
 async function load(path: string): Promise<Doc> {
   const have = docs.get(path)
@@ -48,43 +44,56 @@ async function load(path: string): Promise<Doc> {
   const uri = monaco.Uri.file(path)
   const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(text, monacoLanguageOf(path), uri)
   const doc: Doc = { model, savedVersion: model.getAlternativeVersionId(), mtime, sync: attach(model), viewState: null }
+  model.onDidChangeContent(() => dirtyChanged())
   docs.set(path, doc)
+  dirtyChanged() // tabs showing it re-render (a Markdown tab that opened rendered gets its text)
   return doc
 }
 // a rename that touches files not open yet: they open as tabs (unsaved) so the edit can apply
-setEnsureModel(async (path) => { await load(path); if (!tabs.includes(path)) { tabs = [...tabs, path]; emit() } })
+setEnsureModel(async (path) => { await load(path); opener(path) })
 
-const dirty = (path: string) => { const d = docs.get(path); return !!d && d.model.getAlternativeVersionId() !== d.savedVersion }
+// closing a tab: a file with unsaved edits stays open and asks first (closeRequests); otherwise its model goes
+const closeRequests = new Set<string>()
+export function releaseFile(path: string): boolean {
+  if (isDirty(path)) { closeRequests.add(path); dirtyChanged(); return false }
+  discard(path)
+  return true
+}
+function discard(path: string) {
+  const d = docs.get(path)
+  if (d) { d.sync.dispose(); d.model.dispose(); docs.delete(path) }
+  closeRequests.delete(path)
+  dirtyChanged()
+}
 
-export function EditorView() {
-  const { tabs: open, active: cur } = useOpenFiles()
+export function FileEditor({ path, onClosed }: { path: string; onClosed: () => void }) {
+  useDirtyVersion()
   const host = useRef<HTMLDivElement>(null)
   const ed = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
-  const [, bump] = useState(0)
-  const [full, setFull] = useState(false)
-  const [closing, setClosing] = useState<string | null>(null)
-  const [changed, setChanged] = useState<string | null>(null) // edited here and changed on disk
+  // HTML and Markdown open rendered; Code shows (and edits) the source
+  const [rendered, setRendered] = useState(() => renderable(path))
+  const [changed, setChanged] = useState(false) // edited here and changed on disk
   const [error, setError] = useState('')
-  const curRef = useRef(cur)
-  curRef.current = cur
+  const media = shownOnly(path)
+  const showing = media || (rendered && renderable(path))
 
-  const save = async (path = curRef.current) => {
-    const d = path && docs.get(path)
-    if (!path || !d) return
+  const save = async () => {
+    const d = docs.get(path)
+    if (!d) return
     try {
       d.mtime = await window.api.editorWrite(path, d.model.getValue())
       d.savedVersion = d.model.getAlternativeVersionId()
       saved(d.model)
-      if (changed === path) setChanged(null)
-      bump((n) => n + 1)
+      setChanged(false)
+      dirtyChanged()
     } catch (e) { setError(String((e as Error)?.message ?? e)) }
   }
   const saveRef = useRef(save)
   saveRef.current = save
 
-  // the editor, once
+  // this tab's editor, showing the file's shared model
   useEffect(() => {
-    if (!host.current) return
+    if (media || !host.current) return
     const light = () => document.documentElement.dataset.theme === 'light'
     const e = monaco.editor.create(host.current, {
       automaticLayout: true, theme: light() ? 'vs' : 'vs-dark', fontSize: 13, minimap: { enabled: true }, scrollBeyondLastLine: false,
@@ -92,106 +101,103 @@ export function EditorView() {
     })
     ed.current = e
     e.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void saveRef.current())
-    const sub = e.onDidChangeModelContent(() => bump((n) => n + 1))
     registerLanguageFeatures((file, line, column) => openInEditor(file, line, column))
     const theme = new MutationObserver(() => monaco.editor.setTheme(light() ? 'vs' : 'vs-dark'))
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => { sub.dispose(); theme.disconnect(); e.dispose(); ed.current = null }
-  }, [])
-
-  // show the active file (and go where a definition or a click asked)
-  useEffect(() => {
-    const e = ed.current
-    if (!e) return
-    if (!cur || shownOnly(cur)) { e.setModel(null); return }
-    let stale = false
-    load(cur).then((d) => {
-      if (stale) return
-      const prev = e.getModel()
-      if (prev && prev !== d.model) { const p = [...docs.values()].find((x) => x.model === prev); if (p) p.viewState = e.saveViewState() }
-      if (prev !== d.model) { e.setModel(d.model); if (d.viewState) e.restoreViewState(d.viewState) }
-      if (reveal?.path === cur) { const r = reveal; reveal = null; e.setPosition({ lineNumber: r.line, column: r.column }); e.revealLineInCenter(r.line) }
+    let alive = true
+    load(path).then((d) => {
+      if (!alive) return
+      e.setModel(d.model)
+      if (d.viewState) e.restoreViewState(d.viewState)
       e.focus()
-      setError('')
-    }, (err) => { if (!stale) { setError(String(err?.message ?? err)); closeTab(cur) } })
-    return () => { stale = true }
-  }, [cur])
+    }, (err) => setError(String(err?.message ?? err)))
+    return () => {
+      alive = false
+      const d = docs.get(path)
+      if (d && e.getModel() === d.model) d.viewState = e.saveViewState()
+      theme.disconnect(); e.dispose(); ed.current = null
+    }
+  }, [path, media])
+
+  // go where a definition or a search result asked
+  useEffect(() => {
+    const t = setInterval(() => {
+      const r = reveals.get(path)
+      const e = ed.current
+      if (!r || !e?.getModel()) return
+      reveals.delete(path)
+      e.setPosition({ lineNumber: r.line, column: r.column })
+      e.revealLineInCenter(r.line)
+      e.focus()
+    }, 100)
+    return () => clearInterval(t)
+  }, [path])
 
   // something else changed the file (Claude, git): reload it when it has no unsaved edits, else ask
   useEffect(() => {
+    if (media) return
     const check = async () => {
-      const path = curRef.current
-      const d = path && docs.get(path)
-      if (!path || !d || shownOnly(path)) return
+      const d = docs.get(path)
+      if (!d) return
       const m = await window.api.editorMtime(path)
       if (m === null || m === d.mtime) return
-      if (dirty(path)) { setChanged(path); return }
+      if (isDirty(path)) { setChanged(true); return }
       const { text, mtime } = await window.api.editorRead(path)
       d.model.pushEditOperations([], [{ range: d.model.getFullModelRange(), text }], () => null)
       d.savedVersion = d.model.getAlternativeVersionId()
       d.mtime = mtime
-      bump((n) => n + 1)
+      dirtyChanged()
     }
     const t = setInterval(() => void check(), 2000)
     window.addEventListener('focus', check)
     return () => { clearInterval(t); window.removeEventListener('focus', check) }
-  }, [])
+  }, [path, media])
 
-  const discard = (path: string) => {
-    const d = docs.get(path)
-    if (d) { d.sync.dispose(); d.model.dispose(); docs.delete(path) }
-    setClosing(null)
-    closeTab(path)
-  }
-  const askClose = (path: string) => (dirty(path) ? setClosing(path) : discard(path))
-  const reloadFromDisk = async (path: string) => {
+  const reloadFromDisk = async () => {
     const d = docs.get(path)
     if (!d) return
     const { text, mtime } = await window.api.editorRead(path)
     d.model.pushEditOperations([], [{ range: d.model.getFullModelRange(), text }], () => null)
     d.savedVersion = d.model.getAlternativeVersionId()
     d.mtime = mtime
-    setChanged(null)
+    setChanged(false)
+    dirtyChanged()
   }
 
-  const lang = cur ? langOf(cur) : null
-  const [rendered, setRendered] = useState(false)
-  useEffect(() => setRendered(false), [cur])
-  const showing = !!cur && (shownOnly(cur) || (rendered && renderable(cur)))
+  const lang = langOf(path)
+  const closing = closeRequests.has(path)
   return (
-    <section className={full ? 'tool editor ed-full' : 'tool editor'} data-testid="editor-view">
+    <section className="tool editor" data-testid="editor-view" data-path={path}>
       <div className="ed-tabs">
-        {open.map((p) => (
-          <div key={p} className={`ed-tab${p === cur ? ' cur' : ''}`} title={p} data-testid="editor-tab">
-            <button className="ed-name" onClick={() => openInEditor(p)}>{base(p)}</button>
-            <button className="ed-x" aria-label={`Close ${base(p)}`} onClick={() => askClose(p)} data-testid="editor-tab-close">{dirty(p) ? '●' : '×'}</button>
-          </div>
-        ))}
+        <span className="ed-path dnote" title={path}>{path}</span>
         <span className="dspace" />
-        {cur && renderable(cur) && <button className="dlink" onClick={() => setRendered((r) => !r)} data-testid="editor-render">{rendered ? 'Edit' : 'Preview'}</button>}
-        {cur && !shownOnly(cur) && <span className="dnote ed-lang">{lang ? `${SERVER[lang]} language server` : monacoLanguageOf(cur)}</span>}
-        {cur && <button className="dlink" onClick={() => void window.api.openInVsCode(cur, ed.current?.getPosition()?.lineNumber ?? 1)} data-testid="editor-vscode">Open in VS Code</button>}
-        <button className="dlink" onClick={() => setFull((f) => !f)} data-testid="editor-full">{full ? 'Exit full window' : 'Full window'}</button>
+        {renderable(path) && (
+          <span className="seg ed-seg" role="group" aria-label="View">
+            <button className={rendered ? 'on' : ''} aria-pressed={rendered} onClick={() => setRendered(true)} data-testid="editor-rendered">Rendered</button>
+            <button className={rendered ? '' : 'on'} aria-pressed={!rendered} onClick={() => setRendered(false)} data-testid="editor-code">Code</button>
+          </span>
+        )}
+        {!media && !(rendered && renderable(path)) && <span className="dnote ed-lang">{lang ? `${SERVER[lang]} language server` : monacoLanguageOf(path)}</span>}
+        {!media && <button className="dlink" onClick={() => void window.api.openInVsCode(path, ed.current?.getPosition()?.lineNumber ?? 1)} data-testid="editor-vscode">Open in VS Code</button>}
       </div>
       {closing && (
         <div className="ed-bar" data-testid="editor-unsaved">
-          {base(closing)} has unsaved changes.
-          <button className="dlink" onClick={() => void save(closing).then(() => discard(closing))}>Save</button>
-          <button className="dlink" onClick={() => discard(closing)} data-testid="editor-discard">Discard</button>
-          <button className="dlink" onClick={() => setClosing(null)}>Cancel</button>
+          {base(path)} has unsaved changes.
+          <button className="dlink" onClick={() => void save().then(() => { discard(path); onClosed() })}>Save</button>
+          <button className="dlink" onClick={() => { discard(path); onClosed() }} data-testid="editor-discard">Discard</button>
+          <button className="dlink" onClick={() => { closeRequests.delete(path); dirtyChanged() }}>Cancel</button>
         </div>
       )}
-      {changed && changed === cur && (
+      {changed && (
         <div className="ed-bar" data-testid="editor-changed">
-          {base(changed)} changed on disk while you edited it.
-          <button className="dlink" onClick={() => void reloadFromDisk(changed)}>Reload theirs</button>
-          <button className="dlink" onClick={() => void save(changed)}>Keep mine (save)</button>
+          {base(path)} changed on disk while you edited it.
+          <button className="dlink" onClick={() => void reloadFromDisk()}>Reload theirs</button>
+          <button className="dlink" onClick={() => void save()}>Keep mine (save)</button>
         </div>
       )}
       {error && <div className="derr ed-err" data-testid="editor-error">{error}</div>}
-      {!open.length && <div className="pane-empty">Open a file from Files or Git: code and text to edit, images, PDFs and pages to look at.</div>}
-      {showing && cur && <div className="ed-shown">{/\.(md|markdown)$/i.test(cur) ? <div className="nt-preview md"><MdBody text={docs.get(cur)?.model.getValue() ?? ''} copy={false} /></div> : <Preview key={cur} path={cur} onClose={() => askClose(cur)} />}</div>}
-      <div ref={host} className="ed-host" style={open.length && !showing ? undefined : { display: 'none' }} data-testid="editor-host" />
+      {showing && <div className="ed-shown">{/\.(md|markdown)$/i.test(path) ? <div className="nt-preview md"><MdBody text={docs.get(path)?.model.getValue() ?? ''} copy={false} /></div> : <Preview key={path} path={path} onClose={onClosed} />}</div>}
+      {!media && <div ref={host} className="ed-host" style={showing ? { display: 'none' } : undefined} data-testid="editor-host" />}
     </section>
   )
 }
