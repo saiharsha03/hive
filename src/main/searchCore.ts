@@ -134,3 +134,20 @@ export function formatChunks(r: { mode: 'hybrid' | 'bm25'; indexing: Indexing; c
   r.chunks.forEach((c, i) => lines.push('', `--- passage ${i + 1} ---`, c.text))
   return lines.join('\n')
 }
+
+// vectors for texts, reusing the old vector of any text seen before (a transcript only grows); embed gets only the
+// new texts. null when embedding failed
+export async function reuseVectors(texts: string[], oldTexts: string[], oldVecs: Float32Array | null, dim: number,
+  embed: (t: string[]) => Promise<Float32Array | null>): Promise<Float32Array | null> {
+  const known = new Map<string, number>()
+  if (oldVecs) oldTexts.forEach((t, i) => { if (!known.has(t)) known.set(t, i) })
+  const got = await embed(texts.filter((t) => !known.has(t)))
+  if (!got) return null
+  const out = new Float32Array(texts.length * dim)
+  let j = 0
+  texts.forEach((t, i) => {
+    const k = known.get(t)
+    out.set(k !== undefined ? oldVecs!.subarray(k * dim, (k + 1) * dim) : got.subarray(j * dim, ++j * dim), i * dim)
+  })
+  return out
+}

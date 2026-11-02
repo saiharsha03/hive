@@ -1,4 +1,5 @@
-// Hybrid search over the sessions the sidebar lists: BM25 (MiniSearch) + local MiniLM embeddings, fused with RRF.
+// Search over the sessions the sidebar lists: BM25 (MiniSearch), plus local MiniLM embeddings fused with RRF when
+// HIVE_SEARCH_EMBEDDINGS=1 (off by default: keyword search only).
 // Only user and assistant words are indexed, one chunk per message (long ones split). The index lives in
 // userData/search (manifest.json, chunks.jsonl, embeddings.bin) keyed by session path + size + mtime.
 // Embedding runs in a worker thread so neither the main process nor the UI waits on it.
@@ -9,7 +10,7 @@ import { mkdir, open, readFile, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Worker } from 'node:worker_threads'
-import { chunkText, cosineTopK, messageTexts, rrf, trimSnippet, type SearchResult, type SessionHit, type SessionMeta } from './searchCore'
+import { chunkText, cosineTopK, messageTexts, reuseVectors, rrf, trimSnippet, type SearchResult, type SessionHit, type SessionMeta } from './searchCore'
 import { listSessions, type SessionInfo } from './sessions'
 
 const DIM = 384
@@ -193,9 +194,12 @@ async function indexOne(s: SessionInfo, size: number, mtime: number): Promise<vo
     e = { path: s.path, id: s.id, size, mtime, texts, ids: [], vecs: null }
     bm25.addAll(register(e))
   }
-  e!.vecs = await embed(texts)
+  e!.vecs = await embedReusing(texts, old)
   dirty = true
 }
+
+// a changed session embeds only its new chunks (re-embedding a whole busy session on each change kept the model busy nonstop)
+const embedReusing = (texts: string[], old: Entry | undefined) => reuseVectors(texts, old?.texts ?? [], old?.vecs ?? null, DIM, embed)
 
 async function reconcile(): Promise<void> {
   await load()
@@ -253,7 +257,10 @@ export function syncSearch(sessions: SessionInfo[]): void {
 export function startSearch(): void {
   setTimeout(() => {
     started = true
-    spawn()
+    // keyword (BM25) search only: the embedding model kept a few cores busy on busy sessions. HIVE_SEARCH_EMBEDDINGS=1
+    // in the environment turns the semantic half back on
+    if (process.env.HIVE_SEARCH_EMBEDDINGS === '1') spawn()
+    else { model = 'failed'; broadcast() }
     void (async () => {
       if (!list.length) list = await listSessions()
       void kick()

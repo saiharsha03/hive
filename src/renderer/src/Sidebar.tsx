@@ -196,7 +196,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
 
   const idxLine = status && status.total > 0 && !status.done ? `Indexing threads ${status.indexed}/${status.total}…`
     : status?.model === 'loading' ? 'Loading search model…'
-    : status?.model === 'failed' ? 'Keyword search only'
+    : status?.model === 'failed' ? 'Keyword search'
     : flash ? 'Semantic search ready' : ''
 
   const groupHead = (key: string, label: string, n: number, icon: string, opts: { fold?: boolean; folded?: boolean; items?: SessionInfo[] } = {}) => (
