@@ -3,7 +3,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { dataDir } from './testMode'
 import { join } from 'node:path'
-import { addLink, dropLinks, type LinkMap, type WorktreeLink } from '../shared/worktreeCore'
+import { addLink, dropLinks, moveLinks, type LinkMap, type WorktreeLink } from '../shared/worktreeCore'
 import { retireWorktree } from './devStack'
 import { appName } from '../shared/appName'
 
@@ -37,6 +37,13 @@ const serial = <T>(fn: () => Promise<T>): Promise<T> => {
 }
 
 export const linkThread = (thread: string, link: WorktreeLink) => serial(async () => write(addLink(await read(), thread, link)))
+
+export const moveThreadLinks = (from: string, to: string) => serial(async () => {
+  const map = await read()
+  const n = map[from]?.length ?? 0
+  if (n) await write(moveLinks(map, from, to))
+  return n
+})
 
 export const threadLinks = async (thread: string): Promise<WorktreeLink[]> => (await read())[thread] ?? []
 

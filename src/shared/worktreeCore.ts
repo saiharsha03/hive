@@ -87,6 +87,14 @@ export function addLink(map: LinkMap, thread: string, link: WorktreeLink): LinkM
 }
 
 // drop the links whose worktree is gone; a thread with none left leaves the map
+// a handoff: the new thread takes over the old one's worktrees, so closing the old one no longer deletes them
+export function moveLinks(map: LinkMap, from: string, to: string): LinkMap {
+  const moving = map[from] ?? []
+  if (!moving.length || from === to) return map
+  const { [from]: _old, ...rest } = map
+  return moving.reduce((m, l) => addLink(m, to, l), rest as LinkMap)
+}
+
 export function dropLinks(map: LinkMap, thread: string, paths: string[]): LinkMap {
   const left = (map[thread] ?? []).filter((l) => !paths.some((p) => samePath(p, l.path)))
   const { [thread]: _old, ...rest } = map

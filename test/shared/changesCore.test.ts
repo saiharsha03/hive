@@ -13,6 +13,13 @@ test('a pull request clears the edits before it; a failed or running one does no
   assert.ok(!opensPr('Bash', { command: 'gh pr view 12' }))
   assert.ok(!opensPr('Read', { command: 'gh pr create' }))
   assert.ok(!opensPr('Bash', null))
+  // only an executed gh pr create counts, not a search or echo of the words
+  assert.ok(opensPr('Bash', { command: 'cd repo && git push -u origin x && gh pr create --fill' }))
+  assert.ok(opensPr('Bash', { command: 'GH_HOST=github.com gh pr create --fill' }))
+  assert.ok(opensPr('PowerShell', { command: '& C:/tools/gh.exe pr create --fill' }))
+  assert.ok(!opensPr('Bash', { command: "rg 'pr create' src" }))
+  assert.ok(!opensPr('Bash', { command: "echo 'gh pr create --fill'" }))
+  assert.ok(!opensPr('Bash', { command: 'grep -n "gh pr create" docs/README.md' }))
   assert.deepEqual(ids(sinceLastPr([edit('a'), edit('b')])), ['a', 'b'])
   assert.deepEqual(ids(sinceLastPr([edit('a'), shell('p1', 'gh pr create --fill'), edit('b'), shell('p2', 'gh pr create'), edit('c')])), ['c'])
   assert.deepEqual(ids(sinceLastPr([edit('a'), shell('p', 'gh pr create --fill', 'error')])), ['a', 'p'])

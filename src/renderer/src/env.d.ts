@@ -123,6 +123,7 @@ interface Window {
     chatSetBackground: (tabId: string, on: boolean) => Promise<void>
     worktreeLinks: (thread: string) => Promise<WorktreeLink[]>
     worktreeCleanup: (thread: string) => Promise<string[]>
+    worktreeMove: (from: string, to: string) => Promise<number>
     pathForFile: (file: File) => string
     chatReset: () => Promise<void>
     previewUrl: (path: string) => Promise<string>
@@ -175,6 +176,7 @@ interface Window {
     dropChoices: () => Promise<import('../../shared/dropCore').DropChoice[]>
     handoffAt: () => Promise<number>
     handoffFile: (tabId: string) => Promise<string>
+    handoffReady: (file: string, since: number) => Promise<boolean>
     pullConfig: () => Promise<{ ok: boolean; message: string }>
     pullList: () => Promise<string[]>
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>

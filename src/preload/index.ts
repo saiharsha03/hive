@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld('api', {
   chatSetBackground: (tabId: string, on: boolean) => ipcRenderer.invoke('chat:setBackground', tabId, on),
   worktreeLinks: (thread: string) => ipcRenderer.invoke('worktree:links', thread),
   worktreeCleanup: (thread: string) => ipcRenderer.invoke('worktree:cleanup', thread),
+  worktreeMove: (from: string, to: string) => ipcRenderer.invoke('worktree:move', from, to),
   // a dropped file's absolute path (File.path is gone from Electron)
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   chatReset: () => ipcRenderer.invoke('chat:reset'),
@@ -158,6 +159,7 @@ contextBridge.exposeInMainWorld('api', {
   dropChoices: () => ipcRenderer.invoke('drop:choices'),
   handoffAt: () => ipcRenderer.invoke('handoff:at'),
   handoffFile: (tabId: string) => ipcRenderer.invoke('handoff:file', tabId),
+  handoffReady: (file: string, since: number) => ipcRenderer.invoke('handoff:ready', file, since),
   pullConfig: () => ipcRenderer.invoke('pull:config'),
   pullList: () => ipcRenderer.invoke('pull:list'),
   pullRun: (dry: boolean) => ipcRenderer.invoke('pull:run', dry),

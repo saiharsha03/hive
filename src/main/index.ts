@@ -1,8 +1,8 @@
 // Electron main process. The Agent SDK runs here.
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
-import { basename, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
@@ -11,7 +11,7 @@ import { configureChat, liveQuery, liveThreads, stopCodex } from './chat'
 import { resendGroups, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
-import { cleanupThread, threadLinks } from './threadWorktrees'
+import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
 import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
@@ -272,6 +272,7 @@ handle('chat:setBackground', (e, tabId: string, on: boolean) => setBackground(ta
 // worktrees a thread made through the worktree tool; Close / Archive deletes them (plain code, result notes back)
 handle('worktree:links', (_e, thread: string) => threadLinks(String(thread)))
 handle('worktree:cleanup', (_e, thread: string) => cleanupThread(String(thread)))
+handle('worktree:move', (_e, from: string, to: string) => moveThreadLinks(String(from), String(to)))
 // the page (re)loaded: no tab is showing any live session any more, so stop them all
 handle('chat:reset', () => { killAllTerminals(); return closeAll() })
 handle('chat:mode', () => PERMISSION_MODE)
@@ -309,7 +310,14 @@ handle('app:workspace', () => appConfig.config?.root ?? null)
 handle('drop:choices', () => parseDropChoices(appConfig.env.HIVE_DROP_SKILLS))
 // Handoff: the size a thread is offered a fresh one at (HIVE_HANDOFF_AT), and a new file for a handoff to go in
 handle('handoff:at', () => handoffAt(appConfig.env.HIVE_HANDOFF_AT))
-handle('handoff:file', (_e, tabId: string) => join(dataDir(), 'hive', 'handoffs', handoffName(String(tabId), Date.now())))
+const HANDOFFS = () => join(dataDir(), 'hive', 'handoffs')
+handle('handoff:file', (_e, tabId: string) => join(HANDOFFS(), handoffName(String(tabId), Date.now())))
+// written (in the handoffs folder, since the request, with something in it): only then does the fresh thread start
+handle('handoff:ready', (_e, file: string, since: number) => {
+  const f = resolve(String(file))
+  if (dirname(f) !== resolve(HANDOFFS())) return false
+  try { const st = statSync(f); return st.isFile() && st.size >= 200 && st.mtimeMs >= Number(since) - 2000 } catch { return false }
+})
 handle('pull:config', () => ({ ok: !!appConfig.config, message: appConfig.message }))
 handle('pull:list', () => (appConfig.config ? scanRepos(appConfig.config).map((r) => r.name) : []))
 handle('pull:run', (e, dry: boolean) => {

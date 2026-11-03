@@ -96,3 +96,13 @@ test('links: add dedupes by path (any slash or case), drop forgets and removes e
   assert.deepEqual(w.dropLinks({ t2: [l1] }, 'none', ['x']), { t2: [l1] })
 })
 
+test('links: a handoff moves them to the new thread (merging), and leaves others alone', () => {
+  const l1 = { repo: 'a', path: 'C:/w/a/x', branch: 'x', at: 1 }
+  const l2 = { repo: 'b', path: 'C:/w/b/y', branch: 'y', at: 2 }
+  const map = { old: [l1, l2], other: [l1] }
+  assert.deepEqual(w.moveLinks(map, 'old', 'new'), { other: [l1], new: [l1, l2] })
+  assert.deepEqual(w.moveLinks({ old: [l1], new: [{ ...l1, at: 9 }] }, 'old', 'new'), { new: [l1] }) // same path: one link
+  assert.equal(w.moveLinks(map, 'none', 'new'), map)
+  assert.equal(w.moveLinks(map, 'old', 'old'), map)
+})
+

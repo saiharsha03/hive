@@ -2,9 +2,14 @@
 
 type ToolLike = { kind: string; name?: string; input?: unknown; status?: string }
 
-// a shell command that opened a pull request (gh pr create, also through a wrapper script)
-export const opensPr = (name: string | undefined, input: unknown): boolean =>
-  (name === 'Bash' || name === 'PowerShell') && /\bpr\s+create\b/.test(String((input as { command?: unknown } | null)?.command ?? ''))
+// one command of a shell line that runs gh (or a gh wrapper script) with pr create; variable assignments, & and sh may lead
+const GH_PR_CREATE = /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:&\s*)?(?:(?:ba)?sh\s+)?(?:\S*[\\/])?(?:gh(?:\.exe)?|[\w.-]*gh\.sh)\s+pr\s+create\b/
+// a shell command that opened a pull request (gh pr create, also through a wrapper script); not a grep or echo of it
+export const opensPr = (name: string | undefined, input: unknown): boolean => {
+  if (name !== 'Bash' && name !== 'PowerShell') return false
+  const cmd = String((input as { command?: unknown } | null)?.command ?? '')
+  return cmd.split(/&&|\|\||[;\n|]/).some((part) => GH_PR_CREATE.test(part.trim()))
+}
 
 // the thread's items after the last pull request it opened successfully (all of them when it opened none)
 export function sinceLastPr<T extends ToolLike>(items: T[]): T[] {

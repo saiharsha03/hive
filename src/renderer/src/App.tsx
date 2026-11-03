@@ -2,6 +2,7 @@
 // A UI (appearance.ts + views.ts) only decides where regions sit; switching it keeps every chat, terminal and scroll.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { HANDOFF_AT_DEFAULT, handoffRequest, handoffStart, shouldOffer } from '../../shared/handoffCore'
+import { isWatcherTab } from '../../shared/readOnlyCore'
 import { FileTree } from './FileTree'
 import { Preview } from './Preview'
 import { Sidebar, liveLook, refreshThreadList } from './Sidebar'
@@ -106,6 +107,8 @@ export function App() {
   const [rightView, setRightView] = usePerUI<ViewId>('view.right', ui, arr.right[0] ?? 'files')
   // a view saved before the panel's views were merged (Changes, Preview) falls back to the first one
   const rv: ViewId = arr.right.includes(rightView) ? rightView : arr.right[0]
+  // a saved left view the layout no longer has (Git moved to a tab) falls back to its first
+  const lv: ViewId = arr.left.includes(leftView) ? leftView : (arr.left[0] ?? 'threads')
   const [bottomView, setBottomView] = usePerUI<ViewId>('view.bottom', ui, arr.bottom[0] ?? 'agents')
   const [bottomMax, setBottomMax] = useState(false)
   const [leftW, setLeftW, saveLeftW] = useSize(`${ui}.left`, ui === 'workbench' ? 280 : 300)
@@ -454,55 +457,83 @@ export function App() {
   }
 
   // ---- handoff: a big or just-compacted thread is offered a fresh one (handoffCore) ----
-  // offer: shown now; dismissed: where Not now was said; pending: the handoff file being written (the turn writing it)
-  type HandoffState = { total: number; offer: boolean; dismissed?: { total: number; compactions: number }; pending?: string }
+  // offer: shown now; dismissed: where Not now was said; pending: the handoff being written (file, asked at);
+  // failed: the last attempt ended without a usable file. Watcher threads are never offered (their read-only
+  // limits come from their tab id, which a new thread would not have).
+  type HandoffState = { total: number; offer: boolean; dismissed?: { total: number; compactions: number }; pending?: { file: string; since: number }; failed?: boolean }
   const [handoffAtTokens, setHandoffAtTokens] = useState(HANDOFF_AT_DEFAULT)
   useEffect(() => { void window.api.handoffAt().then(setHandoffAtTokens).catch(() => {}) }, [])
   const [handoffs, setHandoffs] = useState<Record<string, HandoffState>>({})
   const handoffsRef = useRef(handoffs)
   handoffsRef.current = handoffs
   const wasBusy = useRef(new Map<string, boolean>())
-  const startHandoffThread = (from: Session, file: string) => {
+  const canHandOff = (s: Session) => !s.tool && !s.file && !isWatcherTab(s.id)
+  // a handoff thread waiting for its Claude session id, to take the worktree links held under its tab id meanwhile
+  const linksToSession = useRef(new Set<string>())
+  const startHandoffThread = async (from: Session, file: string) => {
     setHandoffs((all) => { const { [from.id]: _gone, ...rest } = all; return rest })
     const id = `new-${Date.now()}`
+    // its worktrees move with it at once (under the tab id until it has a session id), so closing the old thread keeps them
+    if (from.sessionId && (await window.api.worktreeMove(from.sessionId, id).catch(() => 0))) linksToSession.current.add(id)
     const title = `${from.title} (cont.)`
     const text = handoffStart(from.title, file)
     const cwd = from.cwd || workspace || folder
-    setSessions((all) => [...all, { id, title, cwd, items: [{ kind: 'user', text, images: [], at: Date.now() }], streaming: '', busy: true, loaded: true, background: false }])
+    setSessions((all) => [
+      ...all.map((s) => (s.id === from.id ? { ...s, worktrees: [] } : s)),
+      { id, title, cwd, worktrees: from.worktrees, items: [{ kind: 'user', text, images: [], at: Date.now() }], streaming: '', busy: true, loaded: true, background: false },
+    ])
     setPaneState((p) => activateIn(p, id))
     void window.api.chatSend(id, cwd, undefined, { title, text, images: [] })
   }
-  // when a foreground thread's turn ends: open the fresh thread if that turn wrote a handoff, else check its size
+  // the handoff turn ended (however it ended): the fresh thread starts only if the file was really written
+  const finishHandoff = (s: Session, p: { file: string; since: number }) => {
+    void window.api.handoffReady(p.file, p.since).catch(() => false).then((ok) => {
+      if (handoffsRef.current[s.id]?.pending?.file !== p.file) return // closed or retried meanwhile
+      if (ok) return void startHandoffThread(s, p.file)
+      setHandoffs((all) => ({ ...all, [s.id]: { ...all[s.id], pending: undefined, offer: true, failed: true } }))
+    })
+  }
+  // when a thread's turn ends: finish a pending handoff (also in the background), else check a foreground thread's size
   useEffect(() => {
     for (const s of sessions) {
+      if (s.sessionId && linksToSession.current.delete(s.id)) void window.api.worktreeMove(s.id, s.sessionId).catch(() => {})
       const was = wasBusy.current.get(s.id) ?? false
       wasBusy.current.set(s.id, s.busy)
-      if (!was || s.busy || s.background || s.tool || s.file) continue
+      if (!was || s.busy || !canHandOff(s)) continue
       const pending = handoffsRef.current[s.id]?.pending
-      if (pending) { startHandoffThread(s, pending); continue }
+      if (pending) { finishHandoff(s, pending); continue }
+      if (s.background) continue
       const compactions = s.compactions ?? 0
       void window.api.chatContext(s.id).then((c) => setHandoffs((all) => {
         const prev = all[s.id]
         const total = c?.total ?? 0
         const offer = shouldOffer({ total, compactions, dismissed: prev?.dismissed }, handoffAtTokens)
-        return offer || prev ? { ...all, [s.id]: { ...prev, total, offer } } : all
+        return offer || prev ? { ...all, [s.id]: { ...prev, total, offer, failed: false } } : all
       })).catch(() => {})
     }
+    // a closed thread's state goes with it
+    const ids = new Set(sessions.map((s) => s.id))
+    if (Object.keys(handoffsRef.current).some((id) => !ids.has(id))) setHandoffs((all) => Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id))))
   }, [sessions])
   const handOff = async (s: Session) => {
+    const since = Date.now()
     const file = await window.api.handoffFile(s.id)
-    setHandoffs((all) => ({ ...all, [s.id]: { ...all[s.id], offer: false, pending: file } }))
-    send(s, handoffRequest(file), [])
+    const now = sessionsRef.current.find((x) => x.id === s.id)
+    if (!now || now.busy) return // closed, or a turn started while the file name was fetched
+    setHandoffs((all) => ({ ...all, [s.id]: { ...all[s.id], offer: false, failed: false, pending: { file, since } } }))
+    send(now, handoffRequest(file), [])
   }
-  const notNow = (s: Session) => setHandoffs((all) => ({ ...all, [s.id]: { ...all[s.id], offer: false, dismissed: { total: all[s.id]?.total ?? 0, compactions: s.compactions ?? 0 } } }))
+  const notNow = (s: Session) => setHandoffs((all) => ({ ...all, [s.id]: { ...all[s.id], offer: false, failed: false, dismissed: { total: all[s.id]?.total ?? 0, compactions: s.compactions ?? 0 } } }))
   const handoffBanner = (s: Session): ReactNode => {
     const h = handoffs[s.id]
+    if (!canHandOff(s)) return null
     if (h?.pending) return <div className="handoff-bar" data-testid="handoff-bar"><span>Writing the handoff; a fresh thread opens when it is done.</span></div>
     if (!h?.offer || s.busy) return null
     const compacted = (s.compactions ?? 0) > (h.dismissed?.compactions ?? 0)
+    const why = h.failed ? 'The handoff was not written (the turn stopped or failed).' : compacted ? 'This thread just compacted.' : `This thread is at ${Math.round(h.total / 1000)}k tokens of context.`
     return (
       <div className="handoff-bar" data-testid="handoff-bar">
-        <span>{compacted ? 'This thread just compacted.' : `This thread is at ${Math.round(h.total / 1000)}k tokens of context.`} Every reply re-reads all of it. Hand off to a fresh thread?</span>
+        <span>{why} {h.failed ? 'Try again?' : 'Every reply re-reads all of it. Hand off to a fresh thread?'}</span>
         <button className="pri" onClick={() => void handOff(s)} data-testid="handoff-yes">Hand off</button>
         <button onClick={() => notNow(s)} data-testid="handoff-no">Not now</button>
       </div>
@@ -759,10 +790,10 @@ export function App() {
       </div>
     )
   } else if (ui === 'workbench') {
-    const pickActivity = (v: ViewId) => { if (leftOpen && leftView === v) setLeftOpen(false); else { setLeftView(v); setLeftOpen(true) } }
+    const pickActivity = (v: ViewId) => { if (leftOpen && lv === v) setLeftOpen(false); else { setLeftView(v); setLeftOpen(true) } }
     body = (
       <div className="main">
-        <ActivityBar items={arr.left} current={leftView} open={leftOpen} onPick={pickActivity} badges={badges} bottom={<>
+        <ActivityBar items={arr.left} current={lv} open={leftOpen} onPick={pickActivity} badges={badges} bottom={<>
           <button className="act" title="Deploy wizard" onClick={() => setModal('deploy')} data-testid="activity-deploy"><Icon name="rocket" />{badges.deploy && <span className={`badge ${badges.deploy.cls ?? ''}`}>{badges.deploy.n}</span>}</button>
           <button className="act" title="Pull latest" onClick={(e) => openTool('pull', e.currentTarget)} data-testid="activity-pull"><Icon name="repo-pull" /></button>
           <button className="act" title="MCP servers" onClick={(e) => openTool('mcp', e.currentTarget)} data-testid="activity-mcp"><Icon name="plug" /></button>
@@ -771,8 +802,8 @@ export function App() {
         {leftOpen && (
           <>
             <div className="leftwrap wb" style={{ width: leftW }}>
-              {leftView !== 'threads' && <div className="sidetitle">{VIEW[leftView].label}</div>}
-              <div className="sidebody">{leftView === 'threads' ? threadsList(watchersTools, newSession) : renderView(leftView)}</div>
+              {lv !== 'threads' && <div className="sidetitle">{VIEW[lv].label}</div>}
+              <div className="sidebody">{lv === 'threads' ? threadsList(watchersTools, newSession) : renderView(lv)}</div>
             </div>
             <Divider dir="v" size={leftW} setSize={setLeftW} save={saveLeftW} min={200} max={700} testid="divider-left" />
           </>
