@@ -38,14 +38,23 @@ import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDel
 const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread'])
 const forThread = <T extends { name: string }>(watcher: boolean, tools: T[]): T[] => (watcher ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
 // a watcher's tab, or a watcher's session resumed under any other tab id (the sidebar, the phone, message_thread,
-// after a restart): read-only either way. Unreadable transcript = not a watcher's (nothing to resume read-only from)
+// after a restart): read-only either way. It reads until the first user message is complete; still undecided = read-only
+// (fail closed). No transcript at all = nothing to resume, so not a watcher's
 function isWatcherThread(tabId: string, cwd: string, resume?: string): boolean {
   if (isWatcherTab(tabId)) return true
   if (!resume) return false
+  let fd: number
+  try { fd = openSync(transcriptPath(cwd, resume), 'r') } catch { return false }
   try {
-    const fd = openSync(transcriptPath(cwd, resume), 'r')
-    try { const buf = Buffer.alloc(64 * 1024); const n = readSync(fd, buf, 0, buf.length, 0); return isWatcherTranscript(buf.toString('utf8', 0, n)) } finally { closeSync(fd) }
-  } catch { return false }
+    for (let size = 64 * 1024; size <= 16 * 1024 * 1024; size *= 4) {
+      const buf = Buffer.alloc(size)
+      const n = readSync(fd, buf, 0, size, 0)
+      const known = isWatcherTranscript(buf.toString('utf8', 0, n))
+      if (known !== null) return known
+      if (n < size) return n > 0 // the whole file and no user message: an empty one is nobody's, anything else read-only
+    }
+    return true
+  } catch { return true } finally { closeSync(fd) }
 }
 
 // a watcher's thread starts read-only (its own hooks merged with the read-only command check)

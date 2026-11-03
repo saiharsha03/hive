@@ -4,8 +4,9 @@
 
 export const isWatcherTab = (tabId: string) => tabId.startsWith('watcher-')
 // A watcher session, whatever tab resumes it (sidebar, phone, message_thread, after a restart): its first message is
-// Hive's run header "[<app> watcher run: <name>]" or a wake-up "[<app> wake-up: <name>]". jsonl = the transcript's start.
-export function isWatcherTranscript(jsonl: string): boolean {
+// Hive's run header "[<app> watcher run: <name>]" or a wake-up "[<app> wake-up: <name>]". jsonl = the transcript's start;
+// null = no complete first user message in it yet (read more, or treat as a watcher's: fail closed)
+export function isWatcherTranscript(jsonl: string): boolean | null {
   for (const line of jsonl.split('\n')) {
     if (!line.startsWith('{')) continue
     let e: any
@@ -16,7 +17,7 @@ export function isWatcherTranscript(jsonl: string): boolean {
     if (!text) continue
     return /^\[[^\]\n]{1,80} (watcher run|wake-up): [^\]\n]+\]/.test(text)
   }
-  return false
+  return null
 }
 
 const GH_WRITES: Record<string, RegExp> = {

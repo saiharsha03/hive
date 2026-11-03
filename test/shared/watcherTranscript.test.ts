@@ -13,6 +13,6 @@ test('a watcher transcript is known by its first user message', () => {
   assert.equal(isWatcherTranscript(head('please check the watcher run: tomorrow')), false)
   assert.equal(isWatcherTranscript(head('fix the [Hive watcher run: x] header')), false) // only at the very start
   assert.equal(isWatcherTranscript(user('hi') + '\n' + user('[Hive watcher run: Watch]')), false) // the first message decides
-  assert.equal(isWatcherTranscript(''), false)
-  assert.equal(isWatcherTranscript('{"type":"user","message":{"content":"[Hive watcher run: Wa'), false) // cut off
+  assert.equal(isWatcherTranscript(''), null) // no user message yet: undecided
+  assert.equal(isWatcherTranscript('{"type":"user","message":{"content":"[Hive watcher run: Wa'), null) // cut off: undecided (read more / fail closed)
 })
