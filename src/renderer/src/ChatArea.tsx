@@ -26,7 +26,7 @@ type Props = {
   empty: ReactNode
 }
 
-const stateIcon = (s: Session): [string, string] => (s.tool ? [s.tool === 'todos' ? 'checklist' : 'note', 's-idle'] : s.file ? ['file-code', 's-idle'] : s.busy ? ['loading', 'spin s-work'] : s.waitingSince ? ['bell-dot', 's-wait blink']
+const stateIcon = (s: Session): [string, string] => (s.tool ? [s.tool === 'git' ? 'source-control' : s.tool === 'todos' ? 'checklist' : 'note', 's-idle'] : s.file ? ['file-code', 's-idle'] : s.busy ? ['loading', 'spin s-work'] : s.waitingSince ? ['bell-dot', 's-wait blink']
   : s.items.at(-1)?.kind === 'error' ? ['error', 's-fail'] : ['comment-discussion', 's-idle'])
 
 function PaneView({ pane, sessions, focused, tabs, canSplit, render, onActivate, onFocusPane, onClose, onTabMenu, onMove, onSplit, onNew, solo }: {

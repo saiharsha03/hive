@@ -20,7 +20,9 @@ test.describe('panels', () => {
     const row = h.todoRows().filter({ hasText: text })
     await row.hover()
     await row.getByTestId('todo-talk').click()
-    await expect(h.composer()).toHaveValue(`Let's talk about this to-do: ${text}`)
+    // the new thread's box has it (earlier tests can leave split panes, so there may be more than one box)
+    const want = `Let's talk about this to-do: ${text}`
+    await l.page.waitForFunction((w) => [...document.querySelectorAll<HTMLTextAreaElement>('[data-testid="composer"]')].some((c) => c.value === w), want)
     await h.open('todos')
     await row.hover()
     await row.getByTestId('todo-delete').click()

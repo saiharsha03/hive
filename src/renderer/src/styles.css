@@ -777,7 +777,8 @@ button.sbi:hover { background: var(--hover); }
 .td-x { flex-shrink: 0; width: 20px; height: 20px; border-radius: 3px; font-size: 16px; line-height: 1; color: var(--dim); visibility: hidden; }
 .td:hover .td-x, .td.cur .td-x, .td:focus-within .td-x { visibility: visible; }
 .td-x:hover { background: var(--line2); color: var(--ink); }
-.td-talk { font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
+.td-talk { font-size: 13px; display: inline-flex; align-items: center; justify-content: center; visibility: visible; opacity: .45; } /* always there, so it can be found */
+.td:hover .td-talk, .td.cur .td-talk, .td-talk:focus-visible { opacity: 1; }
 .td-due { flex-shrink: 0; font-size: 11px; color: var(--dim); min-width: 64px; text-align: right; }
 .td-due.empty { color: var(--faint); }
 .td-due:hover { color: var(--ink); }

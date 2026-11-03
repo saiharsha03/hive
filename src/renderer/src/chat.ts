@@ -1,8 +1,8 @@
 // Chat state for one tab, and how each SDK event changes it.
 import { hookWarning, isContinuation } from '../../shared/summaryCore'
 // tools that open as tabs in the main window, like threads and files
-export type ToolTab = 'todos' | 'notes' | 'watchers' | 'scripts' | 'deploy'
-export const TOOL_TABS: ToolTab[] = ['todos', 'notes', 'scripts', 'deploy', 'watchers']
+export type ToolTab = 'git' | 'todos' | 'notes' | 'watchers' | 'scripts' | 'deploy'
+export const TOOL_TABS: ToolTab[] = ['git', 'todos', 'notes', 'scripts', 'deploy', 'watchers']
 
 export type Session = {
   id: string // tab id

@@ -301,6 +301,10 @@ export function App() {
       setSessions((all) => all.map((s) => (s.id === t.tabId && !s.loaded ? { ...s, items: [...items, ...s.items], loaded: true, history: { count: items.length, more } } : s))))
   }), [])
   const active = sessions.find((s) => s.id === activeId)
+  // the thread last on screen: the Git tab shows its changes (the Git tab itself is the active one while it is open)
+  const lastThreadId = useRef<string | null>(null)
+  if (active && !active.tool && !active.file) lastThreadId.current = active.id
+  const lastThread = active && !active.tool && !active.file ? active : sessions.find((s) => s.id === lastThreadId.current)
 
   // a thread closed or archived: the worktrees it made are deleted and the result noted
   useEffect(() => {
@@ -592,11 +596,12 @@ export function App() {
       // Git: the focused thread's changes first, then the repos (status, stage, commit, push)
       case 'git': return (
         <div className="gitview">
-          {active && !active.file && <div className="gitview-thread"><ChangesView session={active} diff={diff} onDiff={setDiff} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => document.querySelector('[data-testid="git-panel"]')?.scrollIntoView()} /></div>}
-          <div className="gitview-top"><GitPanel onDiff={setGitDiff} focus={gitFocus} /></div>
-          {gitDiff && <>
+          {lastThread && <div className="gitview-thread"><ChangesView session={lastThread} diff={diff} onDiff={(d) => { setDiff(d); setGitDiff(null) }} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => document.querySelector('[data-testid="git-panel"]')?.scrollIntoView()} /></div>}
+          <div className="gitview-top"><GitPanel onDiff={(d) => { setGitDiff(d); setDiff(null) }} focus={gitFocus} /></div>
+          {/* the diff of whatever was clicked last: a thread's changed file or a repo's file */}
+          {(diff ?? gitDiff) && <>
             <Divider dir="h" size={gitDiffH} setSize={setGitDiffH} save={saveGitDiffH} sign={-1} min={120} max={1200} testid="divider-git-diff" />
-            <div className="gitview-diff" style={{ height: gitDiffH }}><DiffPanel spec={gitDiff} onClose={() => setGitDiff(null)} onOpenInGit={(f) => void openInGit(f)} /></div>
+            <div className="gitview-diff" style={{ height: gitDiffH }}><DiffPanel spec={(diff ?? gitDiff)!} onClose={() => { setDiff(null); setGitDiff(null) }} onOpenInGit={(f) => void openInGit(f)} /></div>
           </>}
         </div>
       )
@@ -756,7 +761,7 @@ export function App() {
   const toolTabButtons = TOOL_TABS.filter((t) => t !== 'watchers').map((t) => ({
     icon: VIEW[t].icon, on: activeId === `tool:${t}`, title: VIEW[t].label, testid: `top-view-${t}`, onClick: () => openToolTab(t),
   }))
-  const viewButtons = arr.right.filter((v) => v !== 'watchers').map((v) => ({
+  const viewButtons = arr.right.filter((v) => v !== 'watchers' && !(TOOL_TABS as string[]).includes(v)).map((v) => ({
     icon: VIEW[v].icon, on: rightOpen && rv === v, title: VIEW[v].label, testid: `top-view-${v}`,
     onClick: () => { if (rightOpen && rv === v) setRightOpen(false); else { setRightView(v); setRightOpen(true) } },
   }))
