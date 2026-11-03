@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import {
   createWatcher, deleteWatcher, initWatchers, listWatchersView, migrateLegacyWatch, runWatcherNow, setWatcherEnabled, tick,
-  updateWatcher, watcherDetail, watcherIds, watcherStopReason } from '../../src/main/watchers'
+  updateWatcher, watcherDetail, watcherIds, watcherStopReason, watcherTabFor } from '../../src/main/watchers'
 import { normalizeSchedule, watcherHeader, watcherId, foldersOf, defaultPrompt, legacyWatcher } from '../../src/shared/watchersCore'
 
 type Call = { tabId: string; cwd: string; title: string; prompt: string; resume?: string }
@@ -49,7 +49,7 @@ test('ids, schedules, header and default prompt (pure)', () => {
   const f = foldersOf('demo', 'C:/w/demo')
   const h = watcherHeader({ name: 'Demo', kind: 'sweep', now: new Date(), lastRun: null, s: { last: { sweep: null, daily: null, weekly: null } }, f, promptFile: 'C:/w/demo/prompt.md', prompt: 'GOAL TEXT', fresh: true })
   assert.match(h, /SQLite database: C:\/w\/demo\/memory\/demo\.db/)
-  assert.match(h, /new thread/)
+  assert.match(h, /Every run is a fresh thread/)
   assert.ok(h.endsWith('GOAL TEXT'))
   const h2 = watcherHeader({ name: 'Demo', kind: 'daily', now: new Date(), lastRun: null, s: { last: { sweep: null, daily: null, weekly: null } }, f, promptFile: 'p.md', prompt: null, fresh: false })
   assert.match(h2, /unchanged since you last got them/)
@@ -119,6 +119,7 @@ test('create writes the folder; every run is a fresh thread, closed when it ends
   const s1 = state('tiny')
   assert.ok(s1.runs[0].endedAt); assert.equal(s1.runs[0].summary, 'Checked the time: 09:00. Nothing new.')
   assert.equal(s1.tabId, null); assert.equal(s1.sessionId, null)
+  assert.match(watcherTabFor('sess-1') ?? '', /^watcher-tiny-/) // the closed run's session still resumes read-only
   // run now: a new thread with the full prompt and how the last run ended, never a resume
   assert.equal(runWatcherNow('tiny', 'daily'), '')
   assert.equal(calls.length, 2); assert.notEqual(calls[1].tabId, tab); assert.equal(calls[1].resume, undefined)
@@ -152,7 +153,7 @@ test('disable ends the session; enable starts a fresh thread', async () => {
   assert.equal(wfile('tiny').enabled, false)
   assert.equal(state('tiny').sessionId, null); assert.equal(state('tiny').tabId, null)
   assert.match(runWatcherNow('tiny'), /^$/) // run now still works by hand when off
-  assert.notEqual(calls[1].tabId, tab); assert.equal(calls[1].resume, undefined); assert.match(calls[1].prompt, /new thread/)
+  assert.notEqual(calls[1].tabId, tab); assert.equal(calls[1].resume, undefined); assert.match(calls[1].prompt, /Every run is a fresh thread/)
   finish(calls[1].tabId)
   setWatcherEnabled('tiny', true)
   await new Promise((r) => setTimeout(r, 700)) // enable ticks shortly after
@@ -266,7 +267,8 @@ test('Stop hook: a run that saved nothing (or, self-scheduled, set no next wake)
   const tab = calls[0].tabId
   await new Promise((r) => setTimeout(r, 20))
   assert.match(watcherStopReason(tab) ?? '', /save what the next run needs/)
-  writeFileSync(join(root, 'saver', 'memory', 'notes.md'), 'checked x')
+  mkdirSync(join(root, 'saver', 'memory', 'projects'), { recursive: true })
+  writeFileSync(join(root, 'saver', 'memory', 'projects', 'notes.md'), 'checked x') // deep: the folder time is not enough
   assert.equal(watcherStopReason(tab), null)
   assert.equal(watcherStopReason('watcher-unknown-1'), null) // not a run Hive started: never blocks
   createWatcher({ name: 'Planner', goal: 'g', schedule: { every: 'self' } }, 'test')

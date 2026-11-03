@@ -45,7 +45,7 @@ export const setWatcherStop = (f: (tabId: string) => string | null) => { watcher
 const saveCheck = (tabId: string, hooks: Options['hooks'] = {}): Options['hooks'] => ({
   ...hooks,
   Stop: [...(hooks?.Stop ?? []), { hooks: [async (input: any) => {
-    if (input.stop_hook_active) return {} // already asked once this stop: let it end
+    if (input.stop_hook_active || input.agent_id) return {} // asked once already, or a subagent stopping: let it end
     const why = watcherStop(tabId)
     return why ? { decision: 'block' as const, reason: why } : {}
   }] }],
@@ -556,7 +556,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     } finally {
       // only if this tab still points at this process: a reopened tab may already have a new one. A process closeTab
       // stopped is already out of live, but the window still shows it working until it hears hive_closed
-      if (s.closedByApp && !live.has(tabId)) send({ type: 'hive_closed' })
+      if (s.closedByApp && !live.has(tabId)) { if (!web.isDestroyed()) web.send('chat:event', tabId, { type: 'hive_closed' }) }
       else if (live.get(tabId) === s) {
         send({ type: 'hive_closed' })
         live.delete(tabId)
@@ -686,7 +686,7 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
   }
   // not running: a thread that stopped in this app run, else any saved Claude session by id
   const g = findGone(ref)
-  let target = g && { tabId: g.tabOpen ? g.tabId : g.sessionId, sessionId: g.sessionId, cwd: g.cwd, title: g.title }
+  let target = g && { tabId: g.tabOpen || isWatcherTab(g.tabId) ? g.tabId : g.sessionId, sessionId: g.sessionId, cwd: g.cwd, title: g.title }
   if (!target) {
     const info = (await listSessions().catch(() => [])).find((x) => x.id === ref)
     if (info?.cwd) target = { tabId: info.id, sessionId: info.id, cwd: info.cwd, title: info.title }

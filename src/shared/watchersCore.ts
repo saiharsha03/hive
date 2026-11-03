@@ -173,8 +173,8 @@ export function watcherHeader(a: {
     ...(lastRun?.summary ? [`It ended with: ${lastRun.summary.replace(/\s*\n\s*/g, ' ')}`] : []),
     `Last daily report run: ${stamp(s.last.daily)}. Last weekly report run: ${stamp(s.last.weekly)}.`,
     fresh
-      ? 'This is a new thread for this watcher. Every later run arrives as a new message in this same thread, so you keep the conversation; '
-        + 'a long thread is compacted automatically, and your memory folder is what survives a new thread.'
+      ? 'Every run is a fresh thread, closed when the run ends: the next run knows only what you saved (memory folder, db, findings, '
+        + 'reports) and your final reply, so end each run with a short summary of what you checked, what changed and what is next.'
       : 'Same thread as your earlier runs: what you did before is above (or in your memory if the thread was compacted).',
     `Watcher folder: ${f.dir}`,
     `Memory folder (yours; keep whatever you need between runs): ${f.memory}`,
@@ -209,8 +209,8 @@ export function defaultPrompt(name: string, goal: string): string {
   return [
     `# ${name}`,
     '',
-    `You are ${name}, a watcher: a long-lived background thread in ${appName()} that wakes up on a schedule. Each run arrives as a new`,
-    'message in this same thread, with a header that says the run kind, the time, your last run, and where your memory,',
+    `You are ${name}, a watcher: a background job in ${appName()} that wakes up on a schedule. Each run is a fresh thread`,
+    'that starts with a header saying the run kind, the time, how your last run ended, and where your memory,',
     'database, reports and findings go. Nobody is watching you live; what you leave behind is what counts.',
     '',
     '## Goal',

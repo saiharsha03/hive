@@ -10,5 +10,5 @@ export function saveReminder(a: { saved: boolean; selfScheduled: boolean; nextWa
   ]
   if (!missing.length) return null
   return `Before this run ends: ${missing.join(', and ')}. This thread is closed when the run ends and the next run starts ` +
-    'a fresh one that knows only what is on disk. If there is truly nothing to keep, say so in one line and end.'
+    'a fresh one that knows only what is on disk and your final reply. Then end with a short summary of this run (what you checked, what changed, what is next); if there is truly nothing to keep, say so in that summary.'
 }

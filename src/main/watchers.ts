@@ -5,7 +5,7 @@
 // Adaptive watchers take their sweep interval from the 7-day usage limit, each with its own tiers. Hive adds no guards:
 // the thread runs in auto mode like any other background thread. With HIVE_TEST_MODE=1 nothing runs on its own.
 // No Electron imports: the thread starter and the thread state are passed in.
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, type Dirent } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { dueKind, localIso, markStarted, nextRuns, parseFindings, pickTier, type RunKind, type WatchConfig } from '../shared/watchCore'
@@ -72,6 +72,8 @@ export function watcherTabFor(sessionId: string): string | null {
   for (const id of watcherIds()) {
     const st = readState(id)
     if (st.sessionId === sessionId) return st.tabId ?? `watcher-${id}-${Date.now()}`
+    // a finished run (its thread closed, its session only in the run history) still resumes read-only
+    if (st.runs.some((r) => r.sessionId === sessionId)) return `watcher-${id}-${Date.now()}`
   }
   return null
 }
@@ -160,13 +162,13 @@ function settle(id: string, s: WatcherState): { s: WatcherState; running: boolea
       cur.endedAt = Date.now()
       if (t && t.lastOk === false) cur.error = 'The turn ended with an error'
       if (t?.lastReply) cur.summary = t.lastReply.trim().slice(0, 1500)
+      if (s.tabId) runOf.delete(s.tabId)
       dirty = true
     }
   }
   // the run is over: close its thread (one waiting on the user stays open until it is answered or the next run)
   if (s.tabId && !t?.working && !t?.waitingReason && cur?.endedAt) {
-    deps.closeThread(s.tabId)
-    runOf.delete(s.tabId)
+    closeRun(s.tabId)
     s.tabId = null; s.sessionId = null; s.promptSent = null
     dirty = true
   }
@@ -236,6 +238,7 @@ const started = (s: WatcherState, kind: RunKind, at: number) => { const m = mark
 // wake: a self-scheduled wake-up; its due rows go into the fresh thread after the run header
 // the run each watcher tab is doing, for the Stop hook's save check
 const runOf = new Map<string, { since: number; f: Folders; dir: string; self: boolean }>()
+const closeRun = (tabId: string) => { runOf.delete(tabId); deps.closeThread(tabId) }
 
 function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind, wake?: Wake): string {
   const now = new Date()
@@ -259,7 +262,7 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
   if (s.tabId || s.sessionId) {
     const st = s.tabId ? deps.threadState(s.tabId) : null
     if (st?.working) return '' // never cut a turn short; the next tick tries again
-    if (s.tabId) deps.closeThread(s.tabId)
+    if (s.tabId) closeRun(s.tabId)
     s = { ...s, tabId: null, sessionId: null, promptSent: null }
   }
   const live = s.tabId ? deps.threadState(s.tabId) : null
@@ -311,7 +314,7 @@ export function setWatcherEnabled(id: string, on: boolean): string {
   const w = readWatcher(id)
   if (!w) return `No watcher "${id}"`
   const { s } = settle(id, readState(id))
-  if (s.tabId) deps.closeThread(s.tabId)
+  if (s.tabId) closeRun(s.tabId)
   const cur = s.runs.at(-1)
   if (cur && !cur.endedAt && !cur.error) cur.endedAt = Date.now()
   saveState(id, { ...s, tabId: null, sessionId: null, promptSent: null })
@@ -378,7 +381,7 @@ export function deleteWatcher(id: string): string {
   const w = readWatcher(id)
   if (!w) throw new Error(`No watcher "${id}"`)
   const s = readState(id)
-  if (s.tabId) deps.closeThread(s.tabId)
+  if (s.tabId) closeRun(s.tabId)
   const bin = join(watchersRoot(), '_deleted')
   mkdirSync(bin, { recursive: true })
   const to = join(bin, `${id}-${new Date().toISOString().replace(/[:.]/g, '-')}`)
@@ -471,8 +474,13 @@ export function watcherStopReason(tabId: string): string | null {
   const r = runOf.get(tabId)
   if (!r) return null
   const newer = (p: string) => { try { return statSync(p).mtimeMs >= r.since } catch { return false } }
-  const inMemory = () => { try { return readdirSync(r.f.memory).some((n) => newer(join(r.f.memory, n))) } catch { return false } }
-  const saved = inMemory() || newer(r.f.findings) || newer(r.f.reports) || newer(r.f.db)
+  // any file under the folder (a few levels deep): editing an existing file does not touch its folder's time
+  const anyNewer = (dir: string, depth = 4): boolean => {
+    let names: Dirent[]
+    try { names = readdirSync(dir, { withFileTypes: true }) } catch { return false }
+    return names.some((d) => (d.isDirectory() ? depth > 0 && anyNewer(join(dir, d.name), depth - 1) : newer(join(dir, d.name))))
+  }
+  const saved = anyNewer(r.f.memory) || newer(r.f.findings) || anyNewer(r.f.reports) || newer(r.f.db)
   let nextWake = true
   if (r.self) { try { nextWake = readWakeups(r.dir, Date.now()).next !== null } catch { nextWake = false } }
   return saveReminder({ saved, selfScheduled: r.self, nextWake })

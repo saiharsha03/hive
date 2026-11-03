@@ -65,13 +65,15 @@ async function withLimits(u: any): Promise<any> {
 }
 // the usage endpoint is rate limited: one answer serves the minute polls for USAGE_MS
 const USAGE_MS = 5 * 60_000
+const PLACEHOLDER_MS = 2 * 60_000
 let usageCache: { at: number; u: any } | null = null
 async function usageNow(q: Query): Promise<any> {
   if (usageCache && Date.now() - usageCache.at < USAGE_MS) return usageCache.u
   const u = await withLimits(await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }))
   // only a real reading is kept: right after a start no thread has talked to the API yet, and caching that
   // placeholder held the bar at 0% for the whole window
-  if (realLimits(u?.rate_limits)) usageCache = { at: Date.now(), u }
+  // a placeholder is kept briefly too (the endpoint is rate limited), then a real reading is tried again
+  usageCache = { at: realLimits(u?.rate_limits) ? Date.now() : Date.now() - USAGE_MS + PLACEHOLDER_MS, u }
   return u
 }
 
@@ -110,7 +112,7 @@ export type Weekly = { pct: number | null; readAt: number; error: string }
 let weekly: Weekly | null = null
 function remember(u: any, err: unknown) {
   // a placeholder answer never overwrites a real reading (its 7-day number is stale)
-  if (!err && !realLimits(u?.rate_limits) && weekly?.pct != null) return
+  if (!err && !realLimits(u?.rate_limits) && weekly?.pct != null) { weekly = { ...weekly, readAt: Date.now() }; return }
   const pct = realLimits(u?.rate_limits) ? u?.rate_limits?.seven_day?.utilization : undefined
   weekly = typeof pct === 'number' && Number.isFinite(pct)
     ? { pct, readAt: Date.now(), error: '' }
