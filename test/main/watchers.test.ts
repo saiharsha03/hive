@@ -273,3 +273,23 @@ test('a watcher thread grown past the limit gets a fresh thread at its next run;
   assert.equal(calls[2].resume, undefined)
   assert.match(calls[2].prompt, /watch things/) // with the full prompt, as a fresh thread
 })
+
+test('a self-scheduled watcher rotated at a wake still gets the due rows in its fresh thread', async () => {
+  const base = setup()
+  createWatcher({ name: 'Selfbig', goal: 'plans itself', schedule: { every: 'self' } }, 't')
+  const tab = calls[0].tabId
+  finish(tab)
+  const file = join(base, 'selfbig-session.jsonl')
+  deps.transcript = () => file
+  writeFileSync(file, `${JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 400_000 } } })}\n`)
+  const db = new DatabaseSync(join(root, 'selfbig', 'schedule.db'))
+  db.exec(`CREATE TABLE IF NOT EXISTS wakeups (id INTEGER PRIMARY KEY, wake_at TEXT NOT NULL, purpose TEXT, status TEXT NOT NULL DEFAULT 'pending', woken_at TEXT, finished_at TEXT, result TEXT, created_at TEXT)`)
+  db.prepare('INSERT INTO wakeups (wake_at, purpose) VALUES (?, ?)').run(new Date(Date.now() - 60_000).toISOString(), 'check n8n')
+  await tick()
+  assert.equal(calls.length, 2)
+  assert.deepEqual(closed, [tab]); assert.notEqual(calls[1].tabId, tab)
+  assert.match(calls[1].prompt, /plans itself/) // the full header and prompt, as a fresh thread...
+  assert.match(calls[1].prompt, /You scheduled this in .*schedule\.db: #1 at .* \(check n8n\)/) // ...plus what woke it
+  assert.equal(db.prepare('SELECT status FROM wakeups').get()!.status, 'woken')
+  db.close()
+})

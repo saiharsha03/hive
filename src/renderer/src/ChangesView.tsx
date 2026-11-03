@@ -1,12 +1,12 @@
 // Changes: the focused thread's changed files (its repo's working tree, plus the files the agent edited in this
-// thread), and the split diff of the one picked below them. Commit and push live in the Git view.
+// thread). The one picked shows in the Git view's diff panel below; commit and push live there too.
 import { useEffect, useMemo, useState } from 'react'
 import type { Session } from './chat'
-import { DiffPanel, type DiffSpec } from './DiffPanel'
+import type { DiffSpec } from './DiffPanel'
 import { counts, FILE_TOOLS, type Hunk } from '../../shared/diffCore'
 import type { Detail, Entry, FileArea } from '../../shared/gitCore'
 import { hunksOf, shortPath } from './SessionView'
-import { Divider, Icon, useSize } from './ui'
+import { Icon } from './ui'
 
 type Row = { key: string; path: string; letter: string; add?: number; del?: number; spec: DiffSpec; agent: boolean }
 const LETTER_CLASS: Record<string, string> = { M: 'g-modified', A: 'g-added', '?': 'g-untracked', U: 'g-untracked', D: 'g-deleted', R: 'g-renamed', C: 'g-renamed' }
@@ -27,14 +27,14 @@ function agentEdits(s: Session | null): { file: string; label: string; tool: str
   return [...by.values()]
 }
 
-export function ChangesView({ session, diff, onDiff, onOpenInGit, onOpenGit }: {
-  session: Session | null; diff: DiffSpec | null; onDiff: (s: DiffSpec | null) => void; onOpenInGit: (file: string) => void; onOpenGit: () => void
+// diff = this list's pick; shown = the Git view's diff panel shows something (this pick or a repo file)
+export function ChangesView({ session, diff, shown, onDiff, onOpenGit }: {
+  session: Session | null; diff: DiffSpec | null; shown: boolean; onDiff: (s: DiffSpec | null) => void; onOpenGit: () => void
 }) {
   const [repo, setRepo] = useState<{ dir: string; name: string } | null>(null)
   const [d, setD] = useState<Detail | null>(null)
   const [err, setErr] = useState('')
   const [n, setN] = useState(0)
-  const [listH, setListH, saveListH] = useSize('changes.list', 180)
   const where = session?.worktrees?.at(-1)?.path ?? session?.cwd ?? ''
 
   useEffect(() => {
@@ -80,13 +80,13 @@ export function ChangesView({ session, diff, onDiff, onOpenInGit, onOpenGit }: {
 
   const tot = rows.reduce((a, r) => ({ add: a.add + (r.add ?? 0), del: a.del + (r.del ?? 0) }), { add: 0, del: 0 })
   const selKey = diff ? (diff.t === 'file' ? diff.path : diff.t === 'edit' ? diff.label : '') : ''
-  // pick the first file when nothing is shown yet
-  useEffect(() => { if (!diff && rows.length) onDiff(rows[0].spec) }, [rows.length > 0, session?.id])
+  // pick the first file when the diff panel shows nothing yet (never over a repo file picked in the Git panel)
+  useEffect(() => { if (!shown && rows.length) onDiff(rows[0].spec) }, [rows.length > 0, session?.id])
 
   if (!session) return <div className="pane-empty">Open a thread to see what it changed.</div>
   return (
     <div className="changes" data-testid="changes-view">
-      <div className="files" style={{ height: listH }}>
+      <div className="files">
         <div className="fh">
           <b>{rows.length} file{rows.length === 1 ? '' : 's'} changed</b>
           {rows.length > 0 && <span><span className="dv-add">+{tot.add}</span> <span className="dv-del">−{tot.del}</span></span>}
@@ -110,10 +110,6 @@ export function ChangesView({ session, diff, onDiff, onOpenInGit, onOpenGit }: {
             </button>
           ))}
         </div>
-      </div>
-      <Divider dir="h" size={listH} setSize={setListH} save={saveListH} min={60} max={800} testid="changes-divider" />
-      <div className="changes-diff">
-        {diff ? <DiffPanel spec={diff} onClose={() => onDiff(null)} onOpenInGit={onOpenInGit} /> : <div className="pane-empty">Pick a file to see its diff.</div>}
       </div>
     </div>
   )

@@ -54,7 +54,7 @@ const append = () => [
   'add_todo can also set a due date (YYYY-MM-DD; turn words like "Monday" or "next week" into a date using the current date) and a status:',
   '"talk" when the user needs to talk to someone about it ("need to talk"), "holding" to hold it off for now, otherwise leave it as "todo".',
   'When the user asks you to note or save something to their Notes, use mcp__hive__add_note (it adds to the note with that title, or makes one).',
-  'A shell command still running after 60 seconds is moved to the background by Hive, so you stay free to talk with the user; you are told when it finishes, and can read its output then.',
+  ...(autoBackgroundMs ? [`A shell command still running after ${autoBackgroundMs / 1000} seconds is moved to the background by ${appName()}, so you stay free to talk with the user; you are told when it finishes, and can read its output then.`] : []),
   'mcp__hive__organize_thread pins, snoozes, closes or archives this conversation in the sidebar (e.g. "talk tomorrow", "keep this handy", "we are done"); use your judgement.',
   'Claude can search the user\'s past Claude Code sessions with mcp__hive__search_sessions when the user refers to earlier work ("like we did last week", "the CSV import").',
   'To work on code in one of the user\'s repos, call mcp__hive__worktree with the repo and a branch or a ticket (key plus a few words) and do all the work in the folder it returns,',
@@ -501,7 +501,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   let lastText = '' // the turn's latest assistant text, in case its result carries none
   // a shell command of this thread still running after a minute goes to the background, so Claude is free to talk
   // (and steer, or answer you) while it runs; only commands, never agents
-  const longCommands = autoBackground((id) => q.backgroundTasks(id), AUTO_BACKGROUND_MS)
+  const longCommands = autoBackground((id) => q.backgroundTasks(id), autoBackgroundMs)
 
   void (async () => {
     try {
@@ -735,8 +735,14 @@ export async function contextUsage(tabId: string): Promise<{ total: number; max:
   return { total: u.totalTokens, max: u.maxTokens }
 }
 
-// After this long a running shell command is moved to the background (HIVE_AUTO_BACKGROUND_S; 0 turns it off)
-const AUTO_BACKGROUND_MS = (() => { const v = Number(process.env.HIVE_AUTO_BACKGROUND_S ?? 60); return Number.isFinite(v) && v > 0 ? v * 1000 : 0 })()
+// After this long a running shell command is moved to the background: HIVE_AUTO_BACKGROUND_S in Hive's settings,
+// default 60, 0 turns it off (empty or not a number = the default). Threads started from then on use it.
+let autoBackgroundMs = 60_000
+export function configureChat(env: Record<string, string>): void {
+  const raw = (env.HIVE_AUTO_BACKGROUND_S ?? '').trim()
+  const v = Number(raw)
+  autoBackgroundMs = raw === '' || !Number.isFinite(v) ? 60_000 : v > 0 ? v * 1000 : 0
+}
 
 export async function background(tabId: string, toolUseId?: string): Promise<boolean> {
   return (await live.get(tabId)?.q.backgroundTasks(toolUseId)) ?? false

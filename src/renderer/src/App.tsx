@@ -248,6 +248,7 @@ export function App() {
       const d = await window.api.gitDetail(at.dir)
       const area = d.unstaged.some((e) => e.path === at.path) ? 'unstaged' : d.staged.some((e) => e.path === at.path) ? 'staged' : d.untracked.some((e) => e.path === at.path) ? 'untracked' : null
       if (!area) { notice(`${at.path} has no uncommitted changes in ${at.name}`); return }
+      setDiff(null) // the agent-edit diff would otherwise stay on top (diff ?? gitDiff)
       setGitDiff({ t: 'file', dir: at.dir, repo: at.name, path: at.path, area, orig: d.staged.find((e) => e.path === at.path)?.orig })
     } catch (e: any) {
       notice(`Git: ${e?.message ?? e}`)
@@ -596,7 +597,7 @@ export function App() {
       // Git: the focused thread's changes first, then the repos (status, stage, commit, push)
       case 'git': return (
         <div className="gitview">
-          {lastThread && <div className="gitview-thread"><ChangesView session={lastThread} diff={diff} onDiff={(d) => { setDiff(d); setGitDiff(null) }} onOpenInGit={(f) => void openInGit(f)} onOpenGit={() => document.querySelector('[data-testid="git-panel"]')?.scrollIntoView()} /></div>}
+          {lastThread && <div className="gitview-thread"><ChangesView session={lastThread} diff={diff} shown={!!(diff ?? gitDiff)} onDiff={(d) => { setDiff(d); setGitDiff(null) }} onOpenGit={() => document.querySelector('[data-testid="git-panel"]')?.scrollIntoView()} /></div>}
           <div className="gitview-top"><GitPanel onDiff={(d) => { setGitDiff(d); setDiff(null) }} focus={gitFocus} /></div>
           {/* the diff of whatever was clicked last: a thread's changed file or a repo's file */}
           {(diff ?? gitDiff) && <>

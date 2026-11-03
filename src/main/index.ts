@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { liveQuery, liveThreads, stopCodex } from './chat'
+import { configureChat, liveQuery, liveThreads, stopCodex } from './chat'
 import { resendGroups, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
@@ -82,6 +82,7 @@ initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
 const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('allow:status', st) }
 initAllowlist(appConfig.env, allowChanged)
 setWatcherPosts(appConfig.env)
+configureChat(appConfig.env)
 // usage limits: the idle status process has none, so a live thread's answer stands in
 setLiveUsage(liveUsage)
 // Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.claude/hive/watchers);
@@ -160,6 +161,7 @@ function applySettings() {
   configureWatchers(appConfig.config?.root ?? '', appConfig.env)
   initAllowlist(appConfig.env, allowChanged)
   setWatcherPosts(appConfig.env)
+  configureChat(appConfig.env)
   initMobile(appConfig.env, mobileDeps())
 }
 const draftOf = (d: unknown): Draft => {
