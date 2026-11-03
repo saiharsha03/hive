@@ -19,4 +19,7 @@ test('updated = the newest user or assistant message; titles, hooks and meta lin
   // no timestamps on messages: the file time
   const bare = parse('C:/x/b.jsonl', line({ type: 'user', message: { content: 'hi' } }), 42)!
   assert.equal(bare.updated, 42)
+  // the final entry cut off by the tail chunk: its time is unknown, so the file's time
+  const cut = [line({ type: 'user', timestamp: '2026-11-01T10:00:00Z', message: { content: 'start' } }), '{"type":"assistant","timestamp":"2026-11-03T'].join('\n')
+  assert.equal(parse('C:/x/c.jsonl', cut, 99)!.updated, 99)
 })

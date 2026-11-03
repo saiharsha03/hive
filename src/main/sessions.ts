@@ -48,7 +48,12 @@ function firstUserText(entry: any): string | null {
 
 export function parse(path: string, text: string, updated: number): SessionInfo | null {
   let custom = '', ai = '', first = '', cwd = '', started = 0, entrypoint = '', last = 0
-  for (const line of text.split('\n')) {
+  // the file's final line cut off (a huge entry past the tail chunk): its time is unknown, so the file's time is used
+  const lines = text.split('\n')
+  const tail = [...lines].reverse().find((l) => l.trim() !== '') ?? ''
+  let tailCut = false
+  try { JSON.parse(tail) } catch { tailCut = true }
+  for (const line of lines) {
     if (!line.startsWith('{')) continue // cut-off line at a chunk edge
     let e: any
     try { e = JSON.parse(line) } catch { continue }
@@ -62,7 +67,7 @@ export function parse(path: string, text: string, updated: number): SessionInfo 
     if ((e.type === 'user' || e.type === 'assistant') && !e.isMeta && e.timestamp) last = Math.max(last, Date.parse(e.timestamp) || 0)
   }
   if (!first && !custom && !ai) return null // empty session
-  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated: last || updated, started: started || updated, path, entrypoint }
+  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated: (!tailCut && last) || updated, started: started || updated, path, entrypoint }
 }
 
 export async function listSessions(): Promise<SessionInfo[]> {
