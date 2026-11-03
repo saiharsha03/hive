@@ -32,6 +32,8 @@ test('a pull request clears the edits before it; a failed or running one does no
   assert.ok(opensPr('Bash', { command: 'url="$(gh pr create --fill)" && echo "$url"' }))
   assert.ok(!opensPr('Bash', { command: "echo '$(gh pr create --fill)'" }))
   assert.ok(opensPr('Bash', { command: "cat > b.md <<'EOF'\ntext\nEOF\ngh pr create --body-file b.md" }))
+  assert.ok(opensPr('Bash', { command: "git commit -m \"$(cat <<'EOF'\nfix: thing\nEOF\n)\" && git push -u origin HEAD && gh pr create --fill" }))
+  assert.ok(opensPr('Bash', { command: 'grep x <<< "$v"; gh pr create --fill' }))
   assert.deepEqual(ids(sinceLastPr([edit('a'), edit('b')])), ['a', 'b'])
   assert.deepEqual(ids(sinceLastPr([edit('a'), shell('p1', 'gh pr create --fill'), edit('b'), shell('p2', 'gh pr create'), edit('c')])), ['c'])
   assert.deepEqual(ids(sinceLastPr([edit('a'), shell('p', 'gh pr create --fill', 'error')])), ['a', 'p'])

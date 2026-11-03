@@ -515,7 +515,7 @@ export function App() {
     }
     // a closed thread's state goes with it; a handoff tab closed before it had a session id gives the worktrees back
     const ids = new Set(sessions.map((s) => s.id))
-    for (const [tab, back] of linksToSession.current) if (!ids.has(tab)) { linksToSession.current.delete(tab); void window.api.worktreeMove(tab, back).catch(() => {}) }
+    for (const [tab, back] of linksToSession.current) if (!ids.has(tab)) { linksToSession.current.delete(tab); void window.api.worktreeMove(tab, back).then(() => window.api.worktreeLinks(back)).then((left) => setSessions((all) => all.map((x) => (x.sessionId === back ? { ...x, worktrees: left.map(({ repo, path, branch }) => ({ repo, path, branch })) } : x)))).catch(() => {}) }
     if (Object.keys(handoffsRef.current).some((id) => !ids.has(id))) setHandoffs((all) => Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id))))
   }, [sessions])
   const handOff = async (s: Session) => {
