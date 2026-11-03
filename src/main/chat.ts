@@ -29,6 +29,7 @@ import { isWatcherTab } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
 import { notifyPhone } from './mobile'
 import { autoBackground } from '../shared/autoBackgroundCore'
+import { realLimits } from '../shared/usageCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -692,7 +693,7 @@ export async function liveUsage(): Promise<any | null> {
         s.q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 5000) }),
       ])
-      if (u?.rate_limits) return u
+      if (realLimits(u?.rate_limits)) return u // a placeholder answer: try the next thread
     } catch { /* the next thread */ } finally { clearTimeout(timer) }
   }
   return null

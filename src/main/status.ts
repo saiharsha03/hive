@@ -6,6 +6,7 @@ import { claudeExecutable, engineInfo } from './engine'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { realLimits } from '../shared/usageCore'
 
 export type Limit = { pct: number | null; resetsAt: string | null } | null
 export type Status = {
@@ -26,7 +27,7 @@ const loginStamp = () => { try { return statSync(credentials()).mtimeMs } catch 
 let startedOn = 0
 function current(): Query {
   const stamp = loginStamp()
-  if (q && stamp !== startedOn) { q.close(); q = null; lastGood = null }
+  if (q && stamp !== startedOn) { q.close(); q = null; lastGood = null; usageCache = null }
   if (!q) { q = idleQuery(); startedOn = stamp }
   return q
 }
@@ -45,6 +46,7 @@ function idleQuery(): Query {
 // the idle process, for lists a tab without its own running process asks for (commands, models, MCP servers)
 export const idle = (): Query => current()
 
+// a placeholder answer never replaces a real reading (usageCore)
 const limit = (w: any): Limit => (w ? { pct: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null)
 
 // Rate limits come only from a process that has talked to the API, so the idle one answers without them. A live
@@ -54,17 +56,28 @@ let liveUsage: () => Promise<any | null> = async () => null
 export const setLiveUsage = (f: () => Promise<any | null>) => { liveUsage = f }
 const KEEP_MS = 6 * 3_600_000
 let lastGood: { limits: any; at: number } | null = null
+// a live thread's limits first, then the idle process's, then the last real reading
 async function withLimits(u: any): Promise<any> {
-  const limits = u?.rate_limits ?? (await liveUsage().catch(() => null))?.rate_limits
+  const live = (await liveUsage().catch(() => null))?.rate_limits
+  const limits = [live, u?.rate_limits].find(realLimits)
   if (limits) { lastGood = { limits, at: Date.now() }; return { ...u, rate_limits: limits } }
   return lastGood && Date.now() - lastGood.at < KEEP_MS ? { ...u, rate_limits: lastGood.limits } : u
+}
+// the usage endpoint is rate limited: one answer serves the minute polls for USAGE_MS
+const USAGE_MS = 5 * 60_000
+let usageCache: { at: number; u: any } | null = null
+async function usageNow(q: Query): Promise<any> {
+  if (usageCache && Date.now() - usageCache.at < USAGE_MS) return usageCache.u
+  const u = await withLimits(await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }))
+  usageCache = { at: Date.now(), u }
+  return u
 }
 
 export async function getStatus(): Promise<Status> {
   const q = current()
   const [account, usage, mcp] = await Promise.allSettled([
     q.accountInfo(),
-    q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }).then(withLimits),
+    usageNow(q),
     q.mcpServerStatus(),
   ])
   const a = account.status === 'fulfilled' ? account.value : null
