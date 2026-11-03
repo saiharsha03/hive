@@ -14,6 +14,7 @@ export type Session = {
   streaming: string // text of the reply being written right now
   busy: boolean
   compacting?: boolean // the engine is summarising the conversation to free context (can take minutes)
+  compactions?: number // how many times it compacted while open (a handoff is offered after one)
   turnOpen?: boolean // during a compaction: a turn is still running underneath it
   loaded: boolean // history read (reopened sessions)
   // a reopened thread shows its recent end first: earlier = how many items came from its transcript, more = there is
@@ -136,7 +137,7 @@ export function applyEvent(s: Session, ev: any): Session {
       if (ev.subtype === 'compact_boundary') {
         const how = ev.compact_metadata?.trigger === 'manual' ? 'compacted' : 'auto-compacted'
         const ended = s.compacting ? { compacting: false, busy: !!s.turnOpen } : {}
-        return { ...s, ...ended, items: [...s.items, { kind: 'note', text: `Conversation ${how} to free up context` }] }
+        return { ...s, ...ended, compactions: (s.compactions ?? 0) + 1, items: [...s.items, { kind: 'note', text: `Conversation ${how} to free up context` }] }
       }
       // a hook said something to the user (security warning on an edit, a blocked call); empty output stays hidden
       {

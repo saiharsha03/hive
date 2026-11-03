@@ -32,19 +32,20 @@ export type Arrangement = {
 
 // the bottom panel holds only what runs: Agents and the terminal; the tools are side panel views picked from the top bar
 const BOTTOM: ViewId[] = ['agents', 'terminal']
+// Git is never a side panel view: it opens as a tab (TOOL_TABS), and two Git views would share one selected diff
 
 export const ARRANGE: Record<UIId, Arrangement> = {
-  default: { left: ['threads'], right: ['files', 'git'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
+  default: { left: ['threads'], right: ['files'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
   workbench: {
-    left: ['threads', 'files', 'git', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['git', 'deploy'], bottom: BOTTOM,
+    left: ['threads', 'files', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['deploy'], bottom: BOTTOM,
     chat: 'grid', tabs: 'full', closed: [],
   },
   strip: {
-    left: [], right: ['agents', 'watchers', 'git', 'dev', 'scripts', 'todos', 'notes', 'files', 'deploy'],
+    left: [], right: ['agents', 'watchers', 'dev', 'scripts', 'todos', 'notes', 'files', 'deploy'],
     bottom: ['terminal', 'agents'], chat: 'columns', tabs: 'title', closed: ['right'],
   },
   focus: {
-    left: [], right: ['files', 'git', 'todos', 'notes', 'scripts', 'deploy', 'watchers', 'dev'], bottom: BOTTOM,
+    left: [], right: ['files', 'todos', 'notes', 'scripts', 'deploy', 'watchers', 'dev'], bottom: BOTTOM,
     chat: 'single', tabs: 'none', closed: ['right', 'bottom'],
   },
 }

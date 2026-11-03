@@ -156,6 +156,8 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (path: string) => ipcRenderer.invoke('shell:open', path),
   workspaceRoot: () => ipcRenderer.invoke('app:workspace'),
   dropChoices: () => ipcRenderer.invoke('drop:choices'),
+  handoffAt: () => ipcRenderer.invoke('handoff:at'),
+  handoffFile: (tabId: string) => ipcRenderer.invoke('handoff:file', tabId),
   pullConfig: () => ipcRenderer.invoke('pull:config'),
   pullList: () => ipcRenderer.invoke('pull:list'),
   pullRun: (dry: boolean) => ipcRenderer.invoke('pull:run', dry),

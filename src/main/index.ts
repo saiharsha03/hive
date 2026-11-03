@@ -46,6 +46,7 @@ import { killAllTerminals, killTerminal, openTerminal, resizeTerminal, setTermin
 import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
 import { dataDir, TEST_MODE } from './testMode'
+import { handoffAt, handoffName } from '../shared/handoffCore'
 
 // test mode: Electron's own storage (search index, sessions cache, page storage) lives in the test data folder
 if (TEST_MODE) app.setPath('userData', join(dataDir(), 'userData'))
@@ -306,6 +307,9 @@ handle('app:home', () => app.getPath('home'))
 handle('app:workspace', () => appConfig.config?.root ?? null)
 // Pull latest: plain git
 handle('drop:choices', () => parseDropChoices(appConfig.env.HIVE_DROP_SKILLS))
+// Handoff: the size a thread is offered a fresh one at (HIVE_HANDOFF_AT), and a new file for a handoff to go in
+handle('handoff:at', () => handoffAt(appConfig.env.HIVE_HANDOFF_AT))
+handle('handoff:file', (_e, tabId: string) => join(dataDir(), 'hive', 'handoffs', handoffName(String(tabId), Date.now())))
 handle('pull:config', () => ({ ok: !!appConfig.config, message: appConfig.message }))
 handle('pull:list', () => (appConfig.config ? scanRepos(appConfig.config).map((r) => r.name) : []))
 handle('pull:run', (e, dry: boolean) => {

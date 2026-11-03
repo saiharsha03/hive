@@ -160,6 +160,7 @@ function toolMark(name: string): [string, string] {
 
 type Props = {
   session: Session
+  banner?: import('react').ReactNode // shown above the message box (the handoff offer)
   mode: string
   focused: boolean
   onFocus: () => void
@@ -191,7 +192,7 @@ function When({ at }: { at: number }) {
 // background tool calls' tasks that ended (tool use id -> state), kept for the app's life
 const bgEnded = new Map<string, import('../../shared/taskCore').Task['status']>()
 
-export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, compactHead }: Props) {
+export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, compactHead, banner }: Props) {
   // only the newest items are drawn at first, so a long thread opens at once; Show earlier adds more
   const [limit, setLimit] = useState(WINDOW)
   const [draft, setDraft] = useState(() => drafts.get(session.id)?.text ?? '')
@@ -498,6 +499,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
         </div>
       )}
 
+      {banner}
       <div className="composer" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onDrop}>
         {slash.menu}
         <div className={boxFocus ? 'box focus' : 'box'}>

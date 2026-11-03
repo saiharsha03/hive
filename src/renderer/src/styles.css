@@ -331,6 +331,10 @@ kbd { font: 11px var(--mono); color: var(--faint); }
 
 /* message box */
 .composer { position: relative; padding: 8px 16px 8px; flex-shrink: 0; }
+.handoff-bar { display: flex; align-items: center; gap: 8px; margin: 0 16px; padding: 6px 10px; font-size: 12px; color: var(--ink); background: var(--side); border: 1px solid var(--line2); border-radius: 2px; flex-shrink: 0; }
+.handoff-bar span { flex: 1; }
+.handoff-bar button { border: 1px solid var(--line2); padding: 1px 8px; border-radius: 2px; color: var(--ink); }
+.handoff-bar button.pri { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .box { border: 1px solid var(--line2); background: var(--raised); border-radius: 2px; }
 .box.focus { border-color: var(--focus); }
 .atts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px 0; }

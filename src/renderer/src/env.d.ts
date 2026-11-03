@@ -173,6 +173,8 @@ interface Window {
     openExternal: (path: string) => Promise<string>
     workspaceRoot: () => Promise<string | null>
     dropChoices: () => Promise<import('../../shared/dropCore').DropChoice[]>
+    handoffAt: () => Promise<number>
+    handoffFile: (tabId: string) => Promise<string>
     pullConfig: () => Promise<{ ok: boolean; message: string }>
     pullList: () => Promise<string[]>
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>

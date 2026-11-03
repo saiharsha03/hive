@@ -91,7 +91,7 @@ export function initWatchers(env: Record<string, string>, workspaceRoot: string,
   deps = d
   builtins = b
   workspace = workspaceRoot
-  rotateTokens = rotateTokensOf(env.HIVE_WATCHER_ROTATE_TOKENS)
+  rotateTokens = rotateTokensOf(env.HIVE_WATCHER_ROTATE_CONTEXT)
   woke = new Set()
   lastSeen = readHeartbeat()
   if (TEST_MODE) return // never on its own in test mode, and the real Watch folder is never moved
@@ -103,7 +103,7 @@ export function initWatchers(env: Record<string, string>, workspaceRoot: string,
 
 export function configureWatchers(workspaceRoot: string, env: Record<string, string> = {}) {
   workspace = workspaceRoot
-  rotateTokens = rotateTokensOf(env.HIVE_WATCHER_ROTATE_TOKENS)
+  rotateTokens = rotateTokensOf(env.HIVE_WATCHER_ROTATE_CONTEXT)
   reportsRoot = TEST_MODE ? '' : reportsRootOf(env.HIVE_WATCHERS_REPORTS_DIR, workspaceRoot)
 }
 let reportsRoot = ''
@@ -228,7 +228,7 @@ const started = (s: WatcherState, kind: RunKind, at: number) => { const m = mark
 
 // one run: a new turn in the watcher's thread, or a new (or resumed) thread when none is live. '' = started
 // wake: a self-scheduled wake-up; an existing thread then gets only the wake message, not the run header
-// a watcher thread past this many tokens of context gets a fresh one at its next run: HIVE_WATCHER_ROTATE_TOKENS in
+// a watcher thread past this many tokens of context gets a fresh one at its next run: HIVE_WATCHER_ROTATE_CONTEXT in
 // Hive's settings (default 150000; not a positive number = the default)
 let rotateTokens = 150_000
 const rotateTokensOf = (v?: string) => (Number(v) > 0 ? Number(v) : 150_000)

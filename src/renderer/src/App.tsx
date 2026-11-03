@@ -1,6 +1,7 @@
 // The app: threads and their live sessions, the chat panes, and the regions the current UI arranges around them.
 // A UI (appearance.ts + views.ts) only decides where regions sit; switching it keeps every chat, terminal and scroll.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { HANDOFF_AT_DEFAULT, handoffRequest, handoffStart, shouldOffer } from '../../shared/handoffCore'
 import { FileTree } from './FileTree'
 import { Preview } from './Preview'
 import { Sidebar, liveLook, refreshThreadList } from './Sidebar'
@@ -452,6 +453,62 @@ export function App() {
     })
   }
 
+  // ---- handoff: a big or just-compacted thread is offered a fresh one (handoffCore) ----
+  // offer: shown now; dismissed: where Not now was said; pending: the handoff file being written (the turn writing it)
+  type HandoffState = { total: number; offer: boolean; dismissed?: { total: number; compactions: number }; pending?: string }
+  const [handoffAtTokens, setHandoffAtTokens] = useState(HANDOFF_AT_DEFAULT)
+  useEffect(() => { void window.api.handoffAt().then(setHandoffAtTokens).catch(() => {}) }, [])
+  const [handoffs, setHandoffs] = useState<Record<string, HandoffState>>({})
+  const handoffsRef = useRef(handoffs)
+  handoffsRef.current = handoffs
+  const wasBusy = useRef(new Map<string, boolean>())
+  const startHandoffThread = (from: Session, file: string) => {
+    setHandoffs((all) => { const { [from.id]: _gone, ...rest } = all; return rest })
+    const id = `new-${Date.now()}`
+    const title = `${from.title} (cont.)`
+    const text = handoffStart(from.title, file)
+    const cwd = from.cwd || workspace || folder
+    setSessions((all) => [...all, { id, title, cwd, items: [{ kind: 'user', text, images: [], at: Date.now() }], streaming: '', busy: true, loaded: true, background: false }])
+    setPaneState((p) => activateIn(p, id))
+    void window.api.chatSend(id, cwd, undefined, { title, text, images: [] })
+  }
+  // when a foreground thread's turn ends: open the fresh thread if that turn wrote a handoff, else check its size
+  useEffect(() => {
+    for (const s of sessions) {
+      const was = wasBusy.current.get(s.id) ?? false
+      wasBusy.current.set(s.id, s.busy)
+      if (!was || s.busy || s.background || s.tool || s.file) continue
+      const pending = handoffsRef.current[s.id]?.pending
+      if (pending) { startHandoffThread(s, pending); continue }
+      const compactions = s.compactions ?? 0
+      void window.api.chatContext(s.id).then((c) => setHandoffs((all) => {
+        const prev = all[s.id]
+        const total = c?.total ?? 0
+        const offer = shouldOffer({ total, compactions, dismissed: prev?.dismissed }, handoffAtTokens)
+        return offer || prev ? { ...all, [s.id]: { ...prev, total, offer } } : all
+      })).catch(() => {})
+    }
+  }, [sessions])
+  const handOff = async (s: Session) => {
+    const file = await window.api.handoffFile(s.id)
+    setHandoffs((all) => ({ ...all, [s.id]: { ...all[s.id], offer: false, pending: file } }))
+    send(s, handoffRequest(file), [])
+  }
+  const notNow = (s: Session) => setHandoffs((all) => ({ ...all, [s.id]: { ...all[s.id], offer: false, dismissed: { total: all[s.id]?.total ?? 0, compactions: s.compactions ?? 0 } } }))
+  const handoffBanner = (s: Session): ReactNode => {
+    const h = handoffs[s.id]
+    if (h?.pending) return <div className="handoff-bar" data-testid="handoff-bar"><span>Writing the handoff; a fresh thread opens when it is done.</span></div>
+    if (!h?.offer || s.busy) return null
+    const compacted = (s.compactions ?? 0) > (h.dismissed?.compactions ?? 0)
+    return (
+      <div className="handoff-bar" data-testid="handoff-bar">
+        <span>{compacted ? 'This thread just compacted.' : `This thread is at ${Math.round(h.total / 1000)}k tokens of context.`} Every reply re-reads all of it. Hand off to a fresh thread?</span>
+        <button className="pri" onClick={() => void handOff(s)} data-testid="handoff-yes">Hand off</button>
+        <button onClick={() => notNow(s)} data-testid="handoff-no">Not now</button>
+      </div>
+    )
+  }
+
   // a file dropped outside a message box: ask what to do with it (only types the app can start work on)
   const onWindowDrop = (e: React.DragEvent) => {
     if (!e.dataTransfer.types.includes('Files')) return
@@ -621,7 +678,7 @@ export function App() {
 
   const renderChat = (s: Session, _pane: unknown, focused: boolean) => s.tool ? <div className="tooltab">{renderView(s.tool)}</div>
     : s.file ? <FileEditor key={s.id} path={s.file} onClosed={() => closeTabs([s.id])} /> : (
-    <SessionView key={s.id} session={s} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
+    <SessionView key={s.id} session={s} banner={handoffBanner(s)} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
       onSend={(text, images, m) => send(s, text, images, m)} onDequeue={(id) => window.api.chatDequeue(s.id, id)} onPromote={(id) => void window.api.chatPromote(s.id, id)}
       onStop={() => window.api.chatInterrupt(s.id)} onBackground={(toolUseId) => void window.api.chatBackground(s.id, toolUseId)} onRunInBackground={() => moveToBackground(s.id)}
       onOpen={(p) => setPreview(p)} onDiff={showDiff} onLoadEarlier={() => loadEarlier(s.id)} onTerminal={() => { if (bottomOpen && bottomView === 'terminal' && termTab === s.id) setBottomOpen(false); else openTerminal(s.id) }} onChanges={() => { setDiff(null); showView('git') }}

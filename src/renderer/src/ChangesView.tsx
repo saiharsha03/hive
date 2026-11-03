@@ -5,6 +5,7 @@ import type { Session } from './chat'
 import type { DiffSpec } from './DiffPanel'
 import { counts, FILE_TOOLS, type Hunk } from '../../shared/diffCore'
 import type { Detail, Entry, FileArea } from '../../shared/gitCore'
+import { sinceLastPr } from '../../shared/changesCore'
 import { hunksOf, shortPath } from './SessionView'
 import { Icon } from './ui'
 
@@ -13,11 +14,12 @@ const LETTER_CLASS: Record<string, string> = { M: 'g-modified', A: 'g-added', '?
 const base = (p: string) => p.split('/').at(-1) ?? p
 const dirOf = (p: string) => p.split('/').slice(0, -1).join('/')
 
-// the agent's edits in this thread, one row per file with the counts of all its edits
+// the agent's edits in this thread since it last opened a pull request (what went into the PR is done), one row per
+// file with the counts of all its edits. Uncommitted files in the working tree still show from git.
 function agentEdits(s: Session | null): { file: string; label: string; tool: string; hunks: Hunk[] }[] {
   if (!s) return []
   const by = new Map<string, { file: string; label: string; tool: string; hunks: Hunk[] }>()
-  for (const it of s.items) {
+  for (const it of sinceLastPr(s.items)) {
     if (it.kind !== 'tool' || !FILE_TOOLS.includes(it.name) || it.status === 'error' || typeof it.input?.file_path !== 'string') continue
     const file = it.input.file_path as string
     const prev = by.get(file.toLowerCase())
