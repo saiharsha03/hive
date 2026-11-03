@@ -5,6 +5,7 @@ import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
+import { closeSync, openSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -25,7 +26,7 @@ import { modeFor, modeSwitch } from '../shared/modeCore'
 import { threadDefaults } from './settings'
 import { boostForMessage, forgetTab, observe, sessionOptions } from './liveStatus'
 import { readOnlyOptions } from './readOnly'
-import { isWatcherTab } from '../shared/readOnlyCore'
+import { isWatcherTab, isWatcherTranscript } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
 import { notifyPhone } from './mobile'
 import { autoBackground } from '../shared/autoBackgroundCore'
@@ -35,10 +36,20 @@ import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDel
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
 // worktrees) or runs services, so nothing it reaches through Hive escapes read-only
 const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread'])
-const forThread = <T extends { name: string }>(tabId: string, tools: T[]): T[] => (isWatcherTab(tabId) ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
+const forThread = <T extends { name: string }>(watcher: boolean, tools: T[]): T[] => (watcher ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
+// a watcher's tab, or a watcher's session resumed under any other tab id (the sidebar, the phone, message_thread,
+// after a restart): read-only either way. Unreadable transcript = not a watcher's (nothing to resume read-only from)
+function isWatcherThread(tabId: string, cwd: string, resume?: string): boolean {
+  if (isWatcherTab(tabId)) return true
+  if (!resume) return false
+  try {
+    const fd = openSync(transcriptPath(cwd, resume), 'r')
+    try { const buf = Buffer.alloc(64 * 1024); const n = readSync(fd, buf, 0, buf.length, 0); return isWatcherTranscript(buf.toString('utf8', 0, n)) } finally { closeSync(fd) }
+  } catch { return false }
+}
 
 // a watcher's thread starts read-only (its own hooks merged with the read-only command check)
-const withReadOnly = (tabId: string, o: Partial<Options>): Partial<Options> => (isWatcherTab(tabId) ? { ...o, ...readOnlyOptions(saveCheck(tabId, o.hooks)) } : o)
+const withReadOnly = (watcher: boolean, tabId: string, o: Partial<Options>): Partial<Options> => (watcher ? { ...o, ...readOnlyOptions(saveCheck(tabId, o.hooks)) } : o)
 // a watcher run must leave what the next run needs on disk (its thread is closed after): the Stop hook asks once
 let watcherStop: (tabId: string) => string | null = () => null
 export const setWatcherStop = (f: (tabId: string) => string | null) => { watcherStop = f }
@@ -141,6 +152,7 @@ function inbox() {
 type Start = { tabId: string; cwd: string; resume?: string; web: WebContents; background: boolean }
 
 function start({ tabId, cwd, resume, web, background }: Start): Live {
+  const watcher = isWatcherThread(tabId, cwd, resume)
   // events only while this process is still the tab's live one; a closed process stays silent
   let s: Live
   const send = (event: unknown) => {
@@ -150,7 +162,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   const hive = createSdkMcpServer({
     name: 'hive',
     version: '1.0.0',
-    tools: forThread(tabId, [
+    tools: forThread(watcher, [
       tool(
         'show_to_user',
         `Open a file (image, screenshot, HTML page, PDF, video, text) in the preview panel of the ${appName()} app, beside the chat. Use whenever you want the user to look at something.`,
@@ -498,7 +510,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       // Settings > General: model and effort for threads started from now on ('' = Claude Code's default)
       ...threadDefaults(),
       // hook events, Hive-only plugin switches, the Stop hook that reports loops and effort; watcher threads read-only
-      ...withReadOnly(tabId, sessionOptions(tabId, send)),
+      ...withReadOnly(watcher, tabId, sessionOptions(tabId, send)),
     },
   })
   // messages queued while Claude works wait here until the turn's result (priority 'later' once handed over)

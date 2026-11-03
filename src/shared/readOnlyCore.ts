@@ -3,6 +3,21 @@
 // PGOPTIONS. Not airtight (a script can find another way), but it stops the ordinary ways of writing.
 
 export const isWatcherTab = (tabId: string) => tabId.startsWith('watcher-')
+// A watcher session, whatever tab resumes it (sidebar, phone, message_thread, after a restart): its first message is
+// Hive's run header "[<app> watcher run: <name>]" or a wake-up "[<app> wake-up: <name>]". jsonl = the transcript's start.
+export function isWatcherTranscript(jsonl: string): boolean {
+  for (const line of jsonl.split('\n')) {
+    if (!line.startsWith('{')) continue
+    let e: any
+    try { e = JSON.parse(line) } catch { continue }
+    if (e.type !== 'user' || e.isMeta) continue
+    const c = e.message?.content
+    const text = typeof c === 'string' ? c : Array.isArray(c) ? (c.find((p: any) => p?.type === 'text')?.text ?? '') : ''
+    if (!text) continue
+    return /^\[[^\]\n]{1,80} (watcher run|wake-up): [^\]\n]+\]/.test(text)
+  }
+  return false
+}
 
 const GH_WRITES: Record<string, RegExp> = {
   pr: /^(create|merge|close|comment|edit|review|ready|reopen|lock|unlock)$/,
