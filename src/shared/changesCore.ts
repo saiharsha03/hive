@@ -8,7 +8,10 @@ const GH_PR_CREATE = /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:&\s*)?(?:(?:ba)?sh\s
 export const opensPr = (name: string | undefined, input: unknown): boolean => {
   if (name !== 'Bash' && name !== 'PowerShell') return false
   const cmd = String((input as { command?: unknown } | null)?.command ?? '')
-  return cmd.split(/&&|\|\||[;\n|]/).some((part) => GH_PR_CREATE.test(part.trim()))
+    .split('<<')[0] // a heredoc body is text, not commands
+    // a quoted string is one word: its spaces and separators can never start a command ("C:\Program Files\...\gh.exe" stays a path)
+    .replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, (q) => q.slice(1, -1).replace(/[\s;&|]/g, '_'))
+  return cmd.split(/&&|\|\||\$\(|`|[;\n|()]/).some((part) => GH_PR_CREATE.test(part.trim())) // $( ) and backticks start commands too
 }
 
 // the thread's items after the last pull request it opened successfully (all of them when it opened none)

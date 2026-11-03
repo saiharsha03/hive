@@ -469,18 +469,20 @@ export function App() {
   const wasBusy = useRef(new Map<string, boolean>())
   const canHandOff = (s: Session) => !s.tool && !s.file && !isWatcherTab(s.id)
   // a handoff thread waiting for its Claude session id, to take the worktree links held under its tab id meanwhile
-  const linksToSession = useRef(new Set<string>())
+  // new tab id -> the old thread's session id (to give the links back if the new tab closes before it has one)
+  const linksToSession = useRef(new Map<string, string>())
   const startHandoffThread = async (from: Session, file: string) => {
     setHandoffs((all) => { const { [from.id]: _gone, ...rest } = all; return rest })
     const id = `new-${Date.now()}`
     // its worktrees move with it at once (under the tab id until it has a session id), so closing the old thread keeps them
-    if (from.sessionId && (await window.api.worktreeMove(from.sessionId, id).catch(() => 0))) linksToSession.current.add(id)
+    const moved = from.sessionId ? await window.api.worktreeMove(from.sessionId, id).catch(() => 0) : 0
+    if (moved && from.sessionId) linksToSession.current.set(id, from.sessionId)
     const title = `${from.title} (cont.)`
     const text = handoffStart(from.title, file)
     const cwd = from.cwd || workspace || folder
     setSessions((all) => [
-      ...all.map((s) => (s.id === from.id ? { ...s, worktrees: [] } : s)),
-      { id, title, cwd, worktrees: from.worktrees, items: [{ kind: 'user', text, images: [], at: Date.now() }], streaming: '', busy: true, loaded: true, background: false },
+      ...all.map((s) => (moved && s.id === from.id ? { ...s, worktrees: [] } : s)), // only when the links really moved
+      { id, title, cwd, worktrees: moved ? from.worktrees : undefined, items: [{ kind: 'user', text, images: [], at: Date.now() }], streaming: '', busy: true, loaded: true, background: false },
     ])
     setPaneState((p) => activateIn(p, id))
     void window.api.chatSend(id, cwd, undefined, { title, text, images: [] })
@@ -511,8 +513,9 @@ export function App() {
         return offer || prev ? { ...all, [s.id]: { ...prev, total, offer, failed: false } } : all
       })).catch(() => {})
     }
-    // a closed thread's state goes with it
+    // a closed thread's state goes with it; a handoff tab closed before it had a session id gives the worktrees back
     const ids = new Set(sessions.map((s) => s.id))
+    for (const [tab, back] of linksToSession.current) if (!ids.has(tab)) { linksToSession.current.delete(tab); void window.api.worktreeMove(tab, back).catch(() => {}) }
     if (Object.keys(handoffsRef.current).some((id) => !ids.has(id))) setHandoffs((all) => Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id))))
   }, [sessions])
   const handOff = async (s: Session) => {
