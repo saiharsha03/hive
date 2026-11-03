@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 
 export type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string; entrypoint: string }
-type CacheEntry = SessionInfo & { size: number; v?: number } // v: parser version; bump to re-read every file
+type CacheEntry = SessionInfo & { size: number; mtime?: number; v?: number } // v: parser version; bump to re-read every file
 
 const ROOT = join(homedir(), '.claude', 'projects')
 const CHUNK = 32 * 1024
@@ -46,8 +46,8 @@ function firstUserText(entry: any): string | null {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-function parse(path: string, text: string, updated: number): SessionInfo | null {
-  let custom = '', ai = '', first = '', cwd = '', started = 0, entrypoint = ''
+export function parse(path: string, text: string, updated: number): SessionInfo | null {
+  let custom = '', ai = '', first = '', cwd = '', started = 0, entrypoint = '', last = 0
   for (const line of text.split('\n')) {
     if (!line.startsWith('{')) continue // cut-off line at a chunk edge
     let e: any
@@ -58,9 +58,11 @@ function parse(path: string, text: string, updated: number): SessionInfo | null 
     if (!entrypoint && e.entrypoint) entrypoint = e.entrypoint
     if (!started && e.timestamp) started = Date.parse(e.timestamp) || 0
     if (!first) first = firstUserText(e) ?? ''
+    // the newest message (a title change, hook or summary line is not one), so the list orders by last activity
+    if ((e.type === 'user' || e.type === 'assistant') && !e.isMeta && e.timestamp) last = Math.max(last, Date.parse(e.timestamp) || 0)
   }
   if (!first && !custom && !ai) return null // empty session
-  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated, started: started || updated, path, entrypoint }
+  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated: last || updated, started: started || updated, path, entrypoint }
 }
 
 export async function listSessions(): Promise<SessionInfo[]> {
@@ -79,11 +81,11 @@ export async function listSessions(): Promise<SessionInfo[]> {
     await Promise.all(files.slice(i, i + 32).map(async (path) => {
       const s = await stat(path)
       const hit = cache[path]
-      if (hit && hit.v === 2 && hit.size === s.size && hit.updated === s.mtimeMs) {
+      if (hit && hit.v === 3 && hit.size === s.size && hit.mtime === s.mtimeMs) {
         next[path] = hit
       } else {
         const info = parse(path, await readEnds(path, s.size), s.mtimeMs)
-        if (info) next[path] = { ...info, size: s.size, v: 2 }
+        if (info) next[path] = { ...info, size: s.size, mtime: s.mtimeMs, v: 3 }
       }
       const info = next[path]
       // sessions started inside temp/scratchpad folders are helpers, not real work

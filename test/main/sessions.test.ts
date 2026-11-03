@@ -1,0 +1,22 @@
+// the sidebar orders threads by their last message, not by when they started or when the file was last touched
+import { test } from 'vitest'
+import assert from 'node:assert/strict'
+import { parse } from '../../src/main/sessions'
+
+const line = (o: object) => JSON.stringify(o)
+
+test('updated = the newest user or assistant message; titles, hooks and meta lines do not count', () => {
+  const text = [
+    line({ type: 'user', timestamp: '2026-11-01T10:00:00Z', cwd: 'C:/r/app', message: { content: 'start the work' } }),
+    line({ type: 'assistant', timestamp: '2026-11-02T09:00:00Z', message: { content: [] } }),
+    line({ type: 'user', isMeta: true, timestamp: '2026-11-03T08:00:00Z', message: { content: 'meta' } }),
+    line({ type: 'custom-title', customTitle: 'Renamed later', timestamp: '2026-11-03T09:00:00Z' }),
+  ].join('\n')
+  const s = parse('C:/x/abc.jsonl', text, Date.parse('2026-11-03T09:30:00Z'))!
+  assert.equal(s.title, 'Renamed later')
+  assert.equal(s.started, Date.parse('2026-11-01T10:00:00Z'))
+  assert.equal(s.updated, Date.parse('2026-11-02T09:00:00Z'))
+  // no timestamps on messages: the file time
+  const bare = parse('C:/x/b.jsonl', line({ type: 'user', message: { content: 'hi' } }), 42)!
+  assert.equal(bare.updated, 42)
+})

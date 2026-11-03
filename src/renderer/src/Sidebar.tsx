@@ -9,8 +9,8 @@ import { getPref, setPref } from './prefs'
 import { Icon } from './ui'
 import { useWatchers } from './useWatchers'
 
-// start date: time for today, otherwise "Oct 28", with the year only when it isn't this year
-function started(t: number): string {
+// last message: time for today, otherwise "Oct 28", with the year only when it isn't this year
+function lastAt(t: number): string {
   const d = new Date(t)
   if (d.toDateString() === new Date().toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   const sameYear = d.getFullYear() === new Date().getFullYear()
@@ -189,7 +189,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
       >
         {lr ? <Icon name={liveLook(lr).icon} className={liveLook(lr).cls} /> : <Icon name={placeIcon(s.id, section)} className="s-idle" />}
         <span className="t">{s.title}</span>
-        {lr ? <span className={`st ${liveLook(lr).cls.replace(' spin', '')}`}>{liveLook(lr).word}</span> : <span className="tm">{started(s.started)}</span>}
+        {lr ? <span className={`st ${liveLook(lr).cls.replace(' spin', '')}`}>{liveLook(lr).word}</span> : <span className="tm" title="Last message">{lastAt(s.updated)}</span>}
         {meta && <span className="m">{meta}</span>}
         {snippet && <span className="snip">{snippet}</span>}
         <button
