@@ -28,6 +28,7 @@ import { readOnlyOptions } from './readOnly'
 import { isWatcherTab } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
 import { notifyPhone } from './mobile'
+import { autoBackground } from '../shared/autoBackgroundCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -53,6 +54,7 @@ const append = () => [
   'add_todo can also set a due date (YYYY-MM-DD; turn words like "Monday" or "next week" into a date using the current date) and a status:',
   '"talk" when the user needs to talk to someone about it ("need to talk"), "holding" to hold it off for now, otherwise leave it as "todo".',
   'When the user asks you to note or save something to their Notes, use mcp__hive__add_note (it adds to the note with that title, or makes one).',
+  'A shell command still running after 60 seconds is moved to the background by Hive, so you stay free to talk with the user; you are told when it finishes, and can read its output then.',
   'mcp__hive__organize_thread pins, snoozes, closes or archives this conversation in the sidebar (e.g. "talk tomorrow", "keep this handy", "we are done"); use your judgement.',
   'Claude can search the user\'s past Claude Code sessions with mcp__hive__search_sessions when the user refers to earlier work ("like we did last week", "the CSV import").',
   'To work on code in one of the user\'s repos, call mcp__hive__worktree with the repo and a branch or a ticket (key plus a few words) and do all the work in the folder it returns,',
@@ -497,6 +499,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     cwd, lastReply: null, lastOk: null, onIdle: new Set(), emit: send,
   }
   let lastText = '' // the turn's latest assistant text, in case its result carries none
+  // a shell command of this thread still running after a minute goes to the background, so Claude is free to talk
+  // (and steer, or answer you) while it runs; only commands, never agents
+  const longCommands = autoBackground((id) => q.backgroundTasks(id), AUTO_BACKGROUND_MS)
 
   void (async () => {
     try {
@@ -515,12 +520,15 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         if (m.type === 'assistant' && !m.parent_tool_use_id) {
           const t = ((m.message?.content ?? []) as any[]).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
           if (t.trim()) lastText = t
+          longCommands.started(m.message?.content as any[])
         }
+        if (m.type === 'user' && !m.parent_tool_use_id) longCommands.ended((m as any).message?.content)
         if (m.type === 'result') {
           const r = m as any
           s.lastOk = r.subtype === 'success' && !r.is_error
           s.lastReply = r.subtype === 'success' ? (r.result || lastText) : `The turn ended with an error (${r.subtype}). ${(r.errors ?? []).join('; ')}`.trim()
           lastText = ''
+          longCommands.clear()
           s.turns.turnEnded()
           steersDelivered(tabId) // a message steered into this turn went in with it
           if (!s.turns.isBusy()) wake(s)
@@ -726,6 +734,9 @@ export async function contextUsage(tabId: string): Promise<{ total: number; max:
   const u = await s.q.getContextUsage({ detail: 'summary' })
   return { total: u.totalTokens, max: u.maxTokens }
 }
+
+// After this long a running shell command is moved to the background (HIVE_AUTO_BACKGROUND_S; 0 turns it off)
+const AUTO_BACKGROUND_MS = (() => { const v = Number(process.env.HIVE_AUTO_BACKGROUND_S ?? 60); return Number.isFinite(v) && v > 0 ? v * 1000 : 0 })()
 
 export async function background(tabId: string, toolUseId?: string): Promise<boolean> {
   return (await live.get(tabId)?.q.backgroundTasks(toolUseId)) ?? false
