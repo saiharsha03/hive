@@ -69,7 +69,9 @@ let usageCache: { at: number; u: any } | null = null
 async function usageNow(q: Query): Promise<any> {
   if (usageCache && Date.now() - usageCache.at < USAGE_MS) return usageCache.u
   const u = await withLimits(await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }))
-  usageCache = { at: Date.now(), u }
+  // only a real reading is kept: right after a start no thread has talked to the API yet, and caching that
+  // placeholder held the bar at 0% for the whole window
+  if (realLimits(u?.rate_limits)) usageCache = { at: Date.now(), u }
   return u
 }
 
@@ -88,8 +90,9 @@ export async function getStatus(): Promise<Status> {
   return {
     account: a?.email ?? null,
     plan: u?.subscription_type ?? a?.subscriptionType ?? null,
-    five: limit(u?.rate_limits?.five_hour),
-    seven: limit(u?.rate_limits?.seven_day),
+    // a placeholder is no reading: the meters stay hidden until a real one arrives (not a fake 0%)
+    five: realLimits(u?.rate_limits) ? limit(u?.rate_limits?.five_hour) : null,
+    seven: realLimits(u?.rate_limits) ? limit(u?.rate_limits?.seven_day) : null,
     connectors: m && {
       connected: m.filter((s) => s.status === 'connected').length,
       total: m.length,
@@ -106,7 +109,9 @@ export async function getStatus(): Promise<Status> {
 export type Weekly = { pct: number | null; readAt: number; error: string }
 let weekly: Weekly | null = null
 function remember(u: any, err: unknown) {
-  const pct = u?.rate_limits?.seven_day?.utilization
+  // a placeholder answer never overwrites a real reading (its 7-day number is stale)
+  if (!err && !realLimits(u?.rate_limits) && weekly?.pct != null) return
+  const pct = realLimits(u?.rate_limits) ? u?.rate_limits?.seven_day?.utilization : undefined
   weekly = typeof pct === 'number' && Number.isFinite(pct)
     ? { pct, readAt: Date.now(), error: '' }
     : { pct: null, readAt: Date.now(), error: err ? String((err as Error)?.message ?? err) : 'no 7-day limit in the usage answer' }

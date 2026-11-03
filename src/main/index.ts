@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { configureChat, liveQuery, liveThreads, stopCodex } from './chat'
+import { configureChat, liveQuery, liveThreads, setWatcherStop, stopCodex } from './chat'
 import { resendGroups, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
@@ -22,6 +22,7 @@ import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
 import { editorMtime, editorRead, editorWrite, vsCodeUrl } from './editorFiles'
 import { lspChange, lspClose, lspOpen, lspRequest, lspSaved, setDiagnosticsSink, stopLanguageServers } from './lsp'
 import type { AllowStatus } from '../shared/allowCore'
+import { watcherStopReason } from './watchers'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail, watcherTabFor } from './watchers'
 import { gitDecorations, listDir } from './files'
 import { uiLoad, uiSave } from './uiStore'
@@ -84,6 +85,7 @@ const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAll
 initAllowlist(appConfig.env, allowChanged)
 setWatcherPosts(appConfig.env)
 configureChat(appConfig.env)
+setWatcherStop(watcherStopReason)
 // usage limits: the idle status process has none, so a live thread's answer stands in
 setLiveUsage(liveUsage)
 // Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.claude/hive/watchers);

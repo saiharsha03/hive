@@ -22,7 +22,7 @@ export type WatcherFile = {
   createdBy: string
   createdAt: string // ISO
 }
-export type WatcherRun = { id: string; tabId: string; kind: RunKind; startedAt: number; endedAt?: number; sessionId?: string; error?: string }
+export type WatcherRun = { id: string; tabId: string; kind: RunKind; startedAt: number; endedAt?: number; sessionId?: string; error?: string; summary?: string } // summary: its final reply, for the next run
 // Hive's scheduler state: the long-lived thread (tabId + Claude session) and the runs that went into it
 export type WatcherState = Omit<WatchState, 'enabled'> & {
   tabId: string | null // the thread's tab; null = no thread yet (the next run starts a fresh one)
@@ -170,6 +170,7 @@ export function watcherHeader(a: {
     `Run kind: ${kind}${kind === 'weekly' ? ' (also stands in for today\'s daily report)' : ''}`,
     `Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localIso(now)} (local time; what is worth checking can depend on the day and hour)`,
     `Last run: ${lastRun ? `${lastRun.kind} started ${stamp(lastRun.startedAt)}${lastRun.endedAt ? `, ended ${stamp(lastRun.endedAt)}` : ''}${lastRun.error ? ` (${lastRun.error})` : ''}` : 'none, this is the first run'}`,
+    ...(lastRun?.summary ? [`It ended with: ${lastRun.summary.replace(/\s*\n\s*/g, ' ')}`] : []),
     `Last daily report run: ${stamp(s.last.daily)}. Last weekly report run: ${stamp(s.last.weekly)}.`,
     fresh
       ? 'This is a new thread for this watcher. Every later run arrives as a new message in this same thread, so you keep the conversation; '

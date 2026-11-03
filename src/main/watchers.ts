@@ -13,17 +13,17 @@ import { appName } from '../shared/appName'
 import {
   defaultPrompt, earliest, emptyState, foldersOf, reportsRootOf, legacyState, legacyWatcher, MAX_RUNS, normalizeSchedule, normalizeState,
   normalizeWatcher, statusOf, textHash, wakeMessage, watcherConfig, watcherHeader, watcherId,
-  type WatcherDetail, type WatcherFile, type WatcherInput, type WatcherState, type WatcherSummary, type WatchersList,
+  type Folders, type WatcherDetail, type WatcherFile, type WatcherInput, type WatcherState, type WatcherSummary, type WatchersList,
 } from '../shared/watchersCore'
 import { blocked, dataDir, TEST_MODE, testWeeklyPct } from './testMode'
 import { writeFileSafe } from './safeWrite'
 import { FALLBACK_MS, markWoken, readWakeups, scheduleFile, type Wakeup } from './selfSchedule'
-import { lastContextTokens } from './sessionStats'
+import { saveReminder } from '../shared/watcherSaveCore'
 
 
 // starts the watcher's thread (resume = continue that Claude session) or, when its tab is live, adds a turn to it
 export type RunThread = (t: { tabId: string; cwd: string; title: string; prompt: string; resume?: string }) => boolean // false: no window yet
-export type ThreadState = (tabId: string) => { working: boolean; sessionId: string | null; waitingReason?: string; lastOk?: boolean | null } | null
+export type ThreadState = (tabId: string) => { working: boolean; sessionId: string | null; waitingReason?: string; lastOk?: boolean | null; lastReply?: string | null } | null
 export type Usage = () => Promise<{ pct: number | null; readAt: number; error: string }> // the 7-day limit, 0-100
 // a watcher Hive has built in (Dependabot): shown in the same list with its own switch
 export type Builtin = { id: string; summary: () => WatcherSummary | null; setEnabled: (on: boolean) => void }
@@ -91,7 +91,6 @@ export function initWatchers(env: Record<string, string>, workspaceRoot: string,
   deps = d
   builtins = b
   workspace = workspaceRoot
-  rotateTokens = rotateTokensOf(env.HIVE_WATCHER_ROTATE_CONTEXT)
   woke = new Set()
   lastSeen = readHeartbeat()
   if (TEST_MODE) return // never on its own in test mode, and the real Watch folder is never moved
@@ -103,7 +102,6 @@ export function initWatchers(env: Record<string, string>, workspaceRoot: string,
 
 export function configureWatchers(workspaceRoot: string, env: Record<string, string> = {}) {
   workspace = workspaceRoot
-  rotateTokens = rotateTokensOf(env.HIVE_WATCHER_ROTATE_CONTEXT)
   reportsRoot = TEST_MODE ? '' : reportsRootOf(env.HIVE_WATCHERS_REPORTS_DIR, workspaceRoot)
 }
 let reportsRoot = ''
@@ -161,8 +159,16 @@ function settle(id: string, s: WatcherState): { s: WatcherState; running: boolea
     if (!t?.working) {
       cur.endedAt = Date.now()
       if (t && t.lastOk === false) cur.error = 'The turn ended with an error'
+      if (t?.lastReply) cur.summary = t.lastReply.trim().slice(0, 1500)
       dirty = true
     }
+  }
+  // the run is over: close its thread (one waiting on the user stays open until it is answered or the next run)
+  if (s.tabId && !t?.working && !t?.waitingReason && cur?.endedAt) {
+    deps.closeThread(s.tabId)
+    runOf.delete(s.tabId)
+    s.tabId = null; s.sessionId = null; s.promptSent = null
+    dirty = true
   }
   if (dirty) saveState(id, s)
   return { s, running: !!t?.working }
@@ -227,11 +233,9 @@ function selfNext(dir: string, s: WatcherState): number | null {
 const started = (s: WatcherState, kind: RunKind, at: number) => { const m = markStarted({ ...s, enabled: true }, kind, at); return { since: m.since, last: m.last } }
 
 // one run: a new turn in the watcher's thread, or a new (or resumed) thread when none is live. '' = started
-// wake: a self-scheduled wake-up; an existing thread then gets only the wake message, not the run header
-// a watcher thread past this many tokens of context gets a fresh one at its next run: HIVE_WATCHER_ROTATE_CONTEXT in
-// Hive's settings (default 150000; not a positive number = the default)
-let rotateTokens = 150_000
-const rotateTokensOf = (v?: string) => (Number(v) > 0 ? Number(v) : 150_000)
+// wake: a self-scheduled wake-up; its due rows go into the fresh thread after the run header
+// the run each watcher tab is doing, for the Stop hook's save check
+const runOf = new Map<string, { since: number; f: Folders; dir: string; self: boolean }>()
 
 function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind, wake?: Wake): string {
   const now = new Date()
@@ -249,15 +253,14 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
   }
   mkdirSync(f.memory, { recursive: true })
   mkdirSync(f.reports, { recursive: true })
-  // a thread grown past rotateTokens starts again fresh: every run re-reads the whole thread (cache reads still count
-  // against the limits, and a cold cache re-writes all of it), while what carries over lives in its memory folder and db
-  if (s.sessionId) {
+  // every run is a fresh thread: a long-lived one re-read its whole history each run (that was most of the cost), while
+  // what carries over lives in the memory folder, db, findings and the last run's final reply in the header. A thread
+  // still open here (waiting on the user, or a user's own turn in it) is closed first.
+  if (s.tabId || s.sessionId) {
     const st = s.tabId ? deps.threadState(s.tabId) : null
-    const ctx = lastContextTokens(deps.transcript(cwdOf(w), s.sessionId))
-    if (ctx && ctx > rotateTokens && !st?.working && !st?.waitingReason) {
-      if (s.tabId) deps.closeThread(s.tabId)
-      s = { ...s, tabId: null, sessionId: null, promptSent: null }
-    }
+    if (st?.working) return '' // never cut a turn short; the next tick tries again
+    if (s.tabId) deps.closeThread(s.tabId)
+    s = { ...s, tabId: null, sessionId: null, promptSent: null }
   }
   const live = s.tabId ? deps.threadState(s.tabId) : null
   const fresh = !s.sessionId // no Claude session yet: a new thread
@@ -272,6 +275,7 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
     : watcherHeader({ name: w.name, kind, now, lastRun: prev, s, f, promptFile: c.prompt, prompt: changed, fresh }) + (wake ? `\n\n${wakeText(null)}` : '')
   const resume = !live && s.sessionId ? s.sessionId : undefined
   if (!deps.runThread({ tabId, cwd: cwdOf(w), title: tabTitle(w), prompt, resume })) return `The ${appName()} window is not ready`
+  runOf.set(tabId, { since: now.getTime(), f, dir: c.dir, self: w.schedule.every === 'self' })
   woke.add(id)
   if (wake) { try { markWoken(c.dir, wake.due.map((r) => r.id), localIso(now)) } catch { /* the watcher sees them still pending */ } }
   const next: WatcherState = {
@@ -460,4 +464,16 @@ export async function formatWatchers(): Promise<string> {
     w.dir && `  folder: ${w.dir}`,
     w.message && `  note: ${w.message}`,
   ].filter(Boolean).join('\n')).join('\n') + (l.problems.length ? `\n${l.problems.join('\n')}` : '')
+}
+
+// The Stop hook of a watcher thread: null = it may end; else what it still has to save (asked once per stop, chat.ts)
+export function watcherStopReason(tabId: string): string | null {
+  const r = runOf.get(tabId)
+  if (!r) return null
+  const newer = (p: string) => { try { return statSync(p).mtimeMs >= r.since } catch { return false } }
+  const inMemory = () => { try { return readdirSync(r.f.memory).some((n) => newer(join(r.f.memory, n))) } catch { return false } }
+  const saved = inMemory() || newer(r.f.findings) || newer(r.f.reports) || newer(r.f.db)
+  let nextWake = true
+  if (r.self) { try { nextWake = readWakeups(r.dir, Date.now()).next !== null } catch { nextWake = false } }
+  return saveReminder({ saved, selfScheduled: r.self, nextWake })
 }

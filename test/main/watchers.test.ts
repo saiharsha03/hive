@@ -8,13 +8,12 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import {
   createWatcher, deleteWatcher, initWatchers, listWatchersView, migrateLegacyWatch, runWatcherNow, setWatcherEnabled, tick,
-  updateWatcher, watcherDetail, watcherIds,
-} from '../../src/main/watchers'
+  updateWatcher, watcherDetail, watcherIds, watcherStopReason } from '../../src/main/watchers'
 import { normalizeSchedule, watcherHeader, watcherId, foldersOf, defaultPrompt, legacyWatcher } from '../../src/shared/watchersCore'
 
 type Call = { tabId: string; cwd: string; title: string; prompt: string; resume?: string }
 let calls: Call[] = []
-let threads = new Map<string, { working: boolean; sessionId: string | null; waitingReason?: string; lastOk?: boolean | null }>()
+let threads = new Map<string, { working: boolean; sessionId: string | null; waitingReason?: string; lastOk?: boolean | null; lastReply?: string | null }>()
 let closed: string[] = []
 let pct: number | null = 30
 let root = ''
@@ -100,7 +99,7 @@ test('migration moves the Watch folder whole, db intact, state carried over, run
   assert.ok(!existsSync(join(home2, 'watchers')))
 })
 
-test('create writes the folder, starts ONE thread; later runs are turns in it; no overlap', async () => {
+test('create writes the folder; every run is a fresh thread, closed when it ends, told how the last one ended; no overlap', async () => {
   setup()
   const r = createWatcher({ name: 'Tiny', goal: 'note the time', schedule: { every: '1h' } }, 'test')
   assert.equal(r.id, 'tiny'); assert.equal(r.message, '')
@@ -112,29 +111,35 @@ test('create writes the folder, starts ONE thread; later runs are turns in it; n
   // still working: neither run-now nor the tick starts another
   assert.match(runWatcherNow('tiny'), /still working/)
   await tick(); assert.equal(calls.length, 1)
+  threads.get(tab)!.lastReply = 'Checked the time: 09:00. Nothing new.'
   finish(tab)
-  await tick() // not due yet (1h)
+  await tick() // the run ended: its thread is closed; not due yet (1h)
   assert.equal(calls.length, 1)
-  assert.ok(state('tiny').runs[0].endedAt)
-  assert.equal(state('tiny').sessionId, 'sess-1')
-  // run now: a new turn in the same live thread, prompt not repeated
+  assert.deepEqual(closed, [tab])
+  const s1 = state('tiny')
+  assert.ok(s1.runs[0].endedAt); assert.equal(s1.runs[0].summary, 'Checked the time: 09:00. Nothing new.')
+  assert.equal(s1.tabId, null); assert.equal(s1.sessionId, null)
+  // run now: a new thread with the full prompt and how the last run ended, never a resume
   assert.equal(runWatcherNow('tiny', 'daily'), '')
-  assert.equal(calls.length, 2); assert.equal(calls[1].tabId, tab)
-  assert.match(calls[1].prompt, /unchanged since you last got them/)
-  finish(tab)
-  // the prompt changed: the next turn carries it
-  updateWatcher('tiny', { prompt: 'NEW PROMPT' })
-  assert.equal(runWatcherNow('tiny'), '')
-  assert.match(calls[2].prompt, /NEW PROMPT/); assert.equal(calls[2].tabId, tab)
-  finish(tab)
-  // the thread's process went away (reload, tab closed): the next run resumes the same session, same tab
-  threads.delete(tab)
-  assert.equal(runWatcherNow('tiny'), '')
-  assert.equal(calls[3].resume, 'sess-1'); assert.equal(calls[3].tabId, tab)
-  finish(tab, false)
+  assert.equal(calls.length, 2); assert.notEqual(calls[1].tabId, tab); assert.equal(calls[1].resume, undefined)
+  assert.match(calls[1].prompt, /note the time/)
+  assert.match(calls[1].prompt, /It ended with: Checked the time: 09:00\. Nothing new\./)
+  finish(calls[1].tabId, false)
   await tick()
   assert.equal(state('tiny').runs.at(-1).error, 'The turn ended with an error')
   assert.equal((await listWatchersView()).watchers.find((w) => w.id === 'tiny')!.status, 'failed')
+})
+
+test('a run waiting on the user keeps its thread open until the next run', async () => {
+  setup()
+  createWatcher({ name: 'Ask', goal: 'g', schedule: { every: '1h' } }, 'test')
+  const tab = calls[0].tabId
+  threads.get(tab)!.waitingReason = 'which repo?'
+  finish(tab)
+  await tick()
+  assert.deepEqual(closed, []) // still waiting: open
+  assert.equal(runWatcherNow('ask'), '')
+  assert.deepEqual(closed, [tab]); assert.notEqual(calls[1].tabId, tab) // the next run closes it and starts fresh
 })
 
 test('disable ends the session; enable starts a fresh thread', async () => {
@@ -216,32 +221,33 @@ test('detail, list, soft delete', async () => {
   assert.ok(readdirSync(root).includes('_deleted'))
 })
 
-test('self-scheduled watcher wakes only for its own due rows, with just the wake reason, and after 6 h with none', async () => {
+test('self-scheduled watcher: each wake is a fresh thread with the full header plus its due rows; 6 h fallback; startup catch-up', async () => {
   setup()
   createWatcher({ name: 'Selfie', goal: 'plans itself', schedule: { every: 'self' } }, 't')
   assert.equal(wfile('selfie').schedule.every, 'self')
   assert.equal(calls.length, 1) // created on: the first run starts a fresh thread with the full header
-  const tab = calls[0].tabId
-  finish(tab)
+  const last = () => calls.at(-1)!.tabId
+  finish(last()); await tick()
   const db = new DatabaseSync(join(root, 'selfie', 'schedule.db'))
-  db.exec(`CREATE TABLE IF NOT EXISTS wakeups (id INTEGER PRIMARY KEY, wake_at TEXT NOT NULL, purpose TEXT, status TEXT NOT NULL DEFAULT 'pending', woken_at TEXT, finished_at TEXT, result TEXT, created_at TEXT)`)
+  db.exec("CREATE TABLE IF NOT EXISTS wakeups (id INTEGER PRIMARY KEY, wake_at TEXT NOT NULL, purpose TEXT, status TEXT NOT NULL DEFAULT 'pending', woken_at TEXT, finished_at TEXT, result TEXT, created_at TEXT)")
   const iso = (ms: number) => new Date(ms).toISOString()
   db.prepare('INSERT INTO wakeups (wake_at, purpose) VALUES (?, ?)').run(iso(Date.now() + 3_600_000), 'later')
   await tick(); assert.equal(calls.length, 1) // nothing due, one pending: no fallback either
   db.prepare('INSERT INTO wakeups (wake_at, purpose) VALUES (?, ?)').run(iso(Date.now() - 60_000), 'check n8n')
   await tick()
-  assert.equal(calls.length, 2); assert.equal(calls[1].tabId, tab)
-  assert.match(calls[1].prompt, /You scheduled this in .*schedule\.db: #2 at .* \(check n8n\)/)
-  assert.doesNotMatch(calls[1].prompt, /Memory folder|Findings file|organize_thread/) // no instructions
+  assert.equal(calls.length, 2); assert.notEqual(calls[1].tabId, calls[0].tabId); assert.equal(calls[1].resume, undefined)
+  assert.match(calls[1].prompt, /plans itself/) // the full header and prompt...
+  assert.match(calls[1].prompt, /You scheduled this in .*schedule\.db: #2 at .* \(check n8n\)/) // ...plus what woke it
   assert.deepEqual(db.prepare('SELECT id, status FROM wakeups ORDER BY id').all().map((r) => ({ ...r })), [{ id: 1, status: 'pending' }, { id: 2, status: 'woken' }])
-  finish(tab)
+  finish(last())
   await tick(); assert.equal(calls.length, 2) // woken rows are the watcher's to finish, never woken twice
+  assert.deepEqual(closed, [calls[0].tabId, calls[1].tabId]) // each run's thread closed when it ended
   // nothing pending and the last run 6 h ago: the fallback wake
-  db.exec(`UPDATE wakeups SET status = 'done'`)
+  db.exec("UPDATE wakeups SET status = 'done'")
   const s = state('selfie'); s.runs.at(-1).startedAt = Date.now() - 7 * 3_600_000; writeFileSync(join(root, 'selfie', 'state.json'), JSON.stringify(s))
   await tick()
   assert.equal(calls.length, 3); assert.match(calls[2].prompt, /Nothing was pending .* after 6 hours/)
-  finish(tab)
+  finish(last()); await tick()
   // Hive restarts: the first tick always wakes it once to catch up, saying when Hive was last running; then only due rows
   writeFileSync(join(root, '.heartbeat'), String(new Date('2026-11-01T09:00:00').getTime()))
   initWatchers({}, join(root, '..'), deps)
@@ -249,47 +255,27 @@ test('self-scheduled watcher wakes only for its own due rows, with just the wake
   assert.equal(calls.length, 4)
   assert.match(calls[3].prompt, /just started; it was last running at 2026-11-01T09:00:00.*Catch up on anything you missed/s)
   assert.doesNotMatch(calls[3].prompt, /Nothing was pending/)
-  finish(tab)
+  finish(last())
   await tick(); assert.equal(calls.length, 4)
   db.close()
 })
 
-test('a watcher thread grown past the limit gets a fresh thread at its next run; a small one carries on', async () => {
-  const base = setup()
-  createWatcher({ name: 'Big', goal: 'watch things', schedule: { every: '1h' } }, 'test')
+test('Stop hook: a run that saved nothing (or, self-scheduled, set no next wake) is asked to save', async () => {
+  setup()
+  createWatcher({ name: 'Saver', goal: 'g', schedule: { every: '1h' } }, 'test')
   const tab = calls[0].tabId
-  finish(tab)
-  const file = join(base, 'big-session.jsonl')
-  const usage = (n: number) => JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: n } } })
-  deps.transcript = () => file
-  writeFileSync(file, `${usage(40_000)}\n`)
-  assert.equal(runWatcherNow('big'), '')
-  assert.equal(calls[1].tabId, tab) // small: same thread
-  finish(tab)
-  writeFileSync(file, `${usage(40_000)}\n${usage(400_000)}\n`)
-  assert.equal(runWatcherNow('big'), '')
-  assert.deepEqual(closed, [tab]) // the big thread is closed...
-  assert.notEqual(calls[2].tabId, tab) // ...and the run starts a new one
-  assert.equal(calls[2].resume, undefined)
-  assert.match(calls[2].prompt, /watch things/) // with the full prompt, as a fresh thread
-})
-
-test('a self-scheduled watcher rotated at a wake still gets the due rows in its fresh thread', async () => {
-  const base = setup()
-  createWatcher({ name: 'Selfbig', goal: 'plans itself', schedule: { every: 'self' } }, 't')
-  const tab = calls[0].tabId
-  finish(tab)
-  const file = join(base, 'selfbig-session.jsonl')
-  deps.transcript = () => file
-  writeFileSync(file, `${JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 400_000 } } })}\n`)
-  const db = new DatabaseSync(join(root, 'selfbig', 'schedule.db'))
-  db.exec(`CREATE TABLE IF NOT EXISTS wakeups (id INTEGER PRIMARY KEY, wake_at TEXT NOT NULL, purpose TEXT, status TEXT NOT NULL DEFAULT 'pending', woken_at TEXT, finished_at TEXT, result TEXT, created_at TEXT)`)
-  db.prepare('INSERT INTO wakeups (wake_at, purpose) VALUES (?, ?)').run(new Date(Date.now() - 60_000).toISOString(), 'check n8n')
-  await tick()
-  assert.equal(calls.length, 2)
-  assert.deepEqual(closed, [tab]); assert.notEqual(calls[1].tabId, tab)
-  assert.match(calls[1].prompt, /plans itself/) // the full header and prompt, as a fresh thread...
-  assert.match(calls[1].prompt, /You scheduled this in .*schedule\.db: #1 at .* \(check n8n\)/) // ...plus what woke it
-  assert.equal(db.prepare('SELECT status FROM wakeups').get()!.status, 'woken')
+  await new Promise((r) => setTimeout(r, 20))
+  assert.match(watcherStopReason(tab) ?? '', /save what the next run needs/)
+  writeFileSync(join(root, 'saver', 'memory', 'notes.md'), 'checked x')
+  assert.equal(watcherStopReason(tab), null)
+  assert.equal(watcherStopReason('watcher-unknown-1'), null) // not a run Hive started: never blocks
+  createWatcher({ name: 'Planner', goal: 'g', schedule: { every: 'self' } }, 'test')
+  const ptab = calls.at(-1)!.tabId
+  writeFileSync(join(root, 'planner', 'memory', 'notes.md'), 'x')
+  assert.match(watcherStopReason(ptab) ?? '', /schedule your next wake-up/)
+  const db = new DatabaseSync(join(root, 'planner', 'schedule.db'))
+  db.exec("CREATE TABLE IF NOT EXISTS wakeups (id INTEGER PRIMARY KEY, wake_at TEXT NOT NULL, purpose TEXT, status TEXT NOT NULL DEFAULT 'pending', woken_at TEXT, finished_at TEXT, result TEXT, created_at TEXT)")
+  db.prepare('INSERT INTO wakeups (wake_at, purpose) VALUES (?, ?)').run(new Date(Date.now() + 3_600_000).toISOString(), 'next')
   db.close()
+  assert.equal(watcherStopReason(ptab), null)
 })

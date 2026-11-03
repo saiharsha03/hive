@@ -38,7 +38,18 @@ const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'sear
 const forThread = <T extends { name: string }>(tabId: string, tools: T[]): T[] => (isWatcherTab(tabId) ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
 
 // a watcher's thread starts read-only (its own hooks merged with the read-only command check)
-const withReadOnly = (tabId: string, o: Partial<Options>): Partial<Options> => (isWatcherTab(tabId) ? { ...o, ...readOnlyOptions(o.hooks) } : o)
+const withReadOnly = (tabId: string, o: Partial<Options>): Partial<Options> => (isWatcherTab(tabId) ? { ...o, ...readOnlyOptions(saveCheck(tabId, o.hooks)) } : o)
+// a watcher run must leave what the next run needs on disk (its thread is closed after): the Stop hook asks once
+let watcherStop: (tabId: string) => string | null = () => null
+export const setWatcherStop = (f: (tabId: string) => string | null) => { watcherStop = f }
+const saveCheck = (tabId: string, hooks: Options['hooks'] = {}): Options['hooks'] => ({
+  ...hooks,
+  Stop: [...(hooks?.Stop ?? []), { hooks: [async (input: any) => {
+    if (input.stop_hook_active) return {} // already asked once this stop: let it end
+    const why = watcherStop(tabId)
+    return why ? { decision: 'block' as const, reason: why } : {}
+  }] }],
+})
 
 // No permission prompts in the app yet, so foreground sessions run in bypass mode (shown under the message box).
 // Background sessions run in 'auto' (modeCore); a live session switches when it moves between the two.
@@ -79,6 +90,7 @@ const codexById = new Map<string, ChildProcess>()
 type Live = {
   q: Query; push: (m: SDKUserMessage) => void; sessionId: string | null; turns: ReturnType<typeof turnQueue<SDKUserMessage>>
   background: boolean // hidden from the tab bar, or started by Hive on its own: runs in auto mode
+  closedByApp?: boolean // closeTab stopped it (disable, rotation, archive): the window must still hear hive_closed
   mode: PermissionMode | null // the live session's mode as last reported or set
   modeChain: Promise<void> // mode switches run one after another
   cwd: string
@@ -542,8 +554,10 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     } catch (e: any) {
       send({ type: 'hive_error', message: String(e?.message ?? e) })
     } finally {
-      // only if this tab still points at this process: a reopened tab may already have a new one
-      if (live.get(tabId) === s) {
+      // only if this tab still points at this process: a reopened tab may already have a new one. A process closeTab
+      // stopped is already out of live, but the window still shows it working until it hears hive_closed
+      if (s.closedByApp && !live.has(tabId)) send({ type: 'hive_closed' })
+      else if (live.get(tabId) === s) {
         send({ type: 'hive_closed' })
         live.delete(tabId)
         if (s.sessionId) gone.set(tabId, { tabId, sessionId: s.sessionId, cwd, title: titleOf(tabId), lastReply: s.lastReply, tabOpen: true })
@@ -700,9 +714,9 @@ export async function liveUsage(): Promise<any | null> {
 }
 
 // a thread's live state for Hive's own schedulers (watchers): working = a turn is running; null = no live process
-export function threadState(tabId: string): { working: boolean; sessionId: string | null; waitingReason?: string; lastOk: boolean | null } | null {
+export function threadState(tabId: string): { working: boolean; sessionId: string | null; waitingReason?: string; lastOk: boolean | null; lastReply: string | null } | null {
   const s = live.get(tabId)
-  return s ? { working: s.turns.busy(), sessionId: s.sessionId, waitingReason: s.waitingReason, lastOk: s.lastOk } : null
+  return s ? { working: s.turns.busy(), sessionId: s.sessionId, waitingReason: s.waitingReason, lastOk: s.lastOk, lastReply: s.lastReply } : null
 }
 
 // a watcher's run: a new turn in its thread when that is live (the tab shows the message like a started thread's
@@ -763,6 +777,7 @@ export function closeTab(tabId: string, quitting = false): void {
   if (s?.sessionId) gone.set(tabId, { tabId, sessionId: s.sessionId, cwd: s.cwd, title: titleOf(tabId), lastReply: s.lastReply, tabOpen: false })
   tabTitles.delete(tabId)
   if (!quitting) threadClosed(tabId)
+  if (s) s.closedByApp = true
   s?.turns.clear()
   s?.q.close()
   live.delete(tabId)
