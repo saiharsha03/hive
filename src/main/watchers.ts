@@ -18,6 +18,7 @@ import {
 import { blocked, dataDir, TEST_MODE, testWeeklyPct } from './testMode'
 import { writeFileSafe } from './safeWrite'
 import { FALLBACK_MS, markWoken, readWakeups, scheduleFile, type Wakeup } from './selfSchedule'
+import { lastContextTokens } from './sessionStats'
 
 
 // starts the watcher's thread (resume = continue that Claude session) or, when its tab is live, adds a turn to it
@@ -225,6 +226,9 @@ const started = (s: WatcherState, kind: RunKind, at: number) => { const m = mark
 
 // one run: a new turn in the watcher's thread, or a new (or resumed) thread when none is live. '' = started
 // wake: a self-scheduled wake-up; an existing thread then gets only the wake message, not the run header
+// a watcher thread past this many tokens of context gets a fresh one at its next run (HIVE_WATCHER_ROTATE_TOKENS)
+const ROTATE_TOKENS = Number(process.env.HIVE_WATCHER_ROTATE_TOKENS) > 0 ? Number(process.env.HIVE_WATCHER_ROTATE_TOKENS) : 150_000
+
 function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, kind: RunKind, wake?: Wake): string {
   const now = new Date()
   const f = foldersOf(id, c.dir, reportsRoot, w.name)
@@ -241,6 +245,16 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
   }
   mkdirSync(f.memory, { recursive: true })
   mkdirSync(f.reports, { recursive: true })
+  // a thread grown past ROTATE_TOKENS starts again fresh: every run re-reads the whole thread (cache reads still count
+  // against the limits, and a cold cache re-writes all of it), while what carries over lives in its memory folder and db
+  if (s.sessionId) {
+    const st = s.tabId ? deps.threadState(s.tabId) : null
+    const ctx = lastContextTokens(deps.transcript(cwdOf(w), s.sessionId))
+    if (ctx && ctx > ROTATE_TOKENS && !st?.working && !st?.waitingReason) {
+      if (s.tabId) deps.closeThread(s.tabId)
+      s = { ...s, tabId: null, sessionId: null, promptSent: null }
+    }
+  }
   const live = s.tabId ? deps.threadState(s.tabId) : null
   const fresh = !s.sessionId // no Claude session yet: a new thread
   const tabId = s.tabId && (live || s.sessionId) ? s.tabId : `watcher-${id}-${now.getTime()}`

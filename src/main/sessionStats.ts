@@ -1,5 +1,6 @@
 // Per-session numbers for the status bar, read from the session's transcript:
 // model, context size, cache warm/cold and when the session started.
+import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 
 export type SessionStats = {
@@ -36,4 +37,30 @@ export async function sessionStats(path: string): Promise<SessionStats> {
     else if ((c?.ephemeral_5m_input_tokens ?? 0) > 0) out.cacheTtlMs = 300_000
   }
   return out
+}
+
+// the context the thread's last request sent (fresh + cache written + cache read), read from the transcript's end only,
+// so it is cheap enough to ask before every watcher run; null when unknown
+export function lastContextTokens(path: string, tailBytes = 512 * 1024): number | null {
+  let text: string
+  try {
+    const fd = openSync(path, 'r')
+    try {
+      const size = fstatSync(fd).size
+      const n = Math.min(size, tailBytes)
+      const buf = Buffer.alloc(n)
+      readSync(fd, buf, 0, n, size - n)
+      text = buf.toString('utf8')
+    } finally { closeSync(fd) }
+  } catch { return null }
+  const lines = text.split('\n')
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i].includes('"usage"')) continue
+    let e: any
+    try { e = JSON.parse(lines[i]) } catch { continue }
+    const u = e.message?.usage
+    if (e.type !== 'assistant' || !u || e.isSidechain) continue
+    return (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
+  }
+  return null
 }

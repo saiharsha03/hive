@@ -253,3 +253,23 @@ test('self-scheduled watcher wakes only for its own due rows, with just the wake
   await tick(); assert.equal(calls.length, 4)
   db.close()
 })
+
+test('a watcher thread grown past the limit gets a fresh thread at its next run; a small one carries on', async () => {
+  const base = setup()
+  createWatcher({ name: 'Big', goal: 'watch things', schedule: { every: '1h' } }, 'test')
+  const tab = calls[0].tabId
+  finish(tab)
+  const file = join(base, 'big-session.jsonl')
+  const usage = (n: number) => JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: n } } })
+  deps.transcript = () => file
+  writeFileSync(file, `${usage(40_000)}\n`)
+  assert.equal(runWatcherNow('big'), '')
+  assert.equal(calls[1].tabId, tab) // small: same thread
+  finish(tab)
+  writeFileSync(file, `${usage(40_000)}\n${usage(400_000)}\n`)
+  assert.equal(runWatcherNow('big'), '')
+  assert.deepEqual(closed, [tab]) // the big thread is closed...
+  assert.notEqual(calls[2].tabId, tab) // ...and the run starts a new one
+  assert.equal(calls[2].resume, undefined)
+  assert.match(calls[2].prompt, /watch things/) // with the full prompt, as a fresh thread
+})
