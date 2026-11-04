@@ -31,7 +31,8 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
   const latestIds = new Set(watchers.flatMap((w) => { const id = latest(w); return id ? [id] : [] }))
   const currentTabs = new Set(watchers.flatMap((w) => (w.tabId ? [w.tabId] : [])))
   const isWatcherLive = (t: PhoneLive) => currentTabs.has(t.tabId) || latestIds.has(t.sessionId ?? '') || latestIds.has(t.tabId)
-  const stateOf = (t: PhoneLive): PhoneThread['state'] => (t.busy ? 'working' : t.waitingReason ? 'waiting' : 'idle')
+  // a question for the user wins over busy, as in the sidebar's Waiting for you
+  const stateOf = (t: PhoneLive): PhoneThread['state'] => (t.waitingReason ? 'waiting' : t.busy ? 'working' : 'idle')
   const savedById = new Map(saved.map((s) => [s.id, s]))
   const out: PhoneThread[] = []
 

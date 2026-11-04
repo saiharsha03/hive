@@ -110,8 +110,9 @@ const phoneItems = (items: Awaited<ReturnType<typeof loadRecentHistory>>['items'
 const mobileDeps = () => ({
   threads: async (): Promise<PhoneThread[]> => {
     // the sidebar's sections (Watchers, Pinned, Waiting, Working, Recent), from the same pins and watcher runs
-    const live = liveThreads().map((t) => ({ tabId: t.tabId, sessionId: t.sessionId, title: t.title, folder: basename(t.cwd), busy: t.busy, waitingReason: t.waitingReason }))
+    // watchers first: listing them settles a finished run and can close its tab, so the live list is read after
     const { watchers } = await listWatchersView()
+    const live = liveThreads().map((t) => ({ tabId: t.tabId, sessionId: t.sessionId, title: t.title, folder: basename(t.cwd), busy: t.busy, waitingReason: t.waitingReason }))
     return phoneThreads(live, await listSessions(), watchers, uiLoad('threads') as ThreadMap, Date.now())
   },
   read: async (id: string) => {

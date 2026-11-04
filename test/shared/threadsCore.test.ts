@@ -46,4 +46,8 @@ describe('phoneThreads', () => {
     const out = phoneThreads([], rows, [], { p1: { pinned: 1 }, p2: { pinned: 2 } }, now, 3)
     expect(out.map((t) => t.id)).toEqual(['p2', 'p1', 'r0', 'r1', 'r2'])
   })
+  it('puts a busy thread that asked for the user under Waiting, as the sidebar does', () => {
+    const out = phoneThreads([liveT('t', 's', { busy: true, waitingReason: 'Needs your input' })], [], [], {}, now)
+    expect(out.map((t) => [t.state, t.section])).toEqual([['waiting', 'waiting']])
+  })
 })
