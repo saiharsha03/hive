@@ -289,8 +289,11 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
         LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp), state = list) {
             items(items) { it -> Item(it) }
             items(asks, key = { "ask:" + it.optString("id") }) { a ->
-                AskCard(a) { answers ->
-                    scope.launch { err = runCatching { Relay.ask("answer", mapOf("id" to id, "ask" to a.optString("id"), "answers" to answers)); tick++; "" }.getOrElse { it.message ?: "Failed" } }
+                AskCard(a) { answers, done ->
+                    scope.launch {
+                        err = runCatching { Relay.ask("answer", mapOf("id" to id, "ask" to a.optString("id"), "answers" to answers)); tick++; "" }.getOrElse { it.message ?: "Failed" }
+                        done(err.isEmpty())
+                    }
                 }
             }
             if (working && asks.isEmpty()) item { Text("Claude is working…", Modifier.padding(8.dp), color = Color(0xFF5BA8F0), fontSize = 13.sp) }
@@ -408,7 +411,7 @@ private fun UsageScreen(onBack: () -> Unit) {
 
 // Claude's multiple-choice question, as on the desktop: pick (or type under Other), then Submit; or reply in the chat
 @Composable
-private fun AskCard(ask: JSONObject, onAnswer: (JSONObject) -> Unit) {
+private fun AskCard(ask: JSONObject, onAnswer: (JSONObject, (Boolean) -> Unit) -> Unit) {
     val qa = ask.optJSONArray("questions") ?: return
     val qs = (0 until qa.length()).map { qa.getJSONObject(it) }
     val picks = remember(ask.optString("id")) { mutableStateListOf<Set<String>>().apply { repeat(qs.size) { add(emptySet()) } } }
@@ -446,7 +449,7 @@ private fun AskCard(ask: JSONObject, onAnswer: (JSONObject) -> Unit) {
             OutlinedTextField(other[i], { other[i] = it }, Modifier.fillMaxWidth(), placeholder = { Text("Other") }, singleLine = true)
         }
         val a = answers()
-        Button(enabled = a != null && !sent, onClick = { sent = true; onAnswer(a!!) }) { Text(if (sent) "Sent" else "Submit") }
+        Button(enabled = a != null && !sent, onClick = { sent = true; onAnswer(a!!) { ok -> if (!ok) sent = false } }) { Text(if (sent) "Sent" else "Submit") }
         Text("or reply in the chat", fontSize = 12.sp, color = Color.Gray)
     }
 }

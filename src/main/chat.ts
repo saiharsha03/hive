@@ -32,7 +32,7 @@ import { notifyPhone } from './mobile'
 import { autoBackground } from '../shared/autoBackgroundCore'
 import { realLimits } from '../shared/usageCore'
 import { parseQuestions } from '../shared/askCore'
-import { cancelAsks, replyInChat, waitForAnswer } from './asks'
+import { cancelAsks, openAsks, replyInChat, waitForAnswer } from './asks'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -533,9 +533,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         send({ type: 'hive_organize', action: 'waiting', reason })
         notifyPhone(`Question: ${titleOf(tabId)}`, questions[0].question, tabId)
         const end = await waitForAnswer(tabId, toolUseID, questions, signal)
-        if (s.waitingReason === reason) s.waitingReason = undefined
         send({ type: 'hive_ask_done', id: toolUseID })
-        send({ type: 'hive_organize', action: 'resolved' })
+        // still waiting while another question of this thread is open
+        if (!openAsks(tabId).length) { if (s.waitingReason === reason) s.waitingReason = undefined; send({ type: 'hive_organize', action: 'resolved' }) }
         if (end.kind === 'answers') return { behavior: 'allow', updatedInput: { ...input, answers: end.answers } }
         return { behavior: 'deny', message: end.kind === 'chat' ? 'The user replied in the chat instead of picking an option: read their next message.' : 'The question was dismissed (the turn was stopped).' }
       },
@@ -651,7 +651,9 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   if (msg.text) content.push({ type: 'text', text: msg.text })
   const m = { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null } as SDKUserMessage
   const cur = s
-  if (msg.text || msg.images.length) replyInChat(tabId) // typed instead of picking: the open question ends
+  // typed instead of picking: the open question ends, but only for a message Claude gets now (a queued one waits for
+  // the turn's end, so the question stays open until then)
+  if ((msg.text || msg.images.length) && msg.mode !== 'queue') replyInChat(tabId)
   // sent while Claude works (steer) or queued: kept on disk until it reaches Claude, so closing Hive loses nothing
   if ((msg.text || msg.images.length) && (msg.mode === 'queue' || cur.turns.isBusy())) {
     addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer', background: cur.background })
