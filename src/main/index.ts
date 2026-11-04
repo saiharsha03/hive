@@ -27,12 +27,14 @@ import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatc
 import { gitDecorations, listDir } from './files'
 import { uiLoad, uiSave } from './uiStore'
 import { phoneThreads, type ThreadMap } from '../shared/threadsCore'
+import { CONTINUE_PROMPT } from '../shared/continueCore'
 import { loadHistory, loadRecentHistory } from './history'
 import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
 import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { answerAsk, openAsks } from './asks'
+import { cancelContinue, continueAt, initAutoContinue } from './autoContinue'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
 import { closeStatus, getStatus, setLiveUsage, weeklyUsage } from './status'
@@ -132,6 +134,7 @@ const mobileDeps = () => ({
   send: async (id: string, text: string) => {
     const w = appWindow()
     if (!w) throw new Error(`The ${appName()} window is not open`)
+    if (text !== CONTINUE_PROMPT) cancelContinue(id) // the user wrote to it: no automatic continue
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
     if (l) { runInThread({ tabId: l.tabId, cwd: l.cwd, title: l.title, prompt: text }, w.webContents); return 'sent' }
     const s = (await listSessions()).find((x) => x.id === id)
@@ -157,6 +160,15 @@ const mobileDeps = () => ({
   changed: mobileChanged,
 })
 initMobile(appConfig.env, mobileDeps())
+// threads that hit the usage limit continue by themselves after the reset (saved across restarts)
+initAutoContinue({
+  fire: async (w, prompt) => {
+    if (!appWindow()) return false // tried again in a minute
+    try { await mobileDeps().send(w.key, prompt) } catch (e) { console.warn(`auto-continue ${w.title}: ${(e as Error).message}`) } // a thread that is gone is dropped
+    return true
+  },
+  changed: (w, at) => { for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('chat:event', w.tabId, { type: 'hive_continue', at, key: w.key }) },
+})
 
 // every consumer picks up saved settings without a restart (running dev services keep theirs until restarted)
 function applySettings() {
@@ -273,6 +285,8 @@ handle('chat:send', (e, tabId: string, cwd: string, resume: string | undefined, 
 handle('chat:dequeue', (_e, tabId: string, queueId: string) => dequeue(tabId, queueId))
 handle('chat:promote', (_e, tabId: string, queueId: string) => promote(tabId, queueId))
 handle('chat:interrupt', (_e, tabId: string) => interrupt(tabId))
+handle('chat:continueAt', (_e, id: string) => continueAt(String(id)))
+handle('chat:cancelContinue', (_e, id: string) => cancelContinue(String(id)))
 handle('chat:answer', (_e, tabId: string, id: string, answers: unknown) => answerAsk(String(tabId), String(id), answers))
 handle('chat:background', (_e, tabId: string, toolUseId?: string) => background(tabId, toolUseId))
 handle('chat:close', (_e, tabId: string) => { killTerminal(String(tabId)); return closeTab(tabId) })

@@ -33,6 +33,8 @@ import { autoBackground } from '../shared/autoBackgroundCore'
 import { realLimits } from '../shared/usageCore'
 import { parseQuestions } from '../shared/askCore'
 import { cancelAsks, openAsks, replyInChat, waitForAnswer } from './asks'
+import { cancelContinue, scheduleContinue } from './autoContinue'
+import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -554,6 +556,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     cwd, lastReply: null, lastOk: null, onIdle: new Set(), emit: send,
   }
   let lastText = '' // the turn's latest assistant text, in case its result carries none
+  // this turn hit the plan's usage limit: set by a rejected rate-limit event (with its reset) or a rate_limit error
+  let limited = false
+  let limitReset: number | null = null
   // a shell command of this thread still running after a minute goes to the background, so Claude is free to talk
   // (and steer, or answer you) while it runs; only commands, never agents
   const longCommands = autoBackground((id) => q.backgroundTasks(id), autoBackgroundMs)
@@ -575,13 +580,28 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         if (m.type === 'assistant' && !m.parent_tool_use_id) {
           const t = ((m.message?.content ?? []) as any[]).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
           if (t.trim()) lastText = t
+          if ((m as any).error === 'rate_limit' && /limit/i.test(t)) limited = true
           longCommands.started(m.message?.content as any[])
         }
         if (m.type === 'user' && !m.parent_tool_use_id) longCommands.ended((m as any).message?.content)
+        if (m.type === 'rate_limit_event') {
+          const i = (m as any).rate_limit_info
+          if (i?.status === 'rejected') { limited = true; if (Number.isFinite(i.resetsAt)) limitReset = i.resetsAt * 1000 }
+        }
         if (m.type === 'result') {
           const r = m as any
           s.lastOk = r.subtype === 'success' && !r.is_error
           s.lastReply = r.subtype === 'success' ? (r.result || lastText) : `The turn ended with an error (${r.subtype}). ${(r.errors ?? []).join('; ')}`.trim()
+          // a usage limit: the thread continues by itself a minute after the reset (not a watcher: its schedule does)
+          if (limited && !s.lastOk && !watcher && s.sessionId) {
+            const reset = limitReset ?? resetFromText(`${lastText}
+${s.lastReply}`, Date.now())
+            if (reset) {
+              const w = scheduleContinue({ key: s.sessionId, tabId, cwd, title: titleOf(tabId) }, reset)
+              notifyPhone(`Usage limit: ${titleOf(tabId)}`, `Continues automatically at ${wakeLabel(w.at, Date.now())}`, tabId)
+            }
+          }
+          limited = false; limitReset = null
           lastText = ''
           longCommands.clear()
           s.turns.turnEnded()
@@ -654,6 +674,7 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   // typed instead of picking: the open question ends, but only for a message Claude gets now (a queued one waits for
   // the turn's end, so the question stays open until then)
   if ((msg.text || msg.images.length) && msg.mode !== 'queue') replyInChat(tabId)
+  if (msg.text || msg.images.length) { cancelContinue(tabId); if (s.sessionId) cancelContinue(s.sessionId) } // the user took over
   // sent while Claude works (steer) or queued: kept on disk until it reaches Claude, so closing Hive loses nothing
   if ((msg.text || msg.images.length) && (msg.mode === 'queue' || cur.turns.isBusy())) {
     addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer', background: cur.background })

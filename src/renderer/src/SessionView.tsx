@@ -20,6 +20,7 @@ import { useSlashMenu } from './SlashMenu'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
 import { Icon } from './ui'
 import { AskCard } from './AskCard'
+import { wakeLabel } from '../../shared/continueCore'
 
 export type Attachment = { url: string; mediaType: string; data: string }
 
@@ -196,6 +197,13 @@ const bgEnded = new Map<string, import('../../shared/taskCore').Task['status']>(
 export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, compactHead, banner }: Props) {
   // only the newest items are drawn at first, so a long thread opens at once; Show earlier adds more
   const [limit, setLimit] = useState(WINDOW)
+  // after a usage limit: when this thread continues by itself (asked again when the plan changes or the thread restarts)
+  const [wakeAt, setWakeAt] = useState<number | null>(null)
+  useEffect(() => {
+    let on = true
+    window.api.chatContinueAt(session.sessionId ?? session.id).then((at) => { if (on) setWakeAt(at) }).catch(() => {})
+    return () => { on = false }
+  }, [session.id, session.sessionId, session.continueRev])
   const [draft, setDraft] = useState(() => drafts.get(session.id)?.text ?? '')
   const [images, setImages] = useState<Attachment[]>(() => drafts.get(session.id)?.images ?? [])
   useEffect(() => { drafts.set(session.id, { text: draft, images }) }, [session.id, draft, images])
@@ -467,6 +475,11 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
         </div>
         <GoalLoop tabId={session.id} busy={session.busy} onSend={onSend} onInterrupt={async () => { await onStop() }} />
       </div>
+      {wakeAt && (
+        <div className="endedrun s-wait" data-testid="auto-continue"><Icon name="clock" />Usage limit reached; this thread continues automatically at {wakeLabel(wakeAt, Date.now())}.
+          <button className="linkbtn" onClick={() => { void window.api.chatCancelContinue(session.sessionId ?? session.id).then(() => setWakeAt(null)) }} data-testid="auto-continue-cancel">Cancel</button>
+        </div>
+      )}
       {session.endedRun && !session.busy && (
         <div className="endedrun" data-testid="ended-run"><Icon name="lock" />This watcher run has ended and its thread is closed. Sending a message reopens it: Claude reads the whole conversation again, which counts against your usage, and the thread stays read-only.</div>
       )}
