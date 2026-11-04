@@ -31,6 +31,8 @@ import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcher
 import { notifyPhone } from './mobile'
 import { autoBackground } from '../shared/autoBackgroundCore'
 import { realLimits } from '../shared/usageCore'
+import { parseQuestions } from '../shared/askCore'
+import { cancelAsks, replyInChat, waitForAnswer } from './asks'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -518,6 +520,25 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       allowDangerouslySkipPermissions: true,
       // Settings > General: model and effort for threads started from now on ('' = Claude Code's default)
       ...threadDefaults(),
+      // Claude's multiple-choice questions (AskUserQuestion) as a card in the thread and on the phone; giving the SDK a
+      // permission handler is what makes the tool available. Any other tool reaching it is denied, as with no handler
+      canUseTool: async (name, input, { signal, toolUseID }) => {
+        if (name !== 'AskUserQuestion') return { behavior: 'deny', message: `${appName()} has no permission prompt for ${name}` }
+        if (watcher) return { behavior: 'deny', message: 'This is an unattended watcher run: nobody is there to answer. Decide yourself and note the open question in your findings.' }
+        const questions = parseQuestions(input)
+        if (!questions) return { behavior: 'deny', message: 'AskUserQuestion needs 1-4 questions, each with a question and labelled options' }
+        const reason = `Question: ${questions[0].question}`.slice(0, 200)
+        s.waitingReason = reason
+        send({ type: 'hive_ask', id: toolUseID, questions })
+        send({ type: 'hive_organize', action: 'waiting', reason })
+        notifyPhone(`Question: ${titleOf(tabId)}`, questions[0].question, tabId)
+        const end = await waitForAnswer(tabId, toolUseID, questions, signal)
+        if (s.waitingReason === reason) s.waitingReason = undefined
+        send({ type: 'hive_ask_done', id: toolUseID })
+        send({ type: 'hive_organize', action: 'resolved' })
+        if (end.kind === 'answers') return { behavior: 'allow', updatedInput: { ...input, answers: end.answers } }
+        return { behavior: 'deny', message: end.kind === 'chat' ? 'The user replied in the chat instead of picking an option: read their next message.' : 'The question was dismissed (the turn was stopped).' }
+      },
       // hook events, Hive-only plugin switches, the Stop hook that reports loops and effort; watcher threads read-only
       ...withReadOnly(watcher, tabId, sessionOptions(tabId, send)),
     },
@@ -630,6 +651,7 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   if (msg.text) content.push({ type: 'text', text: msg.text })
   const m = { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null } as SDKUserMessage
   const cur = s
+  if (msg.text || msg.images.length) replyInChat(tabId) // typed instead of picking: the open question ends
   // sent while Claude works (steer) or queued: kept on disk until it reaches Claude, so closing Hive loses nothing
   if ((msg.text || msg.images.length) && (msg.mode === 'queue' || cur.turns.isBusy())) {
     addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer', background: cur.background })
@@ -785,6 +807,7 @@ export async function background(tabId: string, toolUseId?: string): Promise<boo
 }
 
 export async function interrupt(tabId: string): Promise<void> {
+  cancelAsks(tabId) // Stop also ends an open question
   await live.get(tabId)?.q.interrupt()
 }
 
@@ -792,6 +815,7 @@ export async function interrupt(tabId: string): Promise<void> {
 export function closeTab(tabId: string, quitting = false): void {
   for (const p of codexRuns.get(tabId) ?? []) p.kill()
   codexRuns.delete(tabId)
+  cancelAsks(tabId)
   forgetTab(tabId)
   releaseThread(tabId)
   const s = live.get(tabId)

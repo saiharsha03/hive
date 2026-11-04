@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('api', {
   chatDequeue: (tabId: string, queueId: string) => ipcRenderer.invoke('chat:dequeue', tabId, queueId),
   chatPromote: (tabId: string, queueId: string) => ipcRenderer.invoke('chat:promote', tabId, queueId),
   chatInterrupt: (tabId: string) => ipcRenderer.invoke('chat:interrupt', tabId),
+  chatAnswer: (tabId: string, id: string, answers: Record<string, string>): Promise<boolean> => ipcRenderer.invoke('chat:answer', tabId, id, answers),
   chatBackground: (tabId: string, toolUseId?: string) => ipcRenderer.invoke('chat:background', tabId, toolUseId),
   chatClose: (tabId: string) => ipcRenderer.invoke('chat:close', tabId),
   chatSetBackground: (tabId: string, on: boolean) => ipcRenderer.invoke('chat:setBackground', tabId, on),

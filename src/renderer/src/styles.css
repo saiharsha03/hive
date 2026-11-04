@@ -945,3 +945,12 @@ button.sbi:hover { background: var(--hover); }
 .tooltab { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 .td { flex-wrap: wrap; } .td-text { flex: 1 1 160px; }
 .phonepair { display: flex; flex-direction: column; gap: 6px; } .phoneqr { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; } .phoneqr img { background: #fff; padding: 8px; border-radius: 4px; }
+.askcard { border: 1px solid var(--line2); border-left: 3px solid var(--wait); padding: 10px 12px; display: flex; flex-direction: column; gap: 12px; }
+.askcard.done { border-left-color: var(--line2); opacity: .75; }
+.askq { display: flex; flex-direction: column; gap: 6px; }
+.askhead { align-self: flex-start; font-size: 11px; color: var(--dim); border: 1px solid var(--line2); padding: 0 6px; }
+.asktext { font-weight: 600; }
+.askopt { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.askdesc { color: var(--dim); }
+.askother { width: 100%; }
+.askfoot { display: flex; gap: 10px; align-items: center; }

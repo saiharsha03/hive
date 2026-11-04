@@ -32,6 +32,7 @@ import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
 import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
+import { answerAsk, openAsks } from './asks'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
 import { closeStatus, getStatus, setLiveUsage, weeklyUsage } from './status'
@@ -116,13 +117,14 @@ const mobileDeps = () => ({
     return phoneThreads(live, await listSessions(), watchers, uiLoad('threads') as ThreadMap, Date.now())
   },
   // the plan limits as the status bar's usage popover shows them (one cached reading, see status.ts)
+  answer: (id: string, ask: string, answers: unknown) => { const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id); return !!l && answerAsk(l.tabId, ask, answers) },
   usage: async () => { const st = await getStatus(); return { plan: st.plan, rows: st.usage } },
   read: async (id: string) => {
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
     const path = l?.sessionId ? transcriptPath(l.cwd, l.sessionId) : (await listSessions()).find((s) => s.id === id)?.path
-    if (!path) return l ? { title: l.title, items: [], working: l.busy } : null
+    if (!path) return l ? { title: l.title, items: [], working: l.busy, asks: openAsks(l.tabId) } : null
     const { items } = await loadRecentHistory(path)
-    return { title: l?.title ?? (await listSessions()).find((s) => s.id === id)?.title ?? id, items: phoneItems(items), working: !!l?.busy }
+    return { title: l?.title ?? (await listSessions()).find((s) => s.id === id)?.title ?? id, items: phoneItems(items), working: !!l?.busy, asks: l ? openAsks(l.tabId) : [] }
   },
   send: async (id: string, text: string) => {
     const w = appWindow()
@@ -268,6 +270,7 @@ handle('chat:send', (e, tabId: string, cwd: string, resume: string | undefined, 
 handle('chat:dequeue', (_e, tabId: string, queueId: string) => dequeue(tabId, queueId))
 handle('chat:promote', (_e, tabId: string, queueId: string) => promote(tabId, queueId))
 handle('chat:interrupt', (_e, tabId: string) => interrupt(tabId))
+handle('chat:answer', (_e, tabId: string, id: string, answers: unknown) => answerAsk(String(tabId), String(id), answers))
 handle('chat:background', (_e, tabId: string, toolUseId?: string) => background(tabId, toolUseId))
 handle('chat:close', (_e, tabId: string) => { killTerminal(String(tabId)); return closeTab(tabId) })
 // the tab moved to the background or back on screen: switch its live session's permission mode

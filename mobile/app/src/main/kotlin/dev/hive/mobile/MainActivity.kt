@@ -253,6 +253,7 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
     var title by remember { mutableStateOf("") }
     var items by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var working by remember { mutableStateOf(false) }
+    var asks by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
@@ -268,9 +269,12 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             working = t.optBoolean("working")
             val a = t.getJSONArray("items")
             items = (0 until a.length()).map { a.getJSONObject(it) }
+            // Claude's open questions (an older Hive sends none)
+            val q = t.optJSONArray("asks")
+            asks = if (q == null) emptyList() else (0 until q.length()).map { q.getJSONObject(it) }
             ""
         }.getOrElse { it.message ?: "Failed" }
-        if (items.isNotEmpty()) list.scrollToItem(items.size - 1)
+        if (items.isNotEmpty()) list.scrollToItem(items.size - 1 + asks.size)
     }
     // while Claude works, look again every few seconds
     LaunchedEffect(working) { while (working) { kotlinx.coroutines.delay(4000); tick++ } }
@@ -284,7 +288,12 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
         if (err.isNotEmpty()) Text(err, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error)
         LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp), state = list) {
             items(items) { it -> Item(it) }
-            if (working) item { Text("Claude is working…", Modifier.padding(8.dp), color = Color(0xFF5BA8F0), fontSize = 13.sp) }
+            items(asks, key = { "ask:" + it.optString("id") }) { a ->
+                AskCard(a) { answers ->
+                    scope.launch { err = runCatching { Relay.ask("answer", mapOf("id" to id, "ask" to a.optString("id"), "answers" to answers)); tick++; "" }.getOrElse { it.message ?: "Failed" } }
+                }
+            }
+            if (working && asks.isEmpty()) item { Text("Claude is working…", Modifier.padding(8.dp), color = Color(0xFF5BA8F0), fontSize = 13.sp) }
         }
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(draft, { draft = it }, Modifier.weight(1f), placeholder = { Text(if (working) "Steer Claude…" else "Message Claude…") }, maxLines = 6)
@@ -394,5 +403,50 @@ private fun UsageScreen(onBack: () -> Unit) {
                 Text("${pct.toInt()}% used" + if (reset.isNotEmpty()) ", resets in $reset" else "", fontSize = 12.sp, color = Color.Gray)
             }
         }
+    }
+}
+
+// Claude's multiple-choice question, as on the desktop: pick (or type under Other), then Submit; or reply in the chat
+@Composable
+private fun AskCard(ask: JSONObject, onAnswer: (JSONObject) -> Unit) {
+    val qa = ask.optJSONArray("questions") ?: return
+    val qs = (0 until qa.length()).map { qa.getJSONObject(it) }
+    val picks = remember(ask.optString("id")) { mutableStateListOf<Set<String>>().apply { repeat(qs.size) { add(emptySet()) } } }
+    val other = remember(ask.optString("id")) { mutableStateListOf<String>().apply { repeat(qs.size) { add("") } } }
+    var sent by remember(ask.optString("id")) { mutableStateOf(false) }
+    // question text -> answer (several picks comma-separated), or null while one is unanswered
+    fun answers(): JSONObject? {
+        val out = JSONObject()
+        qs.forEachIndexed { i, q ->
+            val multi = q.optBoolean("multiSelect")
+            val typed = other[i].trim()
+            val parts = if (multi) picks[i].toList() + listOfNotNull(typed.ifEmpty { null }) else if (typed.isNotEmpty()) listOf(typed) else picks[i].take(1)
+            if (parts.isEmpty()) return null
+            out.put(q.optString("question"), parts.joinToString(", "))
+        }
+        return out
+    }
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Color(0xFF2A2418), RoundedCornerShape(10.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        qs.forEachIndexed { i, q ->
+            val multi = q.optBoolean("multiSelect")
+            if (q.optString("header").isNotEmpty()) Text(q.optString("header"), fontSize = 11.sp, color = Color.Gray)
+            Text(q.optString("question"), style = MaterialTheme.typography.bodyLarge)
+            val opts = q.optJSONArray("options")
+            for (j in 0 until (opts?.length() ?: 0)) {
+                val o = opts!!.getJSONObject(j); val label = o.optString("label")
+                val on = label in picks[i] && (multi || other[i].isBlank())
+                Row(Modifier.fillMaxWidth().clickable {
+                    picks[i] = if (multi) (if (label in picks[i]) picks[i] - label else picks[i] + label) else setOf(label)
+                    if (!multi) other[i] = ""
+                }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (multi) Checkbox(on, null) else RadioButton(on, null)
+                    Column { Text(label); if (o.optString("description").isNotEmpty()) Text(o.optString("description"), fontSize = 12.sp, color = Color.Gray) }
+                }
+            }
+            OutlinedTextField(other[i], { other[i] = it }, Modifier.fillMaxWidth(), placeholder = { Text("Other") }, singleLine = true)
+        }
+        val a = answers()
+        Button(enabled = a != null && !sent, onClick = { sent = true; onAnswer(a!!) }) { Text(if (sent) "Sent" else "Submit") }
+        Text("or reply in the chat", fontSize = 12.sp, color = Color.Gray)
     }
 }

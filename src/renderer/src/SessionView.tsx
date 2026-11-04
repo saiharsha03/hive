@@ -19,6 +19,7 @@ import { SummaryRow, WarningRow } from './ChatRows'
 import { useSlashMenu } from './SlashMenu'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
 import { Icon } from './ui'
+import { AskCard } from './AskCard'
 
 export type Attachment = { url: string; mediaType: string; data: string }
 
@@ -394,6 +395,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           )
           if (it.kind === 'tool') {
             if (it.name === SHOW || it.name === CODEX) return null // the card / Codex box says it all
+            if (it.name === 'AskUserQuestion') return <div key={i} className="msg"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} /></div>
             const { verb, what } = toolLine(it.name, it.input)
             const file = FILE_TOOLS.includes(it.name) && it.status !== 'error' && typeof it.input?.file_path === 'string' ? it.input.file_path as string : null
             const hunks = file ? hunksOf(it) : null

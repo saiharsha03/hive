@@ -13,11 +13,14 @@ import { blocked, dataDir, TEST_MODE } from './testMode'
 export type { PhoneThread } from '../shared/threadsCore'
 import type { PhoneThread } from '../shared/threadsCore'
 import type { UsageRow } from '../shared/usageCore'
+import type { AskQuestion } from '../shared/askCore'
 export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
 type Deps = {
   threads: () => Promise<PhoneThread[]>
-  read: (id: string) => Promise<{ title: string; items: PhoneItem[]; working: boolean } | null>
+  // asks: Claude's open multiple-choice questions in that thread (an older app ignores them)
+  read: (id: string) => Promise<{ title: string; items: PhoneItem[]; working: boolean; asks?: { id: string; questions: AskQuestion[] }[] } | null>
+  answer: (id: string, ask: string, answers: unknown) => boolean
   send: (id: string, text: string) => Promise<string>
   start: (folder: string, text: string) => Promise<string>
   stop: (id: string) => Promise<void>
@@ -196,6 +199,7 @@ async function onMessage(raw: string): Promise<void> {
       case 'threads': return reply({ threads: await deps.threads(), folders: deps.folders() })
       case 'thread': return reply({ thread: await deps.read(id) })
       case 'usage': return reply({ usage: await deps.usage() })
+      case 'answer': return deps.answer(id, String(m.ask ?? ''), m.answers) ? reply({ ok: 'answered' }) : reply({ error: 'That question is no longer open' })
       case 'send': return reply({ ok: await deps.send(id, String(m.text ?? '')) })
       case 'new': return reply({ ok: await deps.start(String(m.folder ?? ''), String(m.text ?? '')) })
       case 'stop': await deps.stop(id); return reply({ ok: 'stopped' })

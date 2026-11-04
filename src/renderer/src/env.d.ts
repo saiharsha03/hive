@@ -119,6 +119,7 @@ interface Window {
     chatDequeue: (tabId: string, queueId: string) => Promise<boolean>
     chatPromote: (tabId: string, queueId: string) => Promise<boolean>
     chatInterrupt: (tabId: string) => Promise<void>
+    chatAnswer: (tabId: string, id: string, answers: Record<string, string>) => Promise<boolean>
     chatBackground: (tabId: string, toolUseId?: string) => Promise<boolean>
     chatClose: (tabId: string) => Promise<void>
     chatSetBackground: (tabId: string, on: boolean) => Promise<void>
