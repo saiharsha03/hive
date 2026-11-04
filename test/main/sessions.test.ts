@@ -22,4 +22,7 @@ test('updated = the newest user or assistant message; titles, hooks and meta lin
   // the final entry cut off by the tail chunk: its time is unknown, so the file's time
   const cut = [line({ type: 'user', timestamp: '2026-11-01T10:00:00Z', message: { content: 'start' } }), '{"type":"assistant","timestamp":"2026-11-03T'].join('\n')
   assert.equal(parse('C:/x/c.jsonl', cut, 99)!.updated, 99)
+  // a watcher run's thread is marked, so the sidebar keeps it out of the thread list
+  assert.equal(parse('C:/x/w.jsonl', line({ type: 'user', message: { content: '[Hive watcher run: Watch]\nRun kind: sweep' } }), 1)!.watcherRun, true)
+  assert.equal(parse('C:/x/n.jsonl', line({ type: 'user', message: { content: 'look at the watcher run: later' } }), 1)!.watcherRun, undefined)
 })

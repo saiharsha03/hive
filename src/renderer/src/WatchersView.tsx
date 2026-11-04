@@ -244,7 +244,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
           <span className="dnote">{when(r.startedAt)}{r.endedAt ? ` · ${mins(r.endedAt - r.startedAt)}` : ' · working'}</span>
           {r.error && <span className="derr">{r.error}</span>}
           <span className="dspace" />
-          {!r.error && (r.path || r.tabId) && <button className="dlink" onClick={() => onOpenThread({ tabId: r.tabId, sessionId: r.sessionId ?? null, path: r.path, cwd: r.cwd, title: `Watcher: ${d.name}`, at: r.startedAt })}>Open thread</button>}
+          {(r.path || r.tabId) && <button className="dlink" onClick={() => onOpenThread({ tabId: r.tabId, sessionId: r.sessionId ?? null, path: r.path, cwd: r.cwd, title: `Watcher: ${d.name}`, at: r.startedAt })}>Open thread</button>}
         </div>
       )) : <div className="dnote">No runs yet.</div>)}
     </div>

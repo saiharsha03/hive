@@ -6,6 +6,8 @@ export const isWatcherTab = (tabId: string) => tabId.startsWith('watcher-')
 // A watcher session, whatever tab resumes it (sidebar, phone, message_thread, after a restart): its first message is
 // Hive's run header "[<app> watcher run: <name>]" or a wake-up "[<app> wake-up: <name>]". jsonl = the transcript's start;
 // null = no complete first user message in it yet (read more, or treat as a watcher's: fail closed)
+// the first line of a watcher run header or wake-up: "[<app> watcher run: <name>]" / "[<app> wake-up: <name>]"
+export const WATCHER_HEADER = /^\[[^\]\n]{1,80} (watcher run|wake-up): [^\]\n]+\]/
 export function isWatcherTranscript(jsonl: string): boolean | null {
   for (const line of jsonl.split('\n')) {
     if (!line.startsWith('{')) continue
@@ -15,7 +17,7 @@ export function isWatcherTranscript(jsonl: string): boolean | null {
     const c = e.message?.content
     const text = typeof c === 'string' ? c : Array.isArray(c) ? (c.find((p: any) => p?.type === 'text')?.text ?? '') : ''
     if (!text) continue
-    return /^\[[^\]\n]{1,80} (watcher run|wake-up): [^\]\n]+\]/.test(text)
+    return WATCHER_HEADER.test(text)
   }
   return null
 }

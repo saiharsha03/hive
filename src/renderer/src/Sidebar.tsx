@@ -47,7 +47,8 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const olderRuns = useMemo(() => new Set(watchers.flatMap((w) => (w.sessionIds ?? []).filter((id) => id !== latest(w)))), [watchers])
   const sessions = useMemo(() => {
     const names = new Map(watchers.flatMap((w) => { const id = latest(w); return id ? [[id, w.name] as const] : [] }))
-    return listed && listed.filter((s) => !olderRuns.has(s.id)).map((s) => (names.has(s.id) ? { ...s, title: names.get(s.id)! } : s))
+    const latestIds = new Set(names.keys())
+    return listed && listed.filter((s) => !olderRuns.has(s.id) && !(s.watcherRun && !latestIds.has(s.id))).map((s) => (names.has(s.id) ? { ...s, title: names.get(s.id)! } : s))
   }, [listed, watchers, olderRuns])
   const watcherIds = useMemo(() => new Set(watchers.flatMap((w) => { const id = latest(w); return id ? [id] : [] })), [watchers])
   const [query, setQuery] = useState('')
