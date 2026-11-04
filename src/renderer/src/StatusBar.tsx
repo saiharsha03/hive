@@ -6,7 +6,7 @@ import { useAppName } from './appSettings'
 import { HiveMark } from './HiveMark'
 import { ModelBadge } from './ThreadStatus'
 import { getThemes, getUIs, useAppearance } from './appearance'
-import { Icon } from './ui'
+import { Icon, Popover, anchorOf, type Anchor } from './ui'
 import { AccountSwitch } from './AccountSwitch'
 
 const left = (iso: string | null, now: number) => {
@@ -37,6 +37,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   const [ctx, setCtx] = useState<{ total: number; max: number } | null>(null)
   const [status, setStatus] = useState<Status | null>(null)
   const [switching, setSwitching] = useState(false)
+  const [usageAt, setUsageAt] = useState<Anchor | null>(null)
   const [stats, setStats] = useState<SessionStats | null>(null)
   const [now, setNow] = useState(Date.now())
   const name = useAppName()
@@ -69,7 +70,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   const ctxTotal = ctx?.total ?? stats?.contextTokens ?? null
   const ctxMax = ctx?.max ?? null
   const lim = (label: string, l: Limit, id: string) => l && l.pct !== null && (
-    <Item testid={`status-${id}`} title={l.resetsAt ? `${label} limit, resets in ${left(l.resetsAt, now)}` : `${label} limit`}>
+    <Item testid={`status-${id}`} title={`${l.resetsAt ? `${label} limit, resets in ${left(l.resetsAt, now)}` : `${label} limit`}. Click for all limits`} onClick={(el) => setUsageAt(anchorOf(el))}>
       <span className="lbl">{label}</span><Meter pct={l.pct} t={tone(l.pct)} /><span className={tone(l.pct) === 'ok' ? '' : `s-${tone(l.pct) === 'bad' ? 'fail' : 'wait'}`}>{Math.round(l.pct)}%</span>
       {l.resetsAt && <span className="lbl">resets {left(l.resetsAt, now)}</span>}
     </Item>
@@ -105,6 +106,20 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
         </Item>
       )}
       <Item testid="status-appearance" title="UI and theme" onClick={onAppearance}><Icon name="layout" />{getUIs().find((u) => u.id === ui)?.label} UI, {getThemes(ui).find((t) => t.id === theme)?.label} theme</Item>
+      {usageAt && status && (
+        <Popover anchor={usageAt} onClose={() => setUsageAt(null)} width={300} align="right" testid="usage-pop">
+          <div className="usage-pop">
+            <b>Plan usage{status.plan ? ` (${status.plan[0].toUpperCase()}${status.plan.slice(1)})` : ''}</b>
+            {!status.usage?.length && <div className="hint">No reading yet.</div>}
+            {status.usage?.map((r) => (
+              <div key={r.key} className="usage-row" data-testid={`usage-${r.key}`}>
+                <div>{r.label}</div>
+                <div><Meter pct={r.pct} t={tone(r.pct)} /> {Math.round(r.pct)}% used{r.resetsAt ? `, resets in ${left(r.resetsAt, now)}` : ''}</div>
+              </div>
+            ))}
+          </div>
+        </Popover>
+      )}
       {switching && <AccountSwitch current={status?.account ?? null} working={working} onClose={() => setSwitching(false)} />}
     </footer>
   )

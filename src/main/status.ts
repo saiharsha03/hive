@@ -6,7 +6,7 @@ import { claudeExecutable, engineInfo } from './engine'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { realLimits } from '../shared/usageCore'
+import { realLimits, usageRows, type UsageRow } from '../shared/usageCore'
 
 export type Limit = { pct: number | null; resetsAt: string | null } | null
 export type Status = {
@@ -14,6 +14,7 @@ export type Status = {
   plan: string | null
   five: Limit
   seven: Limit
+  usage: UsageRow[] // every plan window with a reading, for the usage popover and the phone
   connectors: { connected: number; total: number; needsAuth: number; failed: number } | null
   engine: { installed: boolean; version: string | null }
   error?: string
@@ -95,6 +96,7 @@ export async function getStatus(): Promise<Status> {
     // a placeholder is no reading: the meters stay hidden until a real one arrives (not a fake 0%)
     five: realLimits(u?.rate_limits) ? limit(u?.rate_limits?.five_hour) : null,
     seven: realLimits(u?.rate_limits) ? limit(u?.rate_limits?.seven_day) : null,
+    usage: usageRows(u?.rate_limits),
     connectors: m && {
       connected: m.filter((s) => s.status === 'connected').length,
       total: m.length,

@@ -12,6 +12,7 @@ import { blocked, dataDir, TEST_MODE } from './testMode'
 
 export type { PhoneThread } from '../shared/threadsCore'
 import type { PhoneThread } from '../shared/threadsCore'
+import type { UsageRow } from '../shared/usageCore'
 export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
 type Deps = {
@@ -21,6 +22,7 @@ type Deps = {
   start: (folder: string, text: string) => Promise<string>
   stop: (id: string) => Promise<void>
   folders: () => string[]
+  usage: () => Promise<{ plan: string | null; rows: UsageRow[] }>
   changed: () => void
 }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
@@ -193,6 +195,7 @@ async function onMessage(raw: string): Promise<void> {
     switch (m.op) {
       case 'threads': return reply({ threads: await deps.threads(), folders: deps.folders() })
       case 'thread': return reply({ thread: await deps.read(id) })
+      case 'usage': return reply({ usage: await deps.usage() })
       case 'send': return reply({ ok: await deps.send(id, String(m.text ?? '')) })
       case 'new': return reply({ ok: await deps.start(String(m.folder ?? ''), String(m.text ?? '')) })
       case 'stop': await deps.stop(id); return reply({ ok: 'stopped' })

@@ -116,10 +116,11 @@ private fun App(openThread: MutableState<String?>) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var paired by remember { mutableStateOf(Pairing.load(ctx) != null) }
     var newThread by remember { mutableStateOf(false) }
+    var usage by remember { mutableStateOf(false) }
     // Android 13+ asks before an app may show notifications
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) { if (android.os.Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
-    val list = @Composable { Threads(onOpen = { newThread = false; openThread.value = it }, onNew = { newThread = true }, onUnpair = { Relay.disconnect(); Pairing.clear(ctx); paired = false }) }
+    val list = @Composable { Threads(onOpen = { newThread = false; openThread.value = it }, onNew = { newThread = true }, onUsage = { usage = true }, onUnpair = { Relay.disconnect(); Pairing.clear(ctx); paired = false }) }
     BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
         val wide = maxWidth
         when {
@@ -130,12 +131,14 @@ private fun App(openThread: MutableState<String?>) {
                 VerticalDivider(color = Color(0x22FFFFFF))
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     when {
+                        usage -> UsageScreen(onBack = { usage = false })
                         newThread -> NewThread(onDone = { newThread = false })
                         openThread.value != null -> key(openThread.value) { ThreadScreen(openThread.value!!) { openThread.value = null } }
                         else -> Text("Pick a thread", Modifier.align(Alignment.Center), color = Color.Gray)
                     }
                 }
             }
+            usage -> UsageScreen(onBack = { usage = false })
             newThread -> NewThread(onDone = { newThread = false })
             openThread.value != null -> ThreadScreen(openThread.value!!) { openThread.value = null }
             else -> list()
@@ -183,7 +186,7 @@ private fun StatusLine() {
 }
 
 @Composable
-private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUnpair: () -> Unit) {
+private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> Unit, onUnpair: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val state by Relay.state.collectAsState()
     val changed by Relay.changed.collectAsState()
@@ -205,7 +208,10 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUnpair: () ->
             Button(onClick = onNew, enabled = state == Relay.State.Online) { Text("New") }
             Box {
                 TextButton(onClick = { menu = true }) { Text("⋮", fontSize = 20.sp) }
-                DropdownMenu(menu, { menu = false }) { DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = { menu = false; onUnpair() }) }
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(text = { Text("Usage") }, onClick = { menu = false; onUsage() })
+                    DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = { menu = false; onUnpair() })
+                }
             }
         }
         StatusLine()
@@ -343,5 +349,50 @@ private fun NewThread(onDone: () -> Unit) {
             }
         }) { Text(if (busy) "Starting…" else "Start") }
         if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
+    }
+}
+
+// "3h 12m" until an ISO time, like the desktop status bar
+private fun untilReset(iso: String): String = runCatching {
+    val m = maxOf(0L, java.time.Duration.between(java.time.Instant.now(), java.time.Instant.parse(iso)).toMinutes())
+    val d = m / 1440; val h = (m % 1440) / 60
+    if (d > 0) "${d}d ${h}h" else if (h > 0) "${h}h ${m % 60}m" else "${m}m"
+}.getOrDefault("")
+
+// The plan limits as the desktop's usage popover shows them (/usage in Claude Code); an older Hive has no such request
+@Composable
+private fun UsageScreen(onBack: () -> Unit) {
+    val state by Relay.state.collectAsState()
+    var plan by remember { mutableStateOf("") }
+    var rows by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var err by remember { mutableStateOf("") }
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    LaunchedEffect(state) {
+        if (state != Relay.State.Online) return@LaunchedEffect
+        runCatching {
+            val u = Relay.ask("usage").getJSONObject("usage")
+            plan = u.optString("plan").let { if (it == "null") "" else it }
+            val a = u.getJSONArray("rows")
+            rows = (0 until a.length()).map { a.getJSONObject(it) }
+            err = ""
+        }.onFailure { err = if (it.message?.contains("unknown", true) == true) "Update Hive on the computer to see usage" else it.message ?: "Failed" }
+    }
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            Text(if (plan.isEmpty()) "Usage" else "Usage (${plan.replaceFirstChar { it.uppercase() }})", style = MaterialTheme.typography.titleLarge)
+        }
+        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
+        if (rows?.isEmpty() == true) Text("No reading yet.", color = Color.Gray)
+        rows?.forEach { r ->
+            val pct = r.optDouble("pct", 0.0)
+            val color = if (pct >= 90) Color(0xFFE05050) else if (pct >= 70) Color(0xFFE0A030) else Color(0xFF50B070)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(r.optString("label"))
+                LinearProgressIndicator(progress = { (pct / 100).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = color)
+                val reset = if (r.isNull("resetsAt")) "" else untilReset(r.optString("resetsAt"))
+                Text("${pct.toInt()}% used" + if (reset.isNotEmpty()) ", resets in $reset" else "", fontSize = 12.sp, color = Color.Gray)
+            }
+        }
     }
 }

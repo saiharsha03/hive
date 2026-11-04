@@ -115,6 +115,8 @@ const mobileDeps = () => ({
     const live = liveThreads().map((t) => ({ tabId: t.tabId, sessionId: t.sessionId, title: t.title, folder: basename(t.cwd), busy: t.busy, waitingReason: t.waitingReason }))
     return phoneThreads(live, await listSessions(), watchers, uiLoad('threads') as ThreadMap, Date.now())
   },
+  // the plan limits as the status bar's usage popover shows them (one cached reading, see status.ts)
+  usage: async () => { const st = await getStatus(); return { plan: st.plan, rows: st.usage } },
   read: async (id: string) => {
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
     const path = l?.sessionId ? transcriptPath(l.cwd, l.sessionId) : (await listSessions()).find((s) => s.id === id)?.path

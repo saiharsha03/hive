@@ -1,7 +1,7 @@
 // a placeholder usage answer (5 h at 0, no reset time) is not a reading; anything with a 5 h window is
-import { test } from 'vitest'
+import { describe, expect, it, test } from 'vitest'
 import assert from 'node:assert/strict'
-import { realLimits } from '../../src/shared/usageCore'
+import { realLimits, usageRows } from '../../src/shared/usageCore'
 
 test('placeholder limits are not a reading', () => {
   assert.equal(realLimits({ five_hour: { utilization: 0, resets_at: null }, seven_day: { utilization: 12, resets_at: '2026-11-07T08:00:00Z' } }), false)
@@ -10,4 +10,15 @@ test('placeholder limits are not a reading', () => {
   assert.equal(realLimits({ five_hour: { utilization: 5, resets_at: null } }), true)
   assert.equal(realLimits(null), false)
   assert.equal(realLimits({}), false)
+})
+
+describe('usageRows', () => {
+  it('lists the windows with a reading in /usage order', () => {
+    const rows = usageRows({ seven_day_opus: { utilization: 5, resets_at: null }, seven_day: { utilization: 40, resets_at: 'b' }, five_hour: { utilization: 12, resets_at: 'a' }, seven_day_sonnet: null })
+    expect(rows.map((r) => [r.key, r.pct, r.resetsAt])).toEqual([['five_hour', 12, 'a'], ['seven_day', 40, 'b'], ['seven_day_opus', 5, null]])
+  })
+  it('gives nothing for a placeholder answer or none', () => {
+    expect(usageRows({ five_hour: { utilization: 0, resets_at: null } })).toEqual([])
+    expect(usageRows(null)).toEqual([])
+  })
 })

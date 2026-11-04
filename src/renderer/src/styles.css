@@ -646,6 +646,9 @@ button.sbi:hover { background: var(--hover); }
 .sbi.brand { background: var(--sb-brand-bg); color: var(--sb-brand-ink); padding: 0 10px; }
 .meter { display: inline-block; width: 44px; height: 4px; background: var(--line2); position: relative; }
 .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--dim); }
+.usage-pop { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; }
+.usage-row { display: flex; flex-direction: column; gap: 3px; }
+.usage-row .meter { width: 120px; vertical-align: middle; }
 .m-ok i { background: var(--done); } .m-warn i { background: var(--wait); } .m-bad i { background: var(--fail); }
 
 /* ---------- welcome ---------- */
