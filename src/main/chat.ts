@@ -535,7 +535,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         const end = await waitForAnswer(tabId, toolUseID, questions, signal)
         send({ type: 'hive_ask_done', id: toolUseID })
         // still waiting while another question of this thread is open
-        if (!openAsks(tabId).length) { if (s.waitingReason === reason) s.waitingReason = undefined; send({ type: 'hive_organize', action: 'resolved' }) }
+        if (!openAsks(tabId).length) { if (s.waitingReason?.startsWith('Question: ')) s.waitingReason = undefined; send({ type: 'hive_organize', action: 'resolved' }) }
         if (end.kind === 'answers') return { behavior: 'allow', updatedInput: { ...input, answers: end.answers } }
         return { behavior: 'deny', message: end.kind === 'chat' ? 'The user replied in the chat instead of picking an option: read their next message.' : 'The question was dismissed (the turn was stopped).' }
       },
