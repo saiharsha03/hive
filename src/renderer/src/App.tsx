@@ -303,6 +303,9 @@ export function App() {
   // a thread the app started by itself (a watcher's thread) or another thread started or resumed (from):
   // a background tab that is already working; a tab still open for it gets the message
   useEffect(() => window.api.onThread((t) => {
+    // a message from the phone, another thread or an automatic continue: a closed or archived thread comes back too
+    const known = sessionsRef.current.find((s) => s.id === t.tabId)?.sessionId
+    for (const id of new Set([t.sessionId, known, t.tabId])) if (id) keepVisible(id)
     const first: Item = t.from ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.prompt } : { kind: 'user', text: t.prompt, images: [] }
     setSessions((all) => (all.some((s) => s.id === t.tabId) ? all.map((s) => (s.id === t.tabId ? { ...s, busy: true, items: [...s.items, first] } : s)) : [...all, {
       id: t.tabId, title: t.title, cwd: t.cwd, sessionId: t.sessionId, path: t.path, items: [first], streaming: '', busy: true, loaded: !t.path, background: !t.foreground,
@@ -456,6 +459,7 @@ export function App() {
       ...(interrupt ? { interrupt: true } : {}),
     }
     setSessions((all) => all.map((s) => (s.id === target.id ? { ...s, busy: true, items: [...s.items, item] } : s)))
+    keepVisible(target.sessionId ?? target.id) // writing to a closed or archived thread brings it back to the list
     void window.api.chatSend(target.id, target.cwd || folder, target.sessionId, {
       title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background, ...(interrupt ? { interrupt: true } : {}),
     })

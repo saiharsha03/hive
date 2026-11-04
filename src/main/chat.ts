@@ -82,6 +82,7 @@ export const PERMISSION_MODE = 'bypassPermissions' as const
 const append = () => [
   `You are running inside ${appName()}, the user's desktop app for Claude Code.`,
   'Keep this thread named after what the user is doing: once the task is clear (usually after your first reply), call mcp__hive__rename_thread with a short title (3 to 6 words), and again only when the work clearly moves to something else. Do not mention it.',
+  'The user runs many threads at once and sometimes types into the wrong one. When a message clearly is not meant for this thread (it refers to work this thread never did or to another task), do not act on it: say so in one line, call mcp__hive__list_threads to find the thread it belongs to, and offer to forward it there with mcp__hive__message_thread (forward it at once only if the user already asked you to).',
   'To show the user an image, screenshot, HTML mockup, PDF or any file, call mcp__hive__show_to_user with its absolute path.',
   'It opens in a preview panel beside the chat and shows inline in the conversation. Use it instead of opening files in other apps (Start-Process, start, open).',
   'mcp__hive__codex runs OpenAI Codex as a subagent on one task (a second opinion, a review, research, or an implementation). It runs in the background',
@@ -587,6 +588,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         if (m.type === 'rate_limit_event') {
           const i = (m as any).rate_limit_info
           if (i?.status === 'rejected') { limited = true; if (Number.isFinite(i.resetsAt)) limitReset = i.resetsAt * 1000 }
+          else if (i?.status) { limited = false; limitReset = null } // allowed again (overage, a later window): no limit stop
         }
         if (m.type === 'result') {
           const r = m as any

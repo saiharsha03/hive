@@ -167,7 +167,8 @@ initAutoContinue({
     try { await mobileDeps().send(w.key, prompt) } catch (e) { console.warn(`auto-continue ${w.title}: ${(e as Error).message}`) } // a thread that is gone is dropped
     return true
   },
-  changed: (w, at) => { for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('chat:event', w.tabId, { type: 'hive_continue', at, key: w.key }) },
+  // to the tab it started in and to a tab reopened under the session id (after a restart)
+  changed: (w, at) => { for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) for (const id of new Set([w.tabId, w.key])) win.webContents.send('chat:event', id, { type: 'hive_continue', at, key: w.key }) },
 })
 
 // every consumer picks up saved settings without a restart (running dev services keep theirs until restarted)

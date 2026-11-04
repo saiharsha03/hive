@@ -5,10 +5,14 @@ const now = new Date(2026, 10, 4, 13, 0).getTime()
 describe('continueCore', () => {
   it('reads the reset from the limit message', () => {
     expect(resetFromText('Claude AI usage limit reached|1793800000', now)).toBe(1793800000 * 1000)
-    expect(resetFromText("You've hit your limit · resets 3pm (America/Chicago)", now)).toBe(new Date(2026, 10, 4, 15, 0).getTime())
+    expect(resetFromText("You've hit your limit · resets 3pm", now)).toBe(new Date(2026, 10, 4, 15, 0).getTime())
     expect(resetFromText('5-hour limit reached ∙ resets 12:30 am', now)).toBe(new Date(2026, 10, 5, 0, 30).getTime())
     expect(resetFromText('resets 1pm', now)).toBe(new Date(2026, 10, 5, 13, 0).getTime()) // already passed today
     expect(resetFromText('Something went wrong', now)).toBeNull()
+    // a named zone wins over this computer's: 3pm Chicago (CST, UTC-6 in November) is 21:00 UTC
+    expect(resetFromText('resets 3pm (America/Chicago)', Date.UTC(2026, 10, 4, 12, 0))).toBe(Date.UTC(2026, 10, 4, 21, 0))
+    expect(resetFromText('resets 9am (UTC)', Date.UTC(2026, 10, 4, 12, 0))).toBe(Date.UTC(2026, 10, 5, 9, 0))
+    expect(resetFromText('resets 3pm (Not/AZone)', now)).toBe(new Date(2026, 10, 4, 15, 0).getTime())
   })
   it('wakes a minute after the reset, spaced from other waiting threads', () => {
     const reset = now + 3_600_000
