@@ -10,7 +10,8 @@ import { open, seal } from './mobileLink'
 import { writeFileSafe } from './safeWrite'
 import { blocked, dataDir, TEST_MODE } from './testMode'
 
-export type PhoneThread = { id: string; title: string; folder: string; state: 'working' | 'waiting' | 'idle'; note: string; updated: number }
+export type { PhoneThread } from '../shared/threadsCore'
+import type { PhoneThread } from '../shared/threadsCore'
 export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
 type Deps = {

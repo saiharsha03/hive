@@ -26,6 +26,7 @@ import { watcherStopReason } from './watchers'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail, watcherTabFor } from './watchers'
 import { gitDecorations, listDir } from './files'
 import { uiLoad, uiSave } from './uiStore'
+import { phoneThreads, type ThreadMap } from '../shared/threadsCore'
 import { loadHistory, loadRecentHistory } from './history'
 import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
@@ -108,14 +109,10 @@ const phoneItems = (items: Awaited<ReturnType<typeof loadRecentHistory>>['items'
 }).slice(-80).map((p) => ({ ...p, t: p.t.length > 4000 ? `${p.t.slice(0, 4000)}…` : p.t })) // well under the relay's frame limit
 const mobileDeps = () => ({
   threads: async (): Promise<PhoneThread[]> => {
-    const live = liveThreads().filter((t) => !t.tabId.startsWith('watcher-') || t.sessionId)
-    const liveIds = new Set(live.flatMap((t) => [t.tabId, t.sessionId ?? '']))
-    // watcher runs are their own threads now: they would fill the phone's list, so only the user's threads are listed
-    const saved = (await listSessions()).filter((s) => !liveIds.has(s.id) && !s.watcherRun).slice(0, 40)
-    return [
-      ...live.map((t) => ({ id: t.tabId, title: t.title, folder: basename(t.cwd), state: (t.busy ? 'working' : t.waitingReason ? 'waiting' : 'idle') as PhoneThread['state'], note: t.waitingReason ?? '', updated: Date.now() })),
-      ...saved.map((s) => ({ id: s.id, title: s.title, folder: s.project, state: 'idle' as const, note: '', updated: s.updated })),
-    ]
+    // the sidebar's sections (Watchers, Pinned, Waiting, Working, Recent), from the same pins and watcher runs
+    const live = liveThreads().map((t) => ({ tabId: t.tabId, sessionId: t.sessionId, title: t.title, folder: basename(t.cwd), busy: t.busy, waitingReason: t.waitingReason }))
+    const { watchers } = await listWatchersView()
+    return phoneThreads(live, await listSessions(), watchers, uiLoad('threads') as ThreadMap, Date.now())
   },
   read: async (id: string) => {
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)

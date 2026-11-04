@@ -1,9 +1,8 @@
 // Thread organisation for the sessions sidebar: pin, snooze, close, archive. Pure logic first, storage and the hook below.
 import { useSyncExternalStore } from 'react'
 
-export type ThreadState = { pinned?: number; snoozedUntil?: number; snoozedAt?: number; closedAt?: number; archivedAt?: number }
-export type ThreadMap = Record<string, ThreadState>
-export type Place = 'pinned' | 'returned' | 'active' | 'snoozed' | 'closed' | 'archived'
+import { place, type Place, type ThreadMap, type ThreadState } from '../../shared/threadsCore'
+export { place, type Place, type ThreadMap, type ThreadState }
 
 const HOUR = 3_600_000
 const DAY = 86_400_000
@@ -33,16 +32,6 @@ export function presetTime(p: Preset, now: number): number {
   // always a later Monday, so on a Monday it means next week's
   d.setDate(d.getDate() + (p === 'tomorrow' ? 1 : ((8 - d.getDay()) % 7 || 7)))
   return d.getTime()
-}
-
-// where a thread sits; pinned wins unless archived, and a snooze only hides a thread until it comes due
-export function place(s: ThreadState | undefined, now: number): Place {
-  if (!s) return 'active'
-  if (s.archivedAt) return 'archived'
-  if (s.pinned) return 'pinned'
-  if (s.closedAt) return 'closed'
-  if (s.snoozedUntil) return s.snoozedUntil > now ? 'snoozed' : 'returned'
-  return 'active'
 }
 
 // "Tue 9 AM", with the date when it is more than a week out; ":30" only when needed

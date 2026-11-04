@@ -211,7 +211,12 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUnpair: () ->
         StatusLine()
         if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
         LazyColumn(Modifier.fillMaxSize().padding(top = 8.dp)) {
-            items(rows, key = { it.getString("id") }) { t ->
+            // Hive sends each thread's sidebar section, in order; an older Hive sends none, so the list stays flat
+            sections(rows).forEach { (section, group) ->
+            if (section.isNotEmpty()) item(key = "section:$section") {
+                Text(sectionLabels[section] ?: section, style = MaterialTheme.typography.labelLarge, color = Color.Gray, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+            }
+            items(group, key = { it.getString("id") }) { t ->
                 val st = t.optString("state")
                 Column(Modifier.fillMaxWidth().clickable { onOpen(t.getString("id")) }.padding(vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -222,9 +227,17 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUnpair: () ->
                 }
                 HorizontalDivider(color = Color(0x22FFFFFF))
             }
+            }
         }
     }
 }
+
+private val sectionOrder = listOf("watchers", "pinned", "waiting", "working", "recent")
+private val sectionLabels = mapOf("watchers" to "Watchers", "pinned" to "Pinned", "waiting" to "Waiting for you", "working" to "Working", "recent" to "Recent")
+
+// rows grouped by section in the sidebar's order (an unknown section from a newer Hive goes last); "" = no sections
+private fun sections(rows: List<JSONObject>): List<Pair<String, List<JSONObject>>> =
+    rows.groupBy { it.optString("section") }.toList().sortedBy { (k, _) -> sectionOrder.indexOf(k).let { if (it < 0) sectionOrder.size else it } }
 
 @Composable
 private fun ThreadScreen(id: String, onBack: () -> Unit) {
