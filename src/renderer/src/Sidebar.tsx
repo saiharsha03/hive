@@ -9,6 +9,7 @@ import { getPref, setPref } from './prefs'
 import { Icon } from './ui'
 import { useWatchers } from './useWatchers'
 import { isDependabotTab } from '../../shared/dependabotCore'
+import { nextRunLabel } from '../../shared/threadsCore'
 
 // last message: time for today, otherwise "Oct 28", with the year only when it isn't this year
 function lastAt(t: number): string {
@@ -51,6 +52,8 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     const latestIds = new Set(names.keys())
     return listed && listed.filter((s) => !olderRuns.has(s.id) && !(s.watcherRun && !latestIds.has(s.id))).map((s) => (names.has(s.id) ? { ...s, title: names.get(s.id)! } : s))
   }, [listed, watchers, olderRuns])
+  // a watcher's row says when it runs next while it is not running
+  const watcherOf = useMemo(() => new Map(watchers.flatMap((w) => { const id = latest(w); return id ? [[id, w] as const] : [] })), [watchers])
   const watcherIds = useMemo(() => new Set(watchers.flatMap((w) => { const id = latest(w); return id ? [id] : [] })), [watchers])
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -199,7 +202,8 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
 
   const row = (s: SessionInfo, section: string, snippet?: string) => {
     const lr = section === 'watchers' ? watcherLive.get(s.id) : undefined
-    const label = lr ? lr.note : note(s.id, section)
+    const w = section === 'watchers' ? watcherOf.get(s.id) : undefined
+    const label = lr ? lr.note : (w && nextRunLabel(w, now)) || note(s.id, section)
     const meta = [groupBy === 'date' || searching || archiveView || !section.startsWith('project:') ? s.project : '', label].filter(Boolean).join(', ')
     return (
       <div

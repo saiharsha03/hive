@@ -4,7 +4,7 @@
 // The same engine backs the panel (IPC) and the agent tool in chat.ts, which gets guard rails through the `caller`.
 import { BrowserWindow } from 'electron'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, symlinkSync, unlinkSync } from 'node:fs'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
 import { connect } from 'node:net'
 import { dirname, join } from 'node:path'
 import {
@@ -486,7 +486,15 @@ export async function retireWorktree(l: WorktreeLink): Promise<{ done: boolean; 
         return { done: false, note: `${head}: could not auto-save the uncommitted changes (${(e as Error).message}); worktree kept` }
       }
     }
-    await git(main, ['worktree', 'remove', '--force', l.path])
+    // long paths: git on Windows refuses paths past 260 characters unless core.longpaths is on ("Filename too long");
+    // if it still fails, the folder is deleted directly and git forgets it
+    try {
+      await git(main, ['-c', 'core.longpaths=true', 'worktree', 'remove', '--force', l.path])
+    } catch (e) {
+      try { rmSync(l.path, { recursive: true, force: true, maxRetries: 3 }) } catch { throw e }
+      if (existsSync(l.path)) throw e
+      await git(main, ['worktree', 'prune'])
+    }
     publish()
     return { done: true, note: `${head}: ${d.commit ? `uncommitted changes saved as "${WIP_MESSAGE}"; ` : ''}worktree deleted, branch kept` }
   } catch (e) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { phoneThreads, type PhoneLive, type PhoneSaved, type PhoneWatcher } from '../../src/shared/threadsCore'
+import { nextRunLabel, phoneThreads, type PhoneLive, type PhoneSaved, type PhoneWatcher } from '../../src/shared/threadsCore'
 
 const now = 1_000_000
 const saved = (id: string, updated: number, extra: Partial<PhoneSaved> = {}): PhoneSaved => ({ id, title: id, project: 'p', updated, ...extra })
@@ -60,5 +60,16 @@ describe('phoneThreads', () => {
   it('caps Recent and Dependabot separately, so many reviews do not push out the user threads', () => {
     const rows = [...Array.from({ length: 3 }, (_, i) => saved(`b${i}`, 9 - i, { dependabot: true })), saved('a', 1)]
     expect(phoneThreads([], rows, [], {}, now, 2).map((t) => t.id)).toEqual(['b0', 'b1', 'a'])
+  })
+
+  it("says when an idle watcher runs next, or that it is off; a live run's question wins", () => {
+    const at = new Date(2026, 10, 4, 15, 30).getTime(), today = new Date(2026, 10, 4, 9).getTime()
+    expect(nextRunLabel({ enabled: true, nextRun: at }, today)).toBe('next run 3:30 PM')
+    expect(nextRunLabel({ enabled: false, nextRun: at }, today)).toBe('off')
+    expect(nextRunLabel({ enabled: true, nextRun: null }, today)).toBe('')
+    const w: PhoneWatcher[] = [{ name: 'Watch', tabId: null, sessionId: null, sessionIds: ['r1'], enabled: true, nextRun: at }]
+    expect(phoneThreads([], [saved('r1', 5, { watcherRun: true })], w, {}, today)[0].note).toBe('next run 3:30 PM')
+    const busy: PhoneWatcher[] = [{ ...w[0], tabId: 'watcher-w-1' }]
+    expect(phoneThreads([liveT('watcher-w-1', null, { waitingReason: 'approve?' })], [saved('r1', 5, { watcherRun: true })], busy, {}, today)[0].note).toBe('approve?')
   })
 })

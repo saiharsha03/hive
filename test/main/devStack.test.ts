@@ -112,6 +112,20 @@ describe.skipIf(!hasGit)('devStack worktrees (real git)', () => {
     assert.equal(git(MAIN, 'rev-parse', wt.branch), before)
   })
 
+  test('retire: a worktree holding a path past 260 characters (Windows "Filename too long") is still removed', async () => {
+    const w3 = await dev.ensureWorktree('app', { branch: wt.branch })
+    // an ignored build folder nested deep, as a package install or build leaves it
+    fs.unlinkSync(path.join(w3.path, 'node_modules'))
+    const deep = path.join(w3.path, 'node_modules', ...Array.from({ length: 12 }, (_, i) => `folder-with-a-long-name-${i}`))
+    fs.mkdirSync(deep, { recursive: true })
+    fs.writeFileSync(path.join(deep, 'file-at-the-end.txt'), 'x')
+    assert.ok(path.resolve(deep).length > 260)
+    const r = await dev.retireWorktree({ repo: 'app', path: w3.path, branch: w3.branch, at: 0 })
+    assert.equal(r.done, true, r.note)
+    assert.ok(!fs.existsSync(w3.path))
+    assert.ok(!git(MAIN, 'worktree', 'list').includes(path.basename(w3.path)))
+  })
+
   test('never deletes the main checkout', async () => {
     const r = await dev.retireWorktree({ repo: 'app', path: MAIN, branch: 'main', at: 0 })
     assert.equal(r.done, false)

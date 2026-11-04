@@ -13,6 +13,19 @@ export function place(s: ThreadState | undefined, now: number): Place {
   return 'active'
 }
 
+const DAY = 86_400_000
+// "Tue 9 AM", with the date when it is more than a week out; ":30" only when needed
+export function untilLabel(t: number, now: number): string {
+  const d = new Date(t)
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: d.getMinutes() ? '2-digit' : undefined })
+  if (d.toDateString() === new Date(now).toDateString()) return time
+  if (t - now > 6 * DAY) return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${time}`
+  return `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${time}`
+}
+
+// a watcher's row: when it runs next ('' when unknown)
+export const nextRunLabel = (w: { enabled?: boolean; nextRun?: number | null }, now: number) => (w.enabled === false ? 'off' : w.nextRun ? `next run ${untilLabel(w.nextRun, now)}` : '')
+
 // ---- the phone's thread list, in the sidebar's sections ----
 
 export type PhoneSection = 'watchers' | 'pinned' | 'waiting' | 'working' | 'dependabot' | 'recent'
@@ -20,7 +33,7 @@ export const PHONE_SECTIONS: readonly PhoneSection[] = ['watchers', 'pinned', 'w
 export type PhoneThread = { id: string; title: string; folder: string; state: 'working' | 'waiting' | 'idle'; note: string; updated: number; section: PhoneSection }
 export type PhoneLive = { tabId: string; sessionId: string | null; title: string; folder: string; busy: boolean; waitingReason?: string }
 export type PhoneSaved = { id: string; title: string; project: string; updated: number; watcherRun?: boolean; dependabot?: boolean }
-export type PhoneWatcher = { name: string; tabId: string | null; sessionId: string | null; sessionIds?: string[] }
+export type PhoneWatcher = { name: string; tabId: string | null; sessionId: string | null; sessionIds?: string[]; enabled?: boolean; nextRun?: number | null }
 
 // Same rules as the sidebar: a watcher's row is its latest run (with its current run's live state), older runs and
 // other watcher runs stay out; a working or waiting thread sits in Working / Waiting whatever its pin; the rest are
@@ -43,7 +56,7 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
     const t = live.find((l) => (w.tabId && l.tabId === w.tabId) || (id && l.sessionId === id))
     const s = id ? savedById.get(id) : undefined
     if (!t && !s) continue
-    out.push({ id: t?.tabId ?? id!, title: w.name, folder: t?.folder ?? s!.project, state: t ? stateOf(t) : 'idle', note: t?.waitingReason ?? '', updated: s?.updated ?? now, section: 'watchers' })
+    out.push({ id: t?.tabId ?? id!, title: w.name, folder: t?.folder ?? s!.project, state: t ? stateOf(t) : 'idle', note: t?.waitingReason || nextRunLabel(w, now), updated: s?.updated ?? now, section: 'watchers' })
   }
 
   // a watcher tab with no session yet is a run that just started; it is shown under its watcher above

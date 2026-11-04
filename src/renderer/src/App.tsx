@@ -88,7 +88,12 @@ export function App() {
   const [dropChoices, setDropChoices] = useState<DropChoice[]>([])
   useEffect(() => { void window.api.dropChoices().then(setDropChoices) }, [])
   const [notices, setNotices] = useState<{ id: number; text: string }[]>([])
-  const notice = (...texts: string[]) => setNotices((n) => [...n, ...texts.map((text, i) => ({ id: Date.now() + i + Math.random(), text }))])
+  // a toast closes itself: 8 s, or 20 s when it reports a failure (still dismissable at once)
+  const notice = (...texts: string[]) => {
+    const added = texts.map((text, i) => ({ id: Date.now() + i + Math.random(), text }))
+    setNotices((n) => [...n, ...added])
+    for (const a of added) setTimeout(() => setNotices((all) => all.filter((x) => x.id !== a.id)), /could not|failed|error/i.test(a.text) ? 20_000 : 8_000)
+  }
   const deploy = useDeploy()
   const dev = useDev()
   const todos = useTodos()

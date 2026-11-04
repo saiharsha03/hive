@@ -1,8 +1,8 @@
 // Thread organisation for the sessions sidebar: pin, snooze, close, archive. Pure logic first, storage and the hook below.
 import { useSyncExternalStore } from 'react'
 
-import { place, type Place, type ThreadMap, type ThreadState } from '../../shared/threadsCore'
-export { place, type Place, type ThreadMap, type ThreadState }
+import { place, untilLabel, type Place, type ThreadMap, type ThreadState } from '../../shared/threadsCore'
+export { place, untilLabel, type Place, type ThreadMap, type ThreadState }
 
 const HOUR = 3_600_000
 const DAY = 86_400_000
@@ -32,15 +32,6 @@ export function presetTime(p: Preset, now: number): number {
   // always a later Monday, so on a Monday it means next week's
   d.setDate(d.getDate() + (p === 'tomorrow' ? 1 : ((8 - d.getDay()) % 7 || 7)))
   return d.getTime()
-}
-
-// "Tue 9 AM", with the date when it is more than a week out; ":30" only when needed
-export function untilLabel(t: number, now: number): string {
-  const d = new Date(t)
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: d.getMinutes() ? '2-digit' : undefined })
-  if (d.toDateString() === new Date(now).toDateString()) return time
-  if (t - now > 6 * DAY) return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${time}`
-  return `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${time}`
 }
 
 // the dim word shown beside a thread when it is listed outside its own section (search, archive view)
