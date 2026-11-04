@@ -1,5 +1,6 @@
 // Chat state for one tab, and how each SDK event changes it.
 import { hookWarning, isContinuation } from '../../shared/summaryCore'
+import { isWatcherTab } from '../../shared/readOnlyCore'
 // tools that open as tabs in the main window, like threads and files
 export type ToolTab = 'git' | 'todos' | 'notes' | 'watchers' | 'scripts' | 'deploy'
 export const TOOL_TABS: ToolTab[] = ['git', 'todos', 'notes', 'scripts', 'deploy', 'watchers']
@@ -212,8 +213,8 @@ export function applyEvent(s: Session, ev: any): Session {
     case 'hive_error':
       return { ...s, busy: false, compacting: false, turnOpen: false, streaming: '', items: [...settle(s.items, 'error'), { kind: 'error', text: ev.message }] }
     case 'hive_closed':
-      // queued messages died with the process
-      return { ...s, busy: false, compacting: false, turnOpen: false, streaming: '', items: settle(s.items, 'error').filter((it) => !((it.kind === 'user' || it.kind === 'thread') && it.queue?.pending)) }
+      // queued messages died with the process; a watcher run's tab closes when the run ends: it shows the closed-run notice
+      return { ...s, ...(isWatcherTab(s.id) ? { endedRun: true } : {}), busy: false, compacting: false, turnOpen: false, streaming: '', items: settle(s.items, 'error').filter((it) => !((it.kind === 'user' || it.kind === 'thread') && it.queue?.pending)) }
   }
   return s
 }

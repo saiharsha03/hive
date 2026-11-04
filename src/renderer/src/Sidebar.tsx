@@ -117,6 +117,8 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     return (sessions ?? []).filter((s) => !hide.has(s.id))
   }, [sessions, live, archiveView, q, isWatcherRow])
   const sections = useMemo(() => buildSections(savedRows, states, now, query, archiveView, groupBy, watcherIds, dependabotIds), [savedRows, states, now, query, archiveView, groupBy, watcherIds, dependabotIds])
+  // the order the sections are drawn in (Dependabot right under Watchers' live rows), for shift-click ranges
+  const rendered = useMemo(() => [...sections.filter((x) => x.key === 'watchers'), ...sections.filter((x) => x.key === 'dependabot'), ...sections.filter((x) => x.key !== 'watchers' && x.key !== 'dependabot')], [sections])
   const archived = useMemo(() => (sessions ?? []).filter((s) => states[s.id]?.archivedAt).length, [sessions, states])
   const searching = query.trim() !== ''
 
@@ -124,7 +126,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   // search hits can be in any thread, an older watcher run too (those are out of the list, not out of search)
   const byId = useMemo(() => new Map([...(listed ?? []), ...(sessions ?? [])].map((s) => [s.id, s])), [listed, sessions])
   const found = useMemo(() => (hits && text.length >= 2 ? hits.results.flatMap((h) => { const s = byId.get(h.sessionId); return s ? [{ s, snippet: h.snippet }] : [] }) : null), [hits, text, byId])
-  const order = useMemo(() => (found ? found.map((f) => f.s.id) : visibleOrder(sections, open, searching)), [found, sections, open, searching])
+  const order = useMemo(() => (found ? found.map((f) => f.s.id) : visibleOrder(rendered, open, searching)), [found, rendered, open, searching])
   const ids = useMemo(() => order.filter((id) => picked.has(id)), [order, picked])
   const orderRef = useRef(order)
   orderRef.current = order

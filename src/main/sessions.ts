@@ -88,11 +88,11 @@ export async function listSessions(): Promise<SessionInfo[]> {
     await Promise.all(files.slice(i, i + 32).map(async (path) => {
       const s = await stat(path)
       const hit = cache[path]
-      if (hit && hit.v === 4 && hit.size === s.size && hit.mtime === s.mtimeMs) {
+      if (hit && hit.v === 5 && hit.size === s.size && hit.mtime === s.mtimeMs) {
         next[path] = hit
       } else {
         const info = parse(path, await readEnds(path, s.size), s.mtimeMs)
-        if (info) next[path] = { ...info, size: s.size, mtime: s.mtimeMs, v: 4 }
+        if (info) next[path] = { ...info, size: s.size, mtime: s.mtimeMs, v: 5 }
       }
       const info = next[path]
       // sessions started inside temp/scratchpad folders are helpers, not real work

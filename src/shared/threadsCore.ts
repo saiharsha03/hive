@@ -58,12 +58,12 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
     const section = kept && kept !== 'pinned' && bot(t.tabId, t.sessionId) ? 'dependabot' : kept
     if (section) (st === 'idle' ? rest : out).push({ id: t.tabId, title: t.title, folder: t.folder, state: st, note: t.waitingReason ?? '', updated: now, section })
   }
-  let recent = 0
+  let recent = 0, bots = 0 // Recent and Dependabot each hold up to recentMax
   for (const s of saved) {
     if (liveIds.has(s.id) || s.watcherRun || runs.has(s.id)) continue
     const kept = keep(s.id)
     const section = kept === 'recent' && s.dependabot ? 'dependabot' : kept
-    if (!section || (section !== 'pinned' && ++recent > recentMax)) continue
+    if (!section || (section === 'recent' && ++recent > recentMax) || (section === 'dependabot' && ++bots > recentMax)) continue
     rest.push({ id: s.id, title: s.title, folder: s.project, state: 'idle', note: '', updated: s.updated, section })
   }
   const pinAt = (t: PhoneThread) => states[t.id]?.pinned ?? states[live.find((l) => l.tabId === t.id)?.sessionId ?? '']?.pinned ?? 0

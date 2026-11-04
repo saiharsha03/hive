@@ -56,4 +56,9 @@ describe('phoneThreads', () => {
       [saved('s5', 9, { dependabot: true }), saved('s6', 8, { dependabot: true }), saved('s7', 7, { dependabot: true }), saved('a', 6)], [], { s7: { pinned: 1 } }, now)
     expect(out.map((t) => [t.id, t.section])).toEqual([['s7', 'pinned'], ['t', 'working'], ['dependabot-o-r-5-1', 'dependabot'], ['s6', 'dependabot'], ['a', 'recent']])
   })
+
+  it('caps Recent and Dependabot separately, so many reviews do not push out the user threads', () => {
+    const rows = [...Array.from({ length: 3 }, (_, i) => saved(`b${i}`, 9 - i, { dependabot: true })), saved('a', 1)]
+    expect(phoneThreads([], rows, [], {}, now, 2).map((t) => t.id)).toEqual(['b0', 'b1', 'a'])
+  })
 })
