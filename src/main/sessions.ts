@@ -5,7 +5,7 @@ import { app } from 'electron'
 import { open, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import { WATCHER_HEADER } from '../shared/readOnlyCore'
+import { isWatcherTranscript } from '../shared/readOnlyCore'
 
 export type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string; entrypoint: string; watcherRun?: boolean } // watcherRun: a watcher run's thread (its header is the first message)
 type CacheEntry = SessionInfo & { size: number; mtime?: number; v?: number } // v: parser version; bump to re-read every file
@@ -68,7 +68,7 @@ export function parse(path: string, text: string, updated: number): SessionInfo 
     if ((e.type === 'user' || e.type === 'assistant') && !e.isMeta && e.timestamp) last = Math.max(last, Date.parse(e.timestamp) || 0)
   }
   if (!first && !custom && !ai) return null // empty session
-  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated: (!tailCut && last) || updated, started: started || updated, path, entrypoint, ...(WATCHER_HEADER.test(first) ? { watcherRun: true } : {}) }
+  return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated: (!tailCut && last) || updated, started: started || updated, path, entrypoint, ...(isWatcherTranscript(text) === true ? { watcherRun: true } : {}) }
 }
 
 export async function listSessions(): Promise<SessionInfo[]> {

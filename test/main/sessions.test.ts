@@ -25,4 +25,5 @@ test('updated = the newest user or assistant message; titles, hooks and meta lin
   // a watcher run's thread is marked, so the sidebar keeps it out of the thread list
   assert.equal(parse('C:/x/w.jsonl', line({ type: 'user', message: { content: '[Hive watcher run: Watch]\nRun kind: sweep' } }), 1)!.watcherRun, true)
   assert.equal(parse('C:/x/n.jsonl', line({ type: 'user', message: { content: 'look at the watcher run: later' } }), 1)!.watcherRun, undefined)
+  assert.equal(parse('C:/x/p.jsonl', line({ type: 'user', message: { content: '  [Hive watcher run: Watch]\nPlease explain this header' } }), 1)!.watcherRun, undefined) // pasted, indented: a user's thread
 })
