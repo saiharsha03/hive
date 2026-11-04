@@ -290,6 +290,7 @@ export type WatcherSummary = {
   findings: number
   tabId: string | null
   sessionId: string | null
+  sessionIds: string[] // every run's session, oldest first (each run is its own thread): the sidebar keeps them out of the thread list
   dir: string
   prompt: string
 }

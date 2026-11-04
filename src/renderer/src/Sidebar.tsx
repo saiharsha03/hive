@@ -41,11 +41,15 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const [listed, setSessions] = useState<SessionInfo[] | null>(null)
   // a watcher's thread shows under the watcher's name, not Claude's auto title
   const { watchers } = useWatchers()
+  // each run is its own thread: the latest one shows under Watchers, older runs stay out of the list (they are in the
+  // watcher's run list), so no watcher run lands among the user's threads
+  const latest = (w: (typeof watchers)[number]) => w.sessionId ?? w.sessionIds?.at(-1) ?? null
+  const olderRuns = useMemo(() => new Set(watchers.flatMap((w) => (w.sessionIds ?? []).filter((id) => id !== latest(w)))), [watchers])
   const sessions = useMemo(() => {
-    const names = new Map(watchers.flatMap((w) => (w.sessionId ? [[w.sessionId, w.name] as const] : [])))
-    return listed && listed.map((s) => (names.has(s.id) ? { ...s, title: names.get(s.id)! } : s))
-  }, [listed, watchers])
-  const watcherIds = useMemo(() => new Set(watchers.flatMap((w) => (w.sessionId ? [w.sessionId] : []))), [watchers])
+    const names = new Map(watchers.flatMap((w) => { const id = latest(w); return id ? [[id, w.name] as const] : [] }))
+    return listed && listed.filter((s) => !olderRuns.has(s.id)).map((s) => (names.has(s.id) ? { ...s, title: names.get(s.id)! } : s))
+  }, [listed, watchers, olderRuns])
+  const watcherIds = useMemo(() => new Set(watchers.flatMap((w) => { const id = latest(w); return id ? [id] : [] })), [watchers])
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [archiveView, setArchiveView] = useState(false)

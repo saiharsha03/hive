@@ -426,7 +426,8 @@ function summary(id: string, w: WatcherFile, p: Plan, u: Awaited<ReturnType<Usag
     nextRun: !w.enabled ? null : w.schedule.every === 'self' ? selfNext(p.c.dir, s) : earliest(nextRuns(new Date(), p.c, { ...s, enabled: true })),
     schedule: w.schedule, tier: p.tier,
     findings: findingsOf(join(p.c.dir, 'findings.jsonl')).length,
-    tabId: s.tabId, sessionId: s.sessionId, dir: p.c.dir, prompt: p.c.prompt,
+    tabId: s.tabId, sessionId: s.sessionId, sessionIds: [...new Set([...s.runs.flatMap((r) => (r.sessionId ? [r.sessionId] : [])), ...(s.sessionId ? [s.sessionId] : [])])],
+    dir: p.c.dir, prompt: p.c.prompt,
   }
 }
 

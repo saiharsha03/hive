@@ -112,6 +112,6 @@ export function dependabotSummary(): WatcherSummary {
     message: cfg ? '' : 'Not set up: add repos under Settings > Dependabot watcher.',
     lastRun: s.lastRun, nextRun: on && cfg ? (isDue(new Date(), s.lastRun, cfg.time) ? Date.now() : next) : null,
     schedule: { every: 'off', daily: cfg?.time ?? null, weekly: null }, tier: null,
-    findings: Object.keys(s.reviewed).length, tabId: null, sessionId: null, dir: '', prompt: '',
+    findings: Object.keys(s.reviewed).length, tabId: null, sessionId: null, sessionIds: [], dir: '', prompt: '',
   }
 }

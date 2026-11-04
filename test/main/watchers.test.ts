@@ -128,6 +128,8 @@ test('create writes the folder; every run is a fresh thread, closed when it ends
   finish(calls[1].tabId, false)
   await tick()
   assert.equal(state('tiny').runs.at(-1).error, 'The turn ended with an error')
+  // every run's session is listed, so the sidebar keeps old runs out of the thread list
+  assert.deepEqual((await listWatchersView()).watchers.find((w) => w.id === 'tiny')!.sessionIds, ['sess-1', 'sess-2'])
   assert.equal((await listWatchersView()).watchers.find((w) => w.id === 'tiny')!.status, 'failed')
 })
 
