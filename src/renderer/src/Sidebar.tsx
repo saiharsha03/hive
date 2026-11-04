@@ -95,9 +95,17 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   // live threads are listed in Waiting / Working at the top, so they leave the saved list below (a search still finds them)
   const q = query.trim().toLowerCase()
   // a watcher's thread stays in the Watchers section (always on top) even while it works or waits, with its live state
-  const isWatcherRow = useCallback((r: LiveRow) => watcherIds.has(r.sessionId ?? '') || watcherIds.has(r.id) || r.id.startsWith('watcher-'), [watcherIds])
+  // a watcher's current run (its tab); an older run resumed later (phone, message_thread) is a thread like any other
+  const currentTabs = useMemo(() => new Set(watchers.flatMap((w) => (w.tabId ? [w.tabId] : []))), [watchers])
+  const isWatcherRow = useCallback((r: LiveRow) => watcherIds.has(r.sessionId ?? '') || watcherIds.has(r.id) || currentTabs.has(r.id), [watcherIds, currentTabs])
   const liveShown = (rows: LiveRow[]) => rows.filter((r) => !isWatcherRow(r) && (!q || r.title.toLowerCase().includes(q)))
-  const watcherLive = useMemo(() => new Map([...live.waiting, ...live.working].filter(isWatcherRow).map((r) => [r.sessionId ?? r.id, r])), [live, isWatcherRow])
+  const watcherLive = useMemo(() => {
+    const rows = [...live.waiting, ...live.working]
+    const m = new Map(rows.filter(isWatcherRow).map((r) => [r.sessionId ?? r.id, r]))
+    // a run just started: its session is not the watcher's yet, so the row under Watchers takes the run tab's status
+    for (const w of watchers) { const row = w.tabId ? rows.find((r) => r.id === w.tabId) : undefined; const id = latest(w); if (row && id && !m.has(id)) m.set(id, row) }
+    return m
+  }, [live, isWatcherRow, watchers])
   const savedRows = useMemo(() => {
     if (archiveView || q) return sessions ?? []
     const hide = new Set([...live.waiting, ...live.working].filter((r) => !isWatcherRow(r)).flatMap((r) => [r.id, r.sessionId ?? '']))
