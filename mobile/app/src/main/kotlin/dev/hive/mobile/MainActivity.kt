@@ -238,8 +238,8 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
     }
 }
 
-private val sectionOrder = listOf("watchers", "pinned", "waiting", "working", "recent")
-private val sectionLabels = mapOf("watchers" to "Watchers", "pinned" to "Pinned", "waiting" to "Waiting for you", "working" to "Working", "recent" to "Recent")
+private val sectionOrder = listOf("watchers", "pinned", "waiting", "working", "dependabot", "recent")
+private val sectionLabels = mapOf("watchers" to "Watchers", "pinned" to "Pinned", "waiting" to "Waiting for you", "working" to "Working", "dependabot" to "Dependabot", "recent" to "Recent")
 
 // rows grouped by section in the sidebar's order (an unknown section from a newer Hive goes last); "" = no sections
 private fun sections(rows: List<JSONObject>): List<Pair<String, List<JSONObject>>> =

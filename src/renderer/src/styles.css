@@ -954,3 +954,4 @@ button.sbi:hover { background: var(--hover); }
 .askdesc { color: var(--dim); }
 .askother { width: 100%; }
 .askfoot { display: flex; gap: 10px; align-items: center; }
+.endedrun { display: flex; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line2); color: var(--dim); font-size: 12px; }

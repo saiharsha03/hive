@@ -8,6 +8,7 @@ import { PRESETS, archive, buildSections, clearSnooze, close, pin, presetTime, s
 import { getPref, setPref } from './prefs'
 import { Icon } from './ui'
 import { useWatchers } from './useWatchers'
+import { isDependabotTab } from '../../shared/dependabotCore'
 
 // last message: time for today, otherwise "Oct 28", with the year only when it isn't this year
 function lastAt(t: number): string {
@@ -98,7 +99,11 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   // a watcher's current run (its tab); an older run resumed later (phone, message_thread) is a thread like any other
   const currentTabs = useMemo(() => new Set(watchers.flatMap((w) => (w.tabId ? [w.tabId] : []))), [watchers])
   const isWatcherRow = useCallback((r: LiveRow) => watcherIds.has(r.sessionId ?? '') || watcherIds.has(r.id) || currentTabs.has(r.id), [watcherIds, currentTabs])
-  const liveShown = (rows: LiveRow[]) => rows.filter((r) => !isWatcherRow(r) && (!q || r.title.toLowerCase().includes(q)))
+  // Dependabot review threads sit in their own folded section (live ones too), out of Waiting / Working and the dates
+  const dependabotIds = useMemo(() => new Set((sessions ?? []).filter((s) => s.dependabot).map((s) => s.id)), [sessions])
+  const isBotRow = useCallback((r: LiveRow) => !q && (isDependabotTab(r.id) || dependabotIds.has(r.sessionId ?? '')), [dependabotIds, q])
+  const liveShown = (rows: LiveRow[]) => rows.filter((r) => !isWatcherRow(r) && !isBotRow(r) && (!q || r.title.toLowerCase().includes(q)))
+  const botLive = [...live.waiting, ...live.working].filter((r) => !isWatcherRow(r) && isBotRow(r))
   const watcherLive = useMemo(() => {
     const rows = [...live.waiting, ...live.working]
     const m = new Map(rows.filter(isWatcherRow).map((r) => [r.sessionId ?? r.id, r]))
@@ -111,7 +116,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     const hide = new Set([...live.waiting, ...live.working].filter((r) => !isWatcherRow(r)).flatMap((r) => [r.id, r.sessionId ?? '']))
     return (sessions ?? []).filter((s) => !hide.has(s.id))
   }, [sessions, live, archiveView, q, isWatcherRow])
-  const sections = useMemo(() => buildSections(savedRows, states, now, query, archiveView, groupBy, watcherIds), [savedRows, states, now, query, archiveView, groupBy, watcherIds])
+  const sections = useMemo(() => buildSections(savedRows, states, now, query, archiveView, groupBy, watcherIds, dependabotIds), [savedRows, states, now, query, archiveView, groupBy, watcherIds, dependabotIds])
   const archived = useMemo(() => (sessions ?? []).filter((s) => states[s.id]?.archivedAt).length, [sessions, states])
   const searching = query.trim() !== ''
 
@@ -282,8 +287,21 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
             {liveShown(rows).map(liveRow)}
           </div>
         ))}
+        {!found && !archiveView && (() => {
+          const sec = sections.find((x) => x.key === 'dependabot')
+          const n = botLive.length + (sec?.items.length ?? 0)
+          if (!n) return null
+          const folded = !searching && !open.has('dependabot')
+          return (
+            <div key="dependabot" data-testid="section-dependabot">
+              {groupHead('dependabot', 'Dependabot', n, 'git-pull-request', { fold: true, folded, items: sec?.items })}
+              {!folded && botLive.map(liveRow)}
+              {!folded && sec?.items.map((s) => row(s, 'dependabot'))}
+            </div>
+          )
+        })()}
         {!found && sessions && !sections.length && <div className="hint">{archiveView ? 'Nothing archived.' : 'No threads yet.'}</div>}
-        {!found && sections.filter((sec) => sec.key !== 'watchers').map((sec) => {
+        {!found && sections.filter((sec) => sec.key !== 'watchers' && sec.key !== 'dependabot').map((sec) => {
           // a search opens every fold so no match stays hidden
           const folded = !!sec.fold && !searching && !open.has(sec.key)
           const icon = sec.key.startsWith('project:') ? 'folder' : sec.key === 'pinned' ? 'pinned' : sec.key === 'returned' ? 'bell' : 'calendar'

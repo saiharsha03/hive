@@ -50,4 +50,10 @@ describe('phoneThreads', () => {
     const out = phoneThreads([liveT('t', 's', { busy: true, waitingReason: 'Needs your input' })], [], [], {}, now)
     expect(out.map((t) => [t.state, t.section])).toEqual([['waiting', 'waiting']])
   })
+
+  it('puts Dependabot review threads, running or saved, in their own section; a pinned one stays pinned', () => {
+    const out = phoneThreads([liveT('dependabot-o-r-5-1', 's5', { busy: true }), liveT('t', 's', { busy: true })],
+      [saved('s5', 9, { dependabot: true }), saved('s6', 8, { dependabot: true }), saved('s7', 7, { dependabot: true }), saved('a', 6)], [], { s7: { pinned: 1 } }, now)
+    expect(out.map((t) => [t.id, t.section])).toEqual([['s7', 'pinned'], ['t', 'working'], ['dependabot-o-r-5-1', 'dependabot'], ['s6', 'dependabot'], ['a', 'recent']])
+  })
 })

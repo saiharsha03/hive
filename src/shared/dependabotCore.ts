@@ -51,8 +51,11 @@ export const needsReview = (p: OpenPr, reviewed: Reviewed) => reviewed[prKey(p)]
 
 export const reviewTitle = (p: OpenPr) => `Dependabot: ${p.repo.split('/').pop()} #${p.number}`
 
+// how a review thread starts (its first message); the sidebar lists such threads in their own Dependabot section
+export const REVIEW_HEAD = 'Review this Dependabot pull request and decide whether it is safe to merge: '
+export const isDependabotTab = (tabId: string) => tabId.startsWith('dependabot-')
 export const reviewPrompt = (p: OpenPr, localDir: string | null) => [
-  `Review this Dependabot pull request and decide whether it is safe to merge: ${p.url}`,
+  `${REVIEW_HEAD}${p.url}`,
   `"${p.title}" in ${p.repo}, branch ${p.branch}, head ${p.head}.`,
   localDir ? `The repo is checked out at ${localDir}; read it to see how the dependency is actually used.` : 'There is no local checkout of this repo; read it through gh.',
   '',

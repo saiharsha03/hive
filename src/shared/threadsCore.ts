@@ -15,11 +15,11 @@ export function place(s: ThreadState | undefined, now: number): Place {
 
 // ---- the phone's thread list, in the sidebar's sections ----
 
-export type PhoneSection = 'watchers' | 'pinned' | 'waiting' | 'working' | 'recent'
-export const PHONE_SECTIONS: readonly PhoneSection[] = ['watchers', 'pinned', 'waiting', 'working', 'recent']
+export type PhoneSection = 'watchers' | 'pinned' | 'waiting' | 'working' | 'dependabot' | 'recent'
+export const PHONE_SECTIONS: readonly PhoneSection[] = ['watchers', 'pinned', 'waiting', 'working', 'dependabot', 'recent']
 export type PhoneThread = { id: string; title: string; folder: string; state: 'working' | 'waiting' | 'idle'; note: string; updated: number; section: PhoneSection }
 export type PhoneLive = { tabId: string; sessionId: string | null; title: string; folder: string; busy: boolean; waitingReason?: string }
-export type PhoneSaved = { id: string; title: string; project: string; updated: number; watcherRun?: boolean }
+export type PhoneSaved = { id: string; title: string; project: string; updated: number; watcherRun?: boolean; dependabot?: boolean }
 export type PhoneWatcher = { name: string; tabId: string | null; sessionId: string | null; sessionIds?: string[] }
 
 // Same rules as the sidebar: a watcher's row is its latest run (with its current run's live state), older runs and
@@ -34,6 +34,8 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
   // a question for the user wins over busy, as in the sidebar's Waiting for you
   const stateOf = (t: PhoneLive): PhoneThread['state'] => (t.waitingReason ? 'waiting' : t.busy ? 'working' : 'idle')
   const savedById = new Map(saved.map((s) => [s.id, s]))
+  // Dependabot review threads (running or saved) get their own section, as in the sidebar
+  const bot = (tabId: string, sessionId: string | null) => tabId.startsWith('dependabot-') || !!savedById.get(sessionId ?? tabId)?.dependabot
   const out: PhoneThread[] = []
 
   for (const w of watchers) {
@@ -52,14 +54,16 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
   for (const t of others) {
     const st = stateOf(t)
     if (st === 'idle' && runs.has(t.sessionId ?? '')) continue // an older watcher run open but idle: out of the list, as in the sidebar
-    const section = st === 'idle' ? keep(t.sessionId ?? t.tabId) : st
+    const kept = st === 'idle' ? keep(t.sessionId ?? t.tabId) : st
+    const section = kept && kept !== 'pinned' && bot(t.tabId, t.sessionId) ? 'dependabot' : kept
     if (section) (st === 'idle' ? rest : out).push({ id: t.tabId, title: t.title, folder: t.folder, state: st, note: t.waitingReason ?? '', updated: now, section })
   }
   let recent = 0
   for (const s of saved) {
     if (liveIds.has(s.id) || s.watcherRun || runs.has(s.id)) continue
-    const section = keep(s.id)
-    if (!section || (section === 'recent' && ++recent > recentMax)) continue
+    const kept = keep(s.id)
+    const section = kept === 'recent' && s.dependabot ? 'dependabot' : kept
+    if (!section || (section !== 'pinned' && ++recent > recentMax)) continue
     rest.push({ id: s.id, title: s.title, folder: s.project, state: 'idle', note: '', updated: s.updated, section })
   }
   const pinAt = (t: PhoneThread) => states[t.id]?.pinned ?? states[live.find((l) => l.tabId === t.id)?.sessionId ?? '']?.pinned ?? 0

@@ -381,7 +381,7 @@ export function App() {
     replaceUntouched()
     setSessions((all) => [...all, {
       id: info.id, title: info.title, path: info.path, cwd: info.cwd, sessionId: info.id,
-      items: [], streaming: '', busy: false, loaded: false, background: false,
+      items: [], streaming: '', busy: false, loaded: false, background: false, ...(info.watcherRun ? { endedRun: true } : {}),
     }])
     setPaneState((p) => activateIn(p, info.id))
     window.api.worktreeLinks(info.id).then((links) => links.length && setSessions((all) => all.map((s) => (s.id === info.id
@@ -675,7 +675,7 @@ export function App() {
     if (t.sessionId) keepVisible(t.sessionId)
     const s = (t.tabId ? sessions.find((x) => x.id === t.tabId) : undefined) ?? (t.sessionId ? findSession(sessions, t.sessionId) : undefined)
     if (s) activate(s.id)
-    else if (t.sessionId && t.path) openSession({ id: t.sessionId, title: t.title, project: '', cwd: t.cwd, updated: t.at, started: t.at, path: t.path })
+    else if (t.sessionId && t.path) openSession({ id: t.sessionId, title: t.title, project: '', cwd: t.cwd, updated: t.at, started: t.at, path: t.path, watcherRun: true })
     else notice('That watcher has no thread to open yet')
   }
   const watchersHome = <div className="watchers-home" data-testid="watchers-view"><WatchersView onOpen={(p) => setPreview(p)} onOpenThread={openWatcherThread} /></div>

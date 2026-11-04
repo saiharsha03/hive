@@ -13,6 +13,7 @@ export type Session = {
   items: Item[]
   streaming: string // text of the reply being written right now
   busy: boolean
+  endedRun?: boolean // a finished watcher run opened from the list: its thread is closed until a message reopens it
   asks?: string[] // AskUserQuestion tool calls waiting for the user's answer (their cards take it)
   compacting?: boolean // the engine is summarising the conversation to free context (can take minutes)
   compactions?: number // how many times it compacted while open (a handoff is offered after one)
@@ -88,7 +89,7 @@ export function applyEvent(s: Session, ev: any): Session {
   if (ev.parent_tool_use_id) return s
   switch (ev.type) {
     case 'hive_session':
-      return { ...s, sessionId: ev.sessionId, path: ev.path }
+      return { ...s, sessionId: ev.sessionId, path: ev.path, endedRun: undefined } // running again
     case 'hive_ask':
       return { ...s, asks: [...(s.asks ?? []).filter((x) => x !== ev.id), ev.id] }
     case 'hive_ask_done':

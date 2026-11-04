@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string; watcherRun?: boolean }
+type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string; watcherRun?: boolean; dependabot?: boolean }
 
 type SearchResult = { indexing: { indexed: number; total: number } | null; results: { sessionId: string; score: number; snippet: string }[] }
 type SearchStatus = { indexed: number; total: number; done: boolean }

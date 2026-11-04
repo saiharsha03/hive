@@ -467,6 +467,9 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
         </div>
         <GoalLoop tabId={session.id} busy={session.busy} onSend={onSend} onInterrupt={async () => { await onStop() }} />
       </div>
+      {session.endedRun && !session.busy && (
+        <div className="endedrun" data-testid="ended-run"><Icon name="lock" />This watcher run has ended and its thread is closed. Sending a message reopens it: Claude reads the whole conversation again, which counts against your usage, and the thread stays read-only.</div>
+      )}
 
       <div className="thread" ref={thread} onScroll={onScroll}>
         {transcript}

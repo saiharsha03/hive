@@ -121,10 +121,13 @@ const mobileDeps = () => ({
   usage: async () => { const st = await getStatus(); return { plan: st.plan, rows: st.usage } },
   read: async (id: string) => {
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
-    const path = l?.sessionId ? transcriptPath(l.cwd, l.sessionId) : (await listSessions()).find((s) => s.id === id)?.path
+    const saved = l ? undefined : (await listSessions()).find((s) => s.id === id)
+    const path = l?.sessionId ? transcriptPath(l.cwd, l.sessionId) : saved?.path
     if (!path) return l ? { title: l.title, items: [], working: l.busy, asks: openAsks(l.tabId) } : null
     const { items } = await loadRecentHistory(path)
-    return { title: l?.title ?? (await listSessions()).find((s) => s.id === id)?.title ?? id, items: phoneItems(items), working: !!l?.busy, asks: l ? openAsks(l.tabId) : [] }
+    // a finished watcher run: say its thread is closed and what a reply costs
+    const ended: PhoneItem[] = saved?.watcherRun ? [{ k: 'note', t: 'This watcher run has ended and its thread is closed. Replying reopens it: Claude reads the whole conversation again, which counts against your usage.' }] : []
+    return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [] }
   },
   send: async (id: string, text: string) => {
     const w = appWindow()
