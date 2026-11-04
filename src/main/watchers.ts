@@ -251,7 +251,7 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
   } catch (e) {
     // recorded as a run so the list shows why, and counted so it is not retried every tick
     const error = `Cannot read the prompt file ${c.prompt}: ${(e as Error).message}`
-    saveState(id, { ...s, ...started(s, kind, now.getTime()), runs: [...s.runs, { id: runId, tabId: s.tabId ?? '', kind, startedAt: now.getTime(), endedAt: now.getTime(), error }] })
+    saveState(id, { ...s, ...started(s, kind, now.getTime()), runs: [...s.runs, { id: runId, tabId: '', kind, startedAt: now.getTime(), endedAt: now.getTime(), error }] }) // no thread of its own (not the previous run's)
     return error
   }
   mkdirSync(f.memory, { recursive: true })
