@@ -108,7 +108,8 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const searching = query.trim() !== ''
 
   // bulk selection: only rows on screen count, so a search or a fold can't leave hidden rows selected
-  const byId = useMemo(() => new Map((sessions ?? []).map((s) => [s.id, s])), [sessions])
+  // search hits can be in any thread, an older watcher run too (those are out of the list, not out of search)
+  const byId = useMemo(() => new Map([...(listed ?? []), ...(sessions ?? [])].map((s) => [s.id, s])), [listed, sessions])
   const found = useMemo(() => (hits && text.length >= 2 ? hits.results.flatMap((h) => { const s = byId.get(h.sessionId); return s ? [{ s, snippet: h.snippet }] : [] }) : null), [hits, text, byId])
   const order = useMemo(() => (found ? found.map((f) => f.s.id) : visibleOrder(sections, open, searching)), [found, sections, open, searching])
   const ids = useMemo(() => order.filter((id) => picked.has(id)), [order, picked])

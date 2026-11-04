@@ -84,6 +84,7 @@ export function useWatcherCounts() {
   const { watchers } = useWatchers()
   return {
     on: watchers.filter((w) => w.enabled).length, total: watchers.length, waiting: watchers.some((w) => w.waiting), running: watchers.filter((w) => w.state === 'running').length,
-    sessions: watchers.flatMap((w) => (w.sessionId ? [w.sessionId] : [])),
+    // the session shown under Watchers: the live run's, else the latest run's (each run is its own thread)
+    sessions: watchers.flatMap((w) => { const id = w.sessionId ?? w.sessionIds?.at(-1); return id ? [id] : [] }),
   }
 }

@@ -662,7 +662,7 @@ export function App() {
     ...getUIs().map((u) => ({ id: `ui:${u.id}`, group: 'UI', label: `UI: ${u.label}`, hint: ui === u.id ? 'current' : u.description, icon: 'layout', run: () => setUI(u.id) })),
     ...getThemes(ui).map((t) => ({ id: `theme:${t.id}`, group: 'Theme', label: `Theme: ${t.label}`, hint: themeNow === t.id ? `current for ${getUIs().find((u) => u.id === ui)?.label}` : t.description, icon: 'symbol-color', run: () => setTheme(t.id) })),
   ]
-  const loadThreads = async (): Promise<Command[]> => (await window.api.listSessions()).map((s) => ({ id: `saved:${s.id}`, group: 'Threads', label: s.title, hint: s.project, icon: 'history', run: () => openSession(s) }))
+  const loadThreads = async (): Promise<Command[]> => (await window.api.listSessions()).filter((s) => !s.watcherRun).map((s) => ({ id: `saved:${s.id}`, group: 'Threads', label: s.title, hint: s.project, icon: 'history', run: () => openSession(s) }))
 
   // ---- views ----
   const termTargets = panes.panes.map((p) => sessions.find((s) => s.id === p.active)).filter((s): s is Session => !!s)

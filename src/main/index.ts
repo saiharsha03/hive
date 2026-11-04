@@ -110,7 +110,8 @@ const mobileDeps = () => ({
   threads: async (): Promise<PhoneThread[]> => {
     const live = liveThreads().filter((t) => !t.tabId.startsWith('watcher-') || t.sessionId)
     const liveIds = new Set(live.flatMap((t) => [t.tabId, t.sessionId ?? '']))
-    const saved = (await listSessions()).filter((s) => !liveIds.has(s.id)).slice(0, 40)
+    // watcher runs are their own threads now: they would fill the phone's list, so only the user's threads are listed
+    const saved = (await listSessions()).filter((s) => !liveIds.has(s.id) && !s.watcherRun).slice(0, 40)
     return [
       ...live.map((t) => ({ id: t.tabId, title: t.title, folder: basename(t.cwd), state: (t.busy ? 'working' : t.waitingReason ? 'waiting' : 'idle') as PhoneThread['state'], note: t.waitingReason ?? '', updated: Date.now() })),
       ...saved.map((s) => ({ id: s.id, title: s.title, folder: s.project, state: 'idle' as const, note: '', updated: s.updated })),
