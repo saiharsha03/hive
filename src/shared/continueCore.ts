@@ -25,8 +25,12 @@ export function resetFromText(text: string, now: number): number | null {
   const today = wall(now, zone)
   for (const add of [0, 1]) {
     const guess = Date.UTC(today.y, today.mo, today.d + add, h, min)
-    // the instant whose wall clock in that zone reads h:min (offset taken near that instant, so DST is right)
-    const at = guess - zoneOffset(guess, zone)
+    // the instant whose wall clock in that zone reads h:min: try the zone's offset on both sides of a DST change and
+    // keep those that land on h:min; a time that happens twice (fall back) takes the later one, so a continue is never
+    // early; a time that never happens (spring forward) takes the later candidate, just after the change
+    const offs = [zoneOffset(guess - 12 * 3_600_000, zone), zoneOffset(guess + 12 * 3_600_000, zone)]
+    const hits = offs.map((o) => guess - o).filter((t) => { const w = wall(t, zone); return w.h === h && w.mi === min })
+    const at = Math.max(...(hits.length ? hits : offs.map((o) => guess - o)))
     if (at > now) return at
   }
   return null
