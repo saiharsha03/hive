@@ -63,6 +63,22 @@ export function addMember(team: Team, m: Member): void {
   save(team)
 }
 
+// paused: no turn runs and team posts are only logged, until resumed
+export function setPaused(team: Team, at: number | undefined): void {
+  if (at) team.pausedAt = at
+  else delete team.pausedAt
+  save(team)
+}
+
+// remember the Claude session of a team thread, so the team can be resumed after Hive restarts
+export function noteSession(threadId: string, sessionId: string): void {
+  for (const t of listTeams()) {
+    if (t.endedAt) continue
+    const who = [t.lead, ...t.members, ...(t.owner ? [t.owner] : [])].find((x) => x.id === threadId)
+    if (who && who.sessionId !== sessionId) { who.sessionId = sessionId; save(t) }
+  }
+}
+
 export function endTeam(team: Team, now = Date.now()): void {
   team.endedAt = now
   save(team)

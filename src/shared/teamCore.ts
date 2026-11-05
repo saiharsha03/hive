@@ -8,9 +8,9 @@ import type { Todo } from './teamTodoCore'
 
 export const MAX_TEAMMATES = 10
 
-export type Ref = { id: string; title: string }
-export type Member = { id: string; name: string; role: string; cwd: string; joinedAt: number }
-export type Team = { id: string; name: string; goal: string; dir: string; owner?: Ref; lead: Ref; members: Member[]; createdAt: number; endedAt?: number }
+export type Ref = { id: string; title: string; cwd?: string; sessionId?: string } // sessionId: to resume the thread after Hive restarts
+export type Member = { id: string; name: string; role: string; cwd: string; joinedAt: number; sessionId?: string }
+export type Team = { id: string; name: string; goal: string; dir: string; owner?: Ref; lead: Ref; members: Member[]; createdAt: number; endedAt?: number; pausedAt?: number }
 export type LogEntry = { at: number; from: string; fromName: string; to: string[]; text: string } // to [] = posted to the board only
 export type MemberState = 'working' | 'waiting' | 'idle' | 'closed'
 // reply: the member thread's last final reply (trimmed), at: when it finished

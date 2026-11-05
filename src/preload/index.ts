@@ -98,6 +98,8 @@ contextBridge.exposeInMainWorld('api', {
   watcherDelete: (id: string) => ipcRenderer.invoke('watchers:delete', id),
   teamsList: () => ipcRenderer.invoke('teams:list'),
   teamView: (id: string) => ipcRenderer.invoke('teams:view', id),
+  teamPause: (id: string) => ipcRenderer.invoke('teams:pause', id),
+  teamResume: (id: string) => ipcRenderer.invoke('teams:resume', id),
   onTeamsChanged: (cb: (id: string) => void) => {
     const fn = (_e: unknown, id: string) => cb(id)
     ipcRenderer.on('teams:changed', fn)
