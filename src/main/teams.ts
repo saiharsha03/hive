@@ -13,6 +13,7 @@ let cache: Map<string, Team> | null = null
 const listeners = new Set<(teamId: string) => void>()
 export const onTeamChange = (f: (teamId: string) => void) => { listeners.add(f); return () => { listeners.delete(f) } }
 const changed = (id: string) => { for (const f of listeners) f(id) }
+export const teamChanged = changed
 
 function all(): Map<string, Team> {
   if (cache) return cache
