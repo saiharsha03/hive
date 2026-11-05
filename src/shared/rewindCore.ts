@@ -5,20 +5,26 @@
 // there would cut that turn in half. The transcript has no steer mark, so the parent entry tells
 export function forkPoint(transcript: string, uuid: string): { found: boolean; at: string | null; midTurn: boolean } {
   const byId = new Map<string, any>()
+  const children = new Map<string, number>()
   let hit: any = null
   for (const line of transcript.split('\n')) {
     if (!line.startsWith('{')) continue
     let e: any
     try { e = JSON.parse(line) } catch { continue }
     if (e.uuid) byId.set(e.uuid, e)
-    if (e.type === 'user' && e.uuid === uuid) { hit = e; break }
+    if (e.parentUuid) children.set(e.parentUuid, (children.get(e.parentUuid) ?? 0) + 1)
+    if (e.type === 'user' && e.uuid === uuid) hit = e
   }
   if (!hit) return { found: false, at: null, midTurn: false }
   const parent = hit.parentUuid ? byId.get(hit.parentUuid) : null
   const blocks: any[] = Array.isArray(parent?.message?.content) ? parent.message.content : []
+  // a stopped turn is over: Esc during a tool call leaves an "[Request interrupted..." tool result, and a tool call
+  // nobody answered (the process died) has no other child; only a turn that went on past the message was cut
+  const interrupted = blocks.some((b) => b?.type === 'tool_result' && JSON.stringify(b.content ?? '').includes('[Request interrupted'))
+  const wentOn = (children.get(hit.parentUuid) ?? 0) > 1
   const midTurn = !!parent && (parent.type === 'user'
-    ? blocks.some((b) => b?.type === 'tool_result')
-    : parent.type === 'assistant' && blocks.some((b) => b?.type === 'tool_use'))
+    ? blocks.some((b) => b?.type === 'tool_result') && !interrupted
+    : parent.type === 'assistant' && blocks.some((b) => b?.type === 'tool_use') && wentOn)
   return { found: true, at: hit.parentUuid ?? null, midTurn }
 }
 

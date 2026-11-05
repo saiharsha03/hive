@@ -291,7 +291,8 @@ const publish = () => {
 export const listWatchers = () => [...watchers.values()]
 
 export function dismissWatcher(id: string) {
-  cmdWatch.get(id)?.kill()
+  const c = cmdWatch.get(id)
+  if (c) killTree(c) // the watch script's own children (aws, sleep) go too
   cmdWatch.delete(id)
   clearTimeout(timers.get(id))
   timers.delete(id)
@@ -308,6 +309,12 @@ export function rewatch(repo: string, target: Target, sha: string): string {
 // HIVE_DEPLOY_WATCH_CMD: your own watcher (e.g. a deployment-check script) runs after the push, its lines stream into
 // the panel, and its end decides landed / stuck; the built-in polling below is only for when none is set
 const cmdWatch = new Map<string, ReturnType<typeof spawn>>()
+const LOG_MAX = 256 * 1024
+const killTree = (c: ReturnType<typeof spawn>) => {
+  if (!c.pid) return
+  if (process.platform === 'win32') execFile('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true }, () => {})
+  else c.kill('SIGKILL')
+}
 function startCmdWatch(id: string, kind: string, target: Target, sha: string): void {
   const cmd = watchCommand(dc().watchCmd, target, kind, sha)
   const lines: string[] = []
@@ -322,20 +329,34 @@ function startCmdWatch(id: string, kind: string, target: Target, sha: string): v
     partial = parts.pop() ?? ''
     for (const l of parts) if (l.trim()) lines.push(l)
     const cur = watchers.get(id)
-    if (cur) update({ note: lines.at(-1) ?? cur.note, log: (cur.log ?? '') + text.slice(0, text.length - partial.length) })
+    // the panel's copy of the output stops growing past LOG_MAX (every update sends the whole list)
+    const log = (cur?.log ?? '').length < LOG_MAX ? (cur?.log ?? '') + text.slice(0, text.length - partial.length) : cur?.log
+    if (cur) update({ note: lines.at(-1) ?? cur.note, log })
   }
   child.stdout?.on('data', take)
   child.stderr?.on('data', take)
-  child.on('error', (e) => { cmdWatch.delete(id); update({ state: 'waiting', stuck: true, note: `could not start the watch command: ${e.message}`, since: Date.now() }) })
-  child.on('close', (code) => {
+  // one end only: a failed start is not overwritten by the exit that follows it
+  let ended = false
+  const end = (patch: Partial<Watcher>) => {
+    if (ended) return
+    ended = true
     cmdWatch.delete(id)
+    clearTimeout(timers.get(id))
+    if (watchers.has(id)) update({ state: 'waiting', since: Date.now(), ...patch })
+  }
+  child.on('error', (e) => end({ stuck: true, note: `could not start the watch command: ${e.message}` }))
+  // 'exit', not 'close': a grandchild still holding the pipe would keep 'close' from ever firing
+  child.on('exit', (code) => {
     if (partial.trim()) lines.push(partial)
-    if (!watchers.has(id)) return
     const v = watchEnd(code, lines)
-    update({ state: 'waiting', note: v.note, landed: v.state === 'landed', stuck: v.state !== 'landed', since: Date.now() })
+    end({ note: v.note, landed: v.state === 'landed', stuck: v.state !== 'landed' })
   })
-  // the watch command has its own end; past the timeout it is stopped and the deploy shows as stuck
-  timers.set(id, setTimeout(() => { if (cmdWatch.has(id)) { cmdWatch.get(id)!.kill(); lines.push(`no DEPLOY DONE after ${Math.round(TIMEOUT_MS / 60_000)} min`) } }, TIMEOUT_MS))
+  // the watch command has its own end; past the timeout it is stopped (with everything it started) and shows as stuck
+  timers.set(id, setTimeout(() => {
+    if (!cmdWatch.has(id)) return
+    killTree(cmdWatch.get(id)!)
+    end({ stuck: true, note: `no DEPLOY DONE after ${Math.round(TIMEOUT_MS / 60_000)} min; the watch was stopped` })
+  }, TIMEOUT_MS))
 }
 
 function startWatch(repo: string, target: Target, sha: string): string {

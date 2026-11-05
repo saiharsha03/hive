@@ -27,6 +27,17 @@ test('a message steered into a running turn (its parent is a tool call or result
   ].map((e) => JSON.stringify(e)).join('\n')
   assert.equal(forkPoint(steered, 's1').midTurn, true)
   assert.equal(forkPoint(steered, 's2').midTurn, true)
+  // a stopped turn is over: the message after Esc during a tool call, or after a tool call nobody answered, starts a turn
+  const stopped = [
+    { type: 'user', uuid: 'u1', parentUuid: null },
+    { type: 'assistant', uuid: 'a1', parentUuid: 'u1', message: { content: [{ type: 'tool_use', id: 't1' }] } },
+    { type: 'user', uuid: 'r1', parentUuid: 'a1', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: '[Request interrupted by user for tool use]' }] } },
+    { type: 'user', uuid: 'n1', parentUuid: 'r1', message: { content: [{ type: 'text', text: 'try again' }] } },
+    { type: 'assistant', uuid: 'a2', parentUuid: 'n1', message: { content: [{ type: 'tool_use', id: 't2' }] } },
+    { type: 'user', uuid: 'n2', parentUuid: 'a2', message: { content: [{ type: 'text', text: 'after a crash' }] } },
+  ].map((e) => JSON.stringify(e)).join('\n')
+  assert.equal(forkPoint(stopped, 'n1').midTurn, false)
+  assert.equal(forkPoint(stopped, 'n2').midTurn, false)
   assert.equal(forkPoint(lines, 'u2').midTurn, false)
 })
 

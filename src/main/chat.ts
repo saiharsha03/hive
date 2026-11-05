@@ -1240,7 +1240,7 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
     const m = userMsg(labelFromThread(from, text))
     const ev = { type: 'hive_thread_msg', fromId: from.id, fromTitle: from.title, text }
     const busy = t.turns.isBusy()
-    if ((busy || t.turns.isHeld()) && mode === 'queue') { // a held (paused) receiver takes it through its queue, idle or not
+    if ((busy && mode === 'queue') || t.turns.isHeld()) { // a held (paused) receiver takes anything through its queue, a steer too
       const queueId = randomUUID()
       t.emit({ ...ev, queueId })
       t.turns.submit(queueId, m)
