@@ -118,8 +118,8 @@ interface Window {
     onTodosChanged: (cb: () => void) => () => void
     readText: (path: string) => Promise<string>
     chatSend: (tabId: string, cwd: string, resume: string | undefined, msg: Outgoing) => Promise<void>
-    chatRewindFiles: (tabId: string, cwd: string, resume: string, uuid: string, dryRun: boolean) => Promise<RewindFiles>
-    chatRewindChat: (tabId: string, cwd: string, sessionId: string, uuid: string) => Promise<{ ok: boolean; error?: string }>
+    chatRewindPreview: (tabId: string, cwd: string, sessionId: string, uuid: string) => Promise<RewindFiles>
+    chatRewindApply: (tabId: string, cwd: string, sessionId: string, uuid: string, files: string[] | null) => Promise<{ ok: boolean; error?: string; partial?: { missing: string[]; skipped: number } }>
     chatDequeue: (tabId: string, queueId: string) => Promise<boolean>
     chatPromote: (tabId: string, queueId: string) => Promise<boolean>
     chatInterrupt: (tabId: string) => Promise<void>

@@ -185,7 +185,7 @@ type Props = {
 
 type UserItem = Extract<Item, { kind: 'user' }>
 // Rewind a turn: what the dry run said would change, then the real rewind
-type Rewind = { it: UserItem; index: number; preview: RewindFiles | null; error?: string; working?: boolean }
+type Rewind = { it: UserItem; index: number; preview: RewindFiles | null; error?: string; working?: boolean; partial?: { missing: string[]; skipped: number } }
 
 function RewindModal({ r, onFiles, onChat, onClose }: { r: Rewind; onFiles: () => void; onChat: () => void; onClose: () => void }) {
   const p = r.preview
@@ -202,9 +202,13 @@ function RewindModal({ r, onFiles, onChat, onClose }: { r: Rewind; onFiles: () =
         {p && p.canRewind && !files.length && <p className="dnote">No files changed since this message.</p>}
         {p && !p.canRewind && <p className="s-wait">Files cannot be put back{p.error ? `: ${p.error}` : ''}. Only the conversation can be rewound.</p>}
         {r.error && <p className="s-fail" data-testid="rewind-error">{r.error}</p>}
+        {r.partial && <div data-testid="rewind-partial">
+          <p className="s-wait">Not every file was put back{r.partial.skipped ? ` (${r.partial.skipped} skipped: a link or a moved folder)` : ''}. The conversation was left as it is.</p>
+          {r.partial.missing.length > 0 && <><p className="dnote">Still as Claude left them:</p><ul className="rewind-files">{r.partial.missing.map((f) => <li key={f}>{f}</li>)}</ul></>}
+        </div>}
         <div className="rewind-acts">
-          {files.length > 0 && <button className="dbtn primary" disabled={r.working} onClick={onFiles} data-testid="rewind-files-chat">Rewind files and conversation</button>}
-          <button className="dbtn" disabled={r.working || (!p && !r.error)} onClick={onChat} data-testid="rewind-chat">Rewind conversation only</button>
+          {files.length > 0 && !r.partial && <button className="dbtn primary" disabled={r.working} onClick={onFiles} data-testid="rewind-files-chat">Rewind files and conversation</button>}
+          <button className="dbtn" disabled={r.working || (!p && !r.error)} onClick={onChat} data-testid="rewind-chat">{r.partial ? 'Rewind conversation anyway' : 'Rewind conversation only'}</button>
           <button className="dbtn" onClick={onClose}>Cancel</button>
         </div>
       </div>
@@ -340,7 +344,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     if (!it.uuid || !session.sessionId) return
     const r: Rewind = { it, index, preview: null }
     setRewind(r)
-    window.api.chatRewindFiles(session.id, session.cwd ?? '', session.sessionId, it.uuid, true)
+    window.api.chatRewindPreview(session.id, session.cwd ?? '', session.sessionId, it.uuid)
       .then((preview) => setRewind((cur) => (cur?.it === it ? { ...cur, preview } : cur)))
       .catch((e) => setRewind((cur) => (cur?.it === it ? { ...cur, preview: { canRewind: false, error: String(e?.message ?? e) } } : cur)))
   }, [session.id, session.cwd, session.sessionId])
@@ -349,12 +353,11 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     if (!r?.it.uuid || !session.sessionId) return
     setRewind({ ...r, working: true, error: undefined })
     try {
-      if (files) {
-        const done = await window.api.chatRewindFiles(session.id, session.cwd ?? '', session.sessionId, r.it.uuid, false)
-        if (!done.canRewind) { setRewind({ ...r, working: false, error: `Files were not put back: ${done.error ?? 'unknown error'}` }); return }
-      }
-      const chat = await window.api.chatRewindChat(session.id, session.cwd ?? '', session.sessionId, r.it.uuid)
-      if (!chat.ok) { setRewind({ ...r, working: false, error: chat.error ?? 'The conversation could not be rewound.' }); return }
+      // one step in the main process: refused while Claude or its background work runs, files first, then the chat
+      const listed = files && r.preview?.canRewind ? r.preview.filesChanged ?? [] : null
+      const done = await window.api.chatRewindApply(session.id, session.cwd ?? '', session.sessionId, r.it.uuid, listed)
+      if (done.partial) { setRewind({ ...r, working: false, partial: done.partial }); return }
+      if (!done.ok) { setRewind({ ...r, working: false, error: done.error ?? 'The conversation could not be rewound.' }); return }
       onRewound?.(r.index)
       setDraft(r.it.text)
       setImages(r.it.images.map(attachmentOf))
@@ -448,7 +451,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
                   </span>
                 )}
                 {it.queue && !it.queue.pending && !it.steer && <span className="steer">queued</span>}
-                {it.uuid && session.sessionId && !session.busy && !it.queue?.pending && (
+                {/* not a steered message: it went in mid-turn, so there is no clean point before it */}
+                {it.uuid && session.sessionId && !session.busy && !it.queue?.pending && !it.steer && (
                   <button className="rewindb" onClick={() => startRewind(it, i)} title="Go back to before this message: put back the files Claude changed since, and edit the message" data-testid="msg-rewind"><Icon name="discard" />Rewind</button>
                 )}
               </div>

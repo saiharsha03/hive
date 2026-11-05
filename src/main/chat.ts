@@ -20,7 +20,7 @@ import { addToNote } from './notes'
 import { listSessions } from './sessions'
 import { formatThreads, formatWait, labelFromThread, listThreads, resolveThread, statusOf, waitIdle, type From } from '../shared/threadTalkCore'
 import { agentStack, ensureWorktree, logs as devLogs, releaseThread, setThreadTitle } from './devStack'
-import { linkThread } from './threadWorktrees'
+import { linkThread, moveThreadLinks } from './threadWorktrees'
 import { appName } from '../shared/appName'
 import { modeFor, modeSwitch } from '../shared/modeCore'
 import { threadDefaults } from './settings'
@@ -45,7 +45,7 @@ import { formatRoles } from '../shared/roleCore'
 import { addTodo as addTeamTodo, formatTodos, openMajor, updateTodo } from '../shared/teamTodoCore'
 import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
-import { forkPoint } from '../shared/rewindCore'
+import { forkPoint, partialRestore, rewindBlock } from '../shared/rewindCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -182,12 +182,20 @@ function inbox() {
 
 type Start = { tabId: string; cwd: string; resume?: string; web: WebContents; background: boolean }
 // a rewound thread's next process resumes its session only up to this entry, as a fork (the old transcript stays);
-// at null = the rewound message was the first, so it starts fresh
-const forks = new Map<string, { at: string | null }>()
+// at null = the rewound message was the first, so it starts fresh. Bound to the session it was taken from: a tab that
+// now resumes another session ignores it. Only a process that gets a message starts from here (file rewinds use a
+// process of their own), and closing the tab drops it
+const forks = new Map<string, { from: string; at: string | null }>()
+// tabs in the middle of a rewind: nothing may start a process on them until it is done
+const rewinding = new Set<string>()
 
 function start({ tabId, cwd, resume, web, background }: Start): Live {
-  const fork = forks.get(tabId)
+  if (rewinding.has(tabId)) throw new Error('This thread is being rewound; send again in a moment.')
+  const pending = forks.get(tabId)
   forks.delete(tabId)
+  const fork = pending && pending.from === resume ? pending : undefined
+  // the fork gets a new session id: the worktrees the thread made move to it (closing the old session must not delete them)
+  const forkedFrom = fork?.at && resume ? resume : null
   if (fork && !fork.at) resume = undefined
   const watcher = isWatcherThread(tabId, cwd, resume)
   // events only while this process is still the tab's live one; a closed process stays silent
@@ -956,6 +964,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       for await (const m of q as AsyncIterable<SDKMessage>) {
         if (m.type === 'system' && (m as any).subtype === 'init') {
           s.sessionId = (m as any).session_id
+          if (forkedFrom && s.sessionId !== forkedFrom) void moveThreadLinks(forkedFrom, s.sessionId!).catch(() => 0)
           noteSession(tabId, s.sessionId!)
           pendingSession(tabId, s.sessionId!)
           send({ type: 'hive_session', sessionId: s.sessionId, path: transcriptPath(cwd, s.sessionId!) })
@@ -1285,28 +1294,64 @@ export async function interrupt(tabId: string): Promise<void> {
   await live.get(tabId)?.q.interrupt()
 }
 
-// Rewind a turn, files: put back what Claude changed since that message (dryRun = only say what would change).
-// A thread with no process starts one on its session: the checkpoints live with the session, not the process
-export async function rewindFiles(tabId: string, cwd: string, resume: string, uuid: string, dryRun: boolean, web: WebContents) {
-  let s = live.get(tabId)
-  if (!s) live.set(tabId, (s = start({ tabId, cwd, resume, web, background: false })))
-  return s.q.rewindFiles(uuid, { dryRun })
+// Rewind a turn. The file backups live with the session, not the process, so a thread with no running process (or one
+// whose next process is a fork, which starts without them) is asked through a process of its own that never gets a
+// message; the tab's next process is left to start as the fork
+function sessionQuery(cwd: string, sessionId: string): Query {
+  const never: AsyncIterable<any> = { [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) }) }
+  const q = query({ prompt: never, options: { cwd, resume: sessionId, enableFileCheckpointing: true, pathToClaudeCodeExecutable: claudeExecutable(), settingSources: [] } })
+  void (async () => { for await (const _ of q) { /* nothing to show */ } })().catch(() => {})
+  return q
+}
+async function onSession<T>(tabId: string, cwd: string, sessionId: string, f: (q: Query) => Promise<T>): Promise<T> {
+  const s = live.get(tabId)
+  if (s && !forks.has(tabId)) return f(s.q)
+  const q = sessionQuery(cwd, sessionId)
+  try { return await f(q) } finally { q.close() }
 }
 
-// Rewind a turn, conversation: the process stops, and the next message resumes the session as a fork that ends just
-// before that message
-export async function rewindChat(tabId: string, cwd: string, sessionId: string, uuid: string): Promise<{ ok: boolean; error?: string }> {
+// the dry run: what would be put back
+export function rewindPreview(tabId: string, cwd: string, sessionId: string, uuid: string) {
+  return onSession(tabId, cwd, sessionId, (q) => q.rewindFiles(uuid, { dryRun: true }))
+}
+
+// the rewind itself, as one step: refused while a turn or background work runs; the process stops before anything is
+// restored (and no new one starts until it is done), then the files go back (files = the paths the dry run listed),
+// then the conversation: the next message resumes the session as a fork ending just before that message. When fewer
+// files came back than listed, the conversation is left as it is and the result says what was not restored
+export type RewindResult = { ok: boolean; error?: string; partial?: { missing: string[]; skipped: number } }
+export async function rewindApply(tabId: string, cwd: string, sessionId: string, uuid: string, files: string[] | null): Promise<RewindResult> {
   const p = forkPoint(await readFile(transcriptPath(cwd, sessionId), 'utf8').catch(() => ''), uuid)
   if (!p.found) return { ok: false, error: "That message is not in this thread's transcript." }
   const s = live.get(tabId)
-  if (s?.turns.isBusy()) return { ok: false, error: 'Claude is working: stop the turn first.' }
-  if (s) { s.closedByApp = true; s.turns.clear(); s.q.close(); live.delete(tabId); wake(s) }
-  forks.set(tabId, { at: p.at })
-  return { ok: true }
+  const block = rewindBlock({
+    busy: !!s?.turns.isBusy(),
+    runningTasks: (s?.status.tasks ?? []).filter((t) => t.status === 'running').map((t) => t.title || t.kind),
+    codexRuns: codexRuns.get(tabId)?.size ?? 0,
+    rewinding: rewinding.has(tabId),
+  })
+  if (block) return { ok: false, error: block }
+  rewinding.add(tabId)
+  try {
+    if (s) { s.closedByApp = true; s.turns.clear(); s.q.close(); live.delete(tabId); wake(s) }
+    if (files) {
+      const q = sessionQuery(cwd, sessionId)
+      let r: Awaited<ReturnType<Query['rewindFiles']>>
+      try { r = await q.rewindFiles(uuid) } finally { q.close() }
+      if (!r.canRewind) return { ok: false, error: `Files were not put back: ${r.error ?? 'unknown error'}` }
+      const partial = partialRestore(files, r)
+      if (partial) return { ok: false, partial }
+    }
+    forks.set(tabId, { from: sessionId, at: p.at })
+    return { ok: true }
+  } finally {
+    rewinding.delete(tabId)
+  }
 }
 
 // quitting: the app closes every thread at once, and their unsent messages are kept for the next start
 export function closeTab(tabId: string, quitting = false): void {
+  forks.delete(tabId) // a rewind not sent yet does not outlive the tab
   for (const p of codexRuns.get(tabId) ?? []) p.kill()
   codexRuns.delete(tabId)
   cancelAsks(tabId)

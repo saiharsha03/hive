@@ -6,7 +6,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
-import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, rewindChat, rewindFiles, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
+import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { configureChat, liveQuery, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { initThreadWakeups, tick as wakeupsTick } from './threadWakeups'
@@ -318,8 +318,9 @@ watchTodos(() => {
 })
 handle('chat:send', (e, tabId: string, cwd: string, resume: string | undefined, msg: Outgoing) => sendMessage(tabId, cwd, resume, msg, e.sender))
 // Rewind a turn: the files Claude changed since a message of yours, then the conversation back to before it
-handle('chat:rewindFiles', (e, tabId: string, cwd: string, resume: string, uuid: string, dryRun: boolean) => rewindFiles(String(tabId), String(cwd), String(resume), String(uuid), !!dryRun, e.sender))
-handle('chat:rewindChat', (_e, tabId: string, cwd: string, sessionId: string, uuid: string) => rewindChat(String(tabId), String(cwd), String(sessionId), String(uuid)))
+handle('chat:rewindPreview', (_e, tabId: string, cwd: string, sessionId: string, uuid: string) => rewindPreview(String(tabId), String(cwd), String(sessionId), String(uuid)))
+handle('chat:rewindApply', (_e, tabId: string, cwd: string, sessionId: string, uuid: string, files: unknown) =>
+  rewindApply(String(tabId), String(cwd), String(sessionId), String(uuid), Array.isArray(files) ? files.map(String) : null))
 handle('chat:dequeue', (_e, tabId: string, queueId: string) => dequeue(tabId, queueId))
 handle('chat:promote', (_e, tabId: string, queueId: string) => promote(tabId, queueId))
 handle('chat:interrupt', (_e, tabId: string) => interrupt(tabId))
