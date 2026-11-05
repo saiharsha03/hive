@@ -17,6 +17,11 @@ describe('usageRows', () => {
     const rows = usageRows({ seven_day_opus: { utilization: 5, resets_at: null }, seven_day: { utilization: 40, resets_at: 'b' }, five_hour: { utilization: 12, resets_at: 'a' }, seven_day_sonnet: null })
     expect(rows.map((r) => [r.key, r.pct, r.resetsAt])).toEqual([['five_hour', 12, 'a'], ['seven_day', 40, 'b'], ['seven_day_opus', 5, null]])
   })
+  it('shows a window whose reset time has passed as 0, not the old number', () => {
+    const now = Date.parse('2026-11-05T13:00:00Z')
+    const rows = usageRows({ five_hour: { utilization: 32, resets_at: '2026-11-04T17:00:00Z' }, seven_day: { utilization: 26, resets_at: '2026-11-07T08:00:00Z' } }, now)
+    expect(rows.map((r) => [r.key, r.pct, r.resetsAt])).toEqual([['five_hour', 0, null], ['seven_day', 26, '2026-11-07T08:00:00Z']])
+  })
   it('gives nothing for a placeholder answer or none', () => {
     expect(usageRows({ five_hour: { utilization: 0, resets_at: null } })).toEqual([])
     expect(usageRows(null)).toEqual([])
