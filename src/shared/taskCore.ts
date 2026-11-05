@@ -168,6 +168,12 @@ export function worthListing(t: Task, now: number): boolean {
   return t.status === 'running' && now - t.startedAt >= SHELL_AFTER_MS
 }
 
+// what the thread's own lists show: running work, and finished work for a minute after it ended (it then drops out
+// by itself; the Agents view keeps every result)
+export const DONE_SHOWN_MS = 60_000
+export const inThreadList = (t: Task, now: number): boolean =>
+  worthListing(t, now) && (t.status === 'running' || (!!t.endedAt && now - t.endedAt < DONE_SHOWN_MS))
+
 // a shell's name: the short description its command was run with, when the thread's tool rows have it
 export function shellName(t: Task, describe: (command: string) => string | undefined): string {
   return t.kind === 'local_bash' ? describe(t.title) ?? t.title : t.title
