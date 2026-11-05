@@ -453,8 +453,9 @@ export function App() {
     const interrupt = !!target.busy && mode === 'interrupt'
     const busyMode = target.busy ? (interrupt ? 'queue' : mode === 'interrupt' ? 'steer' : (mode ?? 'steer')) : undefined
     const queueId = busyMode === 'queue' ? crypto.randomUUID() : undefined
+    const uuid = crypto.randomUUID() // the message's id in the transcript too, so Rewind can go back to it
     const item: Item = {
-      kind: 'user', text, images: images.map((i) => i.url), at: Date.now(),
+      kind: 'user', text, images: images.map((i) => i.url), at: Date.now(), uuid,
       ...(busyMode === 'steer' ? { steer: true, during: workingOn(target.items) } : {}),
       ...(queueId ? { queue: { id: queueId, pending: true } } : {}),
       ...(interrupt ? { interrupt: true } : {}),
@@ -462,7 +463,7 @@ export function App() {
     setSessions((all) => all.map((s) => (s.id === target.id ? { ...s, busy: true, items: [...s.items, item] } : s)))
     keepVisible(target.sessionId ?? target.id) // writing to a closed or archived thread brings it back to the list
     void window.api.chatSend(target.id, target.cwd || folder, target.sessionId, {
-      title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background, ...(interrupt ? { interrupt: true } : {}),
+      uuid, title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background, ...(interrupt ? { interrupt: true } : {}),
     })
   }
 
@@ -735,6 +736,7 @@ export function App() {
     <SessionView key={s.id} session={s} banner={handoffBanner(s)} mode={mode} focused={focused} onFocus={() => setPaneState((p) => focusPane(p, panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? p.focus))}
       onSend={(text, images, m) => send(s, text, images, m)} onDequeue={(id) => window.api.chatDequeue(s.id, id)} onPromote={(id) => void window.api.chatPromote(s.id, id)}
       onStop={() => window.api.chatInterrupt(s.id)} onBackground={(toolUseId) => void window.api.chatBackground(s.id, toolUseId)} onRunInBackground={() => moveToBackground(s.id)}
+      onRewound={(index) => setSessions((all) => all.map((x) => (x.id === s.id ? { ...x, items: x.items.slice(0, index), history: undefined } : x)))}
       onOpen={(p) => setPreview(p)} onDiff={showDiff} onLoadEarlier={() => loadEarlier(s.id)} onTerminal={() => { if (bottomOpen && bottomView === 'terminal' && termTab === s.id) setBottomOpen(false); else openTerminal(s.id) }} onChanges={() => { setDiff(null); showView('git') }}
       onSplit={arr.chat !== 'single' && panes.panes.length < 4 ? () => newBeside(panes.panes.find((x) => x.tabs.includes(s.id))?.id ?? panes.focus) : undefined}
       compactHead={arr.tabs === 'title'} />

@@ -27,7 +27,7 @@ type SessionStats = {
 
 type FsEntry = { name: string; path: string; dir: boolean }
 type Item =
-  | { kind: 'user'; text: string; images: string[]; at?: number; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean } }
+  | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean } }
   | { kind: 'assistant'; text: string; at?: number }
   // patch: Claude Code's structuredPatch from an Edit / MultiEdit / Write result, for the diff
   | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown }
@@ -41,8 +41,9 @@ type Item =
   | { kind: 'codex'; id: string; task: string; model: string; allowEdits: boolean; status: 'running' | 'done' | 'error'; lines: string[]; answer: string }
   | { kind: 'summary'; text: string } // the compaction summary a continued conversation starts from, shown collapsed
   | { kind: 'warning'; event: string; name: string; text: string } // what a hook said (e.g. a security warning on an edit)
+type RewindFiles = { canRewind: boolean; error?: string; filesChanged?: string[]; insertions?: number; deletions?: number; skippedLinks?: number }
 type McpServerRow = { name: string; status: string; source: string; error?: string; tools: number | null }
-type Outgoing = { title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
+type Outgoing = { uuid?: string; title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
 type WorktreeLink = import('../../shared/worktreeCore').WorktreeLink
 type PluginInfo = { key: string; name: string; source: string; description: string; events: string[]; mod: boolean; enabled: boolean }
 type TodoStatus = 'todo' | 'talk' | 'holding' | 'done'
@@ -116,6 +117,8 @@ interface Window {
     onTodosChanged: (cb: () => void) => () => void
     readText: (path: string) => Promise<string>
     chatSend: (tabId: string, cwd: string, resume: string | undefined, msg: Outgoing) => Promise<void>
+    chatRewindFiles: (tabId: string, cwd: string, resume: string, uuid: string, dryRun: boolean) => Promise<RewindFiles>
+    chatRewindChat: (tabId: string, cwd: string, sessionId: string, uuid: string) => Promise<{ ok: boolean; error?: string }>
     chatDequeue: (tabId: string, queueId: string) => Promise<boolean>
     chatPromote: (tabId: string, queueId: string) => Promise<boolean>
     chatInterrupt: (tabId: string) => Promise<void>

@@ -217,6 +217,13 @@ kbd { font: 11px var(--mono); color: var(--faint); }
 .msg.user .who { color: var(--you-name); }
 .msg.user .body { color: var(--you-ink); }
 .msg.user.queued { opacity: .6; }
+/* Rewind: on hover of your message, at the right of its header */
+.msg.user .rewindb { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 400; color: var(--dim); opacity: 0; transition: opacity .1s; }
+.msg.user:hover .rewindb, .msg.user .rewindb:focus-visible { opacity: 1; }
+.msg.user .rewindb:hover { color: var(--ink); }
+.rewind-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.rewind-files { margin: 0; padding-left: 18px; max-height: 240px; overflow-y: auto; font-family: var(--mono, monospace); font-size: 12px; }
+.rewind-acts { display: flex; gap: 8px; margin-top: 6px; }
 .body { white-space: pre-wrap; }
 .body.md { white-space: normal; line-height: 1.6; color: var(--ink); }
 .body.md p { margin: 0 0 8px; }

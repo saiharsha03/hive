@@ -5,7 +5,7 @@ import { isContinuation } from '../shared/summaryCore'
 import { appName } from '../shared/appName'
 
 export type Item =
-  | { kind: 'user'; text: string; images: string[]; at?: number } // images as data: URLs; at = when it was sent (ms)
+  | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string } // images as data: URLs; at = when it was sent (ms); uuid = its transcript entry (Rewind)
   | { kind: 'assistant'; text: string; at?: number } // at = when Claude wrote it
   | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown }
   | { kind: 'show'; path: string }
@@ -24,9 +24,9 @@ const CODEX_DONE = /^\[Codex finished task (\w+)( with an error)?\]\s*/
 const WRAPPER = /^<(command-|local-command|system-reminder|task-notification|bash-|user-prompt|ide_)/
 
 // a message from another Hive thread carries its label (threadTalkCore); anything else the user typed
-function userItem(text: string, images: string[], at?: number): Item {
+function userItem(text: string, images: string[], at?: number, uuid?: string): Item {
   const t = parseFromThread(text)
-  return t ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.text } : { kind: 'user', text, images, ...(at ? { at } : {}) }
+  return t ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.text } : { kind: 'user', text, images, ...(at ? { at } : {}), ...(uuid ? { uuid } : {}) }
 }
 
 export async function loadHistory(path: string): Promise<Item[]> {
@@ -95,7 +95,7 @@ function parseHistory(text: string): Item[] {
         const done = c.match(CODEX_DONE)
         const box = done && codexByTask.get(done[1])
         if (box) { box.answer = c.replace(CODEX_DONE, '').replace(/^Below is the output of the Codex subagent[^\n]*\n/, '').replace(/<\/?codex_output(_\w+)?>/g, '').trim(); box.status = done![2] ? 'error' : 'done'; continue }
-        if (!WRAPPER.test(c)) items.push(userItem(c, [], at))
+        if (!WRAPPER.test(c)) items.push(userItem(c, [], at, e.uuid))
         continue
       }
       if (!Array.isArray(c)) continue
@@ -114,7 +114,7 @@ function parseHistory(text: string): Item[] {
       }
       const words = c.filter((b: any) => b.type === 'text' && !WRAPPER.test(b.text)).map((b: any) => b.text).join('\n')
       const images = c.filter((b: any) => b.type === 'image' && b.source?.type === 'base64').map((b: any) => `data:${b.source.media_type};base64,${b.source.data}`)
-      if (words || images.length) items.push(userItem(words, images, at))
+      if (words || images.length) items.push(userItem(words, images, at, e.uuid))
     } else if (e.type === 'assistant' && Array.isArray(c)) {
       for (const b of c) {
         const key = `${e.message.id}:${b.type}:${b.id ?? b.text}`
