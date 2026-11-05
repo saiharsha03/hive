@@ -263,6 +263,8 @@ export function App() {
     if (tab) setTermTab(tab)
     setBottomView('terminal'); setBottomOpen(true); setTermFocus((n) => n + 1)
   }
+  const openTerminalRef = useRef(openTerminal) // for the chat-event listener, which is set up once
+  openTerminalRef.current = openTerminal
 
   // a chat diff's "Open in Git panel": that repo in the Git view, and the file's uncommitted diff in Changes
   const openInGit = async (file: string) => {
@@ -303,6 +305,8 @@ export function App() {
       return
     }
     if (ev.type === 'result') refreshThreadList() // a new thread is saved after its first turn
+    // a command only the interactive CLI runs: main typed `claude "/x"` into this thread's terminal; show it
+    if (ev.type === 'hive_open_terminal') { openTerminalRef.current(tabId); return }
     if (ev.type === 'hive_organize') {
       if (ev.action === 'waiting') {
         setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(s, ev.reason, Date.now(), activeIdRef.current === s.id && !s.background) : s)))

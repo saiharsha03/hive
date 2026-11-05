@@ -2,6 +2,8 @@
 // (streaming input mode), so every message continues the same conversation and reuses the cache.
 import { createSdkMcpServer, query, tool, type Options, type PermissionMode, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { WebContents } from 'electron'
+import { typeInTerminal } from './terminal'
+import { cliLine, cliOnlyCommand } from '../shared/cliCommandCore'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFile, readFile } from 'node:fs/promises'
@@ -1010,6 +1012,12 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           syncMode(s, send)
         }
         send(m)
+        // a command only the interactive CLI runs (/design-login, /login, /mcp, ...): run it there, in this
+        // thread's terminal, instead of leaving "isn't available in this environment" (not for watchers)
+        if (m.type === 'system' && !watcher) {
+          const cmd = cliOnlyCommand((m as any).content)
+          if (cmd) { typeInTerminal(tabId, cliLine(cmd)); send({ type: 'hive_open_terminal', command: cmd }) }
+        }
         observe(tabId, m, (id) => transcriptPath(cwd, id), q)
         if (m.type === 'stream_event' && !m.parent_tool_use_id) s.turns.markBusy()
         if (m.type === 'assistant' && !m.parent_tool_use_id) {
