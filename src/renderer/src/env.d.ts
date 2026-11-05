@@ -61,7 +61,7 @@ type HookRow = {
   enabled: boolean
 }
 
-type DeployWatcher = { id: string; repo: string; sha: string; state: 'working' | 'waiting'; note: string; stuck: boolean; landed: boolean }
+type DeployWatcher = { id: string; repo: string; sha: string; state: 'working' | 'waiting'; note: string; stuck: boolean; landed: boolean; log?: string }
 type DeployDiffs = { diffs: import('../../shared/deployCore').RepoDiff[]; changelog: string; output: string; root: string }
 type DeployEnvStatus = {
   env: 'dev' | 'qa' | 'staging' | 'prod'

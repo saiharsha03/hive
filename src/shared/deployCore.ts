@@ -23,6 +23,9 @@ export type DeployConfig = {
   serviceName: string // full ECS service name, {cluster} and {service}
   webRepo: string // the repo with an S3 + CloudFront landed check ('' = none)
   web: Partial<Record<Env, DeployWeb>>
+  // your own landed watcher, run after the push instead of the built-in check: {env} {kind} (api / web) {sha} are
+  // filled in; it prints progress lines and ends with DEPLOY DONE (exit 0) or DEPLOY FAILED
+  watchCmd: string
 }
 
 const items = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean)
@@ -52,7 +55,7 @@ export function parseDeployConfig(env: Record<string, string>): { config: Deploy
       diffsScript: g('HIVE_DIFFS_SCRIPT') || (script ? script.replace(/[^/\\]*$/, 'diffs.sh') : ''),
       apiRepo: g('HIVE_DEPLOY_API_REPO'), cluster: g('HIVE_DEPLOY_API_CLUSTER'), services: items(env.HIVE_DEPLOY_API_SERVICES),
       serviceName: g('HIVE_DEPLOY_API_SERVICE_NAME') || '{cluster}-{service}',
-      webRepo: g('HIVE_DEPLOY_WEB_REPO'), web,
+      webRepo: g('HIVE_DEPLOY_WEB_REPO'), web, watchCmd: g('HIVE_DEPLOY_WATCH_CMD'),
     },
     problems,
   }
@@ -250,3 +253,17 @@ export const bundlePath = (html: string) => html.match(/assets\/index-[A-Za-z0-9
 // ---------- Diagnose prompt ----------
 export const diagnosePrompt = (repo: string, target: Target, note: string) =>
   `The ${target} deploy of ${repo} does not seem to have landed (${note}). Find out why, read-only: compare the ${branchOf(target)} head with what ${target} is serving, check the ECS services / S3 + CloudFront, the service events, any stopped task reasons and logs. Do not change anything. Report the root cause with evidence.`
+
+// ---------- your own watch command ----------
+
+export const watchCommand = (tpl: string, env: string, kind: string, sha: string): string =>
+  tpl.replaceAll('{env}', env).replaceAll('{kind}', kind).replaceAll('{sha}', sha)
+
+// how the watch command ended: landed only on exit 0 with a DEPLOY DONE line; otherwise its DEPLOY FAILED line, else
+// its last line, is why
+export function watchEnd(code: number | null, lines: string[]): Verdict {
+  const done = lines.find((l) => /^DEPLOY DONE/.test(l))
+  if (code === 0 && done) return { state: 'landed', note: done }
+  const why = lines.find((l) => /^DEPLOY FAILED/.test(l)) ?? lines.filter((l) => l.trim()).at(-1)
+  return { state: 'failed', note: why ?? `the watch command exited with ${code}` }
+}

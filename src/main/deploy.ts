@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import {
   ENVS, LOG_FORMAT, POLL_MS, TIMEOUT_MS, allRepos, branchOf, bundlePath, cell, changelog, clusterFor, decide, imageSha, parseDeployConfig, parseDiffsOutput, parseLog, serviceFull,
-  serviceShort, stepApi, stepWeb, suiteRepos, watchKind, webVersion,
+  serviceShort, stepApi, stepWeb, suiteRepos, watchCommand, watchEnd, watchKind, webVersion,
   type ApiObs, type DeployConfig, type DiffsLine, type Env, type Hold, type RepoDiff, type StatusCell, type Suite, type Target, type WebObs,
 } from '../shared/deployCore'
 import type { Loaded } from './devConfig'
@@ -280,7 +280,7 @@ export async function checkStatus(): Promise<EnvStatus[]> {
 
 // ---------- landed-check watchers (plain polling, no AI session) ----------
 
-export type Watcher = { id: string; repo: string; target: Target; sha: string; state: 'working' | 'waiting'; note: string; stuck: boolean; landed: boolean; startedAt: number; since: number }
+export type Watcher = { id: string; repo: string; target: Target; sha: string; state: 'working' | 'waiting'; note: string; stuck: boolean; landed: boolean; startedAt: number; since: number; log?: string }
 const watchers = new Map<string, Watcher>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -291,6 +291,8 @@ const publish = () => {
 export const listWatchers = () => [...watchers.values()]
 
 export function dismissWatcher(id: string) {
+  cmdWatch.get(id)?.kill()
+  cmdWatch.delete(id)
   clearTimeout(timers.get(id))
   timers.delete(id)
   watchers.delete(id)
@@ -303,6 +305,39 @@ export function rewatch(repo: string, target: Target, sha: string): string {
   return startWatch(repo, target, sha)
 }
 
+// HIVE_DEPLOY_WATCH_CMD: your own watcher (e.g. a deployment-check script) runs after the push, its lines stream into
+// the panel, and its end decides landed / stuck; the built-in polling below is only for when none is set
+const cmdWatch = new Map<string, ReturnType<typeof spawn>>()
+function startCmdWatch(id: string, kind: string, target: Target, sha: string): void {
+  const cmd = watchCommand(dc().watchCmd, target, kind, sha)
+  const lines: string[] = []
+  let partial = ''
+  const update = (patch: Partial<Watcher>) => { const cur = watchers.get(id); if (cur) { watchers.set(id, { ...cur, ...patch }); publish() } }
+  update({ note: 'starting the watch command', log: `$ ${cmd}\n` })
+  const child = spawn(BASH(), ['-c', cmd], { cwd: root || undefined, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
+  cmdWatch.set(id, child)
+  const take = (b: Buffer) => {
+    const text = partial + b.toString()
+    const parts = text.split(/\r?\n/)
+    partial = parts.pop() ?? ''
+    for (const l of parts) if (l.trim()) lines.push(l)
+    const cur = watchers.get(id)
+    if (cur) update({ note: lines.at(-1) ?? cur.note, log: (cur.log ?? '') + text.slice(0, text.length - partial.length) })
+  }
+  child.stdout?.on('data', take)
+  child.stderr?.on('data', take)
+  child.on('error', (e) => { cmdWatch.delete(id); update({ state: 'waiting', stuck: true, note: `could not start the watch command: ${e.message}`, since: Date.now() }) })
+  child.on('close', (code) => {
+    cmdWatch.delete(id)
+    if (partial.trim()) lines.push(partial)
+    if (!watchers.has(id)) return
+    const v = watchEnd(code, lines)
+    update({ state: 'waiting', note: v.note, landed: v.state === 'landed', stuck: v.state !== 'landed', since: Date.now() })
+  })
+  // the watch command has its own end; past the timeout it is stopped and the deploy shows as stuck
+  timers.set(id, setTimeout(() => { if (cmdWatch.has(id)) { cmdWatch.get(id)!.kill(); lines.push(`no DEPLOY DONE after ${Math.round(TIMEOUT_MS / 60_000)} min`) } }, TIMEOUT_MS))
+}
+
 function startWatch(repo: string, target: Target, sha: string): string {
   const kind = watchKind(repo, dc())!
   const id = `${repo}-${target}-${Date.now()}`
@@ -310,6 +345,7 @@ function startWatch(repo: string, target: Target, sha: string): string {
   const w: Watcher = { id, repo, target, sha, state: 'working', note: 'starting', stuck: false, landed: false, startedAt, since: startedAt }
   watchers.set(id, w)
   publish()
+  if (dc().watchCmd) { startCmdWatch(id, kind, target, sha); return id }
   let hold: Hold = { ok: 0, tasks: '' }
   const poll = async () => {
     if (!watchers.has(id)) return

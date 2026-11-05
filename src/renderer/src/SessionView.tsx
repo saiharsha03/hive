@@ -642,7 +642,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
         <div className="cmeta">
           {wt ? <span className="wt" title={wt.path}><Icon name="git-branch" />{wt.repo} worktree on {wt.branch}</span>
             : <span title={session.cwd}><Icon name="folder" />{session.cwd}</span>}
-          {(session.worktrees ?? []).slice(0, -1).map((w) => <span key={w.path} className="wt" title={w.path}>{w.repo} on {w.branch}</span>)}
+          {/* the thread's other worktrees as one count (a review thread makes a dozen), the list on hover */}
+          {(session.worktrees?.length ?? 0) > 1 && <span className="wt" title={session.worktrees!.slice(0, -1).map((w) => `${w.repo} on ${w.branch}`).join('\n')}>+{session.worktrees!.length - 1} more</span>}
           <span className={shownMode === 'bypassPermissions' ? 'mode warn' : 'mode'} title={session.modeError ?? undefined}>
             <Icon name="shield" />Permissions: <b>{modeLabel(shownMode)}</b>{session.modeError ? ' (switch failed)' : ''}
           </span>
