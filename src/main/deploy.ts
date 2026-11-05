@@ -313,7 +313,8 @@ const LOG_MAX = 256 * 1024
 const killTree = (c: ReturnType<typeof spawn>) => {
   if (!c.pid) return
   if (process.platform === 'win32') execFile('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true }, () => {})
-  else c.kill('SIGKILL')
+  // elsewhere the watch runs in its own process group (detached), so the shell and what it started go together
+  else { try { process.kill(-c.pid, 'SIGKILL') } catch { c.kill('SIGKILL') } }
 }
 function startCmdWatch(id: string, kind: string, target: Target, sha: string): void {
   const cmd = watchCommand(dc().watchCmd, target, kind, sha)
@@ -321,7 +322,7 @@ function startCmdWatch(id: string, kind: string, target: Target, sha: string): v
   let partial = ''
   const update = (patch: Partial<Watcher>) => { const cur = watchers.get(id); if (cur) { watchers.set(id, { ...cur, ...patch }); publish() } }
   update({ note: 'starting the watch command', log: `$ ${cmd}\n` })
-  const child = spawn(BASH(), ['-c', cmd], { cwd: root || undefined, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
+  const child = spawn(BASH(), ['-c', cmd], { cwd: root || undefined, windowsHide: true, detached: process.platform !== 'win32', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
   cmdWatch.set(id, child)
   const take = (b: Buffer) => {
     const text = partial + b.toString()
@@ -345,12 +346,16 @@ function startCmdWatch(id: string, kind: string, target: Target, sha: string): v
     if (watchers.has(id)) update({ state: 'waiting', since: Date.now(), ...patch })
   }
   child.on('error', (e) => end({ stuck: true, note: `could not start the watch command: ${e.message}` }))
-  // 'exit', not 'close': a grandchild still holding the pipe would keep 'close' from ever firing
-  child.on('exit', (code) => {
-    if (partial.trim()) lines.push(partial)
-    const v = watchEnd(code, lines)
+  // the verdict waits for 'close' (the last output, often the DEPLOY DONE line, can arrive after 'exit'), but at most
+  // 2 s after 'exit': a grandchild still holding the pipe would keep 'close' from ever firing
+  let exitCode: number | null = null
+  const finish = () => {
+    if (partial.trim()) { lines.push(partial); partial = '' }
+    const v = watchEnd(exitCode, lines)
     end({ note: v.note, landed: v.state === 'landed', stuck: v.state !== 'landed' })
-  })
+  }
+  child.on('exit', (code) => { exitCode = code; setTimeout(finish, 2_000) })
+  child.on('close', (code) => { exitCode ??= code; finish() })
   // the watch command has its own end; past the timeout it is stopped (with everything it started) and shows as stuck
   timers.set(id, setTimeout(() => {
     if (!cmdWatch.has(id)) return
