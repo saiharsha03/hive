@@ -103,7 +103,7 @@ export function AgentsDock({ tabId, items, busy, onSend, onPromote, onDequeue }:
   const running = tasks.filter((t) => t.status === 'running').length
   const open = fold === null ? running > 0 || queued.length > 0 : !fold
   return (
-    <div className="tasks dock" data-testid="thread-tasks">
+    <div className="tasks agents-dock" data-testid="thread-tasks">
       <div className="tasks-head">
         <button className="fold" onClick={() => setFold(open)} data-testid="thread-tasks-toggle">
           <Icon name={open ? 'chevron-down' : 'chevron-right'} />
