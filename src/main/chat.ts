@@ -34,6 +34,7 @@ import { realLimits } from '../shared/usageCore'
 import { parseQuestions } from '../shared/askCore'
 import { cancelAsks, openAsks, replyInChat, waitForAnswer } from './asks'
 import { cancelContinue, scheduleContinue } from './autoContinue'
+import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWakeups'
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
 import { formatAgentStatus } from '../shared/agentStatusCore'
@@ -101,6 +102,7 @@ const append = () => [
   'When the user asks you to note or save something to their Notes, use mcp__hive__add_note (it adds to the note with that title, or makes one).',
   ...(autoBackgroundMs ? [`A shell command still running after ${autoBackgroundMs / 1000} seconds is moved to the background by ${appName()}, so you stay free to talk with the user; you are told when it finishes, and can read its output then.`] : []),
   'mcp__hive__organize_thread pins, snoozes, closes or archives this conversation in the sidebar (e.g. "talk tomorrow", "keep this handy", "we are done"); use your judgement.',
+  `To come back to this thread later (check a deploy at 3 PM, look at CI every 30 min, follow up tomorrow), use mcp__hive__schedule_wakeup: ${appName()} keeps it on disk and wakes this thread with the prompt even after ${appName()} was closed or the laptop slept (late ones fire once when it is back). /loop wake-ups and crons die when ${appName()} closes; use schedule_wakeup for anything that must survive that.`,
   'Claude can search the user\'s past Claude Code sessions with mcp__hive__search_sessions when the user refers to earlier work ("like we did last week", "the CSV import").',
   'To work on code in one of the user\'s repos, call mcp__hive__worktree with the repo and a branch or a ticket (key plus a few words) and do all the work in the folder it returns,',
   `never in the main checkout and never with git worktree add by hand. ${appName()} deletes that worktree when the user closes or archives this thread (uncommitted changes are first saved as a WIP commit; the branch stays). Never push unless the user asks.`,
@@ -302,6 +304,48 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           send({ type: 'hive_organize', action, until: c.until, reason: c.reason })
           return { content: [{ type: 'text', text: action === 'snooze' ? `Thread snoozed until ${until}` : action === 'waiting' ? 'Thread marked as waiting for the user' : action === 'resolved' ? 'Waiting mark cleared' : `Thread: ${action} done` }] }
         },
+      ),
+      tool(
+        'schedule_wakeup',
+        `Wake THIS thread later with a prompt, once or repeating. ${appName()} stores it on disk, so it survives this turn, ${appName()} closing and the laptop sleeping: `
+          + `one that came due while ${appName()} was closed fires once when it is back, saying how late it is. The thread is resumed if it is not open. `
+          + `Give at (ISO local time) or in_minutes. The user's local date and time was ${localNow()} when this session started (check your environment date if the session has run long). `
+          + 'snooze also hides the thread in the sidebar until then. list_wakeups / cancel_wakeup manage them.',
+        {
+          prompt: z.string().describe('What to do when it wakes, self-contained (e.g. "Check whether the prod deploy of prevent-api landed and tell the user")'),
+          at: z.string().optional().describe('When, ISO datetime in local time, e.g. 2026-11-06T09:00:00'),
+          in_minutes: z.number().positive().optional().describe('Or: this many minutes from now'),
+          every_minutes: z.number().int().min(5).optional().describe('Repeat this often after the first wake (minimum 5); omit for once'),
+          snooze: z.boolean().optional().describe('Also snooze this thread in the sidebar until the first wake (default false)'),
+        },
+        async ({ prompt, at, in_minutes, every_minutes, snooze }) => {
+          if (!s.sessionId) return fail('This thread has no session yet; try again after its first reply.')
+          const when = at ? new Date(Date.parse(at)) : in_minutes ? new Date(Date.now() + in_minutes * 60_000) : null
+          if (!when || !Number.isFinite(when.getTime())) return fail('Give at (ISO local datetime) or in_minutes.')
+          if (when.getTime() < Date.now() - 60_000) return fail(`${at} is in the past.`)
+          try {
+            const r = addWakeup({ sessionId: s.sessionId, title: titleOf(tabId), at: when, prompt, everyMinutes: every_minutes })
+            if (snooze) {
+              const c = checkOrganize('snooze', r.wake_at)
+              if (c.ok) send({ type: 'hive_organize', action: 'snooze', until: c.until })
+            }
+            return ok(`Wake-up #${r.id} set for ${r.wake_at}${every_minutes ? `, then every ${every_minutes} min` : ''}${snooze ? '; thread snoozed until then' : ''}.`)
+          } catch (e: any) {
+            return fail(`schedule_wakeup failed: ${e?.message ?? e}`)
+          }
+        },
+      ),
+      tool(
+        'list_wakeups',
+        'The pending scheduled wake-ups of THIS thread (id, when, repeat, prompt).',
+        {},
+        async () => ok(s.sessionId ? formatWakeups(listWakeups(s.sessionId)) : 'No pending wake-ups.'),
+      ),
+      tool(
+        'cancel_wakeup',
+        "Cancel one of THIS thread's pending scheduled wake-ups by id (from list_wakeups).",
+        { id: z.number().int().describe('Wake-up id') },
+        async ({ id }) => (s.sessionId && cancelWakeup(id, s.sessionId) ? ok(`Wake-up #${id} cancelled.`) : fail(`No pending wake-up #${id} for this thread.`)),
       ),
       tool(
         'worktree',

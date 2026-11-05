@@ -1,5 +1,5 @@
 // Electron main process. The Agent SDK runs here.
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, shell, Tray } from 'electron'
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
 import { existsSync, readdirSync, statSync } from 'node:fs'
@@ -7,8 +7,9 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { configureChat, liveQuery, liveThreads, setWatcherStop, stopCodex, teamStates } from './chat'
+import { configureChat, liveQuery, liveThreads, messageThread, setWatcherStop, stopCodex, teamStates } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
+import { initThreadWakeups, tick as wakeupsTick } from './threadWakeups'
 import { resendGroups, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
@@ -109,6 +110,14 @@ initWatchers(appConfig.env, appConfig.config?.root ?? '', {
   runThread: (t) => { const w = appWindow(); if (!w) return false; try { runInThread(t, w.webContents); return true } catch { return false } },
   threadState, closeThread: closeTab, transcript: transcriptPath, usage: () => weeklyUsage(), changed: watchersChanged,
 }, [{ id: 'dependabot', summary: dependabotSummary, setEnabled: setDependabotEnabled }])
+
+// Threads' own scheduled wake-ups (schedule_wakeup): delivered like a message from another thread, which resumes a
+// thread that is not open. A window that is not ready yet leaves them pending for the next check.
+initThreadWakeups((sessionId, text) => {
+  const w = appWindow()
+  if (!w) return Promise.reject(new Error('window not ready'))
+  return messageThread(sessionId, text, 'queue', { id: 'hive-wakeup', title: 'Scheduled wake-up' }, w.webContents)
+})
 
 // The phone app (through the relay): its requests map onto the same threads the window shows
 const mobileChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('mobile:status', mobileStatus()) }
@@ -522,6 +531,8 @@ app.on('second-instance', showWindow)
 
 Menu.setApplicationMenu(null)
 app.whenReady().then(() => {
+  // the laptop slept through wake-ups: fire them once it is back (after the network has had a moment)
+  powerMonitor.on('resume', () => { setTimeout(() => void wakeupsTick(), 15_000) })
   handleScheme()
   createWindow()
   makeTray()
