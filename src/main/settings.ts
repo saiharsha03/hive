@@ -35,7 +35,7 @@ export function saveSettings(s: Settings): void {
 export const currentSettings = (): Settings | null => current
 
 // Settings > General, as query options for a new thread
-export function threadDefaults(): { model?: string; effort?: Effort } {
+export function threadDefaults(): { model?: string; effort?: Effort; extraArgs?: Record<string, string | null> } {
   const g = current?.general
-  return { ...(g?.model ? { model: g.model } : {}), ...(g?.effort ? { effort: g.effort } : {}) }
+  return { ...(g?.model ? { model: g.model } : {}), ...(g?.effort ? { effort: g.effort } : {}), ...(g?.chrome ? { extraArgs: { chrome: null } } : {}) }
 }
