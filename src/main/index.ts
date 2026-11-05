@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, shell, Tray } from 'electron'
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { appendFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
@@ -425,7 +425,12 @@ handle('update:apply', () => { if (updateState()?.kind === 'ready') quitting = t
 // Switch account: the engine's browser sign-in; on success the app restarts so everything runs on the new login
 handle('account:switch', async (e, email: string) => {
   const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
-  if (r.ok) setTimeout(() => { closeStatus(); stopLanguageServers(); closeAll(); stopAllScripts(); killAllTerminals(); app.relaunch(); app.exit(0) }, 1500)
+  if (r.ok) setTimeout(() => {
+    // the restart is asked for first, so a failing cleanup step cannot leave Hive closed without it
+    app.relaunch({ args: [...process.argv.slice(1).filter((a) => a !== RELAUNCH_FLAG), RELAUNCH_FLAG] })
+    for (const stop of [closeStatus, stopLanguageServers, closeAll, stopAllScripts, killAllTerminals]) { try { stop() } catch { /* keep going */ } }
+    app.exit(0)
+  }, 1500)
   return r
 })
 handle('account:cancel', () => cancelSwitch())
@@ -609,8 +614,22 @@ function makeTray(): void {
 }
 app.on('before-quit', () => { quitting = true })
 
-// one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one
-if (!TEST_MODE && !app.requestSingleInstanceLock()) app.quit()
+// one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one. A restart Hive made
+// itself (account switch) can come up while the old one is still shutting down its threads and terminals and holds
+// the lock: that copy waits for it (up to 15 s) instead of quitting, which closed Hive for good after a switch
+const RELAUNCH_FLAG = '--hive-relaunch' // marks a restart Hive made itself
+function singleInstance(): boolean {
+  if (app.requestSingleInstanceLock()) return true
+  if (!process.argv.includes(RELAUNCH_FLAG)) return false
+  const pause = new Int32Array(new SharedArrayBuffer(4))
+  for (const until = Date.now() + 15_000; Date.now() < until;) {
+    Atomics.wait(pause, 0, 0, 250)
+    if (app.requestSingleInstanceLock()) return true
+  }
+  try { appendFileSync(join(app.getPath('userData'), 'hive-start.log'), `${new Date().toISOString()} restart gave up: the old Hive still held the lock after 15 s\n`) } catch { /* nowhere to write */ }
+  return false
+}
+if (!TEST_MODE && !singleInstance()) app.quit()
 app.on('second-instance', showWindow)
 
 Menu.setApplicationMenu(null)
