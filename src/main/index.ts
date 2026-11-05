@@ -32,6 +32,7 @@ import { phoneThreads, type ThreadMap } from '../shared/threadsCore'
 import { CONTINUE_PROMPT } from '../shared/continueCore'
 import { loadHistory, loadRecentHistory } from './history'
 import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
+import { checkForUpdates, applyUpdate, startUpdater, updateState } from './updater'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
 import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
@@ -386,6 +387,11 @@ handle('pull:run', (e, dry: boolean) => {
 })
 handle('allow:status', () => allowStatus())
 handle('allow:run', () => runAllowlist())
+// updates from GitHub Releases (packaged builds only)
+handle('update:state', () => updateState())
+handle('update:check', () => checkForUpdates())
+// quitting first: otherwise closing the window only hides it to the tray and the install never runs
+handle('update:apply', () => { if (updateState()?.kind === 'ready') quitting = true; applyUpdate() })
 // Switch account: the engine's browser sign-in; on success the app restarts so everything runs on the new login
 handle('account:switch', async (e, email: string) => {
   const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
@@ -585,6 +591,7 @@ app.whenReady().then(() => {
   createWindow()
   makeTray()
   startSearch()
+  startUpdater((st) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('update:state', st) })
 })
 app.on('window-all-closed', () => {
   closeStatus()

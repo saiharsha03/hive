@@ -43,8 +43,8 @@
     "e2e:only": "playwright test",
     "check": "npm run typecheck && npm run lint && npm test",
     "icons": "node scripts/make-icons.mjs",
-    "dist": "npm run build && electron-builder --win",
-    "dist:dir": "npm run build && electron-builder --win --dir"
+    "dist": "npm run build && electron-builder --win --publish never",
+    "dist:dir": "npm run build && electron-builder --win --dir --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.314",
@@ -52,6 +52,7 @@
     "@vue/language-server": "^2.2.12",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "electron-updater": "^6.8.11",
     "minisearch": "^7.2.0",
     "monaco-editor": "^0.57.0",
     "node-pty": "^1.1.0",

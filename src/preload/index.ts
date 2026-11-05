@@ -205,6 +205,14 @@ contextBridge.exposeInMainWorld('api', {
   },
   allowStatus: () => ipcRenderer.invoke('allow:status'),
   allowRun: () => ipcRenderer.invoke('allow:run'),
+  updateState: () => ipcRenderer.invoke('update:state'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateApply: () => ipcRenderer.invoke('update:apply'),
+  onUpdateState: (cb: (s: unknown) => void) => {
+    const fn = (_e: unknown, s: unknown) => cb(s)
+    ipcRenderer.on('update:state', fn)
+    return () => ipcRenderer.removeListener('update:state', fn)
+  },
   accountSwitch: (email: string) => ipcRenderer.invoke('account:switch', email),
   accountCancel: () => ipcRenderer.invoke('account:cancel'),
   onAccountOutput: (cb: (t: string) => void) => {

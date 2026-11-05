@@ -202,6 +202,10 @@ interface Window {
     onPullRow: (cb: (row: { repo: string; result: string }) => void) => () => void
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
+    updateState: () => Promise<import('../../shared/versionCore').UpdateState | null>
+    updateCheck: () => Promise<void>
+    updateApply: () => Promise<void>
+    onUpdateState: (cb: (s: import('../../shared/versionCore').UpdateState) => void) => () => void
     accountSwitch: (email: string) => Promise<{ ok: boolean; output: string }>
     accountCancel: () => Promise<void>
     onAccountOutput: (cb: (t: string) => void) => () => void
