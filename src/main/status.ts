@@ -6,7 +6,7 @@ import { claudeExecutable, engineInfo } from './engine'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { realLimits, usageRows, type UsageRow } from '../shared/usageCore'
+import { afterReset, realLimits, usageRows, type UsageRow } from '../shared/usageCore'
 
 export type Limit = { pct: number | null; resetsAt: string | null } | null
 export type Status = {
@@ -48,7 +48,7 @@ function idleQuery(): Query {
 export const idle = (): Query => current()
 
 // a placeholder answer never replaces a real reading (usageCore)
-const limit = (w: any): Limit => (w ? { pct: w.utilization ?? null, resetsAt: w.resets_at ?? null } : null)
+const limit = (w: any): Limit => (w ? afterReset({ pct: w.utilization ?? null, resetsAt: w.resets_at ?? null }) : null)
 
 // Rate limits come only from a process that has talked to the API, so the idle one answers without them. A live
 // thread's usage answer stands in (the app sets this to the chat's reader); the last good limits are kept for a while
@@ -115,7 +115,7 @@ let weekly: Weekly | null = null
 function remember(u: any, err: unknown) {
   // a placeholder answer never overwrites a real reading (its 7-day number is stale)
   if (!err && !realLimits(u?.rate_limits) && weekly?.pct != null) { weekly = { ...weekly, readAt: Date.now() }; return }
-  const pct = realLimits(u?.rate_limits) ? u?.rate_limits?.seven_day?.utilization : undefined
+  const pct = realLimits(u?.rate_limits) ? limit(u?.rate_limits?.seven_day)?.pct : undefined
   weekly = typeof pct === 'number' && Number.isFinite(pct)
     ? { pct, readAt: Date.now(), error: '' }
     : { pct: null, readAt: Date.now(), error: err ? String((err as Error)?.message ?? err) : 'no 7-day limit in the usage answer' }
