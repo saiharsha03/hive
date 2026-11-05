@@ -1137,3 +1137,5 @@ button.sbi:hover { background: var(--hover); }
 .ofc-th b { color: var(--hi); font-weight: 600; }
 .ofc-th span { color: var(--faint); }
 .ofc-own { flex: none; max-height: 40%; overflow: auto; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+
+.tv-paused { font-size: 10px; font-weight: 700; letter-spacing: .06em; }

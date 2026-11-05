@@ -38,11 +38,12 @@ import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWak
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
 import { formatAgentStatus } from '../shared/agentStatusCore'
-import { MAX_TEAMMATES, canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, slug, startedNote, targetsOf, teamBrief, type Member, type MemberState, type MemberStatus, type Team } from '../shared/teamCore'
+import { MAX_TEAMMATES, canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, slug, startedNote, targetsOf, teamBrief, type Member, type MemberState, type MemberStatus, type Ref, type Team } from '../shared/teamCore'
 import { changeTodos, readTodos } from './teamTodos'
 import { briefForRole, defineRole, listRoles, remember, rolesDir } from './roles'
 import { formatRoles } from '../shared/roleCore'
 import { addTodo as addTeamTodo, formatTodos, openMajor, updateTodo } from '../shared/teamTodoCore'
+import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
@@ -189,18 +190,23 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     if (live.get(tabId) === s && !web.isDestroyed()) web.send('chat:event', tabId, event)
   }
 
-  const actOn = (ref?: string): Team | string => {
-    if (ref) {
-      const t = getTeam(ref) ?? ownedTeams(tabId).find((x) => x.name.toLowerCase() === ref.toLowerCase())
-      if (!t) return `No team "${ref}".`
-      if (!canAct(t, tabId)) return `This thread is not in team "${t.name}" and does not own it.`
-      return t.endedAt ? `Team "${t.name}" has ended.` : t
+  const actOn = (ref?: string, anyState = false): Team | string => {
+    const pick = (): Team | string => {
+      if (ref) {
+        const t = getTeam(ref) ?? ownedTeams(tabId).find((x) => x.name.toLowerCase() === ref.toLowerCase())
+        if (!t) return `No team "${ref}".`
+        if (!canAct(t, tabId)) return `This thread is not in team "${t.name}" and does not own it.`
+        return t.endedAt ? `Team "${t.name}" has ended.` : t
+      }
+      const mine = teamOf(tabId)
+      if (mine) return mine
+      const owned = ownedTeams(tabId)
+      if (owned.length === 1) return owned[0]
+      return owned.length ? `This thread owns ${owned.length} teams; pass team (${owned.map((t) => t.id).join(', ')}).` : 'This thread is not in a running team.'
     }
-    const mine = teamOf(tabId)
-    if (mine) return mine
-    const owned = ownedTeams(tabId)
-    if (owned.length === 1) return owned[0]
-    return owned.length ? `This thread owns ${owned.length} teams; pass team (${owned.map((t) => t.id).join(', ')}).` : 'This thread is not in a running team.'
+    const t = pick()
+    return typeof t === 'string' || anyState || !t.pausedAt || t.lead.id === tabId || t.owner?.id === tabId
+      ? t : `Team "${t.name}" is paused. Stop working until it is resumed; your progress and to-dos are kept.`
   }
 
   const hive = createSdkMcpServer({
@@ -543,8 +549,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           }
           const names = members.map((m) => m.name.trim().toLowerCase())
           if (new Set(names).size !== names.length) return fail('Teammate names must be unique (roles may repeat).')
-          const me = { id: tabId, title: titleOf(tabId) }
-          const leadRef = newLead ? { id: `team-lead-${slug(name)}-${randomUUID().slice(0, 4)}`, title: `${name}: Lead` } : me
+          const me = { id: tabId, title: titleOf(tabId), cwd, ...(s.sessionId ? { sessionId: s.sessionId } : {}) }
+          const leadRef = newLead ? { id: `team-lead-${slug(name)}-${randomUUID().slice(0, 4)}`, title: `${name}: Lead`, cwd } : me
           const team = createTeam(name, goal, { lead: leadRef, ...(newLead ? { owner: me } : {}) })
           const bad = members.find((m) => nameTaken(team, m.name))
           if (bad) return fail(`The name "${bad.name}" is reserved or taken.`)
@@ -597,6 +603,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           }
           const uniq = [...new Map(targets.map((x) => [x.id, x])).values()]
           appendLog(team, { at: Date.now(), from: tabId, fromName: me, to: uniq.map((x) => x.name), text })
+          if (team.pausedAt) return ok('The team is paused: your post is on the team log; teammates read it when the team resumes. Stop here.')
           const out: string[] = []
           for (const t of uniq) {
             try {
@@ -741,6 +748,30 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const team = actOn(ref)
           if (typeof team === 'string') return fail(team)
           return ok(`${formatTeamStatus(team, teamStates(team), readLog(team), last ?? 20)}\n\n${formatTodos(readTodos(team), (id) => (id ? nameOf(team, id) : 'unassigned'))}`)
+        },
+      ),
+      tool(
+        'pause_team',
+        'Lead or Owner: pause the team. Every running turn of a teammate stops (their background agents keep running), and team posts are only logged until resume_team. '
+          + 'Use it when the user asks, or to stop the team spending while you wait on a decision.',
+        { reason: z.string().optional(), team: z.string().optional().describe('Team id; needed only by an Owner') },
+        async ({ reason, team: ref }) => {
+          const team = actOn(ref, true)
+          if (typeof team === 'string') return fail(team)
+          if (team.lead.id !== tabId && team.owner?.id !== tabId) return fail('Only the Lead or the Owner can pause the team.')
+          return ok(await pauseTeam(team.id, { id: tabId, title: nameOf(team, tabId) }, reason))
+        },
+      ),
+      tool(
+        'resume_team',
+        'Lead or Owner: resume a paused team (also after Hive restarted). Every teammate gets a message to read team_status and its to-dos and carry on; '
+          + 'a teammate whose thread had closed is reopened from its Claude session.',
+        { team: z.string().optional().describe('Team id; needed only by an Owner') },
+        async ({ team: ref }) => {
+          const team = actOn(ref, true)
+          if (typeof team === 'string') return fail(team)
+          if (team.lead.id !== tabId && team.owner?.id !== tabId) return fail('Only the Lead or the Owner can resume the team.')
+          return ok(await resumeTeam(team.id, { id: tabId, title: nameOf(team, tabId) }, web))
         },
       ),
       tool(
@@ -904,6 +935,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       for await (const m of q as AsyncIterable<SDKMessage>) {
         if (m.type === 'system' && (m as any).subtype === 'init') {
           s.sessionId = (m as any).session_id
+          noteSession(tabId, s.sessionId!)
           pendingSession(tabId, s.sessionId!)
           send({ type: 'hive_session', sessionId: s.sessionId, path: transcriptPath(cwd, s.sessionId!) })
           // the mode the process really started in; a foreground/background move made before this point is applied now
@@ -1061,6 +1093,45 @@ export function startBackgroundThread(t: BackgroundThread, web: WebContents): vo
   gone.delete(t.tabId)
   s.turns.markBusy()
   s.push(userMsg(t.from ? labelFromThread(t.from, t.prompt) : t.prompt))
+}
+
+// Pause: stop every running turn of the team (background agents keep going) and hold team posts.
+export async function pauseTeam(teamId: string, by: Ref, reason?: string): Promise<string> {
+  const team = getTeam(teamId)
+  if (!team || team.endedAt) return 'No running team.'
+  if (team.pausedAt) return `Team "${team.name}" is already paused.`
+  setPaused(team, Date.now())
+  const stopped: string[] = []
+  for (const x of [team.lead, ...team.members]) {
+    const t = live.get(x.id)
+    if (x.id === by.id || !t?.turns.isBusy()) continue
+    await interrupt(x.id).catch(() => {})
+    stopped.push(nameOf(team, x.id))
+  }
+  appendLog(team, { at: Date.now(), from: by.id, fromName: by.title, to: [], text: `Team paused${reason ? `: ${reason}` : ''}` })
+  return `Team "${team.name}" paused${stopped.length ? `; stopped ${stopped.join(', ')}` : ''}.`
+}
+
+// Resume: every teammate (and the Lead) gets told to carry on; a closed thread is reopened from its Claude session
+export async function resumeTeam(teamId: string, by: Ref, web: WebContents): Promise<string> {
+  const team = getTeam(teamId)
+  if (!team || team.endedAt) return 'No running team.'
+  setPaused(team, undefined)
+  appendLog(team, { at: Date.now(), from: by.id, fromName: by.title, to: [], text: 'Team resumed' })
+  const text = `[Team "${team.name}", ${by.title}] The team is resumed. Read team_status (posts sent while it was paused are on the log) and your to-dos (todo_list "me"), then carry on where you stopped.`
+  const out: string[] = []
+  for (const x of [{ ...team.lead, name: 'Lead', cwd: team.lead.cwd }, ...team.members]) {
+    if (x.id === by.id) continue
+    const name = nameOf(team, x.id)
+    try {
+      if (live.has(x.id)) { await messageThread(x.id, text, 'queue', by, web); out.push(name) }
+      else if (x.sessionId && x.cwd) {
+        startBackgroundThread({ tabId: x.id, cwd: x.cwd, title: x.id === team.lead.id ? team.lead.title : `${team.name}: ${name}`, prompt: text, resume: x.sessionId, from: by }, web)
+        out.push(`${name} (reopened)`)
+      } else out.push(`${name}: not reopened (no saved session)`)
+    } catch (e: any) { out.push(`${name}: ${e?.message ?? e}`) }
+  }
+  return `Team "${team.name}" resumed: ${out.join(', ') || 'nobody to wake'}.`
 }
 
 // the live state of each team member, for team_status and the Team view

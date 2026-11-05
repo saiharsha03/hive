@@ -30,3 +30,18 @@ test('team folder: create, members, log, knowledge, end; read back from disk', a
   assert.equal(t.teamOf('team-qa-1'), undefined)
   assert.ok(changes.includes(team.id))
 })
+
+test('pause flag and saved sessions survive a reload, for resuming after a restart', async () => {
+  const t = await import('../../src/main/teams')
+  const team = t.createTeam('Pause test', 'g', { lead: { id: 'lead-9', title: 'L', cwd: dir } })
+  t.addMember(team, { id: 'mate-9', name: 'Mate', role: 'builder', cwd: dir, joinedAt: 1 })
+  t.noteSession('mate-9', 'sess-1')
+  t.noteSession('lead-9', 'sess-0')
+  t.setPaused(team, 123)
+  t.resetTeamsCache()
+  const back = t.getTeam(team.id)!
+  assert.deepEqual([back.pausedAt, back.lead.sessionId, back.members[0].sessionId], [123, 'sess-0', 'sess-1'])
+  t.setPaused(back, undefined)
+  t.resetTeamsCache()
+  assert.equal(t.getTeam(team.id)!.pausedAt, undefined)
+})

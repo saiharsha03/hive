@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { configureChat, liveQuery, liveThreads, messageThread, setWatcherStop, stopCodex, teamStates } from './chat'
+import { configureChat, liveQuery, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { initThreadWakeups, tick as wakeupsTick } from './threadWakeups'
 import { resendGroups, takePending } from './pending'
@@ -103,6 +103,8 @@ handle('teams:view', (_e, id: string) => {
   const t = getTeam(String(id))
   return t ? { team: t, states: teamStates(t), log: readLog(t).slice(-300), plan: readTeamFile(t, 'plan.md'), knowledge: readTeamFile(t, 'knowledge.md'), todos: readTodos(t) } : null
 })
+handle('teams:pause', (_e, id: string) => pauseTeam(String(id), { id: 'you', title: 'You' }, 'paused from the Team view'))
+handle('teams:resume', (e, id: string) => resumeTeam(String(id), { id: 'you', title: 'You' }, e.sender))
 onTeamChange((id) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('teams:changed', id) })
 
 const watchersChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('watchers:changed') }

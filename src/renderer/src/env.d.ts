@@ -136,6 +136,8 @@ interface Window {
     watchersList: () => Promise<import('../../shared/watchersCore').WatchersList>
     teamsList: () => Promise<{ id: string; name: string; goal: string; createdAt: number; endedAt?: number; members: number }[]>
     teamView: (id: string) => Promise<import('../../shared/teamCore').TeamView | null>
+    teamPause: (id: string) => Promise<string>
+    teamResume: (id: string) => Promise<string>
     onTeamsChanged: (cb: (id: string) => void) => () => void
     watcherDetail: (id: string) => Promise<import('../../shared/watchersCore').WatcherDetail | null>
     watcherCreate: (input: { name: string; goal: string; schedule?: unknown; cwd?: string }) => Promise<{ id: string; message: string }>

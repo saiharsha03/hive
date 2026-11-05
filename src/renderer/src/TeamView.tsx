@@ -168,6 +168,7 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
         {v && <span className="tv-goal" title={v.team.goal}>{v.team.goal}</span>}
         {v?.team.owner && <button className="link" onClick={() => onActivate(v.team.owner!.id)} title="The thread that started this team; the Lead reports to it">Owner: {v.team.owner.title}</button>}
         <div className="seg" title="How the office is drawn">{(['side', 'plan'] as const).map((m) => <button key={m} className={mode === m ? 'on' : ''} onClick={() => pickMode(m)} data-testid={`team-mode-${m}`}>{m === 'side' ? 'Side' : 'Plan'}</button>)}</div>
+        {v && !v.team.endedAt && <PauseButton v={v} />}
         {v && <span className="tv-meta">{v.team.members.length + 1} members, started {time(v.team.createdAt)}{v.team.endedAt ? `, ended ${time(v.team.endedAt)}` : ''}</span>}
       </div>
       {v && (
@@ -199,5 +200,25 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
         </div>
       )}
     </div>
+  )
+}
+
+// pause every running turn of the team, or wake it back up (also after Hive restarted)
+function PauseButton({ v }: { v: View }) {
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  const paused = !!v.team.pausedAt
+  const go = () => {
+    setBusy(true)
+    void (paused ? window.api.teamResume(v.team.id) : window.api.teamPause(v.team.id))
+      .then((m) => setNote(m)).catch((e) => setNote(String(e?.message ?? e))).finally(() => setBusy(false))
+  }
+  return (
+    <>
+      {paused && <span className="tv-paused s-wait" data-testid="team-paused">PAUSED</span>}
+      <button className="link" disabled={busy} onClick={go} title={note || (paused ? 'Wake every teammate to carry on' : 'Stop every running turn; posts are held until you resume')} data-testid="team-pause">
+        {busy ? (paused ? 'Resuming…' : 'Pausing…') : paused ? 'Resume team' : 'Pause team'}
+      </button>
+    </>
   )
 }
