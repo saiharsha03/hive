@@ -26,6 +26,7 @@ export type Task = {
   toolUses?: number
   durationMs?: number
   lastTool?: string
+  now?: string // live one-line status from agentProgressSummaries ("Reading the dbt models")
   summary?: string
   error?: string
   phases: TaskPhase[]
@@ -110,7 +111,7 @@ export function applyTask(tasks: Task[], ev: any, now: number): Task[] {
     case 'task_progress':
       return upsert(tasks, id!, () => blank(id!, now), (t) => {
         const u = ev.usage ?? {}
-        const next: Task = { ...t, tokens: u.total_tokens ?? t.tokens, toolUses: u.tool_uses ?? t.toolUses, durationMs: u.duration_ms ?? t.durationMs, lastTool: ev.last_tool_name ?? t.lastTool }
+        const next: Task = { ...t, tokens: u.total_tokens ?? t.tokens, toolUses: u.tool_uses ?? t.toolUses, durationMs: u.duration_ms ?? t.durationMs, lastTool: ev.last_tool_name ?? t.lastTool, now: ev.summary ? String(ev.summary) : t.now }
         if (t.title === t.id && ev.summary) next.title = String(ev.summary)
         return Array.isArray(ev.workflow_progress) ? mergeProgress(next, ev.workflow_progress) : next
       })

@@ -51,7 +51,7 @@ export function TaskRow({ t, tabId, open: startOpen = false }: { t: Task; tabId:
         {hasMore && <button className="link" onClick={() => setOpen((o) => !o)} data-testid={`task-details-${t.id}`}>{open ? 'Hide' : 'Details'}</button>}
         {t.status === 'running' && <button className="link danger" onClick={() => void stop()} data-testid={`task-stop-${t.id}`}>Stop</button>}
       </div>
-      {t.status === 'running' && t.lastTool && !open && <div className="tsk-last">{t.lastTool}</div>}
+      {t.status === 'running' && (t.now || t.lastTool) && !open && <div className="tsk-last">{t.now ?? t.lastTool}</div>}
       {err && <div className="tsk-last">{err}</div>}
       {open && (
         <div className="tsk-body">

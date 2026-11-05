@@ -521,6 +521,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       // Hive has a stop button per background task (chat:stopTask), so an interrupt (Esc / Ctrl+Enter) only stops the
       // turn, as in the terminal; without this the SDK fails closed and the interrupt kills every background agent too
       perTaskStopAffordance: true,
+      // a one-line "what it is doing now" for each running subagent every ~30s, shown on its row in the thread status
+      agentProgressSummaries: true,
       permissionMode: modeFor(background, PERMISSION_MODE),
       // always set, so a session that started in auto can still switch to bypass when it comes to the foreground
       allowDangerouslySkipPermissions: true,
