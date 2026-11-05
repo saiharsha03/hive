@@ -947,6 +947,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   // this turn hit the plan's usage limit: set by a rejected rate-limit event (with its reset) or a rate_limit error
   let limited = false
   let limitReset: number | null = null
+  let limitKind: string | undefined
   // a shell command of this thread still running after a minute goes to the background, so Claude is free to talk
   // (and steer, or answer you) while it runs; only commands, never agents
   const longCommands = autoBackground((id) => q.backgroundTasks(id), autoBackgroundMs)
@@ -975,7 +976,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         if (m.type === 'user' && !m.parent_tool_use_id) longCommands.ended((m as any).message?.content)
         if (m.type === 'rate_limit_event') {
           const i = (m as any).rate_limit_info
-          if (i?.status === 'rejected') { limited = true; if (Number.isFinite(i.resetsAt)) limitReset = i.resetsAt * 1000 }
+          if (i?.status === 'rejected') { limited = true; limitKind = i.rateLimitType; if (Number.isFinite(i.resetsAt)) limitReset = i.resetsAt * 1000 }
           else if (i?.status) { limited = false; limitReset = null } // allowed again (overage, a later window): no limit stop
         }
         if (m.type === 'result') {
@@ -988,12 +989,12 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
             const reset = limitReset ?? resetFromText(`${lastText}
 ${s.lastReply}`, Date.now())
             if (reset) {
-              const w = scheduleContinue({ key: s.sessionId, tabId, cwd, title: titleOf(tabId) }, reset)
+              const w = scheduleContinue({ key: s.sessionId, tabId, cwd, title: titleOf(tabId), ...(limitKind ? { kind: limitKind } : {}) }, reset)
               notifyPhone(`Usage limit: ${titleOf(tabId)}`, `Continues automatically at ${wakeLabel(w.at, Date.now())}`, tabId)
             }
           }
-          if (s.lastOk && !limited) limitBack()
-          limited = false; limitReset = null
+          if (s.lastOk && !limited) limitBack(Date.now() - (Number(r.duration_ms) || 0))
+          limited = false; limitReset = null; limitKind = undefined
           lastText = ''
           longCommands.clear()
           s.turns.turnEnded()
@@ -1214,17 +1215,18 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
   return `Thread "${target.title}" was not running; resumed it in the background (id ${target.tabId}) with your message.`
 }
 
-// the usage answer of the first live thread that carries rate limits (only a process that has talked to the API does);
-// each one gets 5 s, so a stuck process does not hold up the status bar. null when no live thread has them
-export async function liveUsage(): Promise<any | null> {
-  for (const s of live.values()) {
+// the usage answer of the live thread that replied most recently and carries rate limits (only a process that has
+// talked to the API does), with that reply's time: an old tab's headers are not passed off as fresh. Each one gets
+// 5 s, so a stuck process does not hold up the status bar. null when no live thread has them
+export async function liveUsage(): Promise<{ u: any; at: number } | null> {
+  for (const s of [...live.values()].filter((x) => x.lastReplyAt).sort((a, b) => b.lastReplyAt! - a.lastReplyAt!)) {
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       const u: any = await Promise.race([
         s.q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 5000) }),
       ])
-      if (realLimits(u?.rate_limits)) return u // a placeholder answer: try the next thread
+      if (realLimits(u?.rate_limits)) return { u, at: s.lastReplyAt! } // a placeholder answer: try the next thread
     } catch { /* the next thread */ } finally { clearTimeout(timer) }
   }
   return null

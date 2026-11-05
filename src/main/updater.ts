@@ -19,7 +19,9 @@ async function checkPortable(): Promise<void> {
   const res = await fetch(RELEASES, { headers: { 'User-Agent': 'Hive', Accept: 'application/vnd.github+json' } })
   if (!res.ok) throw new Error(`GitHub releases: HTTP ${res.status}`)
   const r = (await res.json()) as { tag_name?: string; html_url?: string }
-  if (r.tag_name && r.html_url && isNewer(r.tag_name, app.getVersion())) set({ kind: 'available', version: r.tag_name.replace(/^v/i, ''), url: r.html_url })
+  // only a release page of this repo is ever opened, whatever the answer says
+  const url = r.html_url?.startsWith('https://github.com/saiharsha03/hive/releases/') ? r.html_url : 'https://github.com/saiharsha03/hive/releases/latest'
+  if (r.tag_name && isNewer(r.tag_name, app.getVersion())) set({ kind: 'available', version: r.tag_name.replace(/^v/i, ''), url })
 }
 
 export async function checkForUpdates(): Promise<void> {

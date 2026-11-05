@@ -49,9 +49,9 @@ export function initAutoContinue(d: Deps): void {
 }
 
 // a thread hit the limit: when it wakes (one wake per thread; a later hit replaces it)
-export function scheduleContinue(t: Omit<Wake, 'at'>, resetAt: number): Wake {
+export function scheduleContinue(t: Omit<Wake, 'at' | 'since'>, resetAt: number): Wake {
   const others = wakes.filter((x) => x.key !== t.key).map((x) => x.at)
-  const w: Wake = { ...t, at: planWake(resetAt, others, Date.now()) }
+  const w: Wake = { ...t, since: Date.now(), at: planWake(resetAt, others, Date.now()) }
   wakes = [...wakes.filter((x) => x.key !== t.key), w]
   save()
   arm(w)
@@ -59,12 +59,14 @@ export function scheduleContinue(t: Omit<Wake, 'at'>, resetAt: number): Wake {
   return w
 }
 
-// a turn went through, so the limit is back: the waiting threads continue now, not at their planned reset
-export function limitBack(): void {
-  if (!wakes.some((w) => w.at > Date.now() + 2 * 60_000)) return
-  wakes = wakeNow(wakes, Date.now())
+// a turn that started at turnStartedAt went through, so the plan-wide limit is back (continueCore.wakeNow)
+export function limitBack(turnStartedAt: number): void {
+  const before = wakes
+  wakes = wakeNow(wakes, Date.now(), turnStartedAt)
+  const moved = wakes.filter((w) => !before.includes(w))
+  if (!moved.length) return
   save()
-  for (const w of wakes) { arm(w); deps?.changed(w, w.at) }
+  for (const w of moved) { arm(w); deps?.changed(w, w.at) }
 }
 
 // by session id or tab id: Cancel in the thread, or the user wrote to it themselves

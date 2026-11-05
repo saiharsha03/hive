@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AFTER_RESET_MS, STAGGER_MS, catchUp, planWake, resetFromText, wakeNow } from '../../src/shared/continueCore'
+import { AFTER_RESET_MS, STAGGER_MS, catchUp, planWake, resetFromText, wakeNow, type Wake } from '../../src/shared/continueCore'
 
 const now = new Date(2026, 10, 4, 13, 0).getTime()
 describe('continueCore', () => {
@@ -34,9 +34,17 @@ describe('continueCore', () => {
 })
 
 describe('wakeNow', () => {
+  const w = (key: string, at: number, more = {}) => ({ key, tabId: key, cwd: '/c', title: key, at, since: 0, ...more })
   it('the limit came back: waiting threads go a minute from now, spaced, not at their planned reset', () => {
-    const w = (key: string, at: number) => ({ key, tabId: key, cwd: '/c', title: key, at })
-    const out = wakeNow([w('a', 9_000_000), w('b', 9_500_000)], 1_000)
-    expect(out.map((x) => x.at)).toEqual([1_000 + AFTER_RESET_MS, 1_000 + AFTER_RESET_MS + STAGGER_MS])
+    expect(wakeNow([w('a', 9_000_000), w('b', 9_500_000)], 1_000, 500).map((x) => x.at)).toEqual([1_000 + AFTER_RESET_MS, 1_000 + AFTER_RESET_MS + STAGGER_MS])
+  })
+  it('never moves a wake later: successes every 30 s do not keep pushing it back', () => {
+    let ws: Wake[] = [w('a', 9_000_000)]
+    for (let t = 1_000; t < 300_000; t += 30_000) ws = wakeNow(ws, t, t - 100)
+    expect(ws[0].at).toBe(1_000 + AFTER_RESET_MS)
+  })
+  it('only wakes scheduled before the turn started, and only plan-wide limits', () => {
+    const out = wakeNow([w('late', 9_000_000, { since: 2_000 }), w('opus', 9_000_000, { kind: 'seven_day_opus' })], 1_000, 1_500)
+    expect(out.map((x) => x.at)).toEqual([9_000_000, 9_000_000])
   })
 })
