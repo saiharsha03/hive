@@ -10,7 +10,7 @@ import { Icon } from './ui'
 import { useWatchers } from './useWatchers'
 import { isDependabotTab } from '../../shared/dependabotCore'
 import { nextRunLabel } from '../../shared/threadsCore'
-import { groupTeams, roleIcon, teamThreadIds, type Roster, type RosterPerson, type TeamWord } from '../../shared/teamSidebarCore'
+import { groupTeams, pastTeamPeople, roleIcon, teamThreadIds, type Roster, type RosterPerson, type TeamWord } from '../../shared/teamSidebarCore'
 
 // last message: time for today, otherwise "Oct 28", with the year only when it isn't this year
 function lastAt(t: number): string {
@@ -81,8 +81,11 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     refreshers.add(load)
     return () => { refreshers.delete(load) }
   }, [])
-  // running teams (Lead first, then members): their threads sit in the Teams section, not in the lists below
-  const [rosters, setRosters] = useState<Roster[]>([])
+  // running teams (Lead first, then members): their threads sit in the Teams section, not in the lists below;
+  // an ended team's threads go back to the lists, still marked as team threads
+  const [allRosters, setRosters] = useState<Roster[]>([])
+  const rosters = useMemo(() => allRosters.filter((r) => !r.endedAt), [allRosters])
+  const past = useMemo(() => pastTeamPeople(allRosters), [allRosters])
   useEffect(() => {
     const load = () => { void window.api.teamRoster().then(setRosters).catch(() => setRosters([])) }
     load()
@@ -206,7 +209,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     ? <span className="m"><span className="trole">{who.role.toUpperCase()}</span>{who.name.toLowerCase() !== who.role.toLowerCase() && who.name !== 'Lead' ? ` ${who.name}` : ''}{rest ? `, ${rest}` : ''}</span>
     : rest ? <span className="m">{rest}</span> : null)
 
-  const liveRow = (r: LiveRow, who?: RosterPerson) => {
+  const liveRow = (r: LiveRow, who: RosterPerson | undefined = past.get(r.id) ?? (r.sessionId ? past.get(r.sessionId) : undefined)) => {
     const look = liveLook(r)
     return (
       <div key={r.id} className={`th${r.id === activeId ? ' on' : ''}`} title={r.title} role="button" tabIndex={0} onClick={() => onActivate(r.id)} onKeyDown={(e) => { if (e.key === 'Enter') onActivate(r.id) }} data-testid="live-row" data-id={r.id}>
@@ -219,7 +222,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     )
   }
 
-  const row = (s: SessionInfo, section: string, snippet?: string, who?: RosterPerson) => {
+  const row = (s: SessionInfo, section: string, snippet?: string, who: RosterPerson | undefined = past.get(s.id)) => {
     const lr = section === 'watchers' ? watcherLive.get(s.id) : undefined
     const w = section === 'watchers' ? watcherOf.get(s.id) : undefined
     const label = lr ? lr.note : (w && nextRunLabel(w, now)) || note(s.id, section)

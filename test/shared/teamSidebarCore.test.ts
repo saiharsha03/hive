@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { groupTeams, isAppPage, runningRosters, teamThreadIds, teamWindowOf, teamWindowSearch } from '../../src/shared/teamSidebarCore'
+import { groupTeams, isAppPage, pastTeamPeople, rosterOf, runningRosters, teamThreadIds, teamWindowOf, teamWindowSearch } from '../../src/shared/teamSidebarCore'
 import type { Team } from '../../src/shared/teamCore'
 
 const team = (over: Partial<Team> = {}): Team => ({
@@ -69,4 +69,11 @@ test('role icons by keyword', async () => {
   const { roleIcon } = await import('../../src/shared/teamSidebarCore')
   assert.deepEqual(['lead', 'Senior builder', 'reviewer', 'validator', 'QA', 'researcher', 'Docs writer', 'data engineer', 'mascot'].map(roleIcon),
     ['star-full', 'tools', 'eye', 'beaker', 'checklist', 'search', 'book', 'tools', 'person'])
+})
+
+test('pastTeamPeople: an ended team marks its people by tab and session id; a running one marks none', () => {
+  const m = pastTeamPeople([rosterOf(team()), rosterOf(team({ id: 't2', endedAt: 5 }))].filter((r) => r.id === 't2'))
+  assert.equal(m.get('team-builder-1111')?.role, 'builder')
+  assert.equal(m.get('b-s')?.name, 'Builder')
+  assert.equal(pastTeamPeople([rosterOf(team())]).size, 0)
 })
