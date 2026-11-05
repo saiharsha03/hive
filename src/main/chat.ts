@@ -930,8 +930,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       permissionMode: modeFor(background, PERMISSION_MODE),
       // always set, so a session that started in auto can still switch to bypass when it comes to the foreground
       allowDangerouslySkipPermissions: true,
-      // Settings > General: model and effort for threads started from now on ('' = Claude Code's default)
-      ...threadDefaults(),
+      // Settings > General: model, effort and Claude in Chrome for threads started from now on ('' = Claude Code's
+      // default). A watcher never gets Chrome: it is read-only, and the browser tools act in the user's real Chrome
+      ...(({ extraArgs, ...d }) => (watcher ? d : { ...d, ...(extraArgs ? { extraArgs } : {}) }))(threadDefaults()),
       // Claude's multiple-choice questions (AskUserQuestion) as a card in the thread and on the phone; giving the SDK a
       // permission handler is what makes the tool available. Any other tool reaching it is denied, as with no handler
       canUseTool: async (name, input, { signal, toolUseID }) => {
