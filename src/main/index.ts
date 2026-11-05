@@ -7,9 +7,10 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { configureChat, liveQuery, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates } from './chat'
+import { configureChat, liveQuery, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
-import { initThreadWakeups, tick as wakeupsTick } from './threadWakeups'
+import { cancelWakeup, initThreadWakeups, listWakeups, tick as wakeupsTick } from './threadWakeups'
+import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
 import { resendGroups, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
@@ -37,7 +38,7 @@ import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEM
 import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { answerAsk, openAsks } from './asks'
-import { cancelContinue, continueAt, initAutoContinue } from './autoContinue'
+import { cancelContinue, continueAt, initAutoContinue, listContinues } from './autoContinue'
 import { readTodos } from './teamTodos'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
@@ -166,11 +167,13 @@ const mobileDeps = () => ({
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
     const saved = l ? undefined : (await listSessions()).find((s) => s.id === id)
     const path = l?.sessionId ? transcriptPath(l.cwd, l.sessionId) : saved?.path
-    if (!path) return l ? { title: l.title, items: [], working: l.busy, asks: openAsks(l.tabId) } : null
+    // tasks: the thread's running background work (a 1.x phone app ignores it)
+    const tasks = l ? phoneTasks(threadTasks(l.tabId)) : []
+    if (!path) return l ? { title: l.title, items: [], working: l.busy, asks: openAsks(l.tabId), tasks } : null
     const { items } = await loadRecentHistory(path)
     // a finished watcher run: say its thread is closed and what a reply costs
     const ended: PhoneItem[] = saved?.watcherRun ? [{ k: 'note', t: 'This watcher run has ended and its thread is closed. Replying reopens it: Claude reads the whole conversation again, which counts against your usage.' }] : []
-    return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [] }
+    return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [], tasks }
   },
   send: async (id: string, text: string) => {
     const w = appWindow()
@@ -199,6 +202,32 @@ const mobileDeps = () => ({
     try { return [root, ...readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(join(root, d.name, '.git'))).map((d) => join(root, d.name))] } catch { return [root] }
   },
   changed: mobileChanged,
+  // 2.0 screens: running teams, pause / resume (as the Team view does it), a thread's background work, wake-ups
+  teams: () => phoneTeams(listTeams(), (t) => ({ states: teamStates(t), log: readLog(t), liveId: (id) => liveTabOf(t, id) })),
+  teamPause: async (id: string) => {
+    const t = getTeam(id)
+    if (!t || t.endedAt) throw new Error('That team is not running')
+    return pauseTeam(t.id, { id: 'you', title: 'You' }, 'paused from the phone')
+  },
+  teamResume: async (id: string) => {
+    const t = getTeam(id)
+    if (!t || t.endedAt) throw new Error('That team is not running')
+    const w = mainWeb()
+    if (!w) throw new Error(`The ${appName()} window is not open`)
+    return resumeTeam(t.id, { id: 'you', title: 'You' }, w)
+  },
+  // only a task the thread is running now
+  stopTask: async (thread: string, task: string) => {
+    const l = liveThreads().find((t) => t.tabId === thread || t.sessionId === thread)
+    if (!l || !threadTasks(l.tabId).some((x) => x.id === task && x.status === 'running')) return false
+    if (task.startsWith('codex:')) return stopCodex(task.slice(6))
+    const q = liveQuery(l.tabId)
+    if (!q) return false
+    await q.stopTask(task)
+    return true
+  },
+  wakeups: () => phoneWakeups(listWakeups(), listContinues()),
+  cancelWakeup: (kind: string, id: string) => (kind === 'wake' ? /^\d+$/.test(id) && cancelWakeup(Number(id)) : kind === 'continue' ? cancelContinue(id) : false),
 })
 initMobile(appConfig.env, mobileDeps())
 // threads that hit the usage limit continue by themselves after the reset (saved across restarts)

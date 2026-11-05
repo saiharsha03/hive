@@ -1,7 +1,8 @@
 package dev.hive.mobile
 
 // The app: a fingerprint to open it, pairing (scan the QR Hive shows, or paste it), the threads, one thread (read,
-// send, stop) and a new thread. Everything goes to Hive on the computer through the relay, sealed.
+// send, stop, its background work) and a new thread, the running teams, the wake-ups and usage. Everything goes to
+// Hive on the computer through the relay, sealed.
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -117,10 +118,18 @@ private fun App(openThread: MutableState<String?>) {
     var paired by remember { mutableStateOf(Pairing.load(ctx) != null) }
     var newThread by remember { mutableStateOf(false) }
     var usage by remember { mutableStateOf(false) }
+    var teams by remember { mutableStateOf(false) }
+    var wakeups by remember { mutableStateOf(false) }
     // Android 13+ asks before an app may show notifications
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) { if (android.os.Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
-    val list = @Composable { Threads(onOpen = { newThread = false; openThread.value = it }, onNew = { newThread = true }, onUsage = { usage = true }, onUnpair = { Relay.disconnect(); Pairing.clear(ctx); paired = false }) }
+    // a thread opened from Teams or Wake-ups closes that screen
+    val open = { id: String -> newThread = false; usage = false; teams = false; wakeups = false; openThread.value = id }
+    val list = @Composable {
+        Threads(onOpen = { newThread = false; openThread.value = it }, onNew = { newThread = true }, onUsage = { usage = true },
+            onTeams = { teams = true; wakeups = false; usage = false }, onWakeups = { wakeups = true; teams = false; usage = false },
+            onUnpair = { Relay.disconnect(); Pairing.clear(ctx); paired = false })
+    }
     BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
         val wide = maxWidth
         when {
@@ -132,6 +141,8 @@ private fun App(openThread: MutableState<String?>) {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     when {
                         usage -> UsageScreen(onBack = { usage = false })
+                        teams -> TeamsScreen(onOpen = open, onBack = { teams = false })
+                        wakeups -> WakeupsScreen(onOpen = open, onBack = { wakeups = false })
                         newThread -> NewThread(onDone = { newThread = false })
                         openThread.value != null -> key(openThread.value) { ThreadScreen(openThread.value!!) { openThread.value = null } }
                         else -> Text("Pick a thread", Modifier.align(Alignment.Center), color = Color.Gray)
@@ -139,6 +150,8 @@ private fun App(openThread: MutableState<String?>) {
                 }
             }
             usage -> UsageScreen(onBack = { usage = false })
+            teams -> TeamsScreen(onOpen = open, onBack = { teams = false })
+            wakeups -> WakeupsScreen(onOpen = open, onBack = { wakeups = false })
             newThread -> NewThread(onDone = { newThread = false })
             openThread.value != null -> ThreadScreen(openThread.value!!) { openThread.value = null }
             else -> list()
@@ -186,7 +199,7 @@ private fun StatusLine() {
 }
 
 @Composable
-private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> Unit, onUnpair: () -> Unit) {
+private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> Unit, onTeams: () -> Unit, onWakeups: () -> Unit, onUnpair: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val state by Relay.state.collectAsState()
     val changed by Relay.changed.collectAsState()
@@ -209,6 +222,8 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
             Box {
                 TextButton(onClick = { menu = true }) { Text("⋮", fontSize = 20.sp) }
                 DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(text = { Text("Teams") }, onClick = { menu = false; onTeams() })
+                    DropdownMenuItem(text = { Text("Wake-ups") }, onClick = { menu = false; onWakeups() })
                     DropdownMenuItem(text = { Text("Usage") }, onClick = { menu = false; onUsage() })
                     DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = { menu = false; onUnpair() })
                 }
@@ -254,6 +269,7 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
     var items by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var working by remember { mutableStateOf(false) }
     var asks by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var tasks by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
@@ -272,12 +288,16 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             // Claude's open questions (an older Hive sends none)
             val q = t.optJSONArray("asks")
             asks = if (q == null) emptyList() else (0 until q.length()).map { q.getJSONObject(it) }
+            // its running background work (a 1.x Hive sends none)
+            val b = t.optJSONArray("tasks")
+            tasks = if (b == null) emptyList() else (0 until b.length()).map { b.getJSONObject(it) }
             ""
         }.getOrElse { it.message ?: "Failed" }
         if (items.isNotEmpty()) list.scrollToItem(items.size - 1 + asks.size)
     }
-    // while Claude works, look again every few seconds
-    LaunchedEffect(working) { while (working) { kotlinx.coroutines.delay(4000); tick++ } }
+    // while Claude or its background work runs, look again every few seconds
+    val running = working || tasks.isNotEmpty()
+    LaunchedEffect(running) { while (running) { kotlinx.coroutines.delay(4000); tick++ } }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("‹ Back") }
@@ -286,6 +306,7 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
         }
         Box(Modifier.padding(horizontal = 16.dp)) { StatusLine() }
         if (err.isNotEmpty()) Text(err, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error)
+        if (tasks.isNotEmpty()) BackgroundWork(tasks) { task -> scope.launch { err = runCatching { Relay.ask("stopTask", mapOf("id" to id, "task" to task)); tick++; "" }.getOrElse { it.message ?: "Failed" } } }
         LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp), state = list) {
             items(items) { it -> Item(it) }
             items(asks, key = { "ask:" + it.optString("id") }) { a ->
@@ -404,6 +425,156 @@ private fun UsageScreen(onBack: () -> Unit) {
                 LinearProgressIndicator(progress = { (pct / 100).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = color)
                 val reset = if (r.isNull("resetsAt")) "" else untilReset(r.optString("resetsAt"))
                 Text("${pct.toInt()}% used" + if (reset.isNotEmpty()) ", resets in $reset" else "", fontSize = 12.sp, color = Color.Gray)
+            }
+        }
+    }
+}
+
+// state words in colour, as on the desktop (no dots)
+private fun stateColor(word: String): Color = when (word.lowercase()) {
+    "working" -> Color(0xFF5BA8F0)
+    "waiting", "paused" -> Color(0xFFE0A030)
+    "closed" -> Color(0xFF6A6D75)
+    else -> Color.Gray
+}
+
+@Composable
+private fun StateWord(word: String) = Text(word.uppercase(), fontSize = 11.sp, color = stateColor(word), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, letterSpacing = 0.5.sp)
+
+// "3:41 PM", with the weekday when not today
+private fun whenText(ms: Long): String {
+    val t = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault())
+    val today = java.time.LocalDate.now() == t.toLocalDate()
+    return t.format(java.time.format.DateTimeFormatter.ofPattern(if (today) "h:mm a" else "EEE MMM d, h:mm a"))
+}
+
+// an older Hive on the computer has no such request
+private fun oldHive(e: Throwable, what: String): String = if (e.message?.contains("unknown", true) == true) "Update Hive on the computer to see $what" else e.message ?: "Failed"
+
+// A thread's running subagents, shells, workflows and Codex runs with their live line; Stop ends one of them
+@Composable
+private fun BackgroundWork(tasks: List<JSONObject>, onStop: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text("BACKGROUND WORK", fontSize = 11.sp, color = Color.Gray, letterSpacing = 0.5.sp)
+        tasks.forEach { t ->
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t.optString("kind").uppercase(), fontSize = 11.sp, color = stateColor("working"))
+                        Spacer(Modifier.width(8.dp))
+                        Text(t.optString("title"), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
+                    }
+                    if (t.optString("now").isNotEmpty()) Text(t.optString("now"), fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                TextButton(onClick = { onStop(t.optString("id")) }) { Text("Stop", color = MaterialTheme.colorScheme.error) }
+            }
+        }
+        HorizontalDivider(Modifier.padding(top = 6.dp), color = Color(0x22FFFFFF))
+    }
+}
+
+// Running teams: the state word, each person with role word and state (tap opens the thread), the last posts, and
+// Pause / Resume as in the desktop's Team view
+@Composable
+private fun TeamsScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
+    val state by Relay.state.collectAsState()
+    val changed by Relay.changed.collectAsState()
+    val scope = rememberCoroutineScope()
+    var teams by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var err by remember { mutableStateOf("") }
+    var tick by remember { mutableStateOf(0) }
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    LaunchedEffect(state, changed, tick) {
+        if (state != Relay.State.Online) return@LaunchedEffect
+        runCatching {
+            val a = Relay.ask("teams").getJSONArray("teams")
+            teams = (0 until a.length()).map { a.getJSONObject(it) }
+            err = ""
+        }.onFailure { err = oldHive(it, "teams") }
+    }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(5000); tick++ } }
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            Text("Teams", style = MaterialTheme.typography.titleLarge)
+        }
+        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
+        if (teams?.isEmpty() == true) Text("No team is running.", color = Color.Gray, modifier = Modifier.padding(top = 12.dp))
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(teams ?: emptyList(), key = { it.optString("id") }) { t ->
+                val word = t.optString("word")
+                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t.optString("name"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        StateWord(word)
+                        Spacer(Modifier.width(8.dp))
+                        val op = if (word == "PAUSED") "teamResume" else "teamPause"
+                        OutlinedButton(onClick = { scope.launch { err = runCatching { Relay.ask(op, mapOf("id" to t.optString("id"))); tick++; "" }.getOrElse { it.message ?: "Failed" } } }) {
+                            Text(if (word == "PAUSED") "Resume" else "Pause")
+                        }
+                    }
+                    if (t.optString("goal").isNotEmpty()) Text(t.optString("goal"), fontSize = 12.sp, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    val ms = t.optJSONArray("members")
+                    for (i in 0 until (ms?.length() ?: 0)) {
+                        val m = ms!!.getJSONObject(i)
+                        Row(Modifier.fillMaxWidth().clickable { onOpen(m.optString("open")) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(m.optString("role").uppercase(), Modifier.width(96.dp), fontSize = 11.sp, color = Color.Gray, maxLines = 1)
+                            Text(m.optString("name"), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            StateWord(m.optString("state"))
+                        }
+                    }
+                    val ps = t.optJSONArray("posts")
+                    if ((ps?.length() ?: 0) > 0) Text("LATEST POSTS", Modifier.padding(top = 8.dp), fontSize = 11.sp, color = Color.Gray, letterSpacing = 0.5.sp)
+                    for (i in 0 until (ps?.length() ?: 0)) {
+                        val p = ps!!.getJSONObject(i)
+                        Text("${p.optString("from")}: ${p.optString("text")}", Modifier.padding(top = 4.dp), fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                HorizontalDivider(color = Color(0x22FFFFFF))
+            }
+        }
+    }
+}
+
+// Every scheduled wake-up: a thread's own follow-ups and the threads waiting for a usage limit to reset
+@Composable
+private fun WakeupsScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
+    val state by Relay.state.collectAsState()
+    val changed by Relay.changed.collectAsState()
+    val scope = rememberCoroutineScope()
+    var rows by remember { mutableStateOf<List<JSONObject>?>(null) }
+    var err by remember { mutableStateOf("") }
+    var tick by remember { mutableStateOf(0) }
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    LaunchedEffect(state, changed, tick) {
+        if (state != Relay.State.Online) return@LaunchedEffect
+        runCatching {
+            val a = Relay.ask("wakeups").getJSONArray("wakeups")
+            rows = (0 until a.length()).map { a.getJSONObject(it) }
+            err = ""
+        }.onFailure { err = oldHive(it, "wake-ups") }
+    }
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            Text("Wake-ups", style = MaterialTheme.typography.titleLarge)
+        }
+        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
+        if (rows?.isEmpty() == true) Text("Nothing is scheduled.", color = Color.Gray, modifier = Modifier.padding(top = 12.dp))
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(rows ?: emptyList(), key = { it.optString("kind") + it.optString("id") }) { w ->
+                Row(Modifier.fillMaxWidth().clickable { onOpen(w.optString("open")) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(w.optString("title"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+                        val every = if (w.isNull("every")) "" else ", then every ${w.optInt("every")} min"
+                        Text(whenText(w.optLong("at")) + every, fontSize = 12.sp, color = stateColor("waiting"))
+                        Text(w.optString("prompt"), fontSize = 12.sp, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    TextButton(onClick = { scope.launch { err = runCatching { Relay.ask("cancelWakeup", mapOf("kind" to w.optString("kind"), "id" to w.optString("id"))); tick++; "" }.getOrElse { it.message ?: "Failed" } } }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                HorizontalDivider(color = Color(0x22FFFFFF))
             }
         }
     }
