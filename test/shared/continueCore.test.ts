@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AFTER_RESET_MS, STAGGER_MS, catchUp, planWake, resetFromText } from '../../src/shared/continueCore'
+import { AFTER_RESET_MS, STAGGER_MS, catchUp, planWake, resetFromText, wakeNow } from '../../src/shared/continueCore'
 
 const now = new Date(2026, 10, 4, 13, 0).getTime()
 describe('continueCore', () => {
@@ -30,5 +30,13 @@ describe('continueCore', () => {
     const w = (key: string, at: number) => ({ key, tabId: key, cwd: '', title: key, at })
     const out = catchUp([w('b', now - 1000), w('a', now - 5000), w('c', now + 3_600_000)], now)
     expect(out.map((x) => [x.key, x.at])).toEqual([['a', now + AFTER_RESET_MS], ['b', now + AFTER_RESET_MS + STAGGER_MS], ['c', now + 3_600_000]])
+  })
+})
+
+describe('wakeNow', () => {
+  it('the limit came back: waiting threads go a minute from now, spaced, not at their planned reset', () => {
+    const w = (key: string, at: number) => ({ key, tabId: key, cwd: '/c', title: key, at })
+    const out = wakeNow([w('a', 9_000_000), w('b', 9_500_000)], 1_000)
+    expect(out.map((x) => x.at)).toEqual([1_000 + AFTER_RESET_MS, 1_000 + AFTER_RESET_MS + STAGGER_MS])
   })
 })

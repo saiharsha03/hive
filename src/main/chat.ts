@@ -33,7 +33,7 @@ import { autoBackground } from '../shared/autoBackgroundCore'
 import { realLimits } from '../shared/usageCore'
 import { parseQuestions } from '../shared/askCore'
 import { cancelAsks, openAsks, replyInChat, waitForAnswer } from './asks'
-import { cancelContinue, scheduleContinue } from './autoContinue'
+import { cancelContinue, limitBack, scheduleContinue } from './autoContinue'
 import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWakeups'
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
@@ -992,6 +992,7 @@ ${s.lastReply}`, Date.now())
               notifyPhone(`Usage limit: ${titleOf(tabId)}`, `Continues automatically at ${wakeLabel(w.at, Date.now())}`, tabId)
             }
           }
+          if (s.lastOk && !limited) limitBack()
           limited = false; limitReset = null
           lastText = ''
           longCommands.clear()

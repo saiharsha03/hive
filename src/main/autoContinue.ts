@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileSafe } from './safeWrite'
 import { dataDir } from './testMode'
-import { CONTINUE_PROMPT, catchUp, planWake, type Wake } from '../shared/continueCore'
+import { CONTINUE_PROMPT, catchUp, planWake, wakeNow, type Wake } from '../shared/continueCore'
 
 const file = () => join(dataDir(), 'hive-autocontinue.json')
 let wakes: Wake[] = []
@@ -57,6 +57,14 @@ export function scheduleContinue(t: Omit<Wake, 'at'>, resetAt: number): Wake {
   arm(w)
   deps?.changed(w, w.at)
   return w
+}
+
+// a turn went through, so the limit is back: the waiting threads continue now, not at their planned reset
+export function limitBack(): void {
+  if (!wakes.some((w) => w.at > Date.now() + 2 * 60_000)) return
+  wakes = wakeNow(wakes, Date.now())
+  save()
+  for (const w of wakes) { arm(w); deps?.changed(w, w.at) }
 }
 
 // by session id or tab id: Cancel in the thread, or the user wrote to it themselves
