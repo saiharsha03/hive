@@ -36,6 +36,7 @@ import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { answerAsk, openAsks } from './asks'
 import { cancelContinue, continueAt, initAutoContinue } from './autoContinue'
+import { readTodos } from './teamTodos'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
 import { closeStatus, getStatus, setLiveUsage, weeklyUsage } from './status'
@@ -99,7 +100,7 @@ setLiveUsage(liveUsage)
 handle('teams:list', () => listTeams().map((t) => ({ id: t.id, name: t.name, goal: t.goal, createdAt: t.createdAt, endedAt: t.endedAt, members: t.members.length })))
 handle('teams:view', (_e, id: string) => {
   const t = getTeam(String(id))
-  return t ? { team: t, states: teamStates(t), log: readLog(t).slice(-300), plan: readTeamFile(t, 'plan.md'), knowledge: readTeamFile(t, 'knowledge.md') } : null
+  return t ? { team: t, states: teamStates(t), log: readLog(t).slice(-300), plan: readTeamFile(t, 'plan.md'), knowledge: readTeamFile(t, 'knowledge.md'), todos: readTodos(t) } : null
 })
 onTeamChange((id) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('teams:changed', id) })
 

@@ -4,6 +4,8 @@
 // log.jsonl) and talk through team_post, to anyone directly. Pure parts here: shapes, briefs, addressing, status text.
 // Files live in main/teams.ts, threads in main/chat.ts.
 
+import type { Todo } from './teamTodoCore'
+
 export const MAX_TEAMMATES = 10
 
 export type Ref = { id: string; title: string }
@@ -11,7 +13,9 @@ export type Member = { id: string; name: string; role: string; cwd: string; join
 export type Team = { id: string; name: string; goal: string; dir: string; owner?: Ref; lead: Ref; members: Member[]; createdAt: number; endedAt?: number }
 export type LogEntry = { at: number; from: string; fromName: string; to: string[]; text: string } // to [] = posted to the board only
 export type MemberState = 'working' | 'waiting' | 'idle' | 'closed'
-export type TeamView = { team: Team; states: Record<string, { state: MemberState; doing?: string }>; log: LogEntry[]; plan: string; knowledge: string }
+// reply: the member thread's last final reply (trimmed), at: when it finished
+export type MemberStatus = { state: MemberState; doing?: string; reply?: string; at?: number }
+export type TeamView = { team: Team; states: Record<string, MemberStatus>; log: LogEntry[]; plan: string; knowledge: string; todos: Todo[] }
 
 // short, readable id part: "Builder helix-api" -> "builder-helix-api"
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'mate'

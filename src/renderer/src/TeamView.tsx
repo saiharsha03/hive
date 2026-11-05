@@ -1,56 +1,131 @@
-// The Team view: one team at a time, as an office (a desk per member with its state and latest post) beside the
+// The Team view: one team at a time, as an animated office (side cutaway or floor plan, see office/) beside the
 // plan, the team log and what the team learned. Reads teams:view, refreshed on teams:changed and every 2 s for the
-// members' live states. Click a desk to open that thread.
-import { useEffect, useState } from 'react'
+// members' live states. New team posts play in the office; click a person to talk to them in a docked chat panel.
+import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { LogEntry, MemberState, TeamView as View } from '../../shared/teamCore'
+import type { MemberState, TeamView as View } from '../../shared/teamCore'
+import { STATE_WORD, boardOf, chatOf, knowledgeNote, markOf, nameIn, newSince, peopleOf, sortTodos, todoCount, type LogMark } from '../../shared/officeCore'
+import { openOf, type Todo } from '../../shared/teamTodoCore'
+import { Office, type Mode } from './office/engine'
 import { Icon } from './ui'
 
 type Row = { id: string; name: string; goal: string; createdAt: number; endedAt?: number; members: number }
 const STATE_CLASS: Record<MemberState, string> = { working: 's-work', waiting: 's-wait', idle: 's-idle', closed: 's-idle' }
 const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+const MODE_KEY = 'hive.teamOffice'
+type Sent = Record<string, { at: number; text: string }[]>
 
-export type Desk = { id: string; name: string; role: string; state: MemberState; doing?: string; said?: LogEntry }
-
-export function desksOf(v: View): Desk[] {
-  const last = (id: string) => [...v.log].reverse().find((e) => e.from === id)
-  return [
-    { id: v.team.lead.id, name: 'Lead', role: 'lead', state: v.states[v.team.lead.id]?.state ?? 'closed', doing: v.states[v.team.lead.id]?.doing, said: last(v.team.lead.id) },
-    ...v.team.members.map((m) => ({ id: m.id, name: m.name, role: m.role, state: v.states[m.id]?.state ?? 'closed', doing: v.states[m.id]?.doing, said: last(m.id) })),
-  ]
+// the scene itself is plain DOM/SVG driven by office/engine; React owns only the container
+function OfficeScene({ v, mode, onPick, nod }: { v: View; mode: Mode; onPick: (id: string) => void; nod: { id: string; n: number } | null }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const office = useRef<Office | null>(null)
+  const pick = useRef(onPick)
+  pick.current = onPick
+  const seen = useRef<{ team: string; mark: LogMark } | null>(null)
+  useEffect(() => {
+    const o = new Office(ref.current!, (id) => pick.current(id))
+    office.current = o
+    return () => { o.destroy(); office.current = null; seen.current = null }
+  }, [])
+  useEffect(() => {
+    const o = office.current
+    if (!o) return
+    const b = boardOf(v)
+    o.set({ mode, people: peopleOf(v), title: b.title, count: b.count, board: b.rows, goal: v.team.goal, knowledge: knowledgeNote(v.knowledge) })
+    const was = seen.current
+    if (was && was.team === v.team.id) { const fresh = newSince(was.mark, v.log); if (fresh.length) o.play(fresh) } // history is never replayed
+    else o.clear()
+    seen.current = { team: v.team.id, mark: markOf(v.log) }
+  }, [v, mode])
+  useEffect(() => { if (nod) office.current?.nod(nod.id) }, [nod])
+  return <div className="ofc" ref={ref} data-testid="team-office" />
 }
 
-// a message from you straight to one teammate's thread (it arrives like any message you type in that thread)
-function Say({ id, name, onMessage }: { id: string; name: string; onMessage: (threadId: string, text: string) => boolean }) {
-  const [text, setText] = useState('')
-  const [note, setNote] = useState('')
-  const go = () => {
-    const t = text.trim()
-    if (!t) return
-    if (onMessage(id, t)) { setText(''); setNote('sent') } else setNote('thread not open')
-  }
+// one to-do: a small checkbox (empty open, filled doing, ticked done, struck through dropped), the text, the state
+function TodoRow({ t, owner }: { t: Todo; owner?: string }) {
   return (
-    <div className="tv-say">
-      <input value={text} placeholder={`Message ${name}`} onChange={(e) => { setText(e.target.value); setNote('') }}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go() } }} data-testid={`team-say-${id}`} />
-      {note && <span className={note === 'sent' ? 'tv-note s-done' : 'tv-note s-fail'}>{note}</span>}
+    <div className={`ofc-todo ofc-t-${t.state}`} title={t.note ? `${t.id}: ${t.note}` : t.id}>
+      <i className="ofc-box" data-t={t.state} /><span className="ofc-tt">{t.text}</span>
+      {owner !== undefined && <span className="ofc-tow">{owner}</span>}
+      <span className={`ofc-tw ofc-w-${t.state}`}>{t.state.toUpperCase()}</span>
     </div>
   )
 }
 
-// the office itself; the animated scene replaces this
-function Office({ v, onOpen, onMessage }: { v: View; onOpen: (id: string) => void; onMessage: (threadId: string, text: string) => boolean }) {
+// the To-dos tab: the team board, then each person's own list (read-only; the threads keep them)
+function Todos({ v }: { v: View }) {
+  const all = v.todos ?? []
+  const board = boardOf(v)
+  const major = sortTodos(all.filter((t) => t.major))
+  const mine = all.filter((t) => !t.major)
+  const owners = [...new Set([...peopleOf(v).map((p) => p.id), ...mine.map((t) => t.owner)])].filter((o) => mine.some((t) => t.owner === o))
+  if (!all.length) return <div className="ofc-cempty">No to-dos yet. Teammates add them as they plan their work.</div>
   return (
-    <div className="tv-office" data-testid="team-office">
-      {desksOf(v).map((d) => (
-        <div key={d.id} className="tv-desk" data-testid={`team-desk-${d.id}`}>
-          <button className="tv-dh" onClick={() => onOpen(d.id)} title="Open this thread"><span className="tv-name">{d.name}</span><span className="tv-role">{d.role}</span><span className={`tv-state ${STATE_CLASS[d.state]}`}>{d.state.toUpperCase()}</span></button>
-          {d.doing && <div className="tv-doing">{d.doing}</div>}
-          {d.said && <div className="tv-said">"{d.said.text}"{d.said.to.length ? <span className="tv-to"> to {d.said.to.join(', ')}</span> : null}</div>}
-          {d.state !== 'closed' && !v.team.endedAt && <Say id={d.id} name={d.name} onMessage={onMessage} />}
+    <div className="ofc-todos" data-testid="team-todos">
+      <div className="ofc-th"><b>Team board</b>{major.length ? <span>{board.count}</span> : <span>empty</span>}</div>
+      {major.map((t) => <TodoRow key={t.id} t={t} owner={nameIn(v, t.owner)} />)}
+      {owners.map((o) => {
+        const list = sortTodos(mine.filter((t) => t.owner === o))
+        return (
+          <div key={o || 'none'}>
+            <div className="ofc-th"><b>{nameIn(v, o)}</b><span>{openOf(list).length} open</span></div>
+            {list.map((t) => <TodoRow key={t.id} t={t} />)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// talking to one teammate without leaving the office: what passed between you, and a box straight into its thread
+function Chat({ v, id, sent, onSend, onOpen, onClose }: { v: View; id: string; sent: { at: number; text: string }[]; onSend: (text: string) => boolean; onOpen: () => void; onClose: () => void }) {
+  const p = peopleOf(v).find((x) => x.id === id)
+  const [text, setText] = useState('')
+  const [note, setNote] = useState('')
+  const end = useRef<HTMLDivElement>(null)
+  const lines = chatOf(v, id, sent)
+  const own = sortTodos((v.todos ?? []).filter((t) => !t.major && t.owner === id))
+  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [lines.length, id])
+  useEffect(() => { setText(''); setNote('') }, [id])
+  if (!p) return null
+  const go = () => {
+    const t = text.trim()
+    if (!t) return
+    if (onSend(t)) { setText(''); setNote('sent') } else setNote('thread not open')
+  }
+  return (
+    <div className="ofc-chat" data-testid={`team-chat-${id}`} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }}>
+      <div className="ofc-ch">
+        <span className="ofc-cn">{p.name}</span><span className="ofc-cr">{p.role}</span>
+        <span className={`ofc-cs ${STATE_CLASS[p.state]}`}>{STATE_WORD[p.state]}</span>
+        <button className="ibtn" onClick={onClose} title="Close (Esc)" data-testid="team-chat-close"><Icon name="close" /></button>
+      </div>
+      {p.doing && <div className="ofc-cd">{p.doing}</div>}
+      {own.length > 0 && (
+        <div className="ofc-own" data-testid={`team-chat-todos-${id}`}>
+          <div className="ofc-th"><b>To-dos</b><span>{todoCount(own)} done</span></div>
+          {own.map((t) => <TodoRow key={t.id} t={t} />)}
         </div>
-      ))}
+      )}
+      <div className="ofc-cl">
+        {!lines.length && <div className="ofc-cempty">Nothing between you and {p.name} yet.</div>}
+        {lines.map((l, i) => (
+          <div key={i} className={`ofc-cm ofc-${l.kind}`}>
+            <div className="ofc-chd">{l.kind === 'them' ? `${p.name} ${l.head}` : l.head}{l.at < Number.MAX_SAFE_INTEGER ? <span className="tv-t"> {time(l.at)}</span> : null}</div>
+            {l.kind === 'reply' ? <div className="md"><Markdown remarkPlugins={[remarkGfm]}>{l.text}</Markdown></div> : <div className="ofc-ctx">{l.text}</div>}
+          </div>
+        ))}
+        <div ref={end} />
+      </div>
+      <div className="ofc-cf">
+        {v.team.endedAt || p.state === 'closed'
+          ? <span className="ofc-cempty">{v.team.endedAt ? 'The team has ended.' : 'This thread is closed.'}</span>
+          : <div className="tv-say"><input autoFocus value={text} placeholder={`Message ${p.name}`} onChange={(e) => { setText(e.target.value); setNote('') }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go() } }} data-testid={`team-say-${id}`} />
+              {note && <span className={note === 'sent' ? 'tv-note s-done' : 'tv-note s-fail'}>{note}</span>}</div>}
+        <button className="link" onClick={onOpen} data-testid="team-chat-open">Open thread</button>
+      </div>
     </div>
   )
 }
@@ -59,7 +134,12 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
   const [teams, setTeams] = useState<Row[]>([])
   const [pick, setPick] = useState<string | null>(null)
   const [v, setV] = useState<View | null>(null)
-  const [side, setSide] = useState<'plan' | 'log' | 'knowledge'>('log')
+  const [side, setSide] = useState<'plan' | 'log' | 'knowledge' | 'todos'>('log')
+  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem(MODE_KEY) === 'plan' ? 'plan' : 'side'))
+  const [chat, setChat] = useState<string | null>(null)
+  const [sent, setSent] = useState<Sent>({})
+  const [nod, setNod] = useState<{ id: string; n: number } | null>(null)
+  const pickMode = (m: Mode) => { setMode(m); localStorage.setItem(MODE_KEY, m) }
   const id = pick ?? teams.find((t) => !t.endedAt)?.id ?? teams[0]?.id ?? null
 
   useEffect(() => {
@@ -67,6 +147,7 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
     load()
     return window.api.onTeamsChanged(load)
   }, [])
+  useEffect(() => { setChat(null); setSent({}) }, [id])
   useEffect(() => {
     if (!id) { setV(null); return }
     let on = true
@@ -86,20 +167,31 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
         </select>
         {v && <span className="tv-goal" title={v.team.goal}>{v.team.goal}</span>}
         {v?.team.owner && <button className="link" onClick={() => onActivate(v.team.owner!.id)} title="The thread that started this team; the Lead reports to it">Owner: {v.team.owner.title}</button>}
+        <div className="seg" title="How the office is drawn">{(['side', 'plan'] as const).map((m) => <button key={m} className={mode === m ? 'on' : ''} onClick={() => pickMode(m)} data-testid={`team-mode-${m}`}>{m === 'side' ? 'Side' : 'Plan'}</button>)}</div>
         {v && <span className="tv-meta">{v.team.members.length + 1} members, started {time(v.team.createdAt)}{v.team.endedAt ? `, ended ${time(v.team.endedAt)}` : ''}</span>}
       </div>
       {v && (
         <div className="tv-body">
-          <Office v={v} onOpen={onActivate} onMessage={onMessage} />
+          <div className="ofc-wrap">
+            <OfficeScene v={v} mode={mode} onPick={setChat} nod={nod} />
+            {chat && <Chat v={v} id={chat} sent={sent[chat] ?? []} onClose={() => setChat(null)} onOpen={() => onActivate(chat)}
+              onSend={(text) => {
+                if (!onMessage(chat, text)) return false
+                setSent((x) => ({ ...x, [chat]: [...(x[chat] ?? []), { at: Date.now(), text }] }))
+                setNod((x) => ({ id: chat, n: (x?.n ?? 0) + 1 }))
+                return true
+              }} />}
+          </div>
           <div className="tv-side">
             <div className="tv-tabs">
-              {(['log', 'plan', 'knowledge'] as const).map((k) => <button key={k} className={side === k ? 'on' : ''} onClick={() => setSide(k)} data-testid={`team-tab-${k}`}>{k === 'log' ? `Log (${v.log.length})` : k === 'plan' ? 'Plan' : 'Learned'}</button>)}
+              {(['log', 'todos', 'plan', 'knowledge'] as const).map((k) => <button key={k} className={side === k ? 'on' : ''} onClick={() => setSide(k)} data-testid={`team-tab-${k}`}>{k === 'log' ? `Log (${v.log.length})` : k === 'todos' ? `To-dos (${openOf(v.todos ?? []).length})` : k === 'plan' ? 'Plan' : 'Learned'}</button>)}
               <span className="tv-dir" title={v.team.dir}><Icon name="folder" /></span>
             </div>
             <div className="tv-pane">
               {side === 'log' && [...v.log].reverse().map((e, i) => (
                 <div key={i} className="tv-log"><span className="tv-t">{time(e.at)}</span><span className="tv-from">{e.fromName}{e.to.length ? ` to ${e.to.join(', ')}` : ''}</span><span className="tv-txt">{e.text}</span></div>
               ))}
+              {side === 'todos' && <Todos v={v} />}
               {side === 'plan' && <div className="md"><Markdown remarkPlugins={[remarkGfm]}>{v.plan}</Markdown></div>}
               {side === 'knowledge' && <div className="md"><Markdown remarkPlugins={[remarkGfm]}>{v.knowledge}</Markdown></div>}
             </div>

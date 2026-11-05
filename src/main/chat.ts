@@ -37,7 +37,7 @@ import { cancelContinue, scheduleContinue } from './autoContinue'
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
 import { formatAgentStatus } from '../shared/agentStatusCore'
-import { MAX_TEAMMATES, canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, slug, startedNote, targetsOf, teamBrief, type Member, type MemberState, type Team } from '../shared/teamCore'
+import { MAX_TEAMMATES, canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, slug, startedNote, targetsOf, teamBrief, type Member, type MemberState, type MemberStatus, type Team } from '../shared/teamCore'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamOf } from './teams'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
@@ -128,6 +128,7 @@ type Live = {
   cwd: string
   waitingReason?: string // organize_thread "waiting", until the next message comes in
   lastReply: string | null // the final text of the last finished turn
+  lastReplyAt?: number // when that turn finished
   lastOk: boolean | null // whether the last finished turn succeeded (null: none yet)
   onIdle: Set<() => void> // wait_for_thread callers, told when the thread has no turn running and nothing queued
   emit: (event: unknown) => void // an event to this thread's tab
@@ -766,6 +767,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const r = m as any
           s.lastOk = r.subtype === 'success' && !r.is_error
           s.lastReply = r.subtype === 'success' ? (r.result || lastText) : `The turn ended with an error (${r.subtype}). ${(r.errors ?? []).join('; ')}`.trim()
+          s.lastReplyAt = Date.now()
           // a usage limit: the thread continues by itself a minute after the reset (not a watcher: its schedule does)
           if (limited && !s.lastOk && !watcher && s.sessionId) {
             const reset = limitReset ?? resetFromText(`${lastText}
@@ -900,14 +902,15 @@ export function startBackgroundThread(t: BackgroundThread, web: WebContents): vo
 }
 
 // the live state of each team member, for team_status and the Team view
-export function teamStates(team: Team): Record<string, { state: MemberState; doing?: string }> {
-  const out: Record<string, { state: MemberState; doing?: string }> = {}
+export function teamStates(team: Team): Record<string, MemberStatus> {
+  const out: Record<string, MemberStatus> = {}
+  const said = (text: string | null | undefined, at?: number) => (text?.trim() ? { reply: text.trim().slice(0, 600), ...(at ? { at } : {}) } : {})
   for (const id of [team.lead.id, ...team.members.map((m) => m.id)]) {
     const t = live.get(id)
-    if (!t) { out[id] = { state: 'closed' }; continue }
+    if (!t) { out[id] = { state: 'closed', ...said(gone.get(id)?.lastReply) }; continue }
     const running = t.status.tasks.filter((x) => x.status === 'running')
     const doing = t.waitingReason ?? running.map((x) => x.now ?? x.title).find(Boolean)
-    out[id] = { state: statusOf(threadInfo(id, t)), ...(doing ? { doing } : {}) }
+    out[id] = { state: statusOf(threadInfo(id, t)), ...(doing ? { doing } : {}), ...said(t.lastReply, t.lastReplyAt) }
   }
   return out
 }
