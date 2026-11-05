@@ -306,7 +306,8 @@ export function App() {
     }
     if (ev.type === 'result') refreshThreadList() // a new thread is saved after its first turn
     // a command only the interactive CLI runs: main typed `claude "/x"` into this thread's terminal; show it
-    if (ev.type === 'hive_open_terminal') { openTerminalRef.current(tabId); return }
+    // a background or phone-started thread is brought on screen first: the terminal panel shows the on-screen threads
+    if (ev.type === 'hive_open_terminal') { activateRef.current(tabId); openTerminalRef.current(tabId); return }
     if (ev.type === 'hive_organize') {
       if (ev.action === 'waiting') {
         setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(s, ev.reason, Date.now(), activeIdRef.current === s.id && !s.background) : s)))
@@ -398,6 +399,8 @@ export function App() {
   useEffect(() => {
     if (activeId) setSessions((all) => (all.some((s) => s.id === activeId && (s.waitingSince || s.background)) ? activateSession(all, activeId) : all))
   }, [activeId])
+  const activateRef = useRef(activate) // for the chat-event listener, which is set up once
+  activateRef.current = activate
 
   // a tab still called "New thread N" takes its thread's title once the saved list has one (the sidebar's own name)
   const titleTabs = (list: SessionInfo[]) => {

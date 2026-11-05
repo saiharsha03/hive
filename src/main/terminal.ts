@@ -78,17 +78,19 @@ export function openTerminal(id: string, cwd: string, cols: number, rows: number
 
 // a line to type into a tab's shell: now when it is open, else as soon as it starts (an interactive Claude Code
 // command the SDK cannot run, opened in the real CLI)
-const queued = new Map<string, string>()
+// A queued line older than a minute is dropped: the terminal it was for was never opened, and it must not fire into
+// one opened later for something else
+const queued = new Map<string, { line: string; at: number }>()
 export function typeInTerminal(id: string, line: string) {
   const t = terms.get(id)
   if (t) t.p.write(`${line}\r`)
-  else queued.set(id, line)
+  else queued.set(id, { line, at: Date.now() })
 }
 const flushQueued = (id: string, t: Term) => {
-  const line = queued.get(id)
-  if (!line) return
+  const q = queued.get(id)
   queued.delete(id)
-  setTimeout(() => { if (terms.get(id) === t) t.p.write(`${line}\r`) }, 800) // after the shell's first prompt
+  if (!q || Date.now() - q.at > 60_000) return
+  setTimeout(() => { if (terms.get(id) === t) t.p.write(`${q.line}\r`) }, 800) // after the shell's first prompt
 }
 
 export function writeTerminal(id: string, data: string) {
@@ -102,6 +104,7 @@ export function resizeTerminal(id: string, cols: number, rows: number) {
 
 // the shell and everything started from it (a dev server, a watcher), so nothing is left running
 export function killTerminal(id: string) {
+  queued.delete(id)
   const t = terms.get(id)
   if (!t) return
   t.closing = true
