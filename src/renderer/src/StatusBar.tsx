@@ -76,8 +76,10 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   const cacheLeft = stats?.lastReplyAt ? stats.lastReplyAt + stats.cacheTtlMs - now : null
   const ctxTotal = ctx?.total ?? stats?.contextTokens ?? null
   const ctxMax = ctx?.max ?? null
+  // a reading over 10 minutes old is shown greyed with its time, not passed off as current
+  const asOf = status?.usageAt && now - status.usageAt > 10 * 60_000 ? new Date(status.usageAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null
   const lim = (label: string, l: Limit, id: string) => l && l.pct !== null && (
-    <Item testid={`status-${id}`} title={`${l.resetsAt ? `${label} limit, resets in ${left(l.resetsAt, now)}` : `${label} limit`}. Click for all limits`} onClick={(el) => setUsageAt(anchorOf(el))}>
+    <Item testid={`status-${id}`} cls={asOf ? 's-idle' : undefined} title={`${l.resetsAt ? `${label} limit, resets in ${left(l.resetsAt, now)}` : `${label} limit`}${asOf ? `, as of ${asOf}` : ''}. Click for all limits`} onClick={(el) => setUsageAt(anchorOf(el))}>
       <span className="lbl">{label}</span><Meter pct={l.pct} t={tone(l.pct)} /><span className={tone(l.pct) === 'ok' ? '' : `s-${tone(l.pct) === 'bad' ? 'fail' : 'wait'}`}>{Math.round(l.pct)}%</span>
       {l.resetsAt && <span className="lbl">resets {left(l.resetsAt, now)}</span>}
     </Item>
@@ -101,6 +103,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
       {status?.account && <Item testid="status-account" onClick={() => setSwitching(true)} title={`${status.engine?.version ? `Claude Code ${status.engine.version}${status.engine.installed ? '' : ' (bundled with the SDK)'}. ` : ''}Click to switch account`}><Icon name="account" />{status.account}{status.plan ? `, ${status.plan[0].toUpperCase()}${status.plan.slice(1)}` : ''}</Item>}
       {status && lim('5h', status.five, 'five')}
       {status && lim('7d', status.seven, 'seven')}
+      {asOf && (status?.five || status?.seven) && <span className="sbi s-idle" data-testid="status-usage-asof">as of {asOf}</span>}
       {ctxTotal != null && (
         <Item testid="status-context" title={ctxMax ? 'Context window of the focused thread' : 'Window known once the session runs'}>
           <span className="lbl">ctx</span>{ctxMax ? <Meter pct={(ctxTotal / ctxMax) * 100} t={tone((ctxTotal / ctxMax) * 100)} /> : null}{k(ctxTotal)}{ctxMax ? ` / ${k(ctxMax)}` : ''}

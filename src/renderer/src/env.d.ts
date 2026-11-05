@@ -12,6 +12,7 @@ type Status = {
   five: Limit
   seven: Limit
   usage?: { key: string; label: string; pct: number; resetsAt: string | null }[]
+  usageAt?: number | null
   connectors: { connected: number; total: number; needsAuth: number; failed: number } | null
   engine: { installed: boolean; version: string | null }
   error?: string
