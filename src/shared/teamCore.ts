@@ -40,11 +40,24 @@ export function targetsOf(team: Team, ref: string): { id: string; name: string }
   return team.members.filter((m) => m.role.toLowerCase() === r || plural(m.role.toLowerCase()) === plural(r)).map((m) => ({ id: m.id, name: m.name }))
 }
 
-export const nameOf = (team: Team, id: string) =>
-  id === team.lead.id ? 'Lead' : id === team.owner?.id ? 'Owner' : team.members.find((m) => m.id === id)?.name ?? id
+// a team person's thread id for any id it runs under: a teammate reopened from saved history runs under its Claude
+// session id, not the tab id it joined with, and is still the same teammate (else its tools reject it, and Resume
+// starts a second process on the same session)
+const people = (team: Team): { id: string; sessionId?: string }[] => [team.lead, ...team.members, ...(team.owner ? [team.owner] : [])]
+export const isPerson = (p: { id: string; sessionId?: string }, threadId: string) => p.id === threadId || (!!p.sessionId && p.sessionId === threadId)
+export const personId = (team: Team, threadId: string): string => people(team).find((p) => isPerson(p, threadId))?.id ?? threadId
+
+export const nameOf = (team: Team, threadId: string) => {
+  const id = personId(team, threadId)
+  return id === team.lead.id ? 'Lead' : id === team.owner?.id ? 'Owner' : team.members.find((m) => m.id === id)?.name ?? id
+}
 
 // the team a thread may act on: a member (or its lead) acts on its own team; an owner on the team it names
-export const canAct = (team: Team, threadId: string) => team.lead.id === threadId || team.owner?.id === threadId || team.members.some((m) => m.id === threadId)
+export const canAct = (team: Team, threadId: string) => people(team).some((p) => isPerson(p, threadId))
+
+// end_team: the posts still queued that are now obsolete (for teammates and the Lead); what was queued for the Owner
+// is kept, it is usually the Lead's final report
+export const obsoleteQueued = <Q extends { to: string }>(team: Team, queued: Q[]): Q[] => queued.filter((q) => q.to !== team.owner?.id)
 
 const roster = (team: Team) => [
   ...(team.owner ? [`- Owner (thread ${team.owner.id}): started the team; the Lead reports to it`] : []),

@@ -5,7 +5,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from
 import { join } from 'node:path'
 import { dataDir } from './testMode'
 import { writeFileSafe } from './safeWrite'
-import { parseLog, slug, type LogEntry, type Member, type Ref, type Team } from '../shared/teamCore'
+import { isPerson, parseLog, slug, type LogEntry, type Member, type Ref, type Team } from '../shared/teamCore'
 
 export const teamsDir = () => process.env.HIVE_TEAMS_DIR || join(dataDir(), 'hive', 'teams')
 
@@ -37,11 +37,11 @@ export const getTeam = (id: string): Team | undefined => all().get(id)
 
 // the running team a thread leads or belongs to (an Owner is not in its teams)
 export function teamOf(threadId: string): Team | undefined {
-  return listTeams().find((t) => !t.endedAt && (t.lead.id === threadId || t.members.some((m) => m.id === threadId)))
+  return listTeams().find((t) => !t.endedAt && (isPerson(t.lead, threadId) || t.members.some((m) => isPerson(m, threadId))))
 }
 
 // the running teams a thread started as Owner
-export const ownedTeams = (threadId: string): Team[] => listTeams().filter((t) => !t.endedAt && t.owner?.id === threadId)
+export const ownedTeams = (threadId: string): Team[] => listTeams().filter((t) => !t.endedAt && !!t.owner && isPerson(t.owner, threadId))
 
 export function createTeam(name: string, goal: string, who: { lead: Ref; owner?: Ref }, now = Date.now()): Team {
   const base = `${new Date(now).toISOString().slice(0, 10)}-${slug(name)}`

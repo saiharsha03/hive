@@ -7,6 +7,14 @@ export type Priority = 'next' | 'later'
 export function turnQueue<T>(deliver: (msg: T, priority?: Priority) => void, notify: (id: string, phase: Phase) => void) {
   const waiting: { id: string; msg: T }[] = []
   let busy = false
+  let held = false // a paused team: queued messages wait until it resumes
+  const next = () => {
+    const n = waiting.shift()
+    if (!n) return
+    busy = true
+    deliver(n.msg, 'later')
+    notify(n.id, 'sent')
+  }
   const take = (id: string) => {
     const i = waiting.findIndex((w) => w.id === id)
     return i < 0 ? null : waiting.splice(i, 1)[0]
@@ -42,13 +50,15 @@ export function turnQueue<T>(deliver: (msg: T, priority?: Priority) => void, not
     // the turn's result arrived, success, error or interrupt alike: start the next queued message
     turnEnded() {
       busy = false
-      const n = waiting.shift()
-      if (!n) return
-      busy = true
-      deliver(n.msg, 'later')
-      notify(n.id, 'sent')
+      if (!held) next()
+    },
+    // hold: nothing queued goes in after the running turn; release: the next one goes in now when Claude is idle
+    hold(on: boolean) {
+      held = on
+      if (!on && !busy) next()
     },
     clear: () => { waiting.length = 0 },
+    has: (id: string) => waiting.some((w) => w.id === id),
     size: () => waiting.length,
     busy: () => busy,
   }
