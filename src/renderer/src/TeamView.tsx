@@ -166,7 +166,7 @@ export function TeamView({ onActivate, onMessage, inWindow }: { onActivate: (thr
     return () => { on = false; off(); clearInterval(t) }
   }, [id])
 
-  if (!teams.length) return <div className="pane-empty" data-testid="team-empty">No teams yet. Ask a thread to start one, e.g. "make a team to finish the HelixPrevent migration".</div>
+  if (!teams.length) return <div className="pane-empty" data-testid="team-empty">No teams yet. Ask a thread to start one, e.g. "make a team to finish the billing migration".</div>
   return (
     <div className="teamview" data-testid="team-view">
       <div className="tv-head">

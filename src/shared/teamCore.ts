@@ -17,7 +17,7 @@ export type MemberState = 'working' | 'waiting' | 'idle' | 'closed'
 export type MemberStatus = { state: MemberState; doing?: string; reply?: string; at?: number }
 export type TeamView = { team: Team; states: Record<string, MemberStatus>; log: LogEntry[]; plan: string; knowledge: string; todos: Todo[] }
 
-// short, readable id part: "Builder helix-api" -> "builder-helix-api"
+// short, readable id part: "Builder my-api" -> "builder-my-api"
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'mate'
 
 const RESERVED = new Set(['lead', 'owner', 'all', 'you', 'user'])

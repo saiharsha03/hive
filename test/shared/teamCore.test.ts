@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, obsoleteQueued, parseLog, personId, slug, targetsOf, teamBrief, type Team } from '../../src/shared/teamCore'
 
 const team: Team = {
-  id: 't1', name: 'HelixPrevent migration', goal: 'Move the pipeline to gold', dir: 'C:\\teams\\t1', createdAt: 0,
+  id: 't1', name: 'billing migration', goal: 'Move the pipeline to gold', dir: 'C:\\teams\\t1', createdAt: 0,
   owner: { id: 'new-9', title: 'Planning' },
-  lead: { id: 'team-lead-x', title: 'HelixPrevent migration: Lead' },
+  lead: { id: 'team-lead-x', title: 'billing migration: Lead' },
   members: [
     { id: 'team-b1', name: 'Builder API', role: 'builder', cwd: 'C:\\r', joinedAt: 0 },
     { id: 'team-b2', name: 'Builder Web', role: 'builder', cwd: 'C:\\r', joinedAt: 0 },
@@ -27,7 +27,7 @@ test('posts reach a name, a whole role (singular or plural), Lead, Owner or ever
   assert.equal(nameOf(team, 'new-9'), 'Owner')
   assert.ok(canAct(team, 'new-9') && canAct(team, 'team-qa') && !canAct(team, 'stranger'))
   assert.ok(nameTaken(team, 'qa') && nameTaken(team, 'Owner') && !nameTaken(team, 'Builder 3'))
-  assert.equal(slug('Builder: helix-api!'), 'builder-helix-api')
+  assert.equal(slug('Builder: my-api!'), 'builder-my-api')
 })
 
 test('briefs: teammate gets roster, direct-talk rules and task; a separate Lead gets the Owner and add_teammate', () => {

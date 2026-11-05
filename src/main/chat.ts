@@ -361,7 +361,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           + `Give at (ISO local time) or in_minutes. The user's local date and time was ${localNow()} when this session started (check your environment date if the session has run long). `
           + 'snooze also hides the thread in the sidebar until then. list_wakeups / cancel_wakeup manage them.',
         {
-          prompt: z.string().describe('What to do when it wakes, self-contained (e.g. "Check whether the prod deploy of prevent-api landed and tell the user")'),
+          prompt: z.string().describe('What to do when it wakes, self-contained (e.g. "Check whether the prod deploy of the API landed and tell the user")'),
           at: z.string().optional().describe('When, ISO datetime in local time, e.g. 2026-11-06T09:00:00'),
           in_minutes: z.number().positive().optional().describe('Or: this many minutes from now'),
           every_minutes: z.number().int().min(5).optional().describe('Repeat this often after the first wake (minimum 5); omit for once'),
@@ -582,7 +582,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           + 'it adds the teammates it needs itself unless you list them. One thread can own several unrelated teams. Roles may repeat (several builders, several reviewers). '
           + `At most ${MAX_TEAMMATES} teammates. Only start a team when the user asked for one.`,
         {
-          name: z.string().describe('Team name, e.g. "HelixPrevent migration"'),
+          name: z.string().describe('Team name, e.g. "billing migration"'),
           goal: z.string().describe('What the team must get done, and what done means'),
           lead: z.enum(['me', 'new']).optional().describe('"me" (default): this thread leads. "new": a new Lead thread; this thread is the Owner'),
           lead_task: z.string().optional().describe('With lead "new": instructions for the Lead (scope, constraints, who to add)'),

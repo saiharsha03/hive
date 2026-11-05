@@ -119,7 +119,7 @@ test('diffs: CRLF, missing footer and usage text', () => {
 test('your own watch command: filled in, and landed only on exit 0 with DEPLOY DONE', () => {
   assert.equal(watchCommand('bash w.sh {env} {kind} {sha}', 'staging', 'api', 'abc1234'), 'bash w.sh staging api abc1234')
   assert.deepEqual(watchEnd(0, ['healthy check 4/4', 'DEPLOY DONE: api staging on abc1234']), { state: 'landed', note: 'DEPLOY DONE: api staging on abc1234' })
-  assert.equal(watchEnd(1, ['CI deploy failure', 'DEPLOY FAILED: CircleCI job failed on staging', 'x']).note, 'DEPLOY FAILED: CircleCI job failed on staging')
+  assert.equal(watchEnd(1, ['CI deploy failure', 'DEPLOY FAILED: CI job failed on staging', 'x']).note, 'DEPLOY FAILED: CI job failed on staging')
   assert.equal(watchEnd(0, ['still waiting']).state, 'failed') // exit 0 without DEPLOY DONE is not landed
   assert.equal(watchEnd(2, []).note, 'the watch command exited with 2')
 })
