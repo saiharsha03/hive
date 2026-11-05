@@ -5,7 +5,7 @@ import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFile, readFile } from 'node:fs/promises'
-import { closeSync, openSync, readSync } from 'node:fs'
+import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -37,7 +37,18 @@ import { cancelContinue, limitBack, scheduleContinue } from './autoContinue'
 import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWakeups'
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
-import { formatAgentStatus } from '../shared/agentStatusCore'
+import { formatAgentStatus, recentActions } from '../shared/agentStatusCore'
+// the last `bytes` of a file (its first, cut-off line is skipped by the JSONL readers)
+function readTail(path: string, bytes: number): string {
+  const fd = openSync(path, 'r')
+  try {
+    const size = fstatSync(fd).size
+    const n = Math.min(size, bytes)
+    const buf = Buffer.alloc(n)
+    readSync(fd, buf, 0, n, size - n)
+    return buf.toString('utf8')
+  } finally { closeSync(fd) }
+}
 import type { Task } from '../shared/taskCore'
 import { MAX_TEAMMATES, canAct, formatTeamStatus, isPerson, leadBrief, nameOf, nameTaken, obsoleteQueued, personId, slug, startedNote, targetsOf, teamBrief, type Member, type MemberStatus, type Ref, type Team } from '../shared/teamCore'
 import { changeTodos, readTodos } from './teamTodos'
@@ -549,10 +560,20 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       tool(
         'agent_status',
         'What the background work of this thread is doing right now: each subagent, workflow, shell, monitor and Codex run '
-          + '(status, running time, tool calls, a live "doing now" line, last tool, result or error), plus loops, the next wake-up and the goal. '
-          + 'Call it before telling the user whether a subagent is running, finished or stopped; never report that from memory.',
+          + '(status, running time, tool calls, a live "doing now" line, last tool, and for a running subagent its recent actions: '
+          + 'its last tool calls with what each was for and what it last wrote; result or error), plus loops, the next wake-up and the goal. '
+          + 'Call it before telling the user whether a subagent is running, finished or stopped, or how it is getting on; never report that from memory.',
         {},
-        async () => ok(formatAgentStatus(s.status, Date.now(), s.sessionId ? join(transcriptPath(cwd, s.sessionId).replace(/\.jsonl$/, ''), 'subagents') : undefined)),
+        async () => {
+          const dir = s.sessionId ? join(transcriptPath(cwd, s.sessionId).replace(/\.jsonl$/, ''), 'subagents') : undefined
+          // each running subagent's recent actions, from the last 96 KB of its own transcript
+          const recent = new Map<string, string[]>()
+          for (const t of s.status.tasks) {
+            if (!dir || t.status !== 'running' || !/agent/.test(t.kind)) continue
+            try { recent.set(t.id, recentActions(readTail(join(dir, `agent-${t.id}.jsonl`), 96 * 1024))) } catch { /* no transcript yet */ }
+          }
+          return ok(formatAgentStatus(s.status, Date.now(), dir, recent))
+        },
       ),
       tool(
         'start_team',
