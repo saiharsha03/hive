@@ -38,6 +38,7 @@ import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWak
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
 import { formatAgentStatus } from '../shared/agentStatusCore'
+import type { Task } from '../shared/taskCore'
 import { MAX_TEAMMATES, canAct, formatTeamStatus, isPerson, leadBrief, nameOf, nameTaken, obsoleteQueued, personId, slug, startedNote, targetsOf, teamBrief, type Member, type MemberStatus, type Ref, type Team } from '../shared/teamCore'
 import { changeTodos, readTodos } from './teamTodos'
 import { briefForRole, defineRole, listRoles, remember, rolesDir } from './roles'
@@ -1144,6 +1145,11 @@ export function startBackgroundThread(t: BackgroundThread, web: WebContents): vo
 }
 
 // a team person's live tab: its own id, or the session id it was reopened under from saved history
+// a live thread's background work (the phone app's thread view); [] when it has no process
+export const threadTasks = (tabId: string): Task[] => live.get(tabId)?.status.tasks ?? []
+// a team person's live tab, or null when the thread does not run (the phone opens its session then)
+export const liveTabOf = (team: Team, id: string): string | null => { const t = liveIdOf(team, id); return live.has(t) ? t : null }
+
 function liveIdOf(team: Team, id: string): string {
   if (live.has(id)) return id
   const p = [team.lead, ...team.members, ...(team.owner ? [team.owner] : [])].find((x) => x.id === id)

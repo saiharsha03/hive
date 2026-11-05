@@ -14,6 +14,7 @@ export type { PhoneThread } from '../shared/threadsCore'
 import type { PhoneThread } from '../shared/threadsCore'
 import type { UsageRow } from '../shared/usageCore'
 import type { AskQuestion } from '../shared/askCore'
+import type { PhoneTeam, PhoneWakeup } from '../shared/phoneCore'
 export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
 type Deps = {
@@ -27,6 +28,13 @@ type Deps = {
   folders: () => string[]
   usage: () => Promise<{ plan: string | null; rows: UsageRow[] }>
   changed: () => void
+  // 2.0: teams, a thread's background work, wake-ups (a 1.x phone app never asks for them)
+  teams: () => PhoneTeam[]
+  teamPause: (id: string) => Promise<string>
+  teamResume: (id: string) => Promise<string>
+  stopTask: (thread: string, task: string) => Promise<boolean>
+  wakeups: () => PhoneWakeup[]
+  cancelWakeup: (kind: string, id: string) => boolean
 }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
 type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; future?: number[]; floor?: number }
@@ -203,6 +211,12 @@ async function onMessage(raw: string): Promise<void> {
       case 'send': return reply({ ok: await deps.send(id, String(m.text ?? '')) })
       case 'new': return reply({ ok: await deps.start(String(m.folder ?? ''), String(m.text ?? '')) })
       case 'stop': await deps.stop(id); return reply({ ok: 'stopped' })
+      case 'teams': return reply({ teams: deps.teams() })
+      case 'teamPause': return reply({ ok: await deps.teamPause(id) })
+      case 'teamResume': return reply({ ok: await deps.teamResume(id) })
+      case 'stopTask': return (await deps.stopTask(id, String(m.task ?? ''))) ? reply({ ok: 'stopped' }) : reply({ error: 'That task is not running' })
+      case 'wakeups': return reply({ wakeups: deps.wakeups() })
+      case 'cancelWakeup': return deps.cancelWakeup(String(m.kind ?? ''), id) ? reply({ ok: 'cancelled' }) : reply({ error: 'That wake-up is not scheduled' })
       default: return reply({ error: `unknown request ${String(m.op)}` })
     }
   } catch (e) {
