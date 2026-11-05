@@ -2,7 +2,8 @@
 export const CONTINUE_PROMPT = 'The usage limit has reset. Continue where you left off.'
 export const AFTER_RESET_MS = 60_000 // a minute after the reset
 export const STAGGER_MS = 3 * 60_000 // threads wake a few minutes apart, not all at once
-export type Wake = { key: string; tabId: string; cwd: string; title: string; at: number } // key: the Claude session id
+// key: the Claude session id; since: when it was scheduled; kind: the limit that stopped it (rate_limit_event's type)
+export type Wake = { key: string; tabId: string; cwd: string; title: string; at: number; since?: number; kind?: string }
 
 // The reset time from the limit message, when the rate-limit event gave none: "...|1730000000" (unix seconds) or
 // "resets 3pm" / "resets 3:30 pm" (the next such local time). null = no time in it.
@@ -66,9 +67,19 @@ export function catchUp(wakes: Wake[], now: number): Wake[] {
   })
 }
 
-// the limit came back early (a turn went through: an account switch, an earlier reset): every waiting thread goes now,
-// spaced the same way, instead of sitting on a wake hours away
-export const wakeNow = (wakes: Wake[], now: number): Wake[] => catchUp(wakes.map((w) => ({ ...w, at: Math.min(w.at, now) })), now)
+// the limit came back early: a turn that started after a wake was scheduled went through. Only the plan-wide windows
+// are proven back by that (a per-model weekly limit is not: a Sonnet turn says nothing about Opus). Those wakes go a
+// minute from now, spaced; a wake only ever moves earlier, so repeated successes never push one back
+const GENERAL = new Set([undefined, 'five_hour', 'seven_day'])
+export function wakeNow(wakes: Wake[], now: number, turnStartedAt: number): Wake[] {
+  let next = now + AFTER_RESET_MS
+  return [...wakes].sort((a, b) => a.at - b.at).map((w) => {
+    if (!GENERAL.has(w.kind) || (w.since ?? 0) >= turnStartedAt || w.at <= next) return w
+    const at = next
+    next += STAGGER_MS
+    return { ...w, at }
+  })
+}
 
 // "3:41 PM", with the weekday when not today
 export function wakeLabel(at: number, now: number): string {

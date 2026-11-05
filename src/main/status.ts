@@ -55,25 +55,27 @@ const limit = (w: any): Limit => (w ? afterReset({ pct: w.utilization ?? null, r
 // thread has them is the idle process asked, which goes to the rate-limited usage endpoint and sometimes answers with
 // a placeholder: that read is tried at most once per IDLE_MS. Only a real answer replaces the reading, which keeps its
 // time so the bar can say how old it is.
-let liveUsage: () => Promise<any | null> = async () => null
-export const setLiveUsage = (f: () => Promise<any | null>) => { liveUsage = f }
+let liveUsage: () => Promise<{ u: any; at: number } | null> = async () => null
+export const setLiveUsage = (f: () => Promise<{ u: any; at: number } | null>) => { liveUsage = f }
 const IDLE_MS = 5 * 60_000
+const FRESH_MS = 10 * 60_000 // a live sample older than this (its reply's time) also asks the endpoint
 let usage: { limits: any; plan: string | null; at: number } | null = null
 let lastIdleTry = 0
 let trying: Promise<void> | null = null
 const within = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
   Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))])
-const keep = (u: any): boolean => {
-  if (!realLimits(u?.rate_limits)) return false
-  usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at: Date.now() }
+const keep = (u: any, at: number): boolean => {
+  if (!realLimits(u?.rate_limits) || (usage && at < usage.at)) return false
+  usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at }
   return true
 }
 function readUsage(force = false): Promise<void> {
   trying ??= (async () => {
-    if (keep(await within(liveUsage(), 10_000))) return
+    const live = await within(liveUsage(), 10_000)
+    if (live && keep(live.u, live.at) && Date.now() - live.at < FRESH_MS) return
     if (!force && Date.now() - lastIdleTry < IDLE_MS) return
     lastIdleTry = Date.now()
-    keep(await within(current().usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }), 20_000))
+    keep(await within(current().usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }), 20_000), Date.now())
   })().finally(() => { trying = null })
   return trying
 }
