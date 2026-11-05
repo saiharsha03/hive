@@ -1,8 +1,9 @@
 name: Release
 
+# Started by hand only (Actions > Release > Run workflow): releases are published from a checked local build, and a
+# run on every tag push would upload its own installers over them (and they would not match latest.yml)
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
