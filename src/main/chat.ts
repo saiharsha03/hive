@@ -188,6 +188,14 @@ type Start = { tabId: string; cwd: string; resume?: string; web: WebContents; ba
 const forks = new Map<string, { from: string; at: string | null }>()
 // tabs in the middle of a rewind: nothing may start a process on them until it is done
 const rewinding = new Set<string>()
+// what arrived for a tab while it was being rewound (a send, a thread message, a wake-up): it goes in once the rewind is
+// done, into the rewound conversation, instead of failing with the message shown and never sent
+const afterRewind = new Map<string, (() => void)[]>()
+const holdForRewind = (tabId: string, f: () => void): boolean => {
+  if (!rewinding.has(tabId)) return false
+  afterRewind.set(tabId, [...(afterRewind.get(tabId) ?? []), f])
+  return true
+}
 
 function start({ tabId, cwd, resume, web, background }: Start): Live {
   if (rewinding.has(tabId)) throw new Error('This thread is being rewound; send again in a moment.')
@@ -1064,6 +1072,7 @@ export function setBackground(tabId: string, background: boolean, web: WebConten
 export type Outgoing = { uuid?: string; title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
 
 export function sendMessage(tabId: string, cwd: string, resume: string | undefined, msg: Outgoing, web: WebContents): void {
+  if (holdForRewind(tabId, () => sendMessage(tabId, cwd, resume, msg, web))) return
   if (msg.title) { tabTitles.set(tabId, msg.title); setThreadTitle(tabId, msg.title) }
   let s = live.get(tabId)
   if (!s) live.set(tabId, (s = start({ tabId, cwd, resume, web, background: !!msg.background })))
@@ -1112,6 +1121,7 @@ export function stopCodex(id: string): boolean {
 // foreground: opened as a normal tab (its usual permission mode), e.g. messages resent after a restart from a tab
 export type BackgroundThread = { tabId: string; cwd: string; title: string; prompt: string; from?: From; resume?: string; foreground?: boolean }
 export function startBackgroundThread(t: BackgroundThread, web: WebContents): void {
+  if (holdForRewind(t.tabId, () => startBackgroundThread(t, web))) return
   if (live.has(t.tabId)) throw new Error(`Thread ${t.tabId} is already running`)
   if (web.isDestroyed()) throw new Error('No window to show the thread in')
   web.send('hive:thread', {
@@ -1136,11 +1146,14 @@ function liveIdOf(team: Team, id: string): string {
 
 // an ended team's thread: closed in the sidebar (which also retires its worktrees) and its process stopped, but only
 // once nothing of it still runs, so a worktree is never retired under a running agent or shell
-function retireWhenQuiet(id: string): void {
+// A background shell (a dev server, a watch) never ends by itself, so only agents, workflows and Codex are waited for,
+// and for at most RETIRE_WAIT_MS
+const RETIRE_WAIT_MS = 10 * 60_000
+function retireWhenQuiet(id: string, since = Date.now()): void {
   const t = live.get(id)
   if (!t) return
-  const busy = t.turns.isBusy() || t.status.tasks.some((x) => x.status === 'running') || (codexRuns.get(id)?.size ?? 0) > 0
-  if (busy) { setTimeout(() => retireWhenQuiet(id), 5_000); return }
+  const busy = t.turns.isBusy() || t.status.tasks.some((x) => x.status === 'running' && x.kind !== 'local_bash') || (codexRuns.get(id)?.size ?? 0) > 0
+  if (busy && Date.now() - since < RETIRE_WAIT_MS) { setTimeout(() => retireWhenQuiet(id, since), 5_000); return }
   t.emit({ type: 'hive_organize', action: 'close' })
   closeTab(id)
 }
@@ -1174,7 +1187,7 @@ export async function resumeTeam(teamId: string, by: Ref, web: WebContents): Pro
   const text = `[Team "${team.name}", ${by.title}] The team is resumed. Read team_status (posts sent while it was paused are on the log) and your to-dos (todo_list "me"), then carry on where you stopped.`
   const out: string[] = []
   for (const x of [{ ...team.lead, name: 'Lead', cwd: team.lead.cwd }, ...team.members]) {
-    if (x.id === by.id) continue
+    if (x.id === by.id) { live.get(liveIdOf(team, x.id))?.turns.hold(false); continue } // held by a pause someone else made
     const name = nameOf(team, x.id)
     try {
       const id = liveIdOf(team, x.id)
@@ -1353,7 +1366,7 @@ export async function rewindApply(tabId: string, cwd: string, sessionId: string,
   if (!p.found) return { ok: false, error: "That message is not in this thread's transcript." }
   const s = live.get(tabId)
   const block = rewindBlock({
-    busy: !!s?.turns.isBusy(),
+    busy: !!s?.turns.isBusy() || (s?.turns.size() ?? 0) > 0,
     runningTasks: (s?.status.tasks ?? []).filter((t) => t.status === 'running').map((t) => t.title || t.kind),
     codexRuns: codexRuns.get(tabId)?.size ?? 0,
     rewinding: rewinding.has(tabId),
@@ -1374,6 +1387,9 @@ export async function rewindApply(tabId: string, cwd: string, sessionId: string,
     return { ok: true }
   } finally {
     rewinding.delete(tabId)
+    const held = afterRewind.get(tabId) ?? []
+    afterRewind.delete(tabId)
+    for (const f of held) { try { f() } catch { /* the thread is gone */ } }
   }
 }
 
