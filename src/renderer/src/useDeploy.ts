@@ -7,6 +7,7 @@ import type { LiveRow } from './background'
 export function useDeploy() {
   const [w, setW] = useState<Wizard>(initial)
   const [out, setOut] = useState('')
+  const logSeen = useRef({ id: '', n: 0 })
   const [cfg, setCfg] = useState<{ config: DeployConfig | null; message: string } | null>(null)
   const ref = useRef(w)
   const runPrefix = useRef('')
@@ -51,6 +52,12 @@ export function useDeploy() {
       window.api.onDeployWatch((list) => {
         const mine = list.find((x) => x.id === ref.current.watchId)
         if (!mine) return
+        // the watch command's output goes on under the deploy output, as it comes
+        if (mine.log) {
+          const seen = logSeen.current.id === mine.id ? logSeen.current.n : 0
+          if (mine.log.length > seen) { const more = mine.log.slice(seen); setOut((o) => o + (seen ? '' : '\n') + more) }
+          logSeen.current = { id: mine.id, n: mine.log.length }
+        }
         if (mine.landed) act({ t: 'watchDone', landed: true, note: mine.note, at: Date.now() })
         else if (mine.stuck) act({ t: 'watchDone', landed: false, note: mine.note, at: Date.now() })
         else act({ t: 'watchNote', note: mine.note })
