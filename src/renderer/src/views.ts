@@ -2,7 +2,7 @@
 // is reachable in every UI, through its region, a popover, a modal or Ctrl+K.
 import type { UIId } from './appearance'
 
-export type ViewId = 'threads' | 'git' | 'files' | 'agents' | 'terminal' | 'watchers' | 'deploy' | 'scripts' | 'todos' | 'notes' | 'dev' | 'pull'
+export type ViewId = 'threads' | 'git' | 'files' | 'agents' | 'terminal' | 'watchers' | 'deploy' | 'scripts' | 'todos' | 'notes' | 'dev' | 'pull' | 'team'
 
 export const VIEW: Record<ViewId, { label: string; icon: string; mk: string }> = {
   threads: { label: 'Threads', icon: 'comment-discussion', mk: 'mk-threads' },
@@ -17,6 +17,7 @@ export const VIEW: Record<ViewId, { label: string; icon: string; mk: string }> =
   notes: { label: 'Notes', icon: 'note', mk: 'mk-todos' },
   dev: { label: 'Dev stack', icon: 'server-process', mk: 'mk-dev' },
   pull: { label: 'Pull latest', icon: 'repo-pull', mk: 'mk-pull' },
+  team: { label: 'Team', icon: 'organization', mk: 'mk-agents' },
 }
 
 export type Region = 'left' | 'right' | 'bottom'
@@ -31,7 +32,7 @@ export type Arrangement = {
 }
 
 // the bottom panel holds only what runs: Agents and the terminal; the tools are side panel views picked from the top bar
-const BOTTOM: ViewId[] = ['agents', 'terminal']
+const BOTTOM: ViewId[] = ['agents', 'team', 'terminal']
 // Git is never a side panel view: it opens as a tab (TOOL_TABS), and two Git views would share one selected diff
 
 export const ARRANGE: Record<UIId, Arrangement> = {
@@ -42,7 +43,7 @@ export const ARRANGE: Record<UIId, Arrangement> = {
   },
   strip: {
     left: [], right: ['agents', 'watchers', 'dev', 'scripts', 'todos', 'notes', 'files', 'deploy'],
-    bottom: ['terminal', 'agents'], chat: 'columns', tabs: 'title', closed: ['right'],
+    bottom: ['terminal', 'agents', 'team'], chat: 'columns', tabs: 'title', closed: ['right'],
   },
   focus: {
     left: [], right: ['files', 'todos', 'notes', 'scripts', 'deploy', 'watchers', 'dev'], bottom: BOTTOM,

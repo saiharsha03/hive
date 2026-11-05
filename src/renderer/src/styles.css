@@ -979,3 +979,31 @@ button.sbi:hover { background: var(--hover); }
 .ad-in:focus { outline: none; border-color: var(--focus); }
 .ad-queue { border: 1px solid var(--line); border-left: 2px solid var(--wait); background: var(--panel); padding: 4px 8px; display: flex; flex-direction: column; gap: 3px; }
 .ad-qh { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+
+/* Team view: office (desks) beside the log / plan / learned panes */
+.teamview { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 12.5px; }
+.tv-head { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--line); min-width: 0; }
+.tv-pick { background: var(--panel); color: var(--hi); border: 1px solid var(--line2); border-radius: 2px; padding: 2px 6px; font: inherit; font-weight: 600; }
+.tv-goal { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.tv-meta { color: var(--faint); white-space: nowrap; }
+.tv-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr); }
+.tv-office { overflow: auto; padding: 10px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; align-content: start; }
+.tv-desk { text-align: left; background: var(--panel); border: 1px solid var(--line); border-top: 2px solid var(--line2); padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tv-desk:hover { border-color: var(--focus); }
+.tv-dh { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tv-name { color: var(--hi); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-role { color: var(--faint); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.tv-state { margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.tv-doing { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-said { color: var(--ink); font-style: italic; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tv-to { font-style: normal; color: var(--faint); }
+.tv-side { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.tv-tabs { display: flex; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--line); align-items: center; }
+.tv-tabs button { padding: 2px 8px; color: var(--dim); border-bottom: 2px solid transparent; }
+.tv-tabs button.on { color: var(--hi); border-bottom-color: var(--accent); }
+.tv-dir { margin-left: auto; color: var(--faint); }
+.tv-pane { flex: 1; min-height: 0; overflow: auto; padding: 6px 10px; }
+.tv-log { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; padding: 2px 0; border-bottom: 1px solid var(--line); }
+.tv-t { font-family: var(--mono); color: var(--faint); }
+.tv-from { color: var(--hi); font-weight: 600; white-space: nowrap; }
+.tv-txt { color: var(--ink); }
