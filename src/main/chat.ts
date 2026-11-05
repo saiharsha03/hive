@@ -38,7 +38,7 @@ import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWak
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
 import { formatAgentStatus } from '../shared/agentStatusCore'
-import { MAX_TEAMMATES, canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, slug, startedNote, targetsOf, teamBrief, type Member, type MemberStatus, type Ref, type Team } from '../shared/teamCore'
+import { MAX_TEAMMATES, canAct, formatTeamStatus, isPerson, leadBrief, nameOf, nameTaken, obsoleteQueued, personId, slug, startedNote, targetsOf, teamBrief, type Member, type MemberStatus, type Ref, type Team } from '../shared/teamCore'
 import { changeTodos, readTodos } from './teamTodos'
 import { briefForRole, defineRole, listRoles, remember, rolesDir } from './roles'
 import { formatRoles } from '../shared/roleCore'
@@ -212,9 +212,11 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       return owned.length ? `This thread owns ${owned.length} teams; pass team (${owned.map((t) => t.id).join(', ')}).` : 'This thread is not in a running team.'
     }
     const t = pick()
-    return typeof t === 'string' || anyState || !t.pausedAt || t.lead.id === tabId || t.owner?.id === tabId
+    return typeof t === 'string' || anyState || !t.pausedAt || isPerson(t.lead, tabId) || (!!t.owner && isPerson(t.owner, tabId))
       ? t : `Team "${t.name}" is paused. Stop working until it is resumed; your progress and to-dos are kept.`
   }
+  // this thread as the team knows it (a teammate reopened from history runs under its session id)
+  const me = (team: Team) => personId(team, tabId)
 
   const hive = createSdkMcpServer({
     name: 'hive',
@@ -580,7 +582,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ name, role, task, cwd: dir, team: ref }) => {
           const team = actOn(ref)
           if (typeof team === 'string') return fail(team)
-          if (team.lead.id !== tabId && team.owner?.id !== tabId) return fail('Only the Lead or the Owner can add teammates.')
+          if (team.lead.id !== me(team) && team.owner?.id !== me(team)) return fail('Only the Lead or the Owner can add teammates.')
           if (team.members.length >= MAX_TEAMMATES) return fail(`The team already has ${MAX_TEAMMATES} teammates.`)
           if (nameTaken(team, name)) return fail(`The name "${name}" is reserved or taken.`)
           const m: Member = { id: `team-${slug(name)}-${randomUUID().slice(0, 4)}`, name: name.trim(), role, cwd: dir || cwd, joinedAt: Date.now() }
@@ -588,7 +590,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           try {
             startBackgroundThread({ tabId: m.id, cwd: m.cwd, title: `${team.name}: ${m.name}`, prompt: `${teamBrief(team, m, task)}\n\n${briefForRole(m.role)}`, from: { id: tabId, title: titleOf(tabId) } }, web)
           } catch (e: any) { return fail(`add_teammate failed: ${e?.message ?? e}`) }
-          appendLog(team, { at: Date.now(), from: tabId, fromName: nameOf(team, tabId), to: [], text: `${m.name} (${role}) joined` })
+          appendLog(team, { at: Date.now(), from: me(team), fromName: nameOf(team, tabId), to: [], text: `${m.name} (${role}) joined` })
           return ok(`${m.name} joined (thread ${m.id}). Teammates who joined earlier see the newcomer in team_status.`)
         },
       ),
@@ -601,20 +603,20 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ text, to, team: ref }) => {
           const team = actOn(ref)
           if (typeof team === 'string') return fail(team)
-          const me = nameOf(team, tabId)
+          const myName = nameOf(team, tabId)
           const targets: { id: string; name: string }[] = []
           for (const r of to ?? []) {
             const found = targetsOf(team, r)
             if (!found.length) return fail(`No teammate or role "${r}". Members: Lead, ${team.members.map((x) => `${x.name} (${x.role})`).join(', ')}${team.owner ? ', Owner' : ''}.`)
-            targets.push(...found.filter((x) => x.id !== tabId))
+            targets.push(...found.filter((x) => x.id !== me(team)))
           }
           const uniq = [...new Map(targets.map((x) => [x.id, x])).values()]
-          appendLog(team, { at: Date.now(), from: tabId, fromName: me, to: uniq.map((x) => x.name), text })
+          appendLog(team, { at: Date.now(), from: me(team), fromName: myName, to: uniq.map((x) => x.name), text })
           if (team.pausedAt) return ok('The team is paused: your post is on the team log; teammates read it when the team resumes. Stop here.')
           const out: string[] = []
           for (const t of uniq) {
             try {
-              await messageThread(t.id, `[Team "${team.name}", ${me}] ${text}\n(Reply with mcp__hive__team_post${t.id === team.owner?.id ? ` and team "${team.id}"` : ''}.)`, 'queue', { id: tabId, title: `${team.name}: ${me}` }, web, team.id)
+              await messageThread(liveIdOf(team, t.id), `[Team "${team.name}", ${myName}] ${text}\n(Reply with mcp__hive__team_post${t.id === team.owner?.id ? ` and team "${team.id}"` : ''}.)`, 'queue', { id: tabId, title: `${team.name}: ${myName}` }, web, team.id)
               out.push(t.name)
             } catch (e: any) { out.push(`${t.name} (not delivered: ${e?.message ?? e})`) }
           }
@@ -637,17 +639,17 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const w = (where ?? 'me').trim().toLowerCase()
           const pick = (r: string | undefined) => { if (!r) return ''; const f = targetsOf(team, r); return f.length === 1 ? f[0].id : null }
           let major = false
-          let who: string | null = tabId
+          let who: string | null = me(team)
           if (w === 'team') { major = true; who = pick(owner) }
           else if (w !== 'me') {
-            if (team.lead.id !== tabId && team.owner?.id !== tabId) return fail('Only the Lead adds to the list of someone else; post it to them instead.')
+            if (team.lead.id !== me(team) && team.owner?.id !== me(team)) return fail('Only the Lead adds to the list of someone else; post it to them instead.')
             who = pick(where)
           }
           if (who === null) return fail(`No single teammate "${owner ?? where}".`)
-          const r = changeTodos(team, (l) => addTeamTodo(l, { text, major, owner: who!, by: tabId, at: Date.now() }), () => teamChanged(team.id))
+          const r = changeTodos(team, (l) => addTeamTodo(l, { text, major, owner: who!, by: me(team), at: Date.now() }), () => teamChanged(team.id))
           if (typeof r === 'string') return fail(r)
           const t = r[r.length - 1]
-          return ok(`Added ${t.id}${major ? ' to the team board' : ''}${t.owner && t.owner !== tabId ? ` for ${nameOf(team, t.owner)}` : ''}.`)
+          return ok(`Added ${t.id}${major ? ' to the team board' : ''}${t.owner && t.owner !== me(team) ? ` for ${nameOf(team, t.owner)}` : ''}.`)
         },
       ),
       tool(
@@ -666,13 +668,13 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           if (typeof team === 'string') return fail(team)
           let who: string | undefined
           if (owner) {
-            if (owner.trim().toLowerCase() === 'me') who = tabId
+            if (owner.trim().toLowerCase() === 'me') who = me(team)
             else { const f = targetsOf(team, owner); if (f.length !== 1) return fail(`No single teammate "${owner}".`); who = f[0].id }
           }
-          const r = changeTodos(team, (l) => updateTodo(l, id, tabId, team.lead.id, { state, note, owner: who }, Date.now()), () => teamChanged(team.id))
+          const r = changeTodos(team, (l) => updateTodo(l, id, me(team), team.lead.id, { state, note, owner: who }, Date.now()), () => teamChanged(team.id))
           if (typeof r === 'string') return fail(r)
           const t = r.find((x) => x.id.toLowerCase() === id.trim().toLowerCase())!
-          if (t.major && (state === 'done' || state === 'dropped')) appendLog(team, { at: Date.now(), from: tabId, fromName: nameOf(team, tabId), to: [], text: `${state === 'done' ? 'Done' : 'Dropped'}: ${t.id} ${t.text}${note ? ` (${note})` : ''}` })
+          if (t.major && (state === 'done' || state === 'dropped')) appendLog(team, { at: Date.now(), from: me(team), fromName: nameOf(team, tabId), to: [], text: `${state === 'done' ? 'Done' : 'Dropped'}: ${t.id} ${t.text}${note ? ` (${note})` : ''}` })
           return ok(`${t.id} is ${t.state}. Open on the team board: ${openMajor(r).length}.`)
         },
       ),
@@ -688,7 +690,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const name = (id: string) => (id ? nameOf(team, id) : 'unassigned')
           if (w === 'all') return ok(formatTodos(all, name))
           if (w === 'team') return ok(formatTodos(all, name, { major: true }))
-          const f = w === 'me' ? [{ id: tabId }] : targetsOf(team, where!)
+          const f = w === 'me' ? [{ id: me(team) }] : targetsOf(team, where!)
           if (f.length !== 1) return fail(`No single teammate "${where}".`)
           return ok(formatTodos(all, name, { major: false, owner: f[0].id }))
         },
@@ -705,7 +707,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         },
         async ({ name, summary, instructions }) => {
           const team = teamOf(tabId)
-          const may = (team && team.lead.id === tabId) || ownedTeams(tabId).length > 0 || !team
+          const may = (team && team.lead.id === me(team)) || ownedTeams(tabId).length > 0 || !team
           if (!may) return fail('Only a Lead or an Owner defines roles; ask the Lead (team_post).')
           const r = defineRole(name, summary, instructions)
           return ok(`Role "${r.name}" (${r.id}) saved to the library at ${rolesDir()}.`)
@@ -725,7 +727,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         { text: z.string(), scope: z.enum(['role', 'shared']).optional().describe('Default role') },
         async ({ text, scope }) => {
           const team = teamOf(tabId)
-          const role = team ? (team.lead.id === tabId ? 'lead' : team.members.find((m) => m.id === tabId)?.role) : undefined
+          const role = team ? (team.lead.id === me(team) ? 'lead' : team.members.find((m) => m.id === me(team))?.role) : undefined
           if ((scope ?? 'role') === 'role' && !role) return fail('Only a teammate has a role; use scope "shared".')
           const file = remember(scope ?? 'role', role ?? 'lead', text, team ? `${nameOf(team, tabId)}, ${team.name}` : titleOf(tabId))
           return ok(`Saved to ${file}.`)
@@ -765,8 +767,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ reason, team: ref }) => {
           const team = actOn(ref, true)
           if (typeof team === 'string') return fail(team)
-          if (team.lead.id !== tabId && team.owner?.id !== tabId) return fail('Only the Lead or the Owner can pause the team.')
-          return ok(await pauseTeam(team.id, { id: tabId, title: nameOf(team, tabId) }, reason))
+          if (team.lead.id !== me(team) && team.owner?.id !== me(team)) return fail('Only the Lead or the Owner can pause the team.')
+          return ok(await pauseTeam(team.id, { id: me(team), title: nameOf(team, tabId) }, reason))
         },
       ),
       tool(
@@ -777,8 +779,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ team: ref }) => {
           const team = actOn(ref, true)
           if (typeof team === 'string') return fail(team)
-          if (team.lead.id !== tabId && team.owner?.id !== tabId) return fail('Only the Lead or the Owner can resume the team.')
-          return ok(await resumeTeam(team.id, { id: tabId, title: nameOf(team, tabId) }, web))
+          if (team.lead.id !== me(team) && team.owner?.id !== me(team)) return fail('Only the Lead or the Owner can resume the team.')
+          return ok(await resumeTeam(team.id, { id: me(team), title: nameOf(team, tabId) }, web))
         },
       ),
       tool(
@@ -788,27 +790,24 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ summary, force, team: ref }) => {
           const team = actOn(ref)
           if (typeof team === 'string') return fail(team)
-          if (team.lead.id !== tabId && team.owner?.id !== tabId) return fail('Only the Lead or the Owner can end the team.')
+          if (team.lead.id !== me(team) && team.owner?.id !== me(team)) return fail('Only the Lead or the Owner can end the team.')
           const open = openMajor(readTodos(team))
           if (open.length && !force) return fail(`${open.length} team-board to-dos are still open (${open.map((t) => t.id).join(', ')}). Get them checked off or dropped with a note, or pass force with the reason.`)
-          const others = [team.lead.id, ...team.members.map((m) => m.id), ...(team.owner ? [team.owner.id] : [])].filter((id) => id !== tabId)
-          appendLog(team, { at: Date.now(), from: tabId, fromName: nameOf(team, tabId), to: others.map((id) => nameOf(team, id)), text: `Team ended: ${summary}` })
-          for (const q of teamQueued.get(team.id) ?? []) dequeue(q.tabId, q.queueId)
+          const others = [team.lead.id, ...team.members.map((m) => m.id), ...(team.owner ? [team.owner.id] : [])].filter((id) => id !== me(team))
+          appendLog(team, { at: Date.now(), from: me(team), fromName: nameOf(team, tabId), to: others.map((id) => nameOf(team, id)), text: `Team ended: ${summary}` })
+          // posts still queued for teammates are obsolete now; what waits for the Owner (the Lead's report) still goes
+          for (const q of obsoleteQueued(team, teamQueued.get(team.id) ?? [])) dequeue(q.tabId, q.queueId)
           teamQueued.delete(team.id)
           for (const id of others) {
-            if (!live.has(id)) continue
+            const lid = liveIdOf(team, id)
+            if (!live.has(lid)) continue
             const note = id === team.owner?.id ? `The team has ended: ${summary}` : `The team has ended (${summary}). Stop working and give a one-line final status.`
-            await messageThread(id, `[Team "${team.name}", ${nameOf(team, tabId)}] ${note}`, 'queue', { id: tabId, title: `${team.name}: ${nameOf(team, tabId)}` }, web).catch(() => {})
+            await messageThread(lid, `[Team "${team.name}", ${nameOf(team, tabId)}] ${note}`, 'queue', { id: me(team), title: `${team.name}: ${nameOf(team, tabId)}` }, web).catch(() => {})
           }
-          // teammates (and a Lead the Owner's team started) close once their final status is in, instead of piling
-          // up under Waiting for you; the Owner, or a Lead that is the user's own thread, stays open with the result
-          for (const id of [...team.members.map((m) => m.id), ...(team.owner ? [team.lead.id] : [])]) {
-            const t = live.get(id)
-            if (!t) continue
-            const close = () => { t.onIdle.delete(close); if (live.get(id) === t) t.emit({ type: 'hive_organize', action: 'close' }) }
-            if (id === tabId || t.turns.isBusy()) t.onIdle.add(close)
-            else close()
-          }
+          // teammates (and a Lead the Owner's team started) close once their final status is in and nothing of theirs
+          // still runs (no turn, background agent, shell or Codex run), instead of piling up under Waiting for you; the
+          // Owner, or a Lead that is the user's own thread, stays open with the result
+          for (const id of [...team.members.map((m) => m.id), ...(team.owner ? [team.lead.id] : [])]) retireWhenQuiet(liveIdOf(team, id))
           endTeam(team)
           return ok(`Team "${team.name}" ended.`)
         },
@@ -1119,6 +1118,24 @@ export function startBackgroundThread(t: BackgroundThread, web: WebContents): vo
   s.push(userMsg(t.from ? labelFromThread(t.from, t.prompt) : t.prompt))
 }
 
+// a team person's live tab: its own id, or the session id it was reopened under from saved history
+function liveIdOf(team: Team, id: string): string {
+  if (live.has(id)) return id
+  const p = [team.lead, ...team.members, ...(team.owner ? [team.owner] : [])].find((x) => x.id === id)
+  return (p?.sessionId && resolveThread(p.sessionId, live)) || id
+}
+
+// an ended team's thread: closed in the sidebar (which also retires its worktrees) and its process stopped, but only
+// once nothing of it still runs, so a worktree is never retired under a running agent or shell
+function retireWhenQuiet(id: string): void {
+  const t = live.get(id)
+  if (!t) return
+  const busy = t.turns.isBusy() || t.status.tasks.some((x) => x.status === 'running') || (codexRuns.get(id)?.size ?? 0) > 0
+  if (busy) { setTimeout(() => retireWhenQuiet(id), 5_000); return }
+  t.emit({ type: 'hive_organize', action: 'close' })
+  closeTab(id)
+}
+
 // Pause: stop every running turn of the team (background agents keep going) and hold team posts.
 export async function pauseTeam(teamId: string, by: Ref, reason?: string): Promise<string> {
   const team = getTeam(teamId)
@@ -1127,9 +1144,12 @@ export async function pauseTeam(teamId: string, by: Ref, reason?: string): Promi
   setPaused(team, Date.now())
   const stopped: string[] = []
   for (const x of [team.lead, ...team.members]) {
-    const t = live.get(x.id)
-    if (x.id === by.id || !t?.turns.isBusy()) continue
-    await interrupt(x.id).catch(() => {})
+    const id = liveIdOf(team, x.id)
+    const t = live.get(id)
+    if (x.id === by.id || !t) continue
+    t.turns.hold(true) // what was queued for it waits for the resume, not the end of the interrupted turn
+    if (!t.turns.isBusy()) continue
+    await interrupt(id).catch(() => {})
     stopped.push(nameOf(team, x.id))
   }
   appendLog(team, { at: Date.now(), from: by.id, fromName: by.title, to: [], text: `Team paused${reason ? `: ${reason}` : ''}` })
@@ -1148,7 +1168,9 @@ export async function resumeTeam(teamId: string, by: Ref, web: WebContents): Pro
     if (x.id === by.id) continue
     const name = nameOf(team, x.id)
     try {
-      if (live.has(x.id)) { await messageThread(x.id, text, 'queue', by, web); out.push(name) }
+      const id = liveIdOf(team, x.id)
+      const t = live.get(id)
+      if (t) { t.turns.hold(false); await messageThread(id, text, 'queue', by, web); out.push(name) }
       else if (x.sessionId && x.cwd) {
         startBackgroundThread({ tabId: x.id, cwd: x.cwd, title: x.id === team.lead.id ? team.lead.title : `${team.name}: ${name}`, prompt: text, resume: x.sessionId, from: by }, web)
         out.push(`${name} (reopened)`)
@@ -1163,7 +1185,7 @@ export function teamStates(team: Team): Record<string, MemberStatus> {
   const out: Record<string, MemberStatus> = {}
   const said = (text: string | null | undefined, at?: number) => (text?.trim() ? { reply: text.trim().slice(0, 600), ...(at ? { at } : {}) } : {})
   for (const id of [team.lead.id, ...team.members.map((m) => m.id)]) {
-    const t = live.get(id)
+    const t = live.get(liveIdOf(team, id))
     if (!t) { out[id] = { state: 'closed', ...said(gone.get(id)?.lastReply) }; continue }
     const running = t.status.tasks.filter((x) => x.status === 'running')
     const doing = t.waitingReason ?? running.map((x) => x.now ?? x.title).find(Boolean)
@@ -1180,7 +1202,7 @@ export const liveThreads = () => [...live.entries()].map(([id, t]) => ({ tabId: 
 // (or steered in); a thread that is not running is resumed from its Claude session.
 // team posts still waiting in a busy teammate's queue (team id -> thread, queue id): end_team drops them, else every
 // teammate woke once per stale post after the team ended, each turn saying "the team has ended, I did nothing"
-const teamQueued = new Map<string, { tabId: string; queueId: string }[]>()
+const teamQueued = new Map<string, { tabId: string; queueId: string; to: string }[]>()
 
 export async function messageThread(ref: string, text: string, mode: 'queue' | 'steer', from: From, web: WebContents, teamId?: string): Promise<string> {
   const id = resolveThread(ref, live)
@@ -1194,7 +1216,11 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
       const queueId = randomUUID()
       t.emit({ ...ev, queueId })
       t.turns.submit(queueId, m)
-      if (teamId) teamQueued.set(teamId, [...(teamQueued.get(teamId) ?? []), { tabId: id, queueId }])
+      if (teamId) {
+        const tm = getTeam(teamId)
+        const still = (teamQueued.get(teamId) ?? []).filter((q) => live.get(q.tabId)?.turns.has(q.queueId)) // delivered ones drop out
+        teamQueued.set(teamId, [...still, { tabId: id, queueId, to: tm ? personId(tm, id) : id }])
+      }
       return `Queued for thread "${titleOf(id)}" (${id}); it goes in when its running turn ends.`
     }
     t.emit({ ...ev, ...(busy ? { steer: true } : {}) })

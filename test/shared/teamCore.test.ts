@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, parseLog, slug, targetsOf, teamBrief, type Team } from '../../src/shared/teamCore'
+import { canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, obsoleteQueued, parseLog, personId, slug, targetsOf, teamBrief, type Team } from '../../src/shared/teamCore'
 
 const team: Team = {
   id: 't1', name: 'HelixPrevent migration', goal: 'Move the pipeline to gold', dir: 'C:\\teams\\t1', createdAt: 0,
@@ -45,4 +45,14 @@ test('status shows owner, lead, each member state and the log', () => {
   assert.match(st, /- Lead: working, planning/)
   assert.match(st, /- QA \(qa\): idle/)
   assert.match(st, /QA -> Builder Web: Stage filter shows Activated twice/)
+})
+
+test('a teammate reopened under its session id is still that teammate; the Owner\'s queued report is never obsolete', () => {
+  const t: Team = { ...team, members: [{ ...team.members[0], sessionId: 'sess-b1' }, ...team.members.slice(1)] }
+  assert.equal(personId(t, 'sess-b1'), 'team-b1')
+  assert.equal(nameOf(t, 'sess-b1'), 'Builder API')
+  assert.equal(canAct(t, 'sess-b1'), true)
+  assert.equal(canAct(t, 'stranger'), false)
+  const q = [{ to: 'new-9', id: 'report' }, { to: 'team-b1', id: 'old post' }, { to: 'team-lead-x', id: 'lead post' }]
+  assert.deepEqual(obsoleteQueued(t, q).map((x) => x.id), ['old post', 'lead post'])
 })

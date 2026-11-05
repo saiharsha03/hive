@@ -16,3 +16,17 @@ test('an interrupt waits ahead of messages queued before it; others keep their o
   q.turnEnded()
   assert.deepEqual(got, ['interrupt', 'A', 'B'])
 })
+
+test('held (a paused team): the interrupted turn does not let the queue go in; release does, once idle', () => {
+  const got: string[] = []
+  const q = turnQueue<string>((m) => got.push(m), () => {})
+  q.markBusy()
+  q.submit('a', 'A')
+  q.hold(true)
+  q.turnEnded()
+  assert.deepEqual(got, [])
+  assert.equal(q.has('a'), true)
+  q.hold(false)
+  assert.deepEqual(got, ['A'])
+  assert.equal(q.has('a'), false)
+})
