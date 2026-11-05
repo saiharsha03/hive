@@ -19,7 +19,7 @@ import { useThreadStatus } from './statusStore'
 import { SummaryRow, WarningRow } from './ChatRows'
 import { useSlashMenu } from './SlashMenu'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
-import { Icon } from './ui'
+import { Icon, Modal } from './ui'
 import { AskCard } from './AskCard'
 import { wakeLabel } from '../../shared/continueCore'
 
@@ -179,7 +179,37 @@ type Props = {
   onChanges: () => void
   onSplit?: () => void
   onLoadEarlier?: () => void // a reopened thread's conversation before its recent end
+  onRewound?: (index: number) => void // Rewind: the conversation now ends before item `index`
   compactHead?: boolean
+}
+
+type UserItem = Extract<Item, { kind: 'user' }>
+// Rewind a turn: what the dry run said would change, then the real rewind
+type Rewind = { it: UserItem; index: number; preview: RewindFiles | null; error?: string; working?: boolean }
+
+function RewindModal({ r, onFiles, onChat, onClose }: { r: Rewind; onFiles: () => void; onChat: () => void; onClose: () => void }) {
+  const p = r.preview
+  const files = p?.canRewind ? p.filesChanged ?? [] : []
+  return (
+    <Modal title={<><Icon name="discard" /> Rewind to this message</>} onClose={onClose} testid="rewind">
+      <div className="rewind-body">
+        <p className="dnote">The conversation goes back to just before this message, and its text returns to the message box to change and send again. The old conversation is kept in the session list.</p>
+        {!p && !r.error && <p className="dnote">Checking which files changed since…</p>}
+        {p && files.length > 0 && <>
+          <p>Files Claude changed since then, put back as they were: <span className="dv-add">+{p.insertions ?? 0}</span> <span className="dv-del">−{p.deletions ?? 0}</span></p>
+          <ul className="rewind-files" data-testid="rewind-files">{files.map((f) => <li key={f}>{f}</li>)}</ul>
+        </>}
+        {p && p.canRewind && !files.length && <p className="dnote">No files changed since this message.</p>}
+        {p && !p.canRewind && <p className="s-wait">Files cannot be put back{p.error ? `: ${p.error}` : ''}. Only the conversation can be rewound.</p>}
+        {r.error && <p className="s-fail" data-testid="rewind-error">{r.error}</p>}
+        <div className="rewind-acts">
+          {files.length > 0 && <button className="dbtn primary" disabled={r.working} onClick={onFiles} data-testid="rewind-files-chat">Rewind files and conversation</button>}
+          <button className="dbtn" disabled={r.working || (!p && !r.error)} onClick={onChat} data-testid="rewind-chat">Rewind conversation only</button>
+          <button className="dbtn" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </Modal>
+  )
 }
 
 const WINDOW = 150
@@ -195,7 +225,7 @@ function When({ at }: { at: number }) {
 // background tool calls' tasks that ended (tool use id -> state), kept for the app's life
 const bgEnded = new Map<string, import('../../shared/taskCore').Task['status']>()
 
-export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, compactHead, banner }: Props) {
+export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, onRewound, compactHead, banner }: Props) {
   // only the newest items are drawn at first, so a long thread opens at once; Show earlier adds more
   const [limit, setLimit] = useState(WINDOW)
   // after a usage limit: when this thread continues by itself (asked again when the plan changes or the thread restarts)
@@ -304,6 +334,37 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     setImages((cur) => [...cur, ...it.images.map(attachmentOf)])
   }, [onDequeue])
 
+  // Rewind: a dry run first, so the confirm can list the files that would be put back
+  const [rewind, setRewind] = useState<Rewind | null>(null)
+  const startRewind = useCallback((it: UserItem, index: number) => {
+    if (!it.uuid || !session.sessionId) return
+    const r: Rewind = { it, index, preview: null }
+    setRewind(r)
+    window.api.chatRewindFiles(session.id, session.cwd ?? '', session.sessionId, it.uuid, true)
+      .then((preview) => setRewind((cur) => (cur?.it === it ? { ...cur, preview } : cur)))
+      .catch((e) => setRewind((cur) => (cur?.it === it ? { ...cur, preview: { canRewind: false, error: String(e?.message ?? e) } } : cur)))
+  }, [session.id, session.cwd, session.sessionId])
+  const doRewind = async (files: boolean) => {
+    const r = rewind
+    if (!r?.it.uuid || !session.sessionId) return
+    setRewind({ ...r, working: true, error: undefined })
+    try {
+      if (files) {
+        const done = await window.api.chatRewindFiles(session.id, session.cwd ?? '', session.sessionId, r.it.uuid, false)
+        if (!done.canRewind) { setRewind({ ...r, working: false, error: `Files were not put back: ${done.error ?? 'unknown error'}` }); return }
+      }
+      const chat = await window.api.chatRewindChat(session.id, session.cwd ?? '', session.sessionId, r.it.uuid)
+      if (!chat.ok) { setRewind({ ...r, working: false, error: chat.error ?? 'The conversation could not be rewound.' }); return }
+      onRewound?.(r.index)
+      setDraft(r.it.text)
+      setImages(r.it.images.map(attachmentOf))
+      setRewind(null)
+      box.current?.focus()
+    } catch (e: any) {
+      setRewind({ ...r, working: false, error: String(e?.message ?? e) })
+    }
+  }
+
   const submit = (m: SendMode = sendMode) => {
     if (!draft.trim() && !images.length) return
     const btw = draft.trim().match(/^\/btw\s+([\s\S]+)/)
@@ -387,6 +448,9 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
                   </span>
                 )}
                 {it.queue && !it.queue.pending && !it.steer && <span className="steer">queued</span>}
+                {it.uuid && session.sessionId && !session.busy && !it.queue?.pending && (
+                  <button className="rewindb" onClick={() => startRewind(it, i)} title="Go back to before this message: put back the files Claude changed since, and edit the message" data-testid="msg-rewind"><Icon name="discard" />Rewind</button>
+                )}
               </div>
               {it.images.length > 0 && (
                 <div className="imgs">{it.images.map((src, j) => (
@@ -452,7 +516,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           return <div key={i} className="msg err" data-testid="msg-error"><Icon name="error" className="s-fail" /> {it.text}</div>
         })}
       </>
-  ), [session.loaded, session.items, session.streaming, session.cwd, session.history?.more, limit, onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued, bgOf])
+  ), [session.loaded, session.items, session.streaming, session.cwd, session.history?.more, limit, onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued, bgOf, session.sessionId, session.busy, startRewind])
 
   // the live session's own mode once it reports one; before that, the mode it will start in
   const shownMode = session.mode ?? (session.background ? 'auto' : mode)
@@ -520,6 +584,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
         </div>
       )}
 
+      {rewind && <RewindModal r={rewind} onFiles={() => void doRewind(true)} onChat={() => void doRewind(false)} onClose={() => setRewind(null)} />}
       {banner}
       <div className="composer" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onDrop}>
         {slash.menu}

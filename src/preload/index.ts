@@ -71,6 +71,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   readText: (path: string) => ipcRenderer.invoke('fs:readText', path),
   chatSend: (tabId: string, cwd: string, resume: string | undefined, msg: unknown) => ipcRenderer.invoke('chat:send', tabId, cwd, resume, msg),
+  chatRewindFiles: (tabId: string, cwd: string, resume: string, uuid: string, dryRun: boolean) => ipcRenderer.invoke('chat:rewindFiles', tabId, cwd, resume, uuid, dryRun),
+  chatRewindChat: (tabId: string, cwd: string, sessionId: string, uuid: string) => ipcRenderer.invoke('chat:rewindChat', tabId, cwd, sessionId, uuid),
   chatDequeue: (tabId: string, queueId: string) => ipcRenderer.invoke('chat:dequeue', tabId, queueId),
   chatPromote: (tabId: string, queueId: string) => ipcRenderer.invoke('chat:promote', tabId, queueId),
   chatInterrupt: (tabId: string) => ipcRenderer.invoke('chat:interrupt', tabId),

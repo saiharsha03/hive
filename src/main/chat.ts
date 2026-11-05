@@ -4,7 +4,7 @@ import { createSdkMcpServer, query, tool, type Options, type PermissionMode, typ
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { appendFile } from 'node:fs/promises'
+import { appendFile, readFile } from 'node:fs/promises'
 import { closeSync, openSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -38,13 +38,14 @@ import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWak
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
 import { formatAgentStatus } from '../shared/agentStatusCore'
-import { MAX_TEAMMATES, canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, slug, startedNote, targetsOf, teamBrief, type Member, type MemberState, type MemberStatus, type Ref, type Team } from '../shared/teamCore'
+import { MAX_TEAMMATES, canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, slug, startedNote, targetsOf, teamBrief, type Member, type MemberStatus, type Ref, type Team } from '../shared/teamCore'
 import { changeTodos, readTodos } from './teamTodos'
 import { briefForRole, defineRole, listRoles, remember, rolesDir } from './roles'
 import { formatRoles } from '../shared/roleCore'
 import { addTodo as addTeamTodo, formatTodos, openMajor, updateTodo } from '../shared/teamTodoCore'
 import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
+import { forkPoint } from '../shared/rewindCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -180,8 +181,14 @@ function inbox() {
 }
 
 type Start = { tabId: string; cwd: string; resume?: string; web: WebContents; background: boolean }
+// a rewound thread's next process resumes its session only up to this entry, as a fork (the old transcript stays);
+// at null = the rewound message was the first, so it starts fresh
+const forks = new Map<string, { at: string | null }>()
 
 function start({ tabId, cwd, resume, web, background }: Start): Live {
+  const fork = forks.get(tabId)
+  forks.delete(tabId)
+  if (fork && !fork.at) resume = undefined
   const watcher = isWatcherThread(tabId, cwd, resume)
   // events only while this process is still the tab's live one; a closed process stays silent
   let s: Live
@@ -874,6 +881,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     options: {
       cwd,
       resume,
+      ...(fork?.at && resume ? { resumeSessionAt: fork.at, forkSession: true } : {}),
+      // backups of the files each turn changes, so Rewind can put them back (Query.rewindFiles)
+      enableFileCheckpointing: true,
       pathToClaudeCodeExecutable: claudeExecutable(),
       settingSources: ['user', 'project', 'local'],
       systemPrompt: { type: 'preset', preset: 'claude_code', append: append() },
@@ -1030,7 +1040,7 @@ export function setBackground(tabId: string, background: boolean, web: WebConten
 // While a turn runs: steer = delivered at Claude's next step inside it; queue = held until the turn ends, then starts a new one;
 // interrupt = queued, and the running turn is stopped now, so it goes in straight away as the next turn.
 // background: the tab is not on screen (or Hive started it on its own), so a new process starts in auto mode
-export type Outgoing = { title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
+export type Outgoing = { uuid?: string; title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
 
 export function sendMessage(tabId: string, cwd: string, resume: string | undefined, msg: Outgoing, web: WebContents): void {
   if (msg.title) { tabTitles.set(tabId, msg.title); setThreadTitle(tabId, msg.title) }
@@ -1039,7 +1049,8 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   else setBackground(tabId, !!msg.background, web)
   const content: any[] = msg.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mediaType, data: i.data } }))
   if (msg.text) content.push({ type: 'text', text: msg.text })
-  const m = { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null } as SDKUserMessage
+  // the window's id for the message, so it can be rewound to (the transcript keeps it as the entry's uuid)
+  const m = { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, uuid: msg.uuid ?? randomUUID() } as SDKUserMessage
   const cur = s
   // typed instead of picking: the open question ends, but only for a message Claude gets now (a queued one waits for
   // the turn's end, so the question stays open until then)
@@ -1255,6 +1266,26 @@ export async function background(tabId: string, toolUseId?: string): Promise<boo
 export async function interrupt(tabId: string): Promise<void> {
   cancelAsks(tabId) // Stop also ends an open question
   await live.get(tabId)?.q.interrupt()
+}
+
+// Rewind a turn, files: put back what Claude changed since that message (dryRun = only say what would change).
+// A thread with no process starts one on its session: the checkpoints live with the session, not the process
+export async function rewindFiles(tabId: string, cwd: string, resume: string, uuid: string, dryRun: boolean, web: WebContents) {
+  let s = live.get(tabId)
+  if (!s) live.set(tabId, (s = start({ tabId, cwd, resume, web, background: false })))
+  return s.q.rewindFiles(uuid, { dryRun })
+}
+
+// Rewind a turn, conversation: the process stops, and the next message resumes the session as a fork that ends just
+// before that message
+export async function rewindChat(tabId: string, cwd: string, sessionId: string, uuid: string): Promise<{ ok: boolean; error?: string }> {
+  const p = forkPoint(await readFile(transcriptPath(cwd, sessionId), 'utf8').catch(() => ''), uuid)
+  if (!p.found) return { ok: false, error: "That message is not in this thread's transcript." }
+  const s = live.get(tabId)
+  if (s?.turns.isBusy()) return { ok: false, error: 'Claude is working: stop the turn first.' }
+  if (s) { s.closedByApp = true; s.turns.clear(); s.q.close(); live.delete(tabId); wake(s) }
+  forks.set(tabId, { at: p.at })
+  return { ok: true }
 }
 
 // quitting: the app closes every thread at once, and their unsent messages are kept for the next start
