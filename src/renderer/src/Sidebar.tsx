@@ -306,12 +306,23 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
             {!found.length && <div className="hint">No matches.</div>}
           </div>
         )}
-        {!found && sections.filter((sec) => sec.key === 'watchers').map((sec) => (
-          <div key={sec.key} data-testid="section-watchers">
-            {groupHead(sec.key, sec.label, sec.items.length, 'eye')}
-            {sec.items.map((s) => row(s, 'watchers'))}
-          </div>
-        ))}
+        {!found && (() => {
+          // a run that just started points the watcher at a session the saved list has not picked up yet: its live
+          // run row stands in, so the watcher never drops out of the sidebar for those seconds
+          const sec = sections.find((x) => x.key === 'watchers')
+          const shown = new Set((sec?.items ?? []).map((s) => s.id))
+          const runs = [...live.waiting, ...live.working]
+          const gap = watchers.filter((w) => { const id = latest(w); return !id || !shown.has(id) })
+            .flatMap((w) => { const r = w.tabId ? runs.find((x) => x.id === w.tabId) : undefined; return r ? [{ ...r, title: w.name }] : [] })
+          const n = (sec?.items.length ?? 0) + gap.length
+          return n > 0 && (
+            <div key="watchers" data-testid="section-watchers">
+              {groupHead('watchers', sec?.label ?? 'Watchers', n, 'eye')}
+              {sec?.items.map((s) => row(s, 'watchers'))}
+              {gap.map((r) => liveRow(r))}
+            </div>
+          )
+        })()}
         {!found && !archiveView && ([['waiting', 'Waiting for you', live.waiting, 'bell'], ['working', 'Working', live.working, 'loading']] as const).map(([key, label, rows, icon]) => liveShown(rows).length > 0 && (
           <div key={key} data-testid={`section-${key}`}>
             {groupHead(key, label, liveShown(rows).length, icon)}
