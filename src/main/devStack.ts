@@ -30,6 +30,8 @@ const procs = new Map<string, Proc>()
 const titles = new Map<string, string>()
 const dockerCache = new Map<string, string>() // service name -> compose state
 const dockerBusy = new Map<string, { state: 'starting' | 'failed'; note: string }>()
+// docker services whose port something else already served at start, so that is used instead (name -> note)
+const dockerReused = new Map<string, string>()
 const dockerLogs = new Map<string, LogBuffer>()
 let docker: DevState['docker'] = { phase: 'unknown', message: '' }
 let listening = new Map<number, number>()
@@ -91,6 +93,8 @@ export function snapshot(): DevState {
     if (s.kind === 'docker') {
       const busy = dockerBusy.get(s.name)
       const st = dockerCache.get(s.name)
+      const reused = dockerReused.get(s.name)
+      if (reused && !busy) return { ...base, state: 'running', external: true, note: reused, owner: '', fromDir: null, fromLabel: 'outside the stack', startedAt: 0 } as DevService
       const state = busy ? busy.state : st === 'running' ? 'running' : 'stopped'
       return { ...base, state, external: false, note: busy?.note ?? (st && st !== 'running' ? st : ''), owner: '', fromDir: null, fromLabel: 'main checkout', startedAt: 0 } as DevService
     }
@@ -138,6 +142,8 @@ export async function status(): Promise<DevState> {
       try {
         const ps = parseComposePs(await run('docker', ['compose', 'ps', '-a', '--format', 'json'], { cwd: repoDir(repo), timeout: 30_000 }))
         for (const s of dockerSvcs.filter((x) => x.repo === repo)) dockerCache.set(s.name, ps.get(s.compose) ?? 'not created')
+        // a reused port that is no longer served: back to this stack's own (stopped) container
+        for (const s of dockerSvcs) if (dockerReused.has(s.name) && s.port && !listening.has(s.port)) dockerReused.delete(s.name)
       } catch { /* leave the last state */ }
     }
   } else dockerCache.clear()
@@ -263,7 +269,10 @@ async function startProc(svc: SvcDef, src: Source, caller: Owner): Promise<strin
   const py = svc.python ? join(main, svc.python) : ''
   const cmd = svc.cmd.split('{python}').join(py && existsSync(py) ? py : 'python')
   const envPath = svc.envFile ? [join(dir, svc.envFile), join(main, svc.envFile)].find((f) => existsSync(f)) : undefined
-  const env = { ...process.env, PYTHONUNBUFFERED: '1', FORCE_COLOR: '0', BROWSER: 'none', ...svc.env, ...(envPath ? parseEnvFile(readFileSync(envPath, 'utf8')) : {}) }
+  // a worktree's node_modules is a link to the main checkout's; pnpm's pre-run check sees it as built for another
+  // folder and tries to purge it (through the link) and reinstall, which aborts without a TTY: skip that check there
+  const linkedDeps = sameDir(dir, main) ? {} : { pnpm_config_verify_deps_before_run: 'false', npm_config_verify_deps_before_run: 'false' }
+  const env = { ...process.env, PYTHONUNBUFFERED: '1', FORCE_COLOR: '0', BROWSER: 'none', ...linkedDeps, ...svc.env, ...(envPath ? parseEnvFile(readFileSync(envPath, 'utf8')) : {}) }
   const p: Proc = { child: null, dir, fromLabel: from, owner: caller, startedAt: Date.now(), exited: false, code: null, stopping: false, log: new LogBuffer() }
   procs.set(svc.name, p)
   p.log.push(`$ ${cmd}   (in ${dir})\n`)
@@ -295,9 +304,27 @@ const logDocker = (name: string, text: string) => {
   b.push(text.endsWith('\n') ? text : text + '\n')
 }
 
+// the container publishing a host port ('' when none, e.g. a database installed outside docker)
+const containerOnPort = (port: number) =>
+  run('docker', ['ps', '--filter', `publish=${port}`, '--format', '{{.Names}}'], { timeout: 15_000 }).then((o) => o.trim().split('\n')[0] ?? '').catch(() => '')
+
 async function dockerUp(defs: SvcDef[]): Promise<string[]> {
   const lines: string[] = []
-  await Promise.all([...dockerGroups(defs)].map(async ([repo, ds]) => {
+  await status() // fresh ports and container states: our own running container is not "something else"
+  await Promise.all([...dockerGroups(defs)].map(async ([repo, all]) => {
+    // a port already served by something other than this stack's own container (another worktree's database, say):
+    // use that instead of failing the whole group on "port is already allocated"
+    const ds: SvcDef[] = []
+    for (const s of all) {
+      dockerReused.delete(s.name)
+      if (!s.port || !listening.has(s.port) || dockerCache.get(s.name) === 'running') { ds.push(s); continue }
+      const who = (await containerOnPort(s.port)) || `pid ${listening.get(s.port)}`
+      const note = `port ${s.port} already served by ${who}; using it (its data, not this stack's)`
+      dockerReused.set(s.name, note)
+      logDocker(s.name, note)
+      lines.push(`${s.name}: ${note}`)
+    }
+    if (!ds.length) return
     for (const s of ds) dockerBusy.set(s.name, { state: 'starting', note: '' })
     publish()
     try {
@@ -306,18 +333,25 @@ async function dockerUp(defs: SvcDef[]): Promise<string[]> {
       lines.push(`docker (${repo}): up ${ds.map((s) => s.name).join(', ')}`)
     } catch (e) {
       const m = (e as Error).message
-      for (const s of ds) { dockerBusy.set(s.name, { state: 'failed', note: m }); logDocker(s.name, `up -d failed: ${m}`) }
-      lines.push(`docker (${repo}): failed to start ${ds.map((s) => s.name).join(', ')}: ${m}`)
+      // one service failing fails the command: ask compose which ones did come up
+      const ps = await run('docker', ['compose', 'ps', '-a', '--format', 'json'], { cwd: repoDir(repo), timeout: 30_000 }).then(parseComposePs).catch(() => new Map<string, string>())
+      const up = ds.filter((s) => ps.get(s.compose) === 'running')
+      const down = ds.filter((s) => !up.includes(s))
+      for (const s of up) { dockerBusy.delete(s.name); dockerCache.set(s.name, 'running'); logDocker(s.name, `up -d ${s.compose}: ok`) }
+      for (const s of down) { dockerBusy.set(s.name, { state: 'failed', note: m }); logDocker(s.name, `up -d failed: ${m}`) }
+      if (up.length) lines.push(`docker (${repo}): up ${up.map((s) => s.name).join(', ')}`)
+      lines.push(`docker (${repo}): failed to start ${down.map((s) => s.name).join(', ')}: ${m}`)
     }
     publish()
   }))
   return lines
 }
 
-export async function startStack(stackId: string, srcs: Record<string, Source>, caller: Owner): Promise<string[]> {
+// only: start just these services of the stack (all when omitted)
+export async function startStack(stackId: string, srcs: Record<string, Source>, caller: Owner, only?: string[]): Promise<string[]> {
   const stack = cfg().stacks.find((s) => s.id === stackId)
   if (!stack) throw new Error(`Unknown stack ${stackId}. Known: ${cfg().stacks.map((s) => s.id).join(', ')}`)
-  const defs = stack.services.map(svcByName)
+  const defs = stack.services.filter((n) => !only?.length || only.includes(n)).map(svcByName)
   const lines: string[] = []
   if (defs.some((s) => s.kind === 'docker')) {
     try { await ensureDocker() } catch (e) { return [`Docker: ${(e as Error).message}`] }
@@ -343,13 +377,17 @@ export async function stopService(name: string, caller: Owner): Promise<string> 
   if (s.kind === 'docker') {
     if (caller.kind !== 'user') return `${name}: shared database service; stop it from the Dev stack panel`
     await run('docker', ['compose', 'stop', s.compose], { cwd: repoDir(s.repo), timeout: 120_000 })
+    dockerBusy.delete(name)
+    dockerReused.delete(name)
     dockerCache.set(name, 'exited')
     publish()
     return `${name}: stopped`
   }
   const p = procs.get(name)
-  if (!p || p.exited) return `${name}: not running by ${appName()}`
+  if (!p) return `${name}: not running by ${appName()}`
   if (!canControl(p.owner, caller)) return `${name}: in use by ${label(p.owner)}; not stopped`
+  // an exited process is only remembered to show its failure; stopping it again clears that
+  if (p.exited) { procs.delete(name); publish(); return `${name}: cleared` }
   await stopProc(p, s.port)
   publish()
   return `${name}: stopped`
@@ -359,7 +397,9 @@ export async function stopService(name: string, caller: Owner): Promise<string> 
 export async function stopAll(caller: Owner, names?: string[]): Promise<string[]> {
   const defs = cfg().services.filter((s) => !names || names.includes(s.name))
   const out: string[] = []
-  await Promise.all(defs.filter((s) => s.kind === 'process' && procs.get(s.name) && !procs.get(s.name)!.exited).map(async (s) => { out.push(await stopService(s.name, caller)) }))
+  // running ones, plus exited ones the caller may clear (their failed rows go away)
+  const mine = (p: Proc | undefined) => !!p && (!p.exited || canControl(p.owner, caller))
+  await Promise.all(defs.filter((s) => s.kind === 'process' && mine(procs.get(s.name))).map(async (s) => { out.push(await stopService(s.name, caller)) }))
   if (caller.kind === 'user' && await dockerOk(true)) {
     for (const [repo, ds] of dockerGroups(defs)) {
       try { await run('docker', ['compose', 'stop', ...ds.map((s) => s.compose)], { cwd: repoDir(repo), timeout: 180_000 }); ds.forEach((s) => dockerCache.set(s.name, 'exited')); out.push(`docker (${repo}): stopped`) } catch (e) { out.push(`docker (${repo}): ${(e as Error).message}`) }
@@ -399,11 +439,13 @@ async function settle(names: string[], ms: number) {
   }
 }
 
-export async function agentStack(stackId: string, branches: Record<string, string> | undefined, action: 'start' | 'stop' | 'status', caller: Owner): Promise<string> {
+export async function agentStack(stackId: string, branches: Record<string, string> | undefined, action: 'start' | 'stop' | 'status', caller: Owner, only?: string[]): Promise<string> {
   if (!loaded.config) return loaded.message
   const stack = cfg().stacks.find((s) => s.id === stackId)
   if (!stack) return `Unknown stack "${stackId}". Known stacks: ${cfg().stacks.map((s) => s.id).join(', ') || 'none configured'}`
-  const defs = stack.services.map(svcByName)
+  const unknown = (only ?? []).filter((n) => !stack.services.includes(n))
+  if (unknown.length) return `Not in stack ${stackId}: ${unknown.join(', ')}. Its services: ${stack.services.join(', ')}`
+  const defs = stack.services.filter((n) => !only?.length || only.includes(n)).map(svcByName)
   const names = defs.map((s) => s.name)
   const report = (head: string[]) => [...head, '', formatStatus(snapshot().services.filter((s) => names.includes(s.name)), docker), ...failedLogs(names)].join('\n')
   if (action === 'status') { await status(); return report([]) }
@@ -413,7 +455,7 @@ export async function agentStack(stackId: string, branches: Record<string, strin
   if (bad.length) return `Not in stack ${stackId}: ${bad.join(', ')}. Repos you can set a branch for: ${[...repos].join(', ')}`
   const srcs: Record<string, Source> = {}
   for (const [repo, b] of Object.entries(branches ?? {})) srcs[repo] = { kind: 'branch', branch: b }
-  const lines = await startStack(stackId, srcs, caller)
+  const lines = await startStack(stackId, srcs, caller, only)
   await settle(names, 90_000)
   return report(lines)
 }

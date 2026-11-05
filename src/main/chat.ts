@@ -331,15 +331,17 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         `Start, stop or check one of the dev stacks configured in ${appName()} (docker databases plus local dev servers), to test changes. `
           + `Without branches every repo runs from its main checkout; branches maps a repo name to a local branch, which runs from a git worktree ${appName()} creates. `
           + 'You may only start a service from main or from a branch you name, and you cannot stop or restart a service another thread (or the user) started: the result says "in use by <who>" instead. '
-          + 'Docker databases are shared and are never stopped by this tool. Returns the status, port and any startup error as text.',
+          + 'Docker databases are shared and are never stopped by this tool. Pass services to start, stop or check only some of the stack '
+          + '(e.g. just the web app for a static page): start only what the change needs. Returns the status, port and any startup error as text.',
         {
           stack: z.string().describe(`Stack id as configured in the ${appName()} .env`),
           branches: z.record(z.string(), z.string()).optional().describe('Repo name to local branch name; omitted repos run from main'),
           action: z.enum(['start', 'stop', 'status']).optional().describe('Default start'),
+          services: z.array(z.string()).optional().describe('Only these services of the stack (names as dev_stack status shows them); default all'),
         },
-        async ({ stack, branches, action }) => {
+        async ({ stack, branches, action, services }) => {
           try {
-            return { content: [{ type: 'text', text: await agentStack(stack, branches, action ?? 'start', { kind: 'thread', id: tabId, title: titleOf(tabId) }) }] }
+            return { content: [{ type: 'text', text: await agentStack(stack, branches, action ?? 'start', { kind: 'thread', id: tabId, title: titleOf(tabId) }, services) }] }
           } catch (e: any) {
             return { content: [{ type: 'text', text: `dev_stack failed: ${e?.message ?? e}` }], isError: true }
           }
