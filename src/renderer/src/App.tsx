@@ -395,12 +395,28 @@ export function App() {
     if (activeId) setSessions((all) => (all.some((s) => s.id === activeId && (s.waitingSince || s.background)) ? activateSession(all, activeId) : all))
   }, [activeId])
 
+  // a tab still called "New thread N" takes its thread's title once the saved list has one (the sidebar's own name)
+  const titleTabs = (list: SessionInfo[]) => {
+    const byId = new Map(list.map((x) => [x.id, x.title]))
+    setSessions((all) => {
+      let changed = false
+      const next = all.map((s) => {
+        const t = s.sessionId ? byId.get(s.sessionId) : undefined
+        if (!t || t === s.title || !/^New thread \d+$/.test(s.title)) return s
+        changed = true
+        return { ...s, title: t }
+      })
+      return changed ? next : all
+    })
+  }
+
   // reopen a past session as a tab, with its conversation; the next message resumes it. One already live is reused.
   const replaceUntouched = () => {
     const cur = sessions.find((s) => s.id === activeId)
     if (cur && cur.id.startsWith('new-') && !cur.items.length && !cur.busy && draftEmpty(cur.id)) setSessions((all) => all.filter((s) => s.id !== cur.id))
   }
   const openSession = (info: SessionInfo) => {
+    keepVisible(info.id) // a thread open as a tab is not a closed one: opening it brings it back to the list
     const live = findSession(sessions, info.id)
     if (live) return activate(live.id)
     replaceUntouched()
@@ -717,7 +733,7 @@ export function App() {
   }
   const watchersHome = <div className="watchers-home" data-testid="watchers-view"><WatchersView onOpen={(p) => setPreview(p)} onOpenThread={openWatcherThread} /></div>
   const threadsList = (footer?: ReactNode, onNew?: () => void) => (
-    <Sidebar activeId={activeId} onOpen={openSession} live={live} onActivate={activate} onCloseLive={closeSession} onNew={onNew} footer={footer} onTeam={(id) => { pickTeam(id); showView('team') }} />
+    <Sidebar activeId={activeId} onOpen={openSession} live={live} onActivate={activate} onCloseLive={closeSession} onNew={onNew} footer={footer} onTeam={(id) => { pickTeam(id); showView('team') }} onSaved={titleTabs} />
   )
   const renderView = (v: ViewId): ReactNode => {
     switch (v) {
