@@ -143,7 +143,7 @@ export async function status(): Promise<DevState> {
         const ps = parseComposePs(await run('docker', ['compose', 'ps', '-a', '--format', 'json'], { cwd: repoDir(repo), timeout: 30_000 }))
         for (const s of dockerSvcs.filter((x) => x.repo === repo)) dockerCache.set(s.name, ps.get(s.compose) ?? 'not created')
         // a reused port that is no longer served: back to this stack's own (stopped) container
-        for (const s of dockerSvcs) if (dockerReused.has(s.name) && s.port && !listening.has(s.port)) dockerReused.delete(s.name)
+        for (const s of dockerSvcs) if (dockerReused.has(s.name) && s.port && !(await portOpen(s.port))) dockerReused.delete(s.name)
       } catch { /* leave the last state */ }
     }
   } else dockerCache.clear()
@@ -304,6 +304,16 @@ const logDocker = (name: string, text: string) => {
   b.push(text.endsWith('\n') ? text : text + '\n')
 }
 
+// something accepts connections on the port. Docker Desktop's published ports do not show in netstat, so the docker
+// checks connect instead of reading the netstat map
+export const portOpen = (port: number, host = '127.0.0.1', ms = 1500) => new Promise<boolean>((done) => {
+  const sock = connect({ port, host })
+  const end = (v: boolean) => { sock.destroy(); done(v) }
+  sock.setTimeout(ms, () => end(false))
+  sock.once('connect', () => end(true))
+  sock.once('error', () => end(false))
+})
+
 // the container publishing a host port ('' when none, e.g. a database installed outside docker)
 const containerOnPort = (port: number) =>
   run('docker', ['ps', '--filter', `publish=${port}`, '--format', '{{.Names}}'], { timeout: 15_000 }).then((o) => o.trim().split('\n')[0] ?? '').catch(() => '')
@@ -317,8 +327,8 @@ async function dockerUp(defs: SvcDef[]): Promise<string[]> {
     const ds: SvcDef[] = []
     for (const s of all) {
       dockerReused.delete(s.name)
-      if (!s.port || !listening.has(s.port) || dockerCache.get(s.name) === 'running') { ds.push(s); continue }
-      const who = (await containerOnPort(s.port)) || `pid ${listening.get(s.port)}`
+      if (!s.port || dockerCache.get(s.name) === 'running' || !(await portOpen(s.port))) { ds.push(s); continue }
+      const who = (await containerOnPort(s.port)) || 'a process outside docker'
       const note = `port ${s.port} already served by ${who}; using it (its data, not this stack's)`
       dockerReused.set(s.name, note)
       logDocker(s.name, note)

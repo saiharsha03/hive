@@ -71,3 +71,13 @@ describe.skipIf(!hasGit)('dev stack processes', () => {
     assert.equal(state('api'), 'stopped')
   })
 })
+
+test('portOpen sees a listening port and a closed one', async () => {
+  const net = await import('node:net')
+  const srv = net.createServer().listen(0, '127.0.0.1')
+  await new Promise((r) => srv.once('listening', r))
+  const port = (srv.address() as { port: number }).port
+  assert.equal(await dev.portOpen(port), true)
+  await new Promise((r) => srv.close(r))
+  assert.equal(await dev.portOpen(port), false)
+})
