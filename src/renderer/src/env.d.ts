@@ -138,6 +138,13 @@ interface Window {
     teamView: (id: string) => Promise<import('../../shared/teamCore').TeamView | null>
     teamPause: (id: string) => Promise<string>
     teamResume: (id: string) => Promise<string>
+    teamRoster: () => Promise<import('../../shared/teamSidebarCore').Roster[]>
+    teamOpenWindow: (id?: string) => Promise<void>
+    teamActivate: (threadId: string) => Promise<void>
+    teamSay: (threadId: string, text: string) => Promise<boolean>
+    onTeamPick: (cb: (id: string) => void) => () => void
+    onActivateThread: (cb: (threadId: string) => void) => () => void
+    onSay: (cb: (threadId: string, text: string) => void) => () => void
     onTeamsChanged: (cb: (id: string) => void) => () => void
     watcherDetail: (id: string) => Promise<import('../../shared/watchersCore').WatcherDetail | null>
     watcherCreate: (input: { name: string; goal: string; schedule?: unknown; cwd?: string }) => Promise<{ id: string; message: string }>

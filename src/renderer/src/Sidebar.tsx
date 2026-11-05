@@ -10,6 +10,7 @@ import { Icon } from './ui'
 import { useWatchers } from './useWatchers'
 import { isDependabotTab } from '../../shared/dependabotCore'
 import { nextRunLabel } from '../../shared/threadsCore'
+import { groupTeams, teamThreadIds, type Roster, type TeamWord } from '../../shared/teamSidebarCore'
 
 // last message: time for today, otherwise "Oct 28", with the year only when it isn't this year
 function lastAt(t: number): string {
@@ -20,6 +21,7 @@ function lastAt(t: number): string {
 }
 
 type Live = { waiting: LiveRow[]; working: LiveRow[] }
+const TEAM_CLASS: Record<TeamWord, string> = { PAUSED: 's-wait', WORKING: 's-work', IDLE: 's-idle' }
 type GroupBy = 'project' | 'date'
 
 // state of a live row: waiting (blinking amber), failed (red), working (blue)
@@ -32,6 +34,7 @@ export const liveLook = (r: LiveRow): { icon: string; cls: string; word: string 
 type Props = {
   activeId: string | null; onOpen: (s: SessionInfo) => void; live: Live; onActivate: (id: string) => void; onCloseLive: (id: string) => void
   onNew?: () => void; footer?: ReactNode; title?: string
+  onTeam?: (teamId: string) => void // a team's row: open the Team view on it
 }
 
 // the app asks every sidebar to re-read the saved threads (new threads, new titles), at most every 2 s
@@ -39,7 +42,7 @@ const refreshers = new Set<() => void>()
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 export const refreshThreadList = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refreshers.forEach((f) => f()), 2000) }
 
-export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew, footer, title = 'Threads' }: Props) {
+export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew, footer, title = 'Threads', onTeam }: Props) {
   const [listed, setSessions] = useState<SessionInfo[] | null>(null)
   // a watcher's thread shows under the watcher's name, not Claude's auto title
   const { watchers } = useWatchers()
@@ -78,6 +81,13 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     refreshers.add(load)
     return () => { refreshers.delete(load) }
   }, [])
+  // running teams (Lead first, then members): their threads sit in the Teams section, not in the lists below
+  const [rosters, setRosters] = useState<Roster[]>([])
+  useEffect(() => {
+    const load = () => { void window.api.teamRoster().then(setRosters).catch(() => setRosters([])) }
+    load()
+    return window.api.onTeamsChanged(load)
+  }, [])
   // indexing progress
   useEffect(() => {
     window.api.searchStatus().then(setStatus).catch(() => {})
@@ -105,7 +115,10 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   // Dependabot review threads sit in their own folded section (live ones too), out of Waiting / Working and the dates
   const dependabotIds = useMemo(() => new Set((sessions ?? []).filter((s) => s.dependabot).map((s) => s.id)), [sessions])
   const isBotRow = useCallback((r: LiveRow) => !q && (isDependabotTab(r.id) || dependabotIds.has(r.sessionId ?? '')), [dependabotIds, q])
-  const liveShown = (rows: LiveRow[]) => rows.filter((r) => !isWatcherRow(r) && !isBotRow(r) && (!q || r.title.toLowerCase().includes(q)))
+  // a search finds team threads in the normal lists, like Dependabot's
+  const teamIds = useMemo(() => (q ? new Set<string>() : teamThreadIds(rosters)), [rosters, q])
+  const isTeamRow = (r: LiveRow) => teamIds.has(r.id) || teamIds.has(r.sessionId ?? '')
+  const liveShown = (rows: LiveRow[]) => rows.filter((r) => !isWatcherRow(r) && !isBotRow(r) && !isTeamRow(r) && (!q || r.title.toLowerCase().includes(q)))
   const botLive = [...live.waiting, ...live.working].filter((r) => !isWatcherRow(r) && isBotRow(r))
   const watcherLive = useMemo(() => {
     const rows = [...live.waiting, ...live.working]
@@ -117,8 +130,9 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const savedRows = useMemo(() => {
     if (archiveView || q) return sessions ?? []
     const hide = new Set([...live.waiting, ...live.working].filter((r) => !isWatcherRow(r)).flatMap((r) => [r.id, r.sessionId ?? '']))
-    return (sessions ?? []).filter((s) => !hide.has(s.id))
-  }, [sessions, live, archiveView, q, isWatcherRow])
+    return (sessions ?? []).filter((s) => !hide.has(s.id) && !teamIds.has(s.id))
+  }, [sessions, live, archiveView, q, isWatcherRow, teamIds])
+  const teams = useMemo(() => (q || archiveView ? [] : groupTeams(rosters, [...live.waiting, ...live.working], sessions ?? [])), [rosters, live, sessions, q, archiveView])
   const sections = useMemo(() => buildSections(savedRows, states, now, query, archiveView, groupBy, watcherIds, dependabotIds), [savedRows, states, now, query, archiveView, groupBy, watcherIds, dependabotIds])
   // the order the sections are drawn in (Dependabot right under Watchers' live rows), for shift-click ranges
   const rendered = useMemo(() => [...sections.filter((x) => x.key === 'watchers'), ...sections.filter((x) => x.key === 'dependabot'), ...sections.filter((x) => x.key !== 'watchers' && x.key !== 'dependabot')], [sections])
@@ -306,7 +320,28 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
             </div>
           )
         })()}
-        {!found && sessions && !sections.length && <div className="hint">{archiveView ? 'Nothing archived.' : 'No threads yet.'}</div>}
+        {!found && teams.length > 0 && (
+          <div key="teams" data-testid="section-teams">
+            {groupHead('teams', 'Teams', teams.length, 'organization')}
+            {teams.map((g) => {
+              const key = `team:${g.roster.id}`
+              const folded = !open.has(key)
+              return (
+                <div key={key} className="tteam" data-testid="team-group" data-id={g.roster.id}>
+                  <div className="th" title={g.roster.name} role="button" tabIndex={0} onClick={() => onTeam?.(g.roster.id)} onKeyDown={(e) => { if (e.key === 'Enter') onTeam?.(g.roster.id) }} data-testid="team-row">
+                    <button className="tchev" aria-label={folded ? 'Show members' : 'Hide members'} onClick={(e) => { e.stopPropagation(); toggle(key) }} data-testid="team-fold"><Icon name={folded ? 'chevron-right' : 'chevron-down'} /></button>
+                    <span className="t">{g.roster.name}</span>
+                    <span className={`st ${TEAM_CLASS[g.word]}`}>{g.word}</span>
+                    <span className="m">{g.working}/{g.total} working</span>
+                    <button className="more" aria-label="Open in window" title="Open the team in its own window" onClick={(e) => { e.stopPropagation(); void window.api.teamOpenWindow(g.roster.id) }} data-testid="team-row-window"><Icon name="link-external" /></button>
+                  </div>
+                  {!folded && <div className="tteam-ms">{g.rows.map((x) => (x.kind === 'live' ? liveRow(x.row) : row(x.s, 'team')))}</div>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {!found && sessions && !sections.length && !teams.length && <div className="hint">{archiveView ? 'Nothing archived.' : 'No threads yet.'}</div>}
         {!found && sections.filter((sec) => sec.key !== 'watchers' && sec.key !== 'dependabot').map((sec) => {
           // a search opens every fold so no match stays hidden
           const folded = !!sec.fold && !searching && !open.has(sec.key)

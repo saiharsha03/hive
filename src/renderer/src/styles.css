@@ -132,6 +132,10 @@ kbd { font: 11px var(--mono); color: var(--faint); }
 .th .more { position: absolute; top: 3px; right: 6px; display: none; width: 22px; height: 20px; align-items: center; justify-content: center; color: var(--dim); background: var(--hover); border-radius: 3px; }
 .th:hover .more, .th:focus-within .more { display: flex; }
 .th .more:hover { color: var(--hi); background: var(--line2); }
+/* Teams section: a team's row (fold chevron, name, state word, how many work), its people indented below */
+.th .tchev { display: flex; align-items: center; justify-content: center; width: 20px; height: 18px; color: var(--dim); }
+.th .tchev:hover { color: var(--hi); }
+.tteam-ms .th { padding-left: 26px; }
 .archlink { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 12px; text-align: left; font-size: 11.5px; color: var(--faint); }
 .archlink:hover { color: var(--ink); }
 .bulk { margin: 0 0 8px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel2); }
@@ -981,6 +985,7 @@ button.sbi:hover { background: var(--hover); }
 .ad-qh { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
 
 /* Team view: office (desks) beside the log / plan / learned panes */
+.teamwin { height: 100%; display: flex; flex-direction: column; }
 .teamview { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 12.5px; }
 .tv-head { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--line); min-width: 0; }
 .tv-pick { background: var(--panel); color: var(--hi); border: 1px solid var(--line2); border-radius: 2px; padding: 2px 6px; font: inherit; font-weight: 600; }

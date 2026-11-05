@@ -15,6 +15,12 @@ const STATE_CLASS: Record<MemberState, string> = { working: 's-work', waiting: '
 const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 const MODE_KEY = 'hive.teamOffice'
 type Sent = Record<string, { at: number; text: string }[]>
+type Say = (threadId: string, text: string) => boolean | Promise<boolean>
+
+// which team to show: set from the sidebar's Teams section (or the Team window's address) before or while the view is up
+let wanted: string | null = null
+const pickers = new Set<(id: string) => void>()
+export const pickTeam = (id: string) => { wanted = id; pickers.forEach((f) => f(id)) }
 
 // the scene itself is plain DOM/SVG driven by office/engine; React owns only the container
 function OfficeScene({ v, mode, onPick, nod }: { v: View; mode: Mode; onPick: (id: string) => void; nod: { id: string; n: number } | null }) {
@@ -79,7 +85,7 @@ function Todos({ v }: { v: View }) {
 }
 
 // talking to one teammate without leaving the office: what passed between you, and a box straight into its thread
-function Chat({ v, id, sent, onSend, onOpen, onClose }: { v: View; id: string; sent: { at: number; text: string }[]; onSend: (text: string) => boolean; onOpen: () => void; onClose: () => void }) {
+function Chat({ v, id, sent, onSend, onOpen, onClose }: { v: View; id: string; sent: { at: number; text: string }[]; onSend: (text: string) => Promise<boolean>; onOpen: () => void; onClose: () => void }) {
   const p = peopleOf(v).find((x) => x.id === id)
   const [text, setText] = useState('')
   const [note, setNote] = useState('')
@@ -92,7 +98,7 @@ function Chat({ v, id, sent, onSend, onOpen, onClose }: { v: View; id: string; s
   const go = () => {
     const t = text.trim()
     if (!t) return
-    if (onSend(t)) { setText(''); setNote('sent') } else setNote('thread not open')
+    void onSend(t).then((ok) => { if (ok) { setText(''); setNote('sent') } else setNote('thread not open') })
   }
   return (
     <div className="ofc-chat" data-testid={`team-chat-${id}`} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }}>
@@ -130,9 +136,10 @@ function Chat({ v, id, sent, onSend, onOpen, onClose }: { v: View; id: string; s
   )
 }
 
-export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: string) => void; onMessage: (threadId: string, text: string) => boolean }) {
+// inWindow: shown in the pop-out Team window (no "Open in window" there)
+export function TeamView({ onActivate, onMessage, inWindow }: { onActivate: (threadId: string) => void; onMessage: Say; inWindow?: boolean }) {
   const [teams, setTeams] = useState<Row[]>([])
-  const [pick, setPick] = useState<string | null>(null)
+  const [pick, setPick] = useState<string | null>(wanted)
   const [v, setV] = useState<View | null>(null)
   const [side, setSide] = useState<'plan' | 'log' | 'knowledge' | 'todos'>('log')
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem(MODE_KEY) === 'plan' ? 'plan' : 'side'))
@@ -147,6 +154,7 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
     load()
     return window.api.onTeamsChanged(load)
   }, [])
+  useEffect(() => { pickers.add(setPick); return () => { pickers.delete(setPick) } }, [])
   useEffect(() => { setChat(null); setSent({}) }, [id])
   useEffect(() => {
     if (!id) { setV(null); return }
@@ -169,6 +177,7 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
         {v?.team.owner && <button className="link" onClick={() => onActivate(v.team.owner!.id)} title="The thread that started this team; the Lead reports to it">Owner: {v.team.owner.title}</button>}
         <div className="seg" title="How the office is drawn">{(['side', 'plan'] as const).map((m) => <button key={m} className={mode === m ? 'on' : ''} onClick={() => pickMode(m)} data-testid={`team-mode-${m}`}>{m === 'side' ? 'Side' : 'Plan'}</button>)}</div>
         {v && !v.team.endedAt && <PauseButton v={v} />}
+        {!inWindow && <button className="ibtn" onClick={() => void window.api.teamOpenWindow(id ?? undefined)} title="Open in its own window" data-testid="team-open-window"><Icon name="link-external" /></button>}
         {v && <span className="tv-meta">{v.team.members.length + 1} members, started {time(v.team.createdAt)}{v.team.endedAt ? `, ended ${time(v.team.endedAt)}` : ''}</span>}
       </div>
       {v && (
@@ -176,8 +185,8 @@ export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: str
           <div className="ofc-wrap">
             <OfficeScene v={v} mode={mode} onPick={setChat} nod={nod} />
             {chat && <Chat v={v} id={chat} sent={sent[chat] ?? []} onClose={() => setChat(null)} onOpen={() => onActivate(chat)}
-              onSend={(text) => {
-                if (!onMessage(chat, text)) return false
+              onSend={async (text) => {
+                if (!(await onMessage(chat, text))) return false
                 setSent((x) => ({ ...x, [chat]: [...(x[chat] ?? []), { at: Date.now(), text }] }))
                 setNod((x) => ({ id: chat, n: (x?.n ?? 0) + 1 }))
                 return true
@@ -220,5 +229,16 @@ function PauseButton({ v }: { v: View }) {
         {busy ? (paused ? 'Resuming…' : 'Pausing…') : paused ? 'Resume team' : 'Pause team'}
       </button>
     </>
+  )
+}
+
+// the pop-out Team window's whole page: the Team view, full size. Opening a thread shows it in the main window;
+// a message goes into the thread through the main window, like typing in its tab.
+export function TeamWindow() {
+  useEffect(() => window.api.onTeamPick(pickTeam), [])
+  return (
+    <div className="teamwin" data-testid="team-window">
+      <TeamView inWindow onActivate={(id) => void window.api.teamActivate(id)} onMessage={(id, text) => window.api.teamSay(id, text).catch(() => false)} />
+    </div>
   )
 }

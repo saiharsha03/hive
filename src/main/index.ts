@@ -55,6 +55,7 @@ import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
 import { dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
+import { isAppPage, runningRosters, teamWindowSearch } from '../shared/teamSidebarCore'
 
 // test mode: Electron's own storage (search index, sessions cache, page storage) lives in the test data folder
 if (TEST_MODE) app.setPath('userData', join(dataDir(), 'userData'))
@@ -77,8 +78,13 @@ initScripts(APP_DIR, (runs) => {
   for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('scripts:update', runs)
 }, undefined, () => settings.scripts)
 
+// The main window (threads, tabs) and the pop-out Team window. Threads always belong to the main window's page,
+// never to the Team window, so every "the window" below means mainWin.
+let mainWin: BrowserWindow | null = null
+let teamWin: BrowserWindow | null = null
+const mainWeb = () => (mainWin && !mainWin.isDestroyed() && !mainWin.webContents.isDestroyed() ? mainWin.webContents : null)
 // Hive's own background threads (Dependabot reviewers) open as background tabs in the app window
-const appWindow = () => BrowserWindow.getAllWindows().find((w) => !w.webContents.isDestroyed() && !w.webContents.isLoading())
+const appWindow = () => { const w = mainWeb(); return w && !w.isLoading() ? mainWin! : undefined }
 function spawnThread(t: BackgroundThread) {
   const w = appWindow()
   if (!w) throw new Error(`The ${appName()} window is not ready`)
@@ -104,7 +110,19 @@ handle('teams:view', (_e, id: string) => {
   return t ? { team: t, states: teamStates(t), log: readLog(t).slice(-300), plan: readTeamFile(t, 'plan.md'), knowledge: readTeamFile(t, 'knowledge.md'), todos: readTodos(t) } : null
 })
 handle('teams:pause', (_e, id: string) => pauseTeam(String(id), { id: 'you', title: 'You' }, 'paused from the Team view'))
-handle('teams:resume', (e, id: string) => resumeTeam(String(id), { id: 'you', title: 'You' }, e.sender))
+// reopened threads open as tabs in the main window, also when Resume is pressed in the Team window
+handle('teams:resume', (e, id: string) => resumeTeam(String(id), { id: 'you', title: 'You' }, mainWeb() ?? e.sender))
+// the sidebar's Teams section: running teams, Lead first, with each person's tab id and Claude session
+handle('teams:roster', () => runningRosters(listTeams()))
+handle('teams:openWindow', (_e, id?: string) => openTeamWindow(id ? String(id) : null))
+// from the Team window: show a thread in the main window, or say something in it like typing in its tab
+handle('teams:activate', (_e, threadId: string) => { showWindow(); mainWeb()?.send('hive:activate', String(threadId)) })
+handle('teams:say', (_e, threadId: string, text: string) => {
+  const w = mainWeb()
+  if (!w || !liveThreads().some((t) => t.tabId === threadId)) return false
+  w.send('hive:say', String(threadId), String(text))
+  return true
+})
 onTeamChange((id) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('teams:changed', id) })
 
 const watchersChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('watchers:changed') }
@@ -195,7 +213,7 @@ initAutoContinue({
 // every consumer picks up saved settings without a restart (running dev services keep theirs until restarted)
 function applySettings() {
   setAppName(settings.general.appName, settings.general.appTagline)
-  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.setTitle(windowTitle())
+  if (mainWin && !mainWin.isDestroyed()) mainWin.setTitle(windowTitle())
   appConfig = loadConfig(APP_DIR, (env) => effectiveEnv(env, settings))
   dev.init(appConfig)
   initDeploy(appConfig)
@@ -245,16 +263,9 @@ function saveFromPanel(d: unknown) {
 // The app's own page: the dev server in development, the built index.html otherwise.
 const DEV_URL = process.env.ELECTRON_RENDERER_URL
 const APP_HTML = join(__dirname, '../renderer/index.html')
-// compare parsed origins / the exact file, never string prefixes ("http://localhost:5173@evil.example")
-function isAppUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    if (DEV_URL) return u.origin === new URL(DEV_URL).origin
-    return u.protocol === 'file:' && `${u.origin}${u.pathname}` === `${new URL(pathToFileURL(APP_HTML).href).origin}${new URL(pathToFileURL(APP_HTML).href).pathname}`
-  } catch {
-    return false
-  }
-}
+// compare parsed origins / the exact file, never string prefixes ("http://localhost:5173@evil.example");
+// the Team window's ?view=team&team=<id> is the same page
+const isAppUrl = (url: string): boolean => isAppPage(url, DEV_URL || pathToFileURL(APP_HTML).href, !!DEV_URL)
 
 // Every IPC call must come from the app's own top-level page, never from a preview frame
 // or from a page the window was somehow navigated to.
@@ -457,6 +468,41 @@ handle('dialog:folder', async (e) => {
 // web links open in the browser
 const openInBrowser = (url: string) => { if (/^https?:\/\//i.test(url)) void shell.openExternal(url) }
 
+// a window only ever shows the app; links go to the browser, preview frames stay on local previews
+function guardWindow(web: Electron.WebContents): void {
+  web.on('will-navigate', (e, url) => { if (!isAppUrl(url)) { e.preventDefault(); openInBrowser(url) } })
+  web.on('will-redirect', (e, url) => { if (!isAppUrl(url)) e.preventDefault() })
+  web.on('will-frame-navigate', (e) => {
+    if (!e.isMainFrame && !e.url.startsWith(`${SCHEME}:`) && !e.url.startsWith('about:')) e.preventDefault()
+  })
+  web.setWindowOpenHandler(({ url }) => { openInBrowser(url); return { action: 'deny' } })
+}
+
+// The Team window: the Team view alone, full size, outside the main window. One at a time: opening it again focuses
+// it (and switches to the team asked for). Closing it closes it for real; Quit closes it too.
+function openTeamWindow(teamId: string | null): void {
+  const name = teamId ? getTeam(teamId)?.name : undefined
+  const title = name ? `${name}, Team` : 'Team'
+  if (teamWin && !teamWin.isDestroyed()) {
+    if (teamId) { teamWin.setTitle(title); teamWin.webContents.send('teams:pick', teamId) }
+    if (teamWin.isMinimized()) teamWin.restore()
+    teamWin.show()
+    teamWin.focus()
+    return
+  }
+  const win = new BrowserWindow({
+    title, width: 1500, height: 900, backgroundColor: '#1f1f1f', icon, autoHideMenuBar: true,
+    webPreferences: { preload: join(__dirname, '../preload/index.js') },
+  })
+  teamWin = win
+  win.on('closed', () => { if (teamWin === win) teamWin = null })
+  win.on('page-title-updated', (e) => e.preventDefault()) // keep "<team>, Team", not the page's own title
+  guardWindow(win.webContents)
+  const search = teamWindowSearch(teamId)
+  if (DEV_URL) { const u = new URL(DEV_URL); u.search = search; void win.loadURL(u.href) }
+  else void win.loadFile(APP_HTML, { search })
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     title: windowTitle(),
@@ -470,16 +516,12 @@ function createWindow(): void {
     // plugins: Chromium's built-in PDF viewer for the Preview panel
     webPreferences: { preload: join(__dirname, '../preload/index.js'), plugins: true },
   })
+  mainWin = win
+  win.on('closed', () => { if (mainWin === win) mainWin = null })
   const web = win.webContents
   watchClipboard(win)
   // the window only ever shows the app; links in chat replies go to the browser instead
-  web.on('will-navigate', (e, url) => { if (!isAppUrl(url)) { e.preventDefault(); openInBrowser(url) } })
-  web.on('will-redirect', (e, url) => { if (!isAppUrl(url)) e.preventDefault() })
-  // preview frames may only show local previews, never navigate off to a website
-  web.on('will-frame-navigate', (e) => {
-    if (!e.isMainFrame && !e.url.startsWith(`${SCHEME}:`) && !e.url.startsWith('about:')) e.preventDefault()
-  })
-  web.setWindowOpenHandler(({ url }) => { openInBrowser(url); return { action: 'deny' } })
+  guardWindow(web)
   // the app menu is removed (own top bar), which also removed its shortcuts: bring back reload and dev tools
   web.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return
@@ -508,7 +550,7 @@ function createWindow(): void {
 let quitting = false
 let tray: Tray | null = null
 const showWindow = () => {
-  const w = BrowserWindow.getAllWindows()[0]
+  const w = mainWin && !mainWin.isDestroyed() ? mainWin : null
   if (!w) { createWindow(); return }
   if (w.isMinimized()) w.restore()
   w.show()

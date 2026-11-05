@@ -22,7 +22,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { TodoPanel } from './TodoPanel'
 import { NotesPanel } from './NotesPanel'
 import { setShowAgents } from './ThreadStatus'
-import { TeamView } from './TeamView'
+import { TeamView, pickTeam } from './TeamView'
 import { FileEditor, fileOfTab, fileTabId, openInEditor, releaseFile, setFileOpener } from './EditorView'
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
@@ -466,6 +466,15 @@ export function App() {
     })
   }
 
+  // the Team window asks: show a thread here, or say something in it like typing in its tab
+  const forTeamWindow = useRef({ activate, send })
+  forTeamWindow.current = { activate, send }
+  useEffect(() => {
+    const offActivate = window.api.onActivateThread((id) => forTeamWindow.current.activate(findSession(sessionsRef.current, id)?.id ?? id))
+    const offSay = window.api.onSay((id, text) => { const t = sessionsRef.current.find((x) => x.id === id); if (t) forTeamWindow.current.send(t, text, []) })
+    return () => { offActivate(); offSay() }
+  }, [])
+
   // ---- handoff: a big or just-compacted thread is offered a fresh one (handoffCore) ----
   // offer: shown now; dismissed: where Not now was said; pending: the handoff being written (file, asked at);
   // failed: the last attempt ended without a usable file. Watcher threads are never offered (their read-only
@@ -690,7 +699,7 @@ export function App() {
   }
   const watchersHome = <div className="watchers-home" data-testid="watchers-view"><WatchersView onOpen={(p) => setPreview(p)} onOpenThread={openWatcherThread} /></div>
   const threadsList = (footer?: ReactNode, onNew?: () => void) => (
-    <Sidebar activeId={activeId} onOpen={openSession} live={live} onActivate={activate} onCloseLive={closeSession} onNew={onNew} footer={footer} />
+    <Sidebar activeId={activeId} onOpen={openSession} live={live} onActivate={activate} onCloseLive={closeSession} onNew={onNew} footer={footer} onTeam={(id) => { pickTeam(id); showView('team') }} />
   )
   const renderView = (v: ViewId): ReactNode => {
     switch (v) {

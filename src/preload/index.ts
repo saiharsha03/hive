@@ -100,6 +100,27 @@ contextBridge.exposeInMainWorld('api', {
   teamView: (id: string) => ipcRenderer.invoke('teams:view', id),
   teamPause: (id: string) => ipcRenderer.invoke('teams:pause', id),
   teamResume: (id: string) => ipcRenderer.invoke('teams:resume', id),
+  teamRoster: () => ipcRenderer.invoke('teams:roster'),
+  teamOpenWindow: (id?: string) => ipcRenderer.invoke('teams:openWindow', id),
+  teamActivate: (threadId: string) => ipcRenderer.invoke('teams:activate', threadId),
+  teamSay: (threadId: string, text: string) => ipcRenderer.invoke('teams:say', threadId, text),
+  // the Team window: open on another team
+  onTeamPick: (cb: (id: string) => void) => {
+    const fn = (_e: unknown, id: string) => cb(id)
+    ipcRenderer.on('teams:pick', fn)
+    return () => ipcRenderer.removeListener('teams:pick', fn)
+  },
+  // the main window, asked by the Team window: show a thread / say something in it
+  onActivateThread: (cb: (threadId: string) => void) => {
+    const fn = (_e: unknown, id: string) => cb(id)
+    ipcRenderer.on('hive:activate', fn)
+    return () => ipcRenderer.removeListener('hive:activate', fn)
+  },
+  onSay: (cb: (threadId: string, text: string) => void) => {
+    const fn = (_e: unknown, id: string, text: string) => cb(id, text)
+    ipcRenderer.on('hive:say', fn)
+    return () => ipcRenderer.removeListener('hive:say', fn)
+  },
   onTeamsChanged: (cb: (id: string) => void) => {
     const fn = (_e: unknown, id: string) => cb(id)
     ipcRenderer.on('teams:changed', fn)
