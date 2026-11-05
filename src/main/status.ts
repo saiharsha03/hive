@@ -15,6 +15,7 @@ export type Status = {
   five: Limit
   seven: Limit
   usage: UsageRow[] // every plan window with a reading, for the usage popover and the phone
+  usageAt: number | null // when that reading was taken
   connectors: { connected: number; total: number; needsAuth: number; failed: number } | null
   engine: { installed: boolean; version: string | null }
   error?: string
@@ -28,7 +29,7 @@ const loginStamp = () => { try { return statSync(credentials()).mtimeMs } catch 
 let startedOn = 0
 function current(): Query {
   const stamp = loginStamp()
-  if (q && stamp !== startedOn) { q.close(); q = null; lastGood = null; usageCache = null }
+  if (q && stamp !== startedOn) { q.close(); q = null; usage = null; lastTry = 0 }
   if (!q) { q = idleQuery(); startedOn = stamp }
   return q
 }
@@ -47,56 +48,47 @@ function idleQuery(): Query {
 // the idle process, for lists a tab without its own running process asks for (commands, models, MCP servers)
 export const idle = (): Query => current()
 
-// a placeholder answer never replaces a real reading (usageCore)
 const limit = (w: any): Limit => (w ? afterReset({ pct: w.utilization ?? null, resetsAt: w.resets_at ?? null }) : null)
 
-// Rate limits come only from a process that has talked to the API, so the idle one answers without them. A live
-// thread's usage answer stands in (the app sets this to the chat's reader); the last good limits are kept for a while
-// so the bar does not go blank between runs.
+// Plan limits. Only a process that has talked to the API carries them, so a live thread's usage answer comes first
+// (the app sets the reader), then the idle process's. The endpoint is rate limited and sometimes answers with a
+// placeholder: one try per READ_MS, and only a real answer replaces the reading. The reading keeps its time, so the
+// bar can show how old it is instead of guessing.
 let liveUsage: () => Promise<any | null> = async () => null
 export const setLiveUsage = (f: () => Promise<any | null>) => { liveUsage = f }
-const KEEP_MS = 6 * 3_600_000
-let lastGood: { limits: any; at: number } | null = null
-// a live thread's limits first, then the idle process's, then the last real reading
-async function withLimits(u: any): Promise<any> {
-  const live = (await liveUsage().catch(() => null))?.rate_limits
-  const limits = [live, u?.rate_limits].find(realLimits)
-  if (limits) { lastGood = { limits, at: Date.now() }; return { ...u, rate_limits: limits } }
-  return lastGood && Date.now() - lastGood.at < KEEP_MS ? { ...u, rate_limits: lastGood.limits } : u
-}
-// the usage endpoint is rate limited: one answer serves the minute polls for USAGE_MS
-const USAGE_MS = 5 * 60_000
-const PLACEHOLDER_MS = 2 * 60_000
-let usageCache: { at: number; u: any } | null = null
-async function usageNow(q: Query): Promise<any> {
-  if (usageCache && Date.now() - usageCache.at < USAGE_MS) return usageCache.u
-  const u = await withLimits(await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }))
-  // only a real reading is kept: right after a start no thread has talked to the API yet, and caching that
-  // placeholder held the bar at 0% for the whole window
-  // a placeholder is kept briefly too (the endpoint is rate limited), then a real reading is tried again
-  usageCache = { at: realLimits(u?.rate_limits) ? Date.now() : Date.now() - USAGE_MS + PLACEHOLDER_MS, u }
-  return u
+const READ_MS = 5 * 60_000
+let usage: { limits: any; plan: string | null; at: number } | null = null
+let lastTry = 0
+let trying: Promise<void> | null = null
+const within = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
+  Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))])
+function readUsage(force = false): Promise<void> {
+  if (trying || (!force && Date.now() - lastTry < READ_MS)) return trying ?? Promise.resolve()
+  lastTry = Date.now()
+  trying = (async () => {
+    const q = current()
+    for (const read of [liveUsage, () => q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })]) {
+      const u: any = await within(read(), 20_000)
+      if (realLimits(u?.rate_limits)) { usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at: Date.now() }; return }
+    }
+  })().finally(() => { trying = null })
+  return trying
 }
 
 export async function getStatus(): Promise<Status> {
   const q = current()
-  const [account, usage, mcp] = await Promise.allSettled([
-    q.accountInfo(),
-    usageNow(q),
-    q.mcpServerStatus(),
-  ])
+  const [account, mcp] = await Promise.allSettled([q.accountInfo(), q.mcpServerStatus(), readUsage()])
   const a = account.status === 'fulfilled' ? account.value : null
-  const u = usage.status === 'fulfilled' ? usage.value : null
   const m = mcp.status === 'fulfilled' ? mcp.value : null
-  const failed = [account, usage, mcp].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
-  remember(u, usage.status === 'rejected' ? usage.reason : null)
+  const failed = [account, mcp].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
+  const l = usage?.limits
   return {
     account: a?.email ?? null,
-    plan: u?.subscription_type ?? a?.subscriptionType ?? null,
-    // a placeholder is no reading: the meters stay hidden until a real one arrives (not a fake 0%)
-    five: realLimits(u?.rate_limits) ? limit(u?.rate_limits?.five_hour) : null,
-    seven: realLimits(u?.rate_limits) ? limit(u?.rate_limits?.seven_day) : null,
-    usage: usageRows(u?.rate_limits),
+    plan: usage?.plan ?? a?.subscriptionType ?? null,
+    five: limit(l?.five_hour),
+    seven: limit(l?.seven_day),
+    usage: usageRows(l),
+    usageAt: usage?.at ?? null,
     connectors: m && {
       connected: m.filter((s) => s.status === 'connected').length,
       total: m.length,
@@ -108,36 +100,14 @@ export async function getStatus(): Promise<Status> {
   }
 }
 
-// the 7-day limit for Watch's adaptive sweeps: the latest reading from the status bar's poll (every minute while the
-// window is open) or from its own call when that reading is older than maxAgeMs
+// the 7-day limit for watchers' adaptive schedules: the latest reading, read again when it is older than maxAgeMs
 export type Weekly = { pct: number | null; readAt: number; error: string }
-let weekly: Weekly | null = null
-function remember(u: any, err: unknown) {
-  // a placeholder answer never overwrites a real reading (its 7-day number is stale)
-  if (!err && !realLimits(u?.rate_limits) && weekly?.pct != null) { weekly = { ...weekly, readAt: Date.now() }; return }
-  const pct = realLimits(u?.rate_limits) ? limit(u?.rate_limits?.seven_day)?.pct : undefined
-  weekly = typeof pct === 'number' && Number.isFinite(pct)
-    ? { pct, readAt: Date.now(), error: '' }
-    : { pct: null, readAt: Date.now(), error: err ? String((err as Error)?.message ?? err) : 'no 7-day limit in the usage answer' }
-}
-let reading: Promise<Weekly> | null = null
-export function weeklyUsage(maxAgeMs = 5 * 60_000): Promise<Weekly> {
-  if (weekly && Date.now() - weekly.readAt < maxAgeMs) return Promise.resolve(weekly)
-  reading ??= (async () => {
-    const q = current()
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('the usage read timed out')), 20_000) })
-    try {
-      remember(await Promise.race([q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }).then(withLimits), timeout]), null)
-    } catch (e) {
-      remember(null, e)
-    } finally {
-      clearTimeout(timer)
-      reading = null
-    }
-    return weekly!
-  })()
-  return reading
+export async function weeklyUsage(maxAgeMs = READ_MS): Promise<Weekly> {
+  if (!usage || Date.now() - usage.at > maxAgeMs) await readUsage(true)
+  const pct = limit(usage?.limits?.seven_day)?.pct
+  return typeof pct === 'number' && Number.isFinite(pct)
+    ? { pct, readAt: usage!.at, error: '' }
+    : { pct: null, readAt: Date.now(), error: 'no 7-day limit in the usage answer' }
 }
 
 export function closeStatus(): void {
