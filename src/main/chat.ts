@@ -37,6 +37,8 @@ import { cancelContinue, scheduleContinue } from './autoContinue'
 import { resetFromText, wakeLabel } from '../shared/continueCore'
 import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
 import { formatAgentStatus } from '../shared/agentStatusCore'
+import { MAX_TEAMMATES, findMember, formatTeamStatus, leadNote, nameOf, slug, teamBrief, type Member, type MemberState, type Team } from '../shared/teamCore'
+import { addKnowledge, addMember, appendLog, createTeam, endTeam, readLog, teamOf } from './teams'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
@@ -102,6 +104,7 @@ const append = () => [
   "Call it with action \"waiting\" and a one-line reason when you are blocked on the user's decision or input, so the sidebar shows this session as waiting for them.",
   `${appName()} threads can talk to each other: mcp__hive__list_threads, start_thread, message_thread and wait_for_thread let you hand parallel work to a new background thread, or ask a thread that already holds the context, and use its answer.`,
   'Before you tell the user whether a subagent, workflow or background command is running, finished or stopped, call mcp__hive__agent_status and report what it says, never from memory: an interrupt or crash can end one without a notification.',
+  'Teams: when the user asks for a team (several threads working on one job together), mcp__hive__start_team makes you the Lead and starts the teammates; team_post, team_note, team_status, add_teammate and end_team run it. A message starting "[Team" is a post from a teammate.',
   'A message starting "[To subagent" is the user talking to one of your subagents: pass the text on with SendMessage to that agent, word for word, then carry on with what you were doing.',
   `A message starting "[From thread" was sent by another ${appName()} thread, not the user; your final reply is what that thread gets back when it waits for you.`,
   'Watchers are scheduled background threads, each with its own long-lived thread, memory folder and SQLite db: mcp__hive__create_watcher, list_watchers, update_watcher, enable_watcher, disable_watcher, run_watcher_now and delete_watcher manage them.',
@@ -449,6 +452,125 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async () => ok(formatAgentStatus(s.status, Date.now(), s.sessionId ? join(transcriptPath(cwd, s.sessionId).replace(/\.jsonl$/, ''), 'subagents') : undefined)),
       ),
       tool(
+        'start_team',
+        `Start a team: 1 to ${MAX_TEAMMATES} new ${appName()} threads (teammates, not subagents) that work on one job with you as their Lead. `
+          + 'Each gets a name, a role (e.g. builder, reviewer, validator, QA) and its own task, plus a brief with the team goal, the roster and the shared folder '
+          + '(plan.md, knowledge.md). They talk with team_post and see each other with team_status; the user watches them in the Team view. '
+          + 'Only start a team when the user asked for one. Pick the fewest teammates that cover the job.',
+        {
+          name: z.string().describe('Team name, e.g. "HelixPrevent migration"'),
+          goal: z.string().describe('What the team must get done, and what done means'),
+          members: z.array(z.object({
+            name: z.string().describe('Short unique name, e.g. "Builder API"'),
+            role: z.string().describe('builder, reviewer, validator, QA, researcher, ...'),
+            task: z.string().describe('The part of this teammate, self-contained'),
+            cwd: z.string().optional().describe('Absolute working folder; default the folder of this thread'),
+          })).min(1).max(MAX_TEAMMATES),
+        },
+        async ({ name, goal, members }) => {
+          const already = teamOf(tabId)
+          if (already) return fail(`This thread is already in team "${already.name}". end_team first.`)
+          const names = members.map((m) => m.name.trim().toLowerCase())
+          if (new Set(names).size !== names.length || names.includes('lead') || names.includes('all')) return fail('Teammate names must be unique and not "Lead" or "all".')
+          const team = createTeam(name, goal, { id: tabId, title: titleOf(tabId) })
+          const mates = members.map((m) => ({ member: { id: `team-${slug(m.name)}-${randomUUID().slice(0, 4)}`, name: m.name.trim(), role: m.role, cwd: m.cwd || cwd, joinedAt: Date.now() } as Member, task: m.task }))
+          for (const x of mates) addMember(team, x.member)
+          const started: string[] = []
+          for (const { member: m, task } of mates) {
+            try {
+              startBackgroundThread({ tabId: m.id, cwd: m.cwd, title: `${team.name}: ${m.name}`, prompt: teamBrief(team, m, task), from: { id: tabId, title: titleOf(tabId) } }, web)
+              started.push(`${m.name} (${m.id})`)
+            } catch (e: any) { started.push(`${m.name}: failed to start (${e?.message ?? e})`) }
+          }
+          appendLog(team, { at: Date.now(), from: tabId, fromName: 'Lead', to: [], text: `Team started: ${goal}` })
+          send({ type: 'hive_team', teamId: team.id })
+          return ok(`${leadNote(team)}\nStarted: ${started.join('; ')}`)
+        },
+      ),
+      tool(
+        'add_teammate',
+        `Lead only: add one more teammate to your running team (at most ${MAX_TEAMMATES}).`,
+        { name: z.string(), role: z.string(), task: z.string(), cwd: z.string().optional() },
+        async ({ name, role, task, cwd: dir }) => {
+          const team = teamOf(tabId)
+          if (!team || team.lead.id !== tabId) return fail('Only the Lead of a running team can add teammates.')
+          if (team.members.length >= MAX_TEAMMATES) return fail(`The team already has ${MAX_TEAMMATES} teammates.`)
+          if (findMember(team, name) || /^(lead|all)$/i.test(name.trim())) return fail(`The name "${name}" is taken.`)
+          const m: Member = { id: `team-${slug(name)}-${randomUUID().slice(0, 4)}`, name: name.trim(), role, cwd: dir || cwd, joinedAt: Date.now() }
+          addMember(team, m)
+          try {
+            startBackgroundThread({ tabId: m.id, cwd: m.cwd, title: `${team.name}: ${m.name}`, prompt: teamBrief(team, m, task), from: { id: tabId, title: titleOf(tabId) } }, web)
+          } catch (e: any) { return fail(`add_teammate failed: ${e?.message ?? e}`) }
+          appendLog(team, { at: Date.now(), from: tabId, fromName: 'Lead', to: [], text: `${m.name} (${role}) joined` })
+          return ok(`${m.name} joined (thread ${m.id}).`)
+        },
+      ),
+      tool(
+        'team_post',
+        'Post to your team: to names or roles of teammates, "Lead", or "all". Each one gets it as a message (queued if they are busy); '
+          + 'with no "to" it only goes on the team log. Everything posted shows in the Team view the user watches. Keep it short.',
+        { text: z.string(), to: z.array(z.string()).optional().describe('Teammate names or roles, "Lead", or "all"') },
+        async ({ text, to }) => {
+          const team = teamOf(tabId)
+          if (!team) return fail('This thread is not in a running team.')
+          const me = nameOf(team, tabId)
+          const everyone = [{ id: team.lead.id, name: 'Lead' }, ...team.members.map((m) => ({ id: m.id, name: m.name }))].filter((x) => x.id !== tabId)
+          const targets: { id: string; name: string }[] = []
+          for (const r of to ?? []) {
+            if (r.trim().toLowerCase() === 'all') { targets.push(...everyone); continue }
+            const m = findMember(team, r)
+            if (!m) return fail(`No teammate "${r}". Names: Lead, ${team.members.map((x) => `${x.name} (${x.role})`).join(', ')}.`)
+            if (m.id !== tabId) targets.push(m)
+          }
+          const uniq = [...new Map(targets.map((x) => [x.id, x])).values()]
+          appendLog(team, { at: Date.now(), from: tabId, fromName: me, to: uniq.map((x) => x.name), text })
+          const out: string[] = []
+          for (const t of uniq) {
+            try {
+              await messageThread(t.id, `[Team "${team.name}", ${me}] ${text}\n(Reply with mcp__hive__team_post.)`, 'queue', { id: tabId, title: `${team.name}: ${me}` }, web)
+              out.push(t.name)
+            } catch (e: any) { out.push(`${t.name} (not delivered: ${e?.message ?? e})`) }
+          }
+          return ok(uniq.length ? `Posted to ${out.join(', ')}.` : 'Posted to the team log.')
+        },
+      ),
+      tool(
+        'team_note',
+        'Add one fact to the knowledge.md of your team (a decision, gotcha, path, id, result) so every teammate can rely on it.',
+        { text: z.string() },
+        async ({ text }) => {
+          const team = teamOf(tabId)
+          if (!team) return fail('This thread is not in a running team.')
+          addKnowledge(team, nameOf(team, tabId), text)
+          return ok('Added to knowledge.md.')
+        },
+      ),
+      tool(
+        'team_status',
+        'Your team: the state of each member (working, waiting, idle, closed) and what it is doing, plus the recent team log.',
+        { last: z.number().int().min(1).optional().describe('How many recent posts; default 20') },
+        async ({ last }) => {
+          const team = teamOf(tabId)
+          if (!team) return fail('This thread is not in a running team.')
+          return ok(formatTeamStatus(team, teamStates(team), readLog(team), last ?? 20))
+        },
+      ),
+      tool(
+        'end_team',
+        'Lead only: end the team when the job is done or stopped. Teammates are told to stop; their threads stay for the user to read.',
+        { summary: z.string().describe('One or two lines: what the team got done') },
+        async ({ summary }) => {
+          const team = teamOf(tabId)
+          if (!team || team.lead.id !== tabId) return fail('Only the Lead of a running team can end it.')
+          appendLog(team, { at: Date.now(), from: tabId, fromName: 'Lead', to: team.members.map((m) => m.name), text: `Team ended: ${summary}` })
+          for (const m of team.members) {
+            if (live.has(m.id)) await messageThread(m.id, `[Team "${team.name}", Lead] The team has ended (${summary}). Stop working and give a one-line final status.`, 'queue', { id: tabId, title: `${team.name}: Lead` }, web).catch(() => {})
+          }
+          endTeam(team)
+          return ok(`Team "${team.name}" ended.`)
+        },
+      ),
+      tool(
         'list_threads',
         `List the live ${appName()} threads (each a Claude session like this one): id, title, folder, whether it is working, waiting for the user or idle, and whether it is in the background.`,
         {},
@@ -744,6 +866,19 @@ export function startBackgroundThread(t: BackgroundThread, web: WebContents): vo
   gone.delete(t.tabId)
   s.turns.markBusy()
   s.push(userMsg(t.from ? labelFromThread(t.from, t.prompt) : t.prompt))
+}
+
+// the live state of each team member, for team_status and the Team view
+export function teamStates(team: Team): Record<string, { state: MemberState; doing?: string }> {
+  const out: Record<string, { state: MemberState; doing?: string }> = {}
+  for (const id of [team.lead.id, ...team.members.map((m) => m.id)]) {
+    const t = live.get(id)
+    if (!t) { out[id] = { state: 'closed' }; continue }
+    const running = t.status.tasks.filter((x) => x.status === 'running')
+    const doing = t.waitingReason ?? running.map((x) => x.now ?? x.title).find(Boolean)
+    out[id] = { state: statusOf(threadInfo(id, t)), ...(doing ? { doing } : {}) }
+  }
+  return out
 }
 
 const threadInfo = (id: string, t: Live) => ({ sessionId: t.sessionId, title: titleOf(id), cwd: t.cwd, busy: t.turns.isBusy(), waitingReason: t.waitingReason, background: t.background })

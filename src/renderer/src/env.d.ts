@@ -134,6 +134,9 @@ interface Window {
     chatMode: () => Promise<string>
     chatContext: (tabId: string) => Promise<{ total: number; max: number } | null>
     watchersList: () => Promise<import('../../shared/watchersCore').WatchersList>
+    teamsList: () => Promise<{ id: string; name: string; goal: string; createdAt: number; endedAt?: number; members: number }[]>
+    teamView: (id: string) => Promise<import('../../shared/teamCore').TeamView | null>
+    onTeamsChanged: (cb: (id: string) => void) => () => void
     watcherDetail: (id: string) => Promise<import('../../shared/watchersCore').WatcherDetail | null>
     watcherCreate: (input: { name: string; goal: string; schedule?: unknown; cwd?: string }) => Promise<{ id: string; message: string }>
     watcherUpdate: (id: string, input: { name?: string; goal?: string; schedule?: unknown; cwd?: string }) => Promise<string>

@@ -7,7 +7,8 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { configureChat, liveQuery, liveThreads, setWatcherStop, stopCodex } from './chat'
+import { configureChat, liveQuery, liveThreads, setWatcherStop, stopCodex, teamStates } from './chat'
+import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { resendGroups, takePending } from './pending'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
@@ -94,6 +95,14 @@ setWatcherStop(watcherStopReason)
 setLiveUsage(liveUsage)
 // Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.claude/hive/watchers);
 // the old single Watch (HIVE_WATCH_* settings) moves in as watcher "watch" on the first start. Dependabot shows in the same list.
+// team threads: the list, one team with its live member states, log, plan and knowledge (the Team view)
+handle('teams:list', () => listTeams().map((t) => ({ id: t.id, name: t.name, goal: t.goal, createdAt: t.createdAt, endedAt: t.endedAt, members: t.members.length })))
+handle('teams:view', (_e, id: string) => {
+  const t = getTeam(String(id))
+  return t ? { team: t, states: teamStates(t), log: readLog(t).slice(-300), plan: readTeamFile(t, 'plan.md'), knowledge: readTeamFile(t, 'knowledge.md') } : null
+})
+onTeamChange((id) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('teams:changed', id) })
+
 const watchersChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('watchers:changed') }
 initWatchers(appConfig.env, appConfig.config?.root ?? '', {
   runThread: (t) => { const w = appWindow(); if (!w) return false; try { runInThread(t, w.webContents); return true } catch { return false } },

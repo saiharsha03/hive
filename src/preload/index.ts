@@ -96,6 +96,13 @@ contextBridge.exposeInMainWorld('api', {
   watcherEnable: (id: string, on: boolean) => ipcRenderer.invoke('watchers:enable', id, on),
   watcherRun: (id: string, kind: string) => ipcRenderer.invoke('watchers:run', id, kind),
   watcherDelete: (id: string) => ipcRenderer.invoke('watchers:delete', id),
+  teamsList: () => ipcRenderer.invoke('teams:list'),
+  teamView: (id: string) => ipcRenderer.invoke('teams:view', id),
+  onTeamsChanged: (cb: (id: string) => void) => {
+    const fn = (_e: unknown, id: string) => cb(id)
+    ipcRenderer.on('teams:changed', fn)
+    return () => ipcRenderer.removeListener('teams:changed', fn)
+  },
   onWatchersChanged: (cb: () => void) => {
     const fn = () => cb()
     ipcRenderer.on('watchers:changed', fn)
