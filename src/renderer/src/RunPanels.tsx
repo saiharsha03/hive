@@ -6,9 +6,9 @@
 import { useState } from 'react'
 import { nextRun, untilText } from '../../shared/cronCore'
 import { runCounts } from '../../shared/agentStatusCore'
-import { shellName, worthListing, type Task } from '../../shared/taskCore'
+import { inThreadList, shellName, type Task } from '../../shared/taskCore'
 import { GoalLoop, TaskRow, describer, openAgentsView, useNow } from './ThreadStatus'
-import { clearFinished, useThreadStatus } from './statusStore'
+import { useThreadStatus } from './statusStore'
 import { Icon } from './ui'
 
 type Send = (text: string, images: never[], mode?: 'steer' | 'queue') => void
@@ -96,9 +96,9 @@ export function AgentsDock({ tabId, items, busy, onSend, onPromote, onDequeue }:
   const all = useThreadStatus(tabId)
   // folded to its one-line head until clicked: open, the rows took most of the chat while subagents ran
   const [fold, setFold] = useState(true)
-  const now = useNow(all.tasks.some((t) => t.status === 'running'))
+  const now = useNow(all.tasks.some((t) => t.status === 'running' || inThreadList(t, Date.now())))
   const name = describer(items)
-  const tasks = all.tasks.filter((t) => worthListing(t, now)).map((t) => ({ ...t, title: shellName(t, name) }))
+  const tasks = all.tasks.filter((t) => inThreadList(t, now)).map((t) => ({ ...t, title: shellName(t, name) }))
   const queued = items.filter((it): it is Extract<Item, { kind: 'user' }> => it.kind === 'user' && !!it.queue?.pending)
   if (!tasks.length && !queued.length) return null
   const running = tasks.filter((t) => t.status === 'running').length
@@ -112,7 +112,6 @@ export function AgentsDock({ tabId, items, busy, onSend, onPromote, onDequeue }:
           {[running ? `${running} running` : tasks.length ? 'Background work' : '', tasks.length > running ? `${tasks.length - running} finished` : '', queued.length ? `${queued.length} queued` : ''].filter(Boolean).join(', ')}
         </button>
         <button className="link" onClick={openAgentsView} data-testid="thread-tasks-side">Side panel</button>
-        {open && tasks.length > running && <button className="link" onClick={() => clearFinished(tabId)} data-testid="thread-tasks-clear">Clear finished</button>}
       </div>
       {open && (
         <div className="tst-list">

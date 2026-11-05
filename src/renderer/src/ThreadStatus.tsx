@@ -4,8 +4,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { describeCron, nextRun, untilText } from '../../shared/cronCore'
 import { EFFORTS, modelLabel } from '../../shared/statusCore'
-import { kindLabel, shellName, worthListing, type Task } from '../../shared/taskCore'
-import { clearFinished, dismissGoal, setPicked, useThreadStatus } from './statusStore'
+import { inThreadList, kindLabel, shellName, type Task } from '../../shared/taskCore'
+import { dismissGoal, setPicked, useThreadStatus } from './statusStore'
 import { Icon, Popover, anchorOf, type Anchor } from './ui'
 
 type Send = (text: string, images: never[], mode?: 'steer' | 'queue') => void
@@ -136,9 +136,9 @@ export const openAgentsView = () => showAgents()
 export function TaskList({ tabId, items = [] }: { tabId: string; items?: Item[] }) {
   const all = useThreadStatus(tabId)
   const [open, setOpen] = useState(false)
-  const now = useNow(all.tasks.some((t) => t.status === 'running'))
+  const now = useNow(all.tasks.some((t) => t.status === 'running' || inThreadList(t, Date.now())))
   const name = describer(items)
-  const st = { ...all, tasks: all.tasks.filter((t) => worthListing(t, now)).map((t) => ({ ...t, title: shellName(t, name) })) }
+  const st = { ...all, tasks: all.tasks.filter((t) => inThreadList(t, now)).map((t) => ({ ...t, title: shellName(t, name) })) }
   if (!st.tasks.length) return null
   const running = st.tasks.filter((t) => t.status === 'running').length
   return (
@@ -150,7 +150,6 @@ export function TaskList({ tabId, items = [] }: { tabId: string; items?: Item[] 
           {running ? `${running} running` : 'Background work'}{st.tasks.length > running ? `, ${st.tasks.length - running} finished` : ''}
         </button>
         <button className="link" onClick={() => showAgents()} data-testid="thread-tasks-side">Side panel</button>
-        {open && st.tasks.length > running && <button className="link" onClick={() => clearFinished(tabId)} data-testid="thread-tasks-clear">Clear finished</button>}
       </div>
       {open && <div className="tst-list">{st.tasks.map((t) => <TaskRow key={t.id} t={t} tabId={tabId} />)}</div>}
     </div>

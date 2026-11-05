@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { shellName, worthListing, type Task } from '../../src/shared/taskCore'
+import { inThreadList, shellName, worthListing, type Task } from '../../src/shared/taskCore'
 
 const task = (over: Partial<Task>): Task => ({ id: 'x', kind: 'local_bash', title: 'npm test', status: 'running', startedAt: 0, phases: [], agents: [], ...over })
 
@@ -16,4 +16,12 @@ test('a shell is named by its description when the chat has it', () => {
   assert.equal(shellName(task({}), describe), 'Run the unit tests')
   assert.equal(shellName(task({ title: 'ls' }), describe), 'ls')
   assert.equal(shellName(task({ kind: 'local_agent', title: 'Explore repo' }), describe), 'Explore repo')
+})
+
+test('the thread lists drop finished work a minute after it ended', () => {
+  const done = task({ kind: 'local_agent', status: 'completed', endedAt: 100_000 })
+  assert.equal(inThreadList(done, 130_000), true)
+  assert.equal(inThreadList(done, 161_000), false)
+  assert.equal(inThreadList(task({ kind: 'local_agent' }), 999_999), true)
+  assert.equal(inThreadList(task({ kind: 'local_agent', status: 'stopped' }), 1), false) // no end time: not shown
 })
