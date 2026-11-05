@@ -28,5 +28,5 @@ test('agent status: counts and text from task events, a stopped agent reads as s
   assert.match(text, /doing now: Reading the dbt models/)
   s = reduceStatus(s, { type: 'system', subtype: 'task_updated', task_id: 'a1', patch: { status: 'killed' } }, 0)
   assert.equal(runCounts(s).agents, 0)
-  assert.match(formatAgentStatus(s, 90_000), /Finished or stopped \(1\):\nSubagent \(general-purpose\): Fable review\n  status: (stopped|killed)/)
+  assert.match(formatAgentStatus(s, 90_000), /Finished or stopped \(1\):\nSubagent \(general-purpose\): Fable review\n {2}status: (stopped|killed)/)
 })
