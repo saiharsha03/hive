@@ -130,6 +130,7 @@ export function describer(items: Item[]): (command: string) => string | undefine
 // the app opens the Agents view (every thread's background work) in its side panel
 let showAgents: () => void = () => {}
 export const setShowAgents = (f: () => void) => { showAgents = f }
+export const openAgentsView = () => showAgents()
 
 // the background-work list above the message box: one folded line, the full list in the side panel's Agents view
 export function TaskList({ tabId, items = [] }: { tabId: string; items?: Item[] }) {

@@ -13,13 +13,23 @@ export type ThreadStatus = {
   goal: Goal | null
   crons: LoopJob[]
   wakeRunning: string | null // the scheduled fire running right now (command uuid)
+  nextWake: number | null // when the next ScheduleWakeup fires (ms), until it fires or is stopped
   tasks: Task[]
 }
 
-export const emptyStatus = (): ThreadStatus => ({ goal: null, crons: [], wakeRunning: null, tasks: [] })
+export const emptyStatus = (): ThreadStatus => ({ goal: null, crons: [], wakeRunning: null, nextWake: null, tasks: [] })
 
 const textOf = (ev: any): string => (Array.isArray(ev.message?.content) ? ev.message.content : [])
   .filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+
+// a ScheduleWakeup call in this message: its fire time, null when it stops the loop, undefined when there is none
+function wakeOf(ev: any, now: number): number | null | undefined {
+  const call = (Array.isArray(ev.message?.content) ? ev.message.content : []).findLast((b: any) => b.type === 'tool_use' && b.name === 'ScheduleWakeup')
+  if (!call) return undefined
+  if (call.input?.stop) return null
+  const secs = Number(call.input?.delaySeconds)
+  return Number.isFinite(secs) ? now + Math.min(3600, Math.max(60, secs)) * 1000 : undefined
+}
 
 export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStatus {
   if (!ev || typeof ev !== 'object') return st
@@ -32,6 +42,8 @@ export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStat
       return st
     case 'assistant': {
       if (ev.parent_tool_use_id) return st // a subagent's model is not the thread's
+      const wake = wakeOf(ev, now)
+      if (wake !== undefined) st = { ...st, nextWake: wake }
       const model = ev.message?.model
       if (model === '<synthetic>') {
         const reply = parseGoalReply(textOf(ev))
@@ -53,7 +65,7 @@ export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStat
     case 'active_goal': // not sent by SDK 0.3.314; handled in case a later one does
       return { ...st, goal: goalReduce(st.goal, { t: 'active_goal', value: ev.value ?? null }) }
     case 'command_lifecycle':
-      if (ev.state === 'started' && ev.wakeup_source === 'schedule_wakeup') return { ...st, wakeRunning: ev.command_uuid ?? 'wake' }
+      if (ev.state === 'started' && ev.wakeup_source === 'schedule_wakeup') return { ...st, wakeRunning: ev.command_uuid ?? 'wake', nextWake: null }
       if (ev.state !== 'started' && st.wakeRunning && ev.command_uuid === st.wakeRunning) return { ...st, wakeRunning: null }
       return st
     case 'conversation_reset':
@@ -62,7 +74,7 @@ export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStat
       return { ...st, tasks: applyTask(st.tasks, ev, now) }
     case 'hive_closed':
       // scheduled jobs live in the process and die with it
-      return { ...st, crons: [], wakeRunning: null, ultrathink: false, tasks: applyTask(st.tasks, ev, now) }
+      return { ...st, crons: [], wakeRunning: null, nextWake: null, ultrathink: false, tasks: applyTask(st.tasks, ev, now) }
   }
   return st
 }

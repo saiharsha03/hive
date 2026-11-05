@@ -55,6 +55,7 @@ export function toolLine(name: string, input: any): { verb: string; what: string
     case SHOW: return { verb: 'Showed you', what: file(input?.path) }
     case CODEX: return { verb: 'Codex', what: short(input?.task) }
     case 'mcp__hive__list_threads': return { verb: 'Listed threads', what: '' }
+    case 'mcp__hive__agent_status': return { verb: 'Checked background work', what: '' }
     case 'mcp__hive__start_thread': return { verb: 'Started thread', what: short(input?.title) }
     case 'mcp__hive__message_thread': return { verb: 'Messaged thread', what: short(`${input?.thread}: ${input?.text ?? ''}`) }
     case 'mcp__hive__wait_for_thread': return { verb: input?.timeout_s === 0 ? 'Checked thread' : 'Waited for thread', what: short(input?.thread) }

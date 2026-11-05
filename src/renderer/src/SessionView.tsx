@@ -13,7 +13,8 @@ import { modeLabel } from '../../shared/modeCore'
 import type { ClipOffer } from '../../shared/clipboardCore'
 import { clearOffer, textHash, useClipboardOn, useClipOffer } from './clipboardOffer'
 import { MdBody } from './MdBody'
-import { GoalLoop, ModelEffort, TaskList } from './ThreadStatus'
+import { ModelEffort } from './ThreadStatus'
+import { AgentsDock, RunCard } from './RunPanels'
 import { useThreadStatus } from './statusStore'
 import { SummaryRow, WarningRow } from './ChatRows'
 import { useSlashMenu } from './SlashMenu'
@@ -473,7 +474,6 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             {onSplit && <button onClick={onSplit} title="Open beside (split, up to four chats)" data-testid="chat-split"><Icon name="split-horizontal" />Split</button>}
           </span>
         </div>
-        <GoalLoop tabId={session.id} busy={session.busy} onSend={onSend} onInterrupt={async () => { await onStop() }} />
       </div>
       {wakeAt && (
         <div className="endedrun s-wait" data-testid="auto-continue"><Icon name="clock" />Usage limit reached; this thread continues automatically at {wakeLabel(wakeAt, Date.now())}.
@@ -484,6 +484,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
         <div className="endedrun" data-testid="ended-run"><Icon name="lock" />This watcher run has ended and its thread is closed. Sending a message reopens it: Claude reads the whole conversation again, which counts against your usage, and the thread stays read-only.</div>
       )}
 
+      <div className="thread-wrap">
+      <RunCard tabId={session.id} busy={session.busy} onSend={onSend} onInterrupt={async () => { await onStop() }} />
       <div className="thread" ref={thread} onScroll={onScroll}>
         {transcript}
         {session.streaming && (
@@ -493,8 +495,9 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           </div>
         )}
       </div>
+      </div>
 
-      <TaskList tabId={session.id} items={session.items} />
+      <AgentsDock tabId={session.id} items={session.items} busy={session.busy} onSend={onSend} onPromote={onPromote} onDequeue={onDequeue} />
 
       {btws.map((b, i) => (
         <div key={i} className="btw" data-testid="btw-answer">

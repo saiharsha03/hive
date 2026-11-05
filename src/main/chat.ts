@@ -35,11 +35,13 @@ import { parseQuestions } from '../shared/askCore'
 import { cancelAsks, openAsks, replyInChat, waitForAnswer } from './asks'
 import { cancelContinue, scheduleContinue } from './autoContinue'
 import { resetFromText, wakeLabel } from '../shared/continueCore'
+import { emptyStatus, reduceStatus, type ThreadStatus } from '../shared/statusCore'
+import { formatAgentStatus } from '../shared/agentStatusCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
 // worktrees) or runs services, so nothing it reaches through Hive escapes read-only
-const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread'])
+const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread', 'agent_status'])
 const forThread = <T extends { name: string }>(watcher: boolean, tools: T[]): T[] => (watcher ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
 // a watcher's tab, or a watcher's session resumed under any other tab id (the sidebar, the phone, message_thread,
 // after a restart): read-only either way. It reads until the first user message is complete; still undecided = read-only
@@ -99,6 +101,8 @@ const append = () => [
   'mcp__hive__dev_stack starts, stops or reports a configured dev stack (docker databases plus local servers) and mcp__hive__dev_stack_logs reads the logs of one service; use them to test your changes, pass a branch only for the repo you changed, and never touch services another thread started.',
   "Call it with action \"waiting\" and a one-line reason when you are blocked on the user's decision or input, so the sidebar shows this session as waiting for them.",
   `${appName()} threads can talk to each other: mcp__hive__list_threads, start_thread, message_thread and wait_for_thread let you hand parallel work to a new background thread, or ask a thread that already holds the context, and use its answer.`,
+  'Before you tell the user whether a subagent, workflow or background command is running, finished or stopped, call mcp__hive__agent_status and report what it says, never from memory: an interrupt or crash can end one without a notification.',
+  'A message starting "[To subagent" is the user talking to one of your subagents: pass the text on with SendMessage to that agent, word for word, then carry on with what you were doing.',
   `A message starting "[From thread" was sent by another ${appName()} thread, not the user; your final reply is what that thread gets back when it waits for you.`,
   'Watchers are scheduled background threads, each with its own long-lived thread, memory folder and SQLite db: mcp__hive__create_watcher, list_watchers, update_watcher, enable_watcher, disable_watcher, run_watcher_now and delete_watcher manage them.',
 ].join(' ')
@@ -124,6 +128,7 @@ type Live = {
   lastOk: boolean | null // whether the last finished turn succeeded (null: none yet)
   onIdle: Set<() => void> // wait_for_thread callers, told when the thread has no turn running and nothing queued
   emit: (event: unknown) => void // an event to this thread's tab
+  status: ThreadStatus // the same live status the tab shows (background work, loops, wake-up, goal), for agent_status
 }
 const live = new Map<string, Live>()
 
@@ -170,6 +175,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   // events only while this process is still the tab's live one; a closed process stays silent
   let s: Live
   const send = (event: unknown) => {
+    if (s) s.status = reduceStatus(s.status, event, Date.now())
     if (live.get(tabId) === s && !web.isDestroyed()) web.send('chat:event', tabId, event)
   }
 
@@ -435,6 +441,14 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       tool('delete_watcher', 'Delete a watcher (soft): its thread ends and its folder moves to ~/.claude/hive/watchers/_deleted/.', { id: z.string() },
         async ({ id }) => { try { return ok(`Watcher "${id}" deleted; its folder is now ${deleteWatcher(id)}`) } catch (e: any) { return fail(`delete_watcher failed: ${e?.message ?? e}`) } }),
       tool(
+        'agent_status',
+        'What the background work of this thread is doing right now: each subagent, workflow, shell, monitor and Codex run '
+          + '(status, running time, tool calls, a live "doing now" line, last tool, result or error), plus loops, the next wake-up and the goal. '
+          + 'Call it before telling the user whether a subagent is running, finished or stopped; never report that from memory.',
+        {},
+        async () => ok(formatAgentStatus(s.status, Date.now(), s.sessionId ? join(transcriptPath(cwd, s.sessionId).replace(/\.jsonl$/, ''), 'subagents') : undefined)),
+      ),
+      tool(
         'list_threads',
         `List the live ${appName()} threads (each a Claude session like this one): id, title, folder, whether it is working, waiting for the user or idle, and whether it is in the background.`,
         {},
@@ -559,7 +573,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   )
   s = {
     q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(),
-    cwd, lastReply: null, lastOk: null, onIdle: new Set(), emit: send,
+    cwd, lastReply: null, lastOk: null, onIdle: new Set(), emit: send, status: emptyStatus(),
   }
   let lastText = '' // the turn's latest assistant text, in case its result carries none
   // this turn hit the plan's usage limit: set by a rejected rate-limit event (with its reset) or a rate_limit error
