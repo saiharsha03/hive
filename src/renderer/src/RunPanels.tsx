@@ -94,14 +94,15 @@ export function AgentsDock({ tabId, items, busy, onSend, onPromote, onDequeue }:
   tabId: string; items: Item[]; busy: boolean; onSend: Send; onPromote: (id: string) => void; onDequeue: (id: string) => Promise<unknown> | void
 }) {
   const all = useThreadStatus(tabId)
-  const [fold, setFold] = useState<boolean | null>(null) // null: open while something runs
+  // folded to its one-line head until clicked: open, the rows took most of the chat while subagents ran
+  const [fold, setFold] = useState(true)
   const now = useNow(all.tasks.some((t) => t.status === 'running'))
   const name = describer(items)
   const tasks = all.tasks.filter((t) => worthListing(t, now)).map((t) => ({ ...t, title: shellName(t, name) }))
   const queued = items.filter((it): it is Extract<Item, { kind: 'user' }> => it.kind === 'user' && !!it.queue?.pending)
   if (!tasks.length && !queued.length) return null
   const running = tasks.filter((t) => t.status === 'running').length
-  const open = fold === null ? running > 0 || queued.length > 0 : !fold
+  const open = !fold
   return (
     <div className="tasks agents-dock" data-testid="thread-tasks">
       <div className="tasks-head">
