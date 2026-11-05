@@ -518,6 +518,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       systemPrompt: { type: 'preset', preset: 'claude_code', append: append() },
       mcpServers: { hive },
       includePartialMessages: true,
+      // Hive has a stop button per background task (chat:stopTask), so an interrupt (Esc / Ctrl+Enter) only stops the
+      // turn, as in the terminal; without this the SDK fails closed and the interrupt kills every background agent too
+      perTaskStopAffordance: true,
       permissionMode: modeFor(background, PERMISSION_MODE),
       // always set, so a session that started in auto can still switch to bypass when it comes to the foreground
       allowDangerouslySkipPermissions: true,
