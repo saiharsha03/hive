@@ -30,7 +30,7 @@ test('seed from .env and scripts.json: every non-secret key, the scripts array a
   const { HIVE_TRACKER_TOKEN: _token, SOME_API_KEY: _key, ...rest } = DOT
   assert.deepEqual(s.env, rest)
   assert.deepEqual(s.scripts, SCRIPTS) // the bad entry is kept, so nothing is lost
-  assert.deepEqual(s.general, { shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents' })
+  assert.deepEqual(s.general, { shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true })
   assert.equal(seedSettings(DOT, null).scripts, null)
   assert.equal(seedSettings(DOT, 'not json').scripts, null)
   assert.equal(seedSettings(DOT, '{"a":1}').scripts, null)
@@ -99,7 +99,7 @@ test('store file: first run seeds and saves; afterwards the store wins; a broken
   assert.equal(l.config!.root, 'C:/repos')
   assert.equal(l.env.HIVE_WATCH_TIERS, '80:2h,100:1d')
   assert.equal(l.env.HIVE_X_TOKEN, 'shh')
-  assert.deepEqual(threadDefaults(), { model: 'opus', effort: 'high' })
+  assert.deepEqual(threadDefaults(), { model: 'opus', effort: 'high', extraArgs: { chrome: null } }) // Claude in Chrome is on by default
   // no .env at all: the store alone still configures Hive
   const envFile = process.env.HIVE_ENV_FILE
   process.env.HIVE_ENV_FILE = join(FIX, 'missing.env')
