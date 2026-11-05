@@ -22,6 +22,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { TodoPanel } from './TodoPanel'
 import { NotesPanel } from './NotesPanel'
 import { setShowAgents } from './ThreadStatus'
+import { TeamView } from './TeamView'
 import { FileEditor, fileOfTab, fileTabId, openInEditor, releaseFile, setFileOpener } from './EditorView'
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
@@ -708,6 +709,7 @@ export function App() {
       )
       case 'files': return folder ? <FileTree root={folder} onOpenFolder={() => window.api.pickFolder().then((f) => f && setFolder(f))} selected={preview} onOpenFile={openFile} /> : <div className="pane-empty">Loading…</div>
       case 'agents': return <AgentsView sessions={sessions} live={live} onActivate={activate} />
+      case 'team': return <TeamView onActivate={activate} onMessage={(id, text) => { const t = sessions.find((x) => x.id === id); if (!t) return false; send(t, text, []); return true }} />
       case 'terminal': return <TerminalView targets={termTargets} current={termTab} onPick={setTermTab} focus={termFocus} onSendToChat={(id, text) => insertIntoComposer(id, text)} />
       case 'watchers': return watchersHome
       case 'deploy': return <DeployPanel cfg={deploy.cfg} w={deploy.w} out={deploy.out} act={deploy.act} onDiagnose={diagnose} />
