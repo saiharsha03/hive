@@ -3,14 +3,14 @@
 // Team window's page address (?view=team&team=<id>) and the check that it is still the app's own page.
 import type { Team } from './teamCore'
 
-export type RosterPerson = { id: string; name: string; sessionId?: string }
+export type RosterPerson = { id: string; name: string; role: string; sessionId?: string }
 export type Roster = { id: string; name: string; pausedAt?: number; people: RosterPerson[] }
 
 export const rosterOf = (t: Team): Roster => ({
   id: t.id, name: t.name, ...(t.pausedAt ? { pausedAt: t.pausedAt } : {}),
   people: [
-    { id: t.lead.id, name: 'Lead', ...(t.lead.sessionId ? { sessionId: t.lead.sessionId } : {}) },
-    ...t.members.map((m) => ({ id: m.id, name: m.name, ...(m.sessionId ? { sessionId: m.sessionId } : {}) })),
+    { id: t.lead.id, name: 'Lead', role: 'lead', ...(t.lead.sessionId ? { sessionId: t.lead.sessionId } : {}) },
+    ...t.members.map((m) => ({ id: m.id, name: m.name, role: m.role, ...(m.sessionId ? { sessionId: m.sessionId } : {}) })),
   ],
 })
 
@@ -23,7 +23,7 @@ export const teamThreadIds = (rosters: Roster[]): Set<string> =>
 
 type LiveLike = { id: string; sessionId?: string; state: 'working' | 'waiting' }
 type SavedLike = { id: string }
-export type TeamRow<L, S> = { kind: 'live'; row: L } | { kind: 'saved'; s: S }
+export type TeamRow<L, S> = ({ kind: 'live'; row: L } | { kind: 'saved'; s: S }) & { person: RosterPerson }
 export type TeamWord = 'PAUSED' | 'WORKING' | 'IDLE'
 export type TeamGroup<L, S> = { roster: Roster; rows: TeamRow<L, S>[]; working: number; total: number; word: TeamWord }
 
@@ -35,13 +35,26 @@ export function groupTeams<L extends LiveLike, S extends SavedLike>(rosters: Ros
     let working = 0
     for (const p of roster.people) {
       const l = live.find((r) => r.id === p.id || (!!p.sessionId && r.sessionId === p.sessionId))
-      if (l) { rows.push({ kind: 'live', row: l }); if (l.state === 'working') working++; continue }
+      if (l) { rows.push({ kind: 'live', row: l, person: p }); if (l.state === 'working') working++; continue }
       const s = saved.find((x) => x.id === p.id || x.id === p.sessionId)
-      if (s) rows.push({ kind: 'saved', s })
+      if (s) rows.push({ kind: 'saved', s, person: p })
     }
     const word: TeamWord = roster.pausedAt ? 'PAUSED' : working ? 'WORKING' : 'IDLE'
     return { roster, rows, working, total: roster.people.length, word }
   })
+}
+
+// a team member's mark in the sidebar: an icon for the role (by keyword, so "Senior builder" is a builder)
+export function roleIcon(role: string): string {
+  const r = role.toLowerCase()
+  if (/lead|owner/.test(r)) return 'star-full'
+  if (/review/.test(r)) return 'eye'
+  if (/valid|test/.test(r)) return 'beaker'
+  if (/(^|[^a-z])qa([^a-z]|$)|quality/.test(r)) return 'checklist'
+  if (/research/.test(r)) return 'search'
+  if (/doc|writ/.test(r)) return 'book'
+  if (/build|dev|engineer|code/.test(r)) return 'tools'
+  return 'person'
 }
 
 // the Team window's page: the app page with ?view=team (and &team=<id> to open on one team)

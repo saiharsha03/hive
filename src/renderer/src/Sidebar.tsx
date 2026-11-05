@@ -10,7 +10,7 @@ import { Icon } from './ui'
 import { useWatchers } from './useWatchers'
 import { isDependabotTab } from '../../shared/dependabotCore'
 import { nextRunLabel } from '../../shared/threadsCore'
-import { groupTeams, teamThreadIds, type Roster, type TeamWord } from '../../shared/teamSidebarCore'
+import { groupTeams, roleIcon, teamThreadIds, type Roster, type RosterPerson, type TeamWord } from '../../shared/teamSidebarCore'
 
 // last message: time for today, otherwise "Oct 28", with the year only when it isn't this year
 function lastAt(t: number): string {
@@ -201,20 +201,25 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     setMenu({ ids: targets, x, y })
   }
 
-  const liveRow = (r: LiveRow) => {
+  // a team member's role as a word before the row's note: "BUILDER Builder PR5", "LEAD"
+  const roleLine = (who: RosterPerson | undefined, rest: string) => (who
+    ? <span className="m"><span className="trole">{who.role.toUpperCase()}</span>{who.name.toLowerCase() !== who.role.toLowerCase() && who.name !== 'Lead' ? ` ${who.name}` : ''}{rest ? `, ${rest}` : ''}</span>
+    : rest ? <span className="m">{rest}</span> : null)
+
+  const liveRow = (r: LiveRow, who?: RosterPerson) => {
     const look = liveLook(r)
     return (
       <div key={r.id} className={`th${r.id === activeId ? ' on' : ''}`} title={r.title} role="button" tabIndex={0} onClick={() => onActivate(r.id)} onKeyDown={(e) => { if (e.key === 'Enter') onActivate(r.id) }} data-testid="live-row" data-id={r.id}>
-        <Icon name={look.icon} className={look.cls} />
+        <Icon name={who ? roleIcon(who.role) : look.icon} className={who ? look.cls.replace(' spin', '') : look.cls} />
         <span className="t">{r.title}</span>
         <span className={`st ${look.cls.replace(' spin', '')}`}>{look.word}</span>
-        <span className="m">{r.note}</span>
+        {roleLine(who, r.note ?? '')}
         <button className="more" aria-label="Close thread" title="Close (stops it)" onClick={(e) => { e.stopPropagation(); onCloseLive(r.id) }} data-testid={`thread-live-close-${r.id}`}><Icon name="close" /></button>
       </div>
     )
   }
 
-  const row = (s: SessionInfo, section: string, snippet?: string) => {
+  const row = (s: SessionInfo, section: string, snippet?: string, who?: RosterPerson) => {
     const lr = section === 'watchers' ? watcherLive.get(s.id) : undefined
     const w = section === 'watchers' ? watcherOf.get(s.id) : undefined
     const label = lr ? lr.note : (w && nextRunLabel(w, now)) || note(s.id, section)
@@ -226,10 +231,10 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
         onContextMenu={(e) => { e.preventDefault(); openMenu(s.id, e.clientX, e.clientY) }}
         data-testid="thread-row" data-id={s.id}
       >
-        {lr ? <Icon name={liveLook(lr).icon} className={liveLook(lr).cls} /> : <Icon name={placeIcon(s.id, section)} className="s-idle" />}
+        {who ? <Icon name={roleIcon(who.role)} className="s-idle" /> : lr ? <Icon name={liveLook(lr).icon} className={liveLook(lr).cls} /> : <Icon name={placeIcon(s.id, section)} className="s-idle" />}
         <span className="t">{s.title}</span>
         {lr ? <span className={`st ${liveLook(lr).cls.replace(' spin', '')}`}>{liveLook(lr).word}</span> : <span className="tm" title="Last message">{lastAt(s.updated)}</span>}
-        {meta && <span className="m">{meta}</span>}
+        {who ? roleLine(who, meta) : meta && <span className="m">{meta}</span>}
         {snippet && <span className="snip">{snippet}</span>}
         <button
           className="more" aria-label="Thread actions"
@@ -304,7 +309,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
         {!found && !archiveView && ([['waiting', 'Waiting for you', live.waiting, 'bell'], ['working', 'Working', live.working, 'loading']] as const).map(([key, label, rows, icon]) => liveShown(rows).length > 0 && (
           <div key={key} data-testid={`section-${key}`}>
             {groupHead(key, label, liveShown(rows).length, icon)}
-            {liveShown(rows).map(liveRow)}
+            {liveShown(rows).map((r) => liveRow(r))}
           </div>
         ))}
         {!found && !archiveView && (() => {
@@ -315,7 +320,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
           return (
             <div key="dependabot" data-testid="section-dependabot">
               {groupHead('dependabot', 'Dependabot', n, 'git-pull-request', { fold: true, folded, items: sec?.items })}
-              {!folded && botLive.map(liveRow)}
+              {!folded && botLive.map((r) => liveRow(r))}
               {!folded && sec?.items.map((s) => row(s, 'dependabot'))}
             </div>
           )
@@ -335,7 +340,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
                     <span className="m">{g.working}/{g.total} working</span>
                     <button className="more" aria-label="Open in window" title="Open the team in its own window" onClick={(e) => { e.stopPropagation(); void window.api.teamOpenWindow(g.roster.id) }} data-testid="team-row-window"><Icon name="link-external" /></button>
                   </div>
-                  {!folded && <div className="tteam-ms">{g.rows.map((x) => (x.kind === 'live' ? liveRow(x.row) : row(x.s, 'team')))}</div>}
+                  {!folded && <div className="tteam-ms">{g.rows.map((x) => (x.kind === 'live' ? liveRow(x.row, x.person) : row(x.s, 'team', undefined, x.person)))}</div>}
                 </div>
               )
             })}

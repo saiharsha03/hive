@@ -64,3 +64,9 @@ test('isAppPage: the same page with a query or hash is accepted, anything else i
   assert.ok(!isAppPage('http://localhost:5173@evil.example/', dev, true))
   assert.ok(!isAppPage('not a url', dev, true))
 })
+
+test('role icons by keyword', async () => {
+  const { roleIcon } = await import('../../src/shared/teamSidebarCore')
+  assert.deepEqual(['lead', 'Senior builder', 'reviewer', 'validator', 'QA', 'researcher', 'Docs writer', 'data engineer', 'mascot'].map(roleIcon),
+    ['star-full', 'tools', 'eye', 'beaker', 'checklist', 'search', 'book', 'tools', 'person'])
+})
