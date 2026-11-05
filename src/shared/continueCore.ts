@@ -66,6 +66,10 @@ export function catchUp(wakes: Wake[], now: number): Wake[] {
   })
 }
 
+// the limit came back early (a turn went through: an account switch, an earlier reset): every waiting thread goes now,
+// spaced the same way, instead of sitting on a wake hours away
+export const wakeNow = (wakes: Wake[], now: number): Wake[] => catchUp(wakes.map((w) => ({ ...w, at: Math.min(w.at, now) })), now)
+
 // "3:41 PM", with the weekday when not today
 export function wakeLabel(at: number, now: number): string {
   const d = new Date(at)
