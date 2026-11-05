@@ -69,12 +69,14 @@ export function catchUp(wakes: Wake[], now: number): Wake[] {
 
 // the limit came back early: a turn that started after a wake was scheduled went through. Only the plan-wide windows
 // are proven back by that (a per-model weekly limit is not: a Sonnet turn says nothing about Opus). Those wakes go a
-// minute from now, spaced; a wake only ever moves earlier, so repeated successes never push one back
+// minute from now, spaced; a wake only ever moves earlier, so repeated successes never push one back. A wake already
+// due soon (moved by an earlier success) keeps its slot, and the next one goes a STAGGER_MS after it
 const GENERAL = new Set([undefined, 'five_hour', 'seven_day'])
 export function wakeNow(wakes: Wake[], now: number, turnStartedAt: number): Wake[] {
   let next = now + AFTER_RESET_MS
   return [...wakes].sort((a, b) => a.at - b.at).map((w) => {
-    if (!GENERAL.has(w.kind) || (w.since ?? 0) >= turnStartedAt || w.at <= next) return w
+    if (w.at <= next) { next = Math.max(next, w.at + STAGGER_MS); return w }
+    if (!GENERAL.has(w.kind) || (w.since ?? 0) >= turnStartedAt) return w
     const at = next
     next += STAGGER_MS
     return { ...w, at }

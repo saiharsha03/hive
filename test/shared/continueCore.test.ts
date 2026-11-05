@@ -43,6 +43,13 @@ describe('wakeNow', () => {
     for (let t = 1_000; t < 300_000; t += 30_000) ws = wakeNow(ws, t, t - 100)
     expect(ws[0].at).toBe(1_000 + AFTER_RESET_MS)
   })
+  it('repeated successes keep the spacing between waiting threads', () => {
+    let ws: Wake[] = [w('a', 9_000_000), w('b', 9_500_000), w('c', 9_900_000)]
+    for (let t = 1_000; t < 300_000; t += 30_000) ws = wakeNow(ws, t, t - 100)
+    const at = ws.map((x) => x.at).sort((x, y) => x - y)
+    expect(at[1] - at[0]).toBeGreaterThanOrEqual(STAGGER_MS)
+    expect(at[2] - at[1]).toBeGreaterThanOrEqual(STAGGER_MS)
+  })
   it('only wakes scheduled before the turn started, and only plan-wide limits', () => {
     const out = wakeNow([w('late', 9_000_000, { since: 2_000 }), w('opus', 9_000_000, { kind: 'seven_day_opus' })], 1_000, 1_500)
     expect(out.map((x) => x.at)).toEqual([9_000_000, 9_000_000])

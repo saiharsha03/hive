@@ -30,3 +30,14 @@ test('held (a paused team): the interrupted turn does not let the queue go in; r
   assert.deepEqual(got, ['A'])
   assert.equal(q.has('a'), false)
 })
+
+test('a held queue takes a message even when idle, and hands it over on release', () => {
+  const got: string[] = []
+  const q = turnQueue<string>((m) => got.push(m), () => {})
+  q.hold(true)
+  q.submit('1', 'while paused')
+  assert.deepEqual(got, [])
+  assert.equal(q.isHeld(), true)
+  q.hold(false)
+  assert.deepEqual(got, ['while paused'])
+})

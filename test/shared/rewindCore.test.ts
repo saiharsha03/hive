@@ -11,10 +11,23 @@ const lines = [
 ].map((e) => JSON.stringify(e)).join('\n')
 
 test('fork point of a rewound message', () => {
-  assert.deepEqual(forkPoint(lines, 'u2'), { found: true, at: 'a1' })
-  assert.deepEqual(forkPoint(lines, 'u1'), { found: true, at: null })
-  assert.deepEqual(forkPoint(lines, 'nope'), { found: false, at: null })
-  assert.deepEqual(forkPoint('not json\n{bad', 'u2'), { found: false, at: null })
+  assert.deepEqual(forkPoint(lines, 'u2'), { found: true, at: 'a1', midTurn: false })
+  assert.deepEqual(forkPoint(lines, 'u1'), { found: true, at: null, midTurn: false })
+  assert.deepEqual(forkPoint(lines, 'nope'), { found: false, at: null, midTurn: false })
+  assert.deepEqual(forkPoint('not json\n{bad', 'u2'), { found: false, at: null, midTurn: false })
+})
+
+test('a message steered into a running turn (its parent is a tool call or result) is mid-turn', () => {
+  const steered = [
+    { type: 'user', uuid: 'u1', parentUuid: null },
+    { type: 'assistant', uuid: 'a1', parentUuid: 'u1', message: { content: [{ type: 'tool_use', id: 't1' }] } },
+    { type: 'user', uuid: 'r1', parentUuid: 'a1', message: { content: [{ type: 'tool_result', tool_use_id: 't1' }] } },
+    { type: 'user', uuid: 's1', parentUuid: 'r1', message: { content: [{ type: 'text', text: 'also do X' }] } },
+    { type: 'user', uuid: 's2', parentUuid: 'a1', message: { content: [{ type: 'text', text: 'steer' }] } },
+  ].map((e) => JSON.stringify(e)).join('\n')
+  assert.equal(forkPoint(steered, 's1').midTurn, true)
+  assert.equal(forkPoint(steered, 's2').midTurn, true)
+  assert.equal(forkPoint(lines, 'u2').midTurn, false)
 })
 
 test('rewind is refused while the thread or its background work runs', () => {
@@ -31,4 +44,9 @@ test('a partial file restore lists what was left', () => {
   assert.deepEqual(partialRestore(['a', 'b'], { filesChanged: ['a'] }), { missing: ['b'], skipped: 0 })
   assert.deepEqual(partialRestore(['a'], { filesChanged: ['a'], skippedLinks: 2 }), { missing: [], skipped: 2 })
   assert.equal(partialRestore(['a'], { skippedLinks: 0 }), null) // the CLI's real answer: no list, nothing skipped
+})
+
+test('files a dry run still lists after the restore count as not put back (a missing backup)', () => {
+  assert.deepEqual(partialRestore(['a', 'b'], { skippedLinks: 0 }, ['b']), { missing: ['b'], skipped: 0 })
+  assert.equal(partialRestore(['a'], { skippedLinks: 0 }, []), null)
 })
