@@ -10,6 +10,9 @@ test('placeholder limits are not a reading', () => {
   assert.equal(realLimits({ five_hour: { utilization: 5, resets_at: null } }), true)
   assert.equal(realLimits(null), false)
   assert.equal(realLimits({}), false)
+  // no 5-hour window: a weekly reading with a reset time counts, one without does not
+  assert.equal(realLimits({ five_hour: null, seven_day: { utilization: 22, resets_at: '2026-11-07T08:00:00Z' } }), true)
+  assert.equal(realLimits({ seven_day: { utilization: 22, resets_at: null } }), false)
 })
 
 describe('usageRows', () => {
