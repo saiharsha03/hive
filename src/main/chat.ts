@@ -186,24 +186,30 @@ type Start = { tabId: string; cwd: string; resume?: string; web: WebContents; ba
 // now resumes another session ignores it. Only a process that gets a message starts from here (file rewinds use a
 // process of their own), and closing the tab drops it
 const forks = new Map<string, { from: string; at: string | null }>()
-// tabs in the middle of a rewind: nothing may start a process on them until it is done
-const rewinding = new Set<string>()
+// tabs and sessions in the middle of a rewind (-> that rewind's token): nothing may start a process on them until it is
+// done, under this tab id or another one resuming the same session (a teammate's original id, a thread by session id)
+const rewinding = new Map<string, number>()
+let rewindSeq = 0
+const rewindKey = (tabId: string, resume?: string): string | null => (rewinding.has(tabId) ? tabId : resume && rewinding.has(resume) ? resume : null)
 // what arrived for a tab while it was being rewound (a send, a thread message, a wake-up): it goes in once the rewind is
 // done, into the rewound conversation, instead of failing with the message shown and never sent
 const afterRewind = new Map<string, (() => void)[]>()
-const holdForRewind = (tabId: string, f: () => void): boolean => {
-  if (!rewinding.has(tabId)) return false
-  afterRewind.set(tabId, [...(afterRewind.get(tabId) ?? []), f])
+const holdForRewind = (tabId: string, resume: string | undefined, f: () => void): boolean => {
+  const k = rewindKey(tabId, resume)
+  if (!k) return false
+  afterRewind.set(k, [...(afterRewind.get(k) ?? []), f])
   return true
 }
 
 function start({ tabId, cwd, resume, web, background }: Start): Live {
-  if (rewinding.has(tabId)) throw new Error('This thread is being rewound; send again in a moment.')
+  if (rewindKey(tabId, resume)) throw new Error('This thread is being rewound; send again in a moment.')
   const pending = forks.get(tabId)
   forks.delete(tabId)
   const fork = pending && pending.from === resume ? pending : undefined
-  // the fork gets a new session id: the worktrees the thread made move to it (closing the old session must not delete them)
-  const forkedFrom = fork?.at && resume ? resume : null
+  // the fork (or the fresh session of a first-message rewind) gets a new session id: the worktrees the thread made move
+  // to it (closing the old session must not delete them)
+  const forkedFrom = fork ? fork.from : null
+  const resumedFrom = forkedFrom ?? resume ?? null
   if (fork && !fork.at) resume = undefined
   const watcher = isWatcherThread(tabId, cwd, resume)
   // events only while this process is still the tab's live one; a closed process stays silent
@@ -973,7 +979,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         if (m.type === 'system' && (m as any).subtype === 'init') {
           s.sessionId = (m as any).session_id
           if (forkedFrom && s.sessionId !== forkedFrom) void moveThreadLinks(forkedFrom, s.sessionId!).catch(() => 0)
-          noteSession(tabId, s.sessionId!)
+          noteSession(tabId, s.sessionId!, resumedFrom)
           pendingSession(tabId, s.sessionId!)
           send({ type: 'hive_session', sessionId: s.sessionId, path: transcriptPath(cwd, s.sessionId!) })
           // the mode the process really started in; a foreground/background move made before this point is applied now
@@ -1072,7 +1078,7 @@ export function setBackground(tabId: string, background: boolean, web: WebConten
 export type Outgoing = { uuid?: string; title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
 
 export function sendMessage(tabId: string, cwd: string, resume: string | undefined, msg: Outgoing, web: WebContents): void {
-  if (holdForRewind(tabId, () => sendMessage(tabId, cwd, resume, msg, web))) return
+  if (holdForRewind(tabId, resume, () => sendMessage(tabId, cwd, resume, msg, web))) return
   if (msg.title) { tabTitles.set(tabId, msg.title); setThreadTitle(tabId, msg.title) }
   let s = live.get(tabId)
   if (!s) live.set(tabId, (s = start({ tabId, cwd, resume, web, background: !!msg.background })))
@@ -1121,7 +1127,7 @@ export function stopCodex(id: string): boolean {
 // foreground: opened as a normal tab (its usual permission mode), e.g. messages resent after a restart from a tab
 export type BackgroundThread = { tabId: string; cwd: string; title: string; prompt: string; from?: From; resume?: string; foreground?: boolean }
 export function startBackgroundThread(t: BackgroundThread, web: WebContents): void {
-  if (holdForRewind(t.tabId, () => startBackgroundThread(t, web))) return
+  if (holdForRewind(t.tabId, t.resume, () => startBackgroundThread(t, web))) return
   if (live.has(t.tabId)) throw new Error(`Thread ${t.tabId} is already running`)
   if (web.isDestroyed()) throw new Error('No window to show the thread in')
   web.send('hive:thread', {
@@ -1168,9 +1174,9 @@ export async function pauseTeam(teamId: string, by: Ref, reason?: string): Promi
   for (const x of [team.lead, ...team.members]) {
     const id = liveIdOf(team, x.id)
     const t = live.get(id)
-    if (x.id === by.id || !t) continue
-    t.turns.hold(true) // what was queued for it waits for the resume, not the end of the interrupted turn
-    if (!t.turns.isBusy()) continue
+    if (!t) continue
+    t.turns.hold(true) // what was queued for it waits for the resume, not the end of the interrupted turn (the caller's too)
+    if (x.id === by.id || !t.turns.isBusy()) continue
     await interrupt(id).catch(() => {})
     stopped.push(nameOf(team, x.id))
   }
@@ -1234,7 +1240,7 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
     const m = userMsg(labelFromThread(from, text))
     const ev = { type: 'hive_thread_msg', fromId: from.id, fromTitle: from.title, text }
     const busy = t.turns.isBusy()
-    if (busy && mode === 'queue') {
+    if ((busy || t.turns.isHeld()) && mode === 'queue') { // a held (paused) receiver takes it through its queue, idle or not
       const queueId = randomUUID()
       t.emit({ ...ev, queueId })
       t.turns.submit(queueId, m)
@@ -1364,31 +1370,45 @@ export type RewindResult = { ok: boolean; error?: string; partial?: { missing: s
 export async function rewindApply(tabId: string, cwd: string, sessionId: string, uuid: string, files: string[] | null): Promise<RewindResult> {
   const p = forkPoint(await readFile(transcriptPath(cwd, sessionId), 'utf8').catch(() => ''), uuid)
   if (!p.found) return { ok: false, error: "That message is not in this thread's transcript." }
+  if (p.midTurn) return { ok: false, error: 'That message was steered into a running turn: rewind to the message that started the turn.' }
   const s = live.get(tabId)
   const block = rewindBlock({
     busy: !!s?.turns.isBusy() || (s?.turns.size() ?? 0) > 0,
     runningTasks: (s?.status.tasks ?? []).filter((t) => t.status === 'running').map((t) => t.title || t.kind),
     codexRuns: codexRuns.get(tabId)?.size ?? 0,
-    rewinding: rewinding.has(tabId),
+    rewinding: !!rewindKey(tabId, sessionId),
   })
   if (block) return { ok: false, error: block }
-  rewinding.add(tabId)
+  const token = ++rewindSeq
+  rewinding.set(tabId, token)
+  rewinding.set(sessionId, token)
   try {
     if (s) { s.closedByApp = true; s.turns.clear(); s.q.close(); live.delete(tabId); wake(s) }
     if (files) {
       const q = sessionQuery(cwd, sessionId)
       let r: Awaited<ReturnType<Query['rewindFiles']>>
-      try { r = await q.rewindFiles(uuid) } finally { q.close() }
+      let left: string[] = []
+      try {
+        r = await q.rewindFiles(uuid)
+        // the real answer carries no file list, and a missing backup is not counted in skippedLinks: a second dry run
+        // after the restore shows what still differs
+        if (r.canRewind) left = (await q.rewindFiles(uuid, { dryRun: true }).catch(() => null))?.filesChanged ?? []
+      } finally { q.close() }
       if (!r.canRewind) return { ok: false, error: `Files were not put back: ${r.error ?? 'unknown error'}` }
-      const partial = partialRestore(files, r)
+      const partial = partialRestore(files, r, left)
       if (partial) return { ok: false, partial }
     }
+    // closed while the files were being put back: the abandoned rewind leaves no fork behind
+    if (rewinding.get(tabId) !== token) return { ok: false, error: 'The thread was closed during the rewind.' }
     forks.set(tabId, { from: sessionId, at: p.at })
     return { ok: true }
   } finally {
-    rewinding.delete(tabId)
-    const held = afterRewind.get(tabId) ?? []
-    afterRewind.delete(tabId)
+    const held: (() => void)[] = []
+    for (const k of [tabId, sessionId]) {
+      if (rewinding.get(k) === token) rewinding.delete(k)
+      held.push(...(afterRewind.get(k) ?? []))
+      afterRewind.delete(k)
+    }
     for (const f of held) { try { f() } catch { /* the thread is gone */ } }
   }
 }
@@ -1396,6 +1416,9 @@ export async function rewindApply(tabId: string, cwd: string, sessionId: string,
 // quitting: the app closes every thread at once, and their unsent messages are kept for the next start
 export function closeTab(tabId: string, quitting = false): void {
   forks.delete(tabId) // a rewind not sent yet does not outlive the tab
+  // a rewind in flight: its token goes, so it sets no fork for the closed tab; what waited for it is dropped
+  const tok = rewinding.get(tabId)
+  if (tok) for (const [k, v] of [...rewinding]) if (v === tok) { rewinding.delete(k); afterRewind.delete(k) }
   for (const p of codexRuns.get(tabId) ?? []) p.kill()
   codexRuns.delete(tabId)
   cancelAsks(tabId)

@@ -71,10 +71,12 @@ export function setPaused(team: Team, at: number | undefined): void {
 }
 
 // remember the Claude session of a team thread, so the team can be resumed after Hive restarts
-export function noteSession(threadId: string, sessionId: string): void {
+// The person is found by tab id, or by its stored session (a teammate reopened under its session id, then rewound)
+export function noteSession(threadId: string, sessionId: string, previous?: string | null): void {
   for (const t of listTeams()) {
     if (t.endedAt) continue
-    const who = [t.lead, ...t.members, ...(t.owner ? [t.owner] : [])].find((x) => x.id === threadId)
+    const who = [t.lead, ...t.members, ...(t.owner ? [t.owner] : [])]
+      .find((x) => x.id === threadId || (!!x.sessionId && (x.sessionId === threadId || x.sessionId === previous)))
     if (who && who.sessionId !== sessionId) { who.sessionId = sessionId; save(t) }
   }
 }

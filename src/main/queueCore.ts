@@ -27,7 +27,7 @@ export function turnQueue<T>(deliver: (msg: T, priority?: Priority) => void, not
     // Claude is idle: the message goes straight in; otherwise it waits for the turn's result
     // first: ahead of the messages already waiting (an interrupt)
     submit(id: string, msg: T, first = false) {
-      if (!busy && !waiting.length) { busy = true; deliver(msg); notify(id, 'sent'); return }
+      if (!busy && !waiting.length && !held) { busy = true; deliver(msg); notify(id, 'sent'); return } // held: waits even when idle
       if (first) waiting.unshift({ id, msg })
       else waiting.push({ id, msg })
     },
@@ -57,6 +57,7 @@ export function turnQueue<T>(deliver: (msg: T, priority?: Priority) => void, not
       held = on
       if (!on && !busy) next()
     },
+    isHeld: () => held,
     clear: () => { waiting.length = 0 },
     has: (id: string) => waiting.some((w) => w.id === id),
     size: () => waiting.length,
