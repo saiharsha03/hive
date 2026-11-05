@@ -37,6 +37,11 @@ It started as a personal replacement for an editor plus a terminal, and is share
   *Working* or *Waiting for you* until it needs you.
 - **Agents that talk to each other.** Through Hive's own MCP server, an agent can start a new thread, message
   another one, wait for its answer, or hand work to Codex.
+- **Teams.** Ask for a team and a Lead thread plans the job on a shared board, picks teammates from a role library
+  (Builder, Reviewer, ...), and runs them in parallel, each in its own worktree. Watch them work in an animated
+  office, chat with any teammate, pause and resume the whole team. Every role keeps a memory across teams.
+- **Wake-ups that survive restarts.** A thread can schedule its own follow-up ("check the deploy at 3 PM"); Hive
+  keeps it on disk and wakes the thread even after the app was closed or the laptop slept.
 - **A worktree per thread.** Any thread can ask for its own git worktree, so parallel agents never edit the same
   checkout. Closing or archiving the thread cleans the worktree up.
 - **Watchers.** Persistent background agents, each with its own thread, prompt, SQLite memory, reports and
@@ -66,10 +71,15 @@ It started as a personal replacement for an editor plus a terminal, and is share
 - **Model and effort pickers** switch the running session live. `ultrathink` is highlighted as you type.
 - A **status strip** shows an active goal and its running time, loops, subagents, live workflow progress and
   background tasks, each with a Stop button.
+- **Rewind**: hover one of your messages and rewind to just before it. Hive previews the files Claude changed since
+  (with +/- counts), puts them back, cuts the chat to that point (the old transcript is kept as it was) and puts your
+  message back in the box to edit and resend. Or rewind the conversation only.
 - **Clean copy** puts a reply on the clipboard as both HTML and plain text, so tables paste properly.
 - Security warnings from hooks and plugins show in the thread, not just in a log.
 - **★ Insight** boxes from the Learning and Explanatory output styles render as callouts.
-- Background work folds to one line above the message box; the full list is in the Agents view.
+- Background work folds to one line above the message box; click it to see each subagent's live status and message
+  one directly. Finished work drops out a minute after it ends; the full history is in the Agents view. An
+  interrupt stops only the turn: background agents keep running.
 
 ### Threads and agents
 
@@ -87,6 +97,10 @@ The `hive` MCP server is attached to every session Hive starts and gives the age
 | `show_to_user` | Open a file, image, page or PDF in a full-window preview |
 | `add_todo` | Add to the to-do list |
 | `dev_stack`, `dev_stack_logs` | Start, stop and read logs from the local dev stack |
+| `start_team`, `team_post`, `team_note`, `team_status`, `add_teammate`, `pause_team`, `resume_team`, `end_team` | Run a team of threads (see Teams) |
+| `list_roles`, `define_role` | The team role library |
+| `schedule_wakeup`, `list_wakeups`, `cancel_wakeup` | Wake this thread later, even after Hive was closed |
+| `agent_status` | What the thread's subagents, shells, workflows and Codex runs are doing right now |
 
 Your own threads and background threads run in plain auto mode: Hive adds no allow-lists or guards on top of what
 Claude Code itself does. Watcher threads are the exception (see below).
@@ -121,6 +135,24 @@ sandbox: read-only credentials are the only airtight guarantee.
 Watchers can be toggled from the sidebar, managed from the Watchers view (the Watchers button in the top bar), or
 created by asking any agent.
 
+### Teams
+
+Ask any thread for a team and it becomes the team's **Lead**, or its **Owner** with a separate Lead thread that
+reports back. The Lead breaks the job into items on a shared to-do board, picks how many of each role it needs
+(roles may repeat: two Builders and a Reviewer), and each teammate runs as its own thread, usually in its own
+worktree. A team lives in `~/.claude/hive/teams/<id>/`: `team.json` (who is in it), `plan.md`, `knowledge.md` (what
+the team learned) and `log.jsonl` (every post).
+
+- **Team view** in the bottom panel, or popped out into its own window: an animated office (Side or Plan view) with
+  each member's state and latest post, the log, the plan, the boards and what was learned. Message any member or a
+  whole role from there.
+- **Role library** in `~/.claude/hive/roles/`: each role has editable instructions and a memory of what everyone in
+  that role learned, kept across teams, plus one shared memory for all roles.
+- **Pause and resume** a whole team; a running team picks up again after Hive restarts.
+- Running teams sit folded in the sidebar, each member with its role word (LEAD, BUILDER, REVIEWER).
+
+Push, merge and deploy decisions go back to you; the Lead does not make them.
+
 ### Code
 
 - **Editor**: any file from the file tree opens as a tab next to the threads. Monaco (the editor inside VS Code),
@@ -154,8 +186,13 @@ created by asking any agent.
 
 - **To-dos** and **Notes** (markdown files in `~/.claude/hive/notes`, searchable, saved as you type). Ask any thread
   to note something and it writes to Notes (`add_note`: adds to the note with that title, or makes one).
-- **Account and usage** in the status bar: 5-hour and 7-day limits, and **Switch account** (Claude Code's own
-  browser sign-in, then the app restarts on the new login).
+- **Auto-update**: the installed app checks GitHub Releases at start and every 6 hours, downloads a new version in
+  the background and offers *Restart to update* in the status bar (it also installs when you quit). The portable
+  build shows *vX available* and opens the release page. *Check for updates* is in the command palette.
+- **Account and usage** in the status bar: the plan's 5-hour and 7-day limits (only the windows your plan has), read
+  from the running threads within seconds of each reply, and **Switch account** (Claude Code's own
+  browser sign-in, then the app restarts on the new login). A thread that hits a usage limit continues by itself
+  after the reset, or as soon as any turn goes through again.
 - **Allow my IP**: a button for your own allowlist command (`HIVE_ALLOWLIST_CMD`), lit when your public IP changes.
 - MCP server status (connected, needs sign-in, failed), hooks and plugins switches, a command palette (Ctrl+K), and a
   full-window preview for what Claude shows you.
