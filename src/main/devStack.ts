@@ -343,13 +343,16 @@ export async function stopService(name: string, caller: Owner): Promise<string> 
   if (s.kind === 'docker') {
     if (caller.kind !== 'user') return `${name}: shared database service; stop it from the Dev stack panel`
     await run('docker', ['compose', 'stop', s.compose], { cwd: repoDir(s.repo), timeout: 120_000 })
+    dockerBusy.delete(name)
     dockerCache.set(name, 'exited')
     publish()
     return `${name}: stopped`
   }
   const p = procs.get(name)
-  if (!p || p.exited) return `${name}: not running by ${appName()}`
+  if (!p) return `${name}: not running by ${appName()}`
   if (!canControl(p.owner, caller)) return `${name}: in use by ${label(p.owner)}; not stopped`
+  // an exited process is only remembered to show its failure; stopping it again clears that
+  if (p.exited) { procs.delete(name); publish(); return `${name}: cleared` }
   await stopProc(p, s.port)
   publish()
   return `${name}: stopped`
