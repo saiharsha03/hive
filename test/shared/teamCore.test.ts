@@ -1,36 +1,48 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { findMember, formatTeamStatus, parseLog, slug, teamBrief, type Team } from '../../src/shared/teamCore'
+import { canAct, formatTeamStatus, leadBrief, nameOf, nameTaken, parseLog, slug, targetsOf, teamBrief, type Team } from '../../src/shared/teamCore'
 
 const team: Team = {
   id: 't1', name: 'HelixPrevent migration', goal: 'Move the pipeline to gold', dir: 'C:\\teams\\t1', createdAt: 0,
-  lead: { id: 'new-1', title: 'Gold plan' },
+  owner: { id: 'new-9', title: 'Planning' },
+  lead: { id: 'team-lead-x', title: 'HelixPrevent migration: Lead' },
   members: [
-    { id: 'team-builder-api-ab12', name: 'Builder API', role: 'builder', cwd: 'C:\\r', joinedAt: 0 },
-    { id: 'team-qa-cd34', name: 'QA', role: 'qa', cwd: 'C:\\r', joinedAt: 0 },
-    { id: 'team-rev-1', name: 'Rev One', role: 'reviewer', cwd: 'C:\\r', joinedAt: 0 },
-    { id: 'team-rev-2', name: 'Rev Two', role: 'reviewer', cwd: 'C:\\r', joinedAt: 0 },
+    { id: 'team-b1', name: 'Builder API', role: 'builder', cwd: 'C:\\r', joinedAt: 0 },
+    { id: 'team-b2', name: 'Builder Web', role: 'builder', cwd: 'C:\\r', joinedAt: 0 },
+    { id: 'team-r1', name: 'Rev One', role: 'reviewer', cwd: 'C:\\r', joinedAt: 0 },
+    { id: 'team-r2', name: 'Rev Two', role: 'reviewer', cwd: 'C:\\r', joinedAt: 0 },
+    { id: 'team-qa', name: 'QA', role: 'qa', cwd: 'C:\\r', joinedAt: 0 },
   ],
 }
+const ids = (ref: string) => targetsOf(team, ref).map((x) => x.id)
 
-test('teammates are found by name, unique role, id or "lead"; a shared role is ambiguous', () => {
-  assert.equal(findMember(team, 'builder api')?.id, 'team-builder-api-ab12')
-  assert.equal(findMember(team, 'builder')?.id, 'team-builder-api-ab12')
-  assert.equal(findMember(team, 'team-qa-cd34')?.name, 'QA')
-  assert.equal(findMember(team, 'Lead')?.id, 'new-1')
-  assert.equal(findMember(team, 'reviewer'), null)
-  assert.equal(findMember(team, 'nobody'), null)
+test('posts reach a name, a whole role (singular or plural), Lead, Owner or everyone', () => {
+  assert.deepEqual(ids('builder api'), ['team-b1'])
+  assert.deepEqual(ids('builders'), ['team-b1', 'team-b2'])
+  assert.deepEqual(ids('reviewer'), ['team-r1', 'team-r2'])
+  assert.deepEqual(ids('Lead'), ['team-lead-x'])
+  assert.deepEqual(ids('owner'), ['new-9'])
+  assert.equal(ids('all').length, 6) // lead + 5, not the owner
+  assert.deepEqual(ids('nobody'), [])
+  assert.equal(nameOf(team, 'new-9'), 'Owner')
+  assert.ok(canAct(team, 'new-9') && canAct(team, 'team-qa') && !canAct(team, 'stranger'))
+  assert.ok(nameTaken(team, 'qa') && nameTaken(team, 'Owner') && !nameTaken(team, 'Builder 3'))
   assert.equal(slug('Builder: helix-api!'), 'builder-helix-api')
 })
 
-test('brief names the teammate, roster, folder, rules and task; status shows states and the log', () => {
-  const b = teamBrief(team, team.members[1], 'Click through the pipeline page')
-  for (const s of ['You are "QA" (qa)', 'Builder API (builder; thread team-builder-api-ab12)', 'C:\\teams\\t1', 'Never push', 'Your task: Click through the pipeline page']) assert.ok(b.includes(s), s)
-  const log = parseLog(`${JSON.stringify({ at: 0, from: 'team-qa-cd34', fromName: 'QA', to: ['Builder API'], text: 'Stage filter shows Activated twice' })}\nnot json\n`)
+test('briefs: teammate gets roster, direct-talk rules and task; a separate Lead gets the Owner and add_teammate', () => {
+  const b = teamBrief(team, team.members[4], 'Click through the pipeline page')
+  for (const s of ['You are "QA" (qa)', 'Owner (thread new-9)', 'Builder Web (builder; thread team-b2)', '"builders", "reviewers" reaches all of them', 'C:\\teams\\t1', 'Never push', 'Your task: Click through the pipeline page']) assert.ok(b.includes(s), s)
+  const l = leadBrief(team, 'Keep it to two builders')
+  for (const s of ['You are the Lead', 'mcp__hive__add_teammate', 'team_post to "Owner"', 'From the Owner: Keep it to two builders']) assert.ok(l.includes(s), s)
+})
+
+test('status shows owner, lead, each member state and the log', () => {
+  const log = parseLog(`${JSON.stringify({ at: 0, from: 'team-qa', fromName: 'QA', to: ['Builder Web'], text: 'Stage filter shows Activated twice' })}\nnot json\n`)
   assert.equal(log.length, 1)
-  const st = formatTeamStatus(team, { 'new-1': { state: 'working', doing: 'planning' }, 'team-qa-cd34': { state: 'idle' } }, log)
+  const st = formatTeamStatus(team, { 'team-lead-x': { state: 'working', doing: 'planning' }, 'team-qa': { state: 'idle' } }, log)
+  assert.match(st, /- Owner: closed/)
   assert.match(st, /- Lead: working, planning/)
   assert.match(st, /- QA \(qa\): idle/)
-  assert.match(st, /- Builder API \(builder\): closed/)
-  assert.match(st, /QA -> Builder API: Stage filter shows Activated twice/)
+  assert.match(st, /QA -> Builder Web: Stage filter shows Activated twice/)
 })

@@ -5,7 +5,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from
 import { join } from 'node:path'
 import { dataDir } from './testMode'
 import { writeFileSafe } from './safeWrite'
-import { parseLog, slug, type LogEntry, type Member, type Team } from '../shared/teamCore'
+import { parseLog, slug, type LogEntry, type Member, type Ref, type Team } from '../shared/teamCore'
 
 export const teamsDir = () => process.env.HIVE_TEAMS_DIR || join(dataDir(), 'hive', 'teams')
 
@@ -34,18 +34,21 @@ const save = (t: Team) => { writeFileSafe(join(t.dir, 'team.json'), JSON.stringi
 export const listTeams = (): Team[] => [...all().values()].sort((a, b) => b.createdAt - a.createdAt)
 export const getTeam = (id: string): Team | undefined => all().get(id)
 
-// the running team a thread leads or belongs to
+// the running team a thread leads or belongs to (an Owner is not in its teams)
 export function teamOf(threadId: string): Team | undefined {
   return listTeams().find((t) => !t.endedAt && (t.lead.id === threadId || t.members.some((m) => m.id === threadId)))
 }
 
-export function createTeam(name: string, goal: string, lead: { id: string; title: string }, now = Date.now()): Team {
+// the running teams a thread started as Owner
+export const ownedTeams = (threadId: string): Team[] => listTeams().filter((t) => !t.endedAt && t.owner?.id === threadId)
+
+export function createTeam(name: string, goal: string, who: { lead: Ref; owner?: Ref }, now = Date.now()): Team {
   const base = `${new Date(now).toISOString().slice(0, 10)}-${slug(name)}`
   let id = base
   for (let i = 2; all().has(id) || existsSync(join(teamsDir(), id)); i++) id = `${base}-${i}`
   const dir = join(teamsDir(), id)
   mkdirSync(dir, { recursive: true })
-  const team: Team = { id, name, goal, dir, lead, members: [], createdAt: now }
+  const team: Team = { id, name, goal, dir, ...(who.owner ? { owner: who.owner } : {}), lead: who.lead, members: [], createdAt: now }
   writeFileSafe(join(dir, 'plan.md'), `# ${name}\n\nGoal: ${goal}\n\n| Part | Owner | State | Notes |\n|---|---|---|---|\n`)
   writeFileSafe(join(dir, 'knowledge.md'), `# What team "${name}" learned\n\n`)
   writeFileSafe(join(dir, 'log.jsonl'), '')

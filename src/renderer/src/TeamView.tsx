@@ -21,22 +21,41 @@ export function desksOf(v: View): Desk[] {
   ]
 }
 
+// a message from you straight to one teammate's thread (it arrives like any message you type in that thread)
+function Say({ id, name, onMessage }: { id: string; name: string; onMessage: (threadId: string, text: string) => boolean }) {
+  const [text, setText] = useState('')
+  const [note, setNote] = useState('')
+  const go = () => {
+    const t = text.trim()
+    if (!t) return
+    if (onMessage(id, t)) { setText(''); setNote('sent') } else setNote('thread not open')
+  }
+  return (
+    <div className="tv-say">
+      <input value={text} placeholder={`Message ${name}`} onChange={(e) => { setText(e.target.value); setNote('') }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go() } }} data-testid={`team-say-${id}`} />
+      {note && <span className={note === 'sent' ? 'tv-note s-done' : 'tv-note s-fail'}>{note}</span>}
+    </div>
+  )
+}
+
 // the office itself; the animated scene replaces this
-function Office({ v, onOpen }: { v: View; onOpen: (id: string) => void }) {
+function Office({ v, onOpen, onMessage }: { v: View; onOpen: (id: string) => void; onMessage: (threadId: string, text: string) => boolean }) {
   return (
     <div className="tv-office" data-testid="team-office">
       {desksOf(v).map((d) => (
-        <button key={d.id} className="tv-desk" onClick={() => onOpen(d.id)} title="Open this thread" data-testid={`team-desk-${d.id}`}>
-          <div className="tv-dh"><span className="tv-name">{d.name}</span><span className="tv-role">{d.role}</span><span className={`tv-state ${STATE_CLASS[d.state]}`}>{d.state.toUpperCase()}</span></div>
+        <div key={d.id} className="tv-desk" data-testid={`team-desk-${d.id}`}>
+          <button className="tv-dh" onClick={() => onOpen(d.id)} title="Open this thread"><span className="tv-name">{d.name}</span><span className="tv-role">{d.role}</span><span className={`tv-state ${STATE_CLASS[d.state]}`}>{d.state.toUpperCase()}</span></button>
           {d.doing && <div className="tv-doing">{d.doing}</div>}
           {d.said && <div className="tv-said">"{d.said.text}"{d.said.to.length ? <span className="tv-to"> to {d.said.to.join(', ')}</span> : null}</div>}
-        </button>
+          {d.state !== 'closed' && !v.team.endedAt && <Say id={d.id} name={d.name} onMessage={onMessage} />}
+        </div>
       ))}
     </div>
   )
 }
 
-export function TeamView({ onActivate }: { onActivate: (threadId: string) => void }) {
+export function TeamView({ onActivate, onMessage }: { onActivate: (threadId: string) => void; onMessage: (threadId: string, text: string) => boolean }) {
   const [teams, setTeams] = useState<Row[]>([])
   const [pick, setPick] = useState<string | null>(null)
   const [v, setV] = useState<View | null>(null)
@@ -66,11 +85,12 @@ export function TeamView({ onActivate }: { onActivate: (threadId: string) => voi
           {teams.map((t) => <option key={t.id} value={t.id}>{t.name}{t.endedAt ? ' (ended)' : ''}</option>)}
         </select>
         {v && <span className="tv-goal" title={v.team.goal}>{v.team.goal}</span>}
+        {v?.team.owner && <button className="link" onClick={() => onActivate(v.team.owner!.id)} title="The thread that started this team; the Lead reports to it">Owner: {v.team.owner.title}</button>}
         {v && <span className="tv-meta">{v.team.members.length + 1} members, started {time(v.team.createdAt)}{v.team.endedAt ? `, ended ${time(v.team.endedAt)}` : ''}</span>}
       </div>
       {v && (
         <div className="tv-body">
-          <Office v={v} onOpen={onActivate} />
+          <Office v={v} onOpen={onActivate} onMessage={onMessage} />
           <div className="tv-side">
             <div className="tv-tabs">
               {(['log', 'plan', 'knowledge'] as const).map((k) => <button key={k} className={side === k ? 'on' : ''} onClick={() => setSide(k)} data-testid={`team-tab-${k}`}>{k === 'log' ? `Log (${v.log.length})` : k === 'plan' ? 'Plan' : 'Learned'}</button>)}

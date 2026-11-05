@@ -1,35 +1,69 @@
-// Team threads: a lead thread starts several real threads (teammates) that work on one job together. They share a
-// folder (team.json, plan.md, knowledge.md, log.jsonl) and talk through team_post. Pure parts here: the shapes,
-// the brief each teammate starts with, the log and status text. Files and threads live in main/teams.ts.
+// Team threads: real threads (teammates) that work on one job together. A thread starts a team either as its Lead
+// or as its Owner only (a new Lead thread runs it and reports back); one thread can own several unrelated teams.
+// Roles repeat freely (three builders, two reviewers). They share a folder (team.json, plan.md, knowledge.md,
+// log.jsonl) and talk through team_post, to anyone directly. Pure parts here: shapes, briefs, addressing, status text.
+// Files live in main/teams.ts, threads in main/chat.ts.
 
-export const MAX_TEAMMATES = 6
+export const MAX_TEAMMATES = 10
 
+export type Ref = { id: string; title: string }
 export type Member = { id: string; name: string; role: string; cwd: string; joinedAt: number }
-export type Team = { id: string; name: string; goal: string; dir: string; lead: { id: string; title: string }; members: Member[]; createdAt: number; endedAt?: number }
+export type Team = { id: string; name: string; goal: string; dir: string; owner?: Ref; lead: Ref; members: Member[]; createdAt: number; endedAt?: number }
 export type LogEntry = { at: number; from: string; fromName: string; to: string[]; text: string } // to [] = posted to the board only
 export type MemberState = 'working' | 'waiting' | 'idle' | 'closed'
 export type TeamView = { team: Team; states: Record<string, { state: MemberState; doing?: string }>; log: LogEntry[]; plan: string; knowledge: string }
 
-// short, unique, readable id part: "Builder helix-api" -> "builder-helix-api"
+// short, readable id part: "Builder helix-api" -> "builder-helix-api"
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'mate'
 
-// a name everyone in the team can address: the member's name, its role, or its thread id, case-insensitive
-export function findMember(team: Team, ref: string): { id: string; name: string } | null {
-  const r = ref.trim().toLowerCase()
-  if (r === 'lead' || r === team.lead.id.toLowerCase() || r === team.lead.title.toLowerCase()) return { id: team.lead.id, name: 'Lead' }
-  const m = team.members.find((x) => x.id.toLowerCase() === r || x.name.toLowerCase() === r)
-    ?? (team.members.filter((x) => x.role.toLowerCase() === r).length === 1 ? team.members.find((x) => x.role.toLowerCase() === r) : undefined)
-  return m ? { id: m.id, name: m.name } : null
+const RESERVED = new Set(['lead', 'owner', 'all', 'you', 'user'])
+export const nameTaken = (team: Team, name: string) => {
+  const n = name.trim().toLowerCase()
+  return !n || RESERVED.has(n) || team.members.some((m) => m.name.toLowerCase() === n)
 }
 
-export const nameOf = (team: Team, id: string) => (id === team.lead.id ? 'Lead' : team.members.find((m) => m.id === id)?.name ?? id)
+const plural = (r: string) => r.replace(/s$/, '')
+
+// who a post to `ref` reaches: "Lead", "Owner", "all", a name, a thread id, or a role ("builder" / "builders" = every builder)
+export function targetsOf(team: Team, ref: string): { id: string; name: string }[] {
+  const r = ref.trim().toLowerCase()
+  const everyone = [{ id: team.lead.id, name: 'Lead' }, ...team.members.map((m) => ({ id: m.id, name: m.name }))]
+  if (r === 'all' || r === 'everyone') return everyone
+  if (r === 'lead' || r === team.lead.id.toLowerCase()) return [{ id: team.lead.id, name: 'Lead' }]
+  if (team.owner && (r === 'owner' || r === team.owner.id.toLowerCase())) return [{ id: team.owner.id, name: 'Owner' }]
+  const one = team.members.find((m) => m.id.toLowerCase() === r || m.name.toLowerCase() === r)
+  if (one) return [{ id: one.id, name: one.name }]
+  return team.members.filter((m) => m.role.toLowerCase() === r || plural(m.role.toLowerCase()) === plural(r)).map((m) => ({ id: m.id, name: m.name }))
+}
+
+export const nameOf = (team: Team, id: string) =>
+  id === team.lead.id ? 'Lead' : id === team.owner?.id ? 'Owner' : team.members.find((m) => m.id === id)?.name ?? id
+
+// the team a thread may act on: a member (or its lead) acts on its own team; an owner on the team it names
+export const canAct = (team: Team, threadId: string) => team.lead.id === threadId || team.owner?.id === threadId || team.members.some((m) => m.id === threadId)
 
 const roster = (team: Team) => [
-  `- Lead (thread ${team.lead.id}): plans, splits the work, decides, and reports to the user`,
+  ...(team.owner ? [`- Owner (thread ${team.owner.id}): started the team; the Lead reports to it`] : []),
+  `- Lead (thread ${team.lead.id}): plans, splits the work, settles disagreements, and reports ${team.owner ? 'to the Owner' : 'to the user'}`,
   ...team.members.map((m) => `- ${m.name} (${m.role}; thread ${m.id})`),
 ].join('\n')
 
-// what a teammate's thread starts with, before its task
+const rules = (team: Team) => [
+  `Shared folder: ${team.dir}`,
+  '- plan.md: the plan and who owns which part; keep your own rows current (owner, state, notes) with Edit, and do not rewrite rows of others.',
+  '- knowledge.md: facts the team learned (decisions, gotchas, paths, ids); add with mcp__hive__team_note, read it before you start.',
+  '',
+  'How the team works:',
+  '- Talk to anyone directly with mcp__hive__team_post: a name, a role ("builders", "reviewers" reaches all of them), "Lead", or "all". Teammates work in parallel; you do not need the Lead to relay. Every post also lands on the team log the user watches. Keep posts short: what you did, what you need, what you found.',
+  '- Discuss and decide among yourselves (e.g. builders agree on an interface, reviewers split the files); if you cannot agree, the Lead decides.',
+  '- mcp__hive__team_status shows the state of each teammate and the recent log; check it before you assume what someone else is doing.',
+  '- Ask the teammate who owns a thing instead of redoing it.',
+  '- Do code work in your own worktree (mcp__hive__worktree) so you never edit the files of another teammate.',
+  '- The user may message you directly; treat it like a message from the Lead, and tell the team (team_post) if it changes the plan.',
+  '- Never push, merge or deploy, and never touch production; the Lead brings that to the user.',
+]
+
+// what a teammate's thread starts with
 export function teamBrief(team: Team, me: Member, task: string): string {
   return [
     `You are "${me.name}" (${me.role}) on team "${team.name}", a group of Claude threads in the user's app working on one job together.`,
@@ -38,29 +72,42 @@ export function teamBrief(team: Team, me: Member, task: string): string {
     'The team:',
     roster(team),
     '',
-    `Shared folder: ${team.dir}`,
-    '- plan.md: the plan and who owns which part; keep your own rows current (owner, state, notes) with Edit, and do not rewrite other rows.',
-    '- knowledge.md: facts the team learned (decisions, gotchas, paths, ids); add with mcp__hive__team_note, read it before you start.',
-    '',
-    'How the team works:',
-    '- mcp__hive__team_post talks to teammates by name or role (or "all"); every post also lands on the team log the user watches. Keep posts short: what you did, what you need, what you found.',
-    '- mcp__hive__team_status shows each teammate\'s state and the recent log; check it before you assume what someone else is doing.',
-    '- Ask the teammate who owns a thing instead of redoing it. If two of you disagree, the Lead decides.',
-    '- Do code work in your own worktree (mcp__hive__worktree) so you never edit another teammate\'s files.',
-    '- Never push, merge or deploy, and never touch production; the Lead brings that to the user.',
-    '- When your part is done, post a short result to the Lead and stop.',
+    ...rules(team),
+    '- When your part is done, post a short result to the Lead and stop until someone needs you.',
     '',
     `Your task: ${task}`,
   ].join('\n')
 }
 
-// the lead's own reminder after it starts the team
-export function leadNote(team: Team): string {
+// what a Lead thread started by an Owner begins with
+export function leadBrief(team: Team, task: string): string {
+  return [
+    `You are the Lead of team "${team.name}", a group of Claude threads in the user's app working on one job together. The Owner thread started the team and you report to it.`,
+    `Team goal: ${team.goal}`,
+    '',
+    'The team so far:',
+    roster(team),
+    '',
+    ...rules(team),
+    '',
+    'As Lead: write the plan into plan.md first (rows: part, owner, state). Add the teammates the job needs with mcp__hive__add_teammate',
+    '(name, role, task; roles may repeat, e.g. several builders or reviewers; pick the fewest that cover the job). Let them work in parallel and talk directly.',
+    'You get their posts as messages: wait for them instead of polling. When the job is done or blocked, post the result to the Owner',
+    '(team_post to "Owner"), then end_team.',
+    '',
+    ...(task.trim() ? [`From the Owner: ${task}`] : []),
+  ].join('\n')
+}
+
+// the reminder a thread gets back after it starts a team
+export function startedNote(team: Team, selfIsLead: boolean): string {
   return [
     `Team "${team.name}" started (id ${team.id}), folder ${team.dir}.`,
     roster(team),
-    'Write the plan into plan.md now (rows: part, owner, state). Teammates report to you with team_post; use team_status to see who works on what.',
-    'Wait for posts instead of polling: you get them as messages. The user can watch the team in the Team view.',
+    selfIsLead
+      ? 'You are the Lead: write the plan into plan.md now (rows: part, owner, state). Teammates post to you; wait for their posts instead of polling.'
+      : `You are the Owner. The Lead runs the team and posts its result to you. Pass team "${team.id}" to team_post / team_status / add_teammate / end_team to act on it.`,
+    'The user can watch the team, and message any member, in the Team view.',
   ].join('\n')
 }
 
@@ -74,9 +121,10 @@ export function formatTeamStatus(team: Team, states: Record<string, { state: Mem
     return `- ${label}: ${s.state}${s.doing ? `, ${s.doing}` : ''}`
   }
   return [
-    `Team "${team.name}"${team.endedAt ? ' (ended)' : ''}: ${team.goal}`,
+    `Team "${team.name}" (id ${team.id})${team.endedAt ? ' (ended)' : ''}: ${team.goal}`,
     `Folder: ${team.dir}`,
     'Members:',
+    ...(team.owner ? [row(team.owner.id, 'Owner')] : []),
     row(team.lead.id, 'Lead'),
     ...team.members.map((m) => row(m.id, `${m.name} (${m.role})`)),
     log.length ? `Last ${Math.min(last, log.length)} posts:\n${log.slice(-last).map(logLine).join('\n')}` : 'No posts yet.',

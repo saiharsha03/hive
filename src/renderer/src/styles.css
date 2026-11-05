@@ -1007,3 +1007,10 @@ button.sbi:hover { background: var(--hover); }
 .tv-t { font-family: var(--mono); color: var(--faint); }
 .tv-from { color: var(--hi); font-weight: 600; white-space: nowrap; }
 .tv-txt { color: var(--ink); }
+
+.tv-dh { text-align: left; width: 100%; }
+.tv-dh:hover .tv-name { text-decoration: underline; }
+.tv-say { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.tv-say input { flex: 1; min-width: 0; background: transparent; border: none; border-bottom: 1px solid var(--line2); color: var(--ink); font: inherit; padding: 2px 0; }
+.tv-say input:focus { outline: none; border-bottom-color: var(--focus); }
+.tv-note { font-size: 11px; white-space: nowrap; }
