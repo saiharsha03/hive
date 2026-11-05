@@ -677,6 +677,7 @@ export function App() {
     { id: 'tool:hooks', group: 'Tools', label: 'Hooks', icon: 'symbol-event', run: () => openTool('hooks') },
     { id: 'tool:plugins', group: 'Tools', label: 'Plugins', icon: 'extensions', run: () => openTool('plugins') },
     { id: 'tool:settings', group: 'Tools', label: 'Settings', hint: 'Ctrl+,', icon: 'settings-gear', run: () => setModal('settings') },
+    { id: 'tool:update', group: 'Tools', label: 'Check for updates', icon: 'cloud-download', run: () => void window.api.updateCheck().then(() => window.api.updateState()).then((u) => notice(u ? `Hive ${u.version} is ${u.kind === 'ready' ? 'downloaded: restart from the status bar' : 'available: see the status bar'}` : 'No newer Hive release (or the download is still running)')).catch(() => {}) },
     { id: 'tool:watchers-popover', group: 'Tools', label: 'Watchers: switch on or off', icon: 'eye', mk: 'mk-watch', run: () => setPop({ kind: 'watchers', anchor: centre() }) },
     ...getUIs().map((u) => ({ id: `ui:${u.id}`, group: 'UI', label: `UI: ${u.label}`, hint: ui === u.id ? 'current' : u.description, icon: 'layout', run: () => setUI(u.id) })),
     ...getThemes(ui).map((t) => ({ id: `theme:${t.id}`, group: 'Theme', label: `Theme: ${t.label}`, hint: themeNow === t.id ? `current for ${getUIs().find((u) => u.id === ui)?.label}` : t.description, icon: 'symbol-color', run: () => setTheme(t.id) })),

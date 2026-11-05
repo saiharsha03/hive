@@ -31,8 +31,12 @@ asarUnpack:
 # node-pty and onnxruntime-node ship N-API prebuilds that work in Electron as-is
 npmRebuild: false
 
-# no auto-update feed: releases are downloaded from GitHub Releases
-publish: null
+# update feed: GitHub Releases. The build writes latest.yml next to the installer (attach both to the release);
+# npm run dist never uploads (--publish never)
+publish:
+  provider: github
+  owner: saiharsha03
+  repo: hive
 
 win:
   icon: build/icon.ico

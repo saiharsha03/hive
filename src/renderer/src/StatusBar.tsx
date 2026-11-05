@@ -8,6 +8,7 @@ import { ModelBadge } from './ThreadStatus'
 import { getThemes, getUIs, useAppearance } from './appearance'
 import { Icon, Popover, anchorOf, type Anchor } from './ui'
 import { AccountSwitch } from './AccountSwitch'
+import type { UpdateState } from '../../shared/versionCore'
 
 const left = (iso: string | null, now: number) => {
   if (!iso) return ''
@@ -40,6 +41,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   const [usageAt, setUsageAt] = useState<Anchor | null>(null)
   const [stats, setStats] = useState<SessionStats | null>(null)
   const [now, setNow] = useState(Date.now())
+  const [update, setUpdate] = useState<UpdateState | null>(null)
   const name = useAppName()
   const { ui, theme } = useAppearance()
 
@@ -49,6 +51,11 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
     load()
     const t = setInterval(load, 60_000)
     return () => clearInterval(t)
+  }, [])
+  // a new Hive release: downloaded and waiting for a restart, or (portable) available on GitHub
+  useEffect(() => {
+    window.api.updateState().then(setUpdate).catch(() => {})
+    return window.api.onUpdateState(setUpdate)
   }, [])
   // the focused thread: on switch and every 10 s
   useEffect(() => {
@@ -85,6 +92,11 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
       {failed > 0 && <Item testid="status-failed" cls="s-fail" title="Threads that failed"><Icon name="error" />{failed}</Item>}
       {status?.error && <Item testid="status-error" cls="s-fail" title={status.error}><Icon name="warning" />status error</Item>}
       <span className="sp" />
+      {update && (
+        <Item testid="status-update" cls="s-done" title={update.kind === 'ready' ? `Hive ${update.version} is downloaded. Click to restart into it (it also installs when you quit)` : `Hive ${update.version} is on GitHub. Click to open the release`} onClick={() => void window.api.updateApply()}>
+          <Icon name={update.kind === 'ready' ? 'sync' : 'cloud-download'} />{update.kind === 'ready' ? `Restart to update to v${update.version}` : `v${update.version} available`}
+        </Item>
+      )}
       {!status && <Item testid="status-connecting">Connecting…</Item>}
       {status?.account && <Item testid="status-account" onClick={() => setSwitching(true)} title={`${status.engine?.version ? `Claude Code ${status.engine.version}${status.engine.installed ? '' : ' (bundled with the SDK)'}. ` : ''}Click to switch account`}><Icon name="account" />{status.account}{status.plan ? `, ${status.plan[0].toUpperCase()}${status.plan.slice(1)}` : ''}</Item>}
       {status && lim('5h', status.five, 'five')}
