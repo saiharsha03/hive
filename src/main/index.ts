@@ -55,7 +55,7 @@ import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
 import { dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
-import { isAppPage, runningRosters, teamWindowSearch } from '../shared/teamSidebarCore'
+import { isAppPage, rosterOf, teamWindowSearch } from '../shared/teamSidebarCore'
 
 // test mode: Electron's own storage (search index, sessions cache, page storage) lives in the test data folder
 if (TEST_MODE) app.setPath('userData', join(dataDir(), 'userData'))
@@ -113,7 +113,8 @@ handle('teams:pause', (_e, id: string) => pauseTeam(String(id), { id: 'you', tit
 // reopened threads open as tabs in the main window, also when Resume is pressed in the Team window
 handle('teams:resume', (e, id: string) => resumeTeam(String(id), { id: 'you', title: 'You' }, mainWeb() ?? e.sender))
 // the sidebar's Teams section: running teams, Lead first, with each person's tab id and Claude session
-handle('teams:roster', () => runningRosters(listTeams()))
+// every team: the sidebar shows the running ones in Teams and marks an ended team's threads in the normal lists
+handle('teams:roster', () => listTeams().map(rosterOf))
 handle('teams:openWindow', (_e, id?: string) => openTeamWindow(id ? String(id) : null))
 // from the Team window: show a thread in the main window, or say something in it like typing in its tab
 handle('teams:activate', (_e, threadId: string) => { showWindow(); mainWeb()?.send('hive:activate', String(threadId)) })

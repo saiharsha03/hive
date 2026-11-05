@@ -607,7 +607,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const out: string[] = []
           for (const t of uniq) {
             try {
-              await messageThread(t.id, `[Team "${team.name}", ${me}] ${text}\n(Reply with mcp__hive__team_post${t.id === team.owner?.id ? ` and team "${team.id}"` : ''}.)`, 'queue', { id: tabId, title: `${team.name}: ${me}` }, web)
+              await messageThread(t.id, `[Team "${team.name}", ${me}] ${text}\n(Reply with mcp__hive__team_post${t.id === team.owner?.id ? ` and team "${team.id}"` : ''}.)`, 'queue', { id: tabId, title: `${team.name}: ${me}` }, web, team.id)
               out.push(t.name)
             } catch (e: any) { out.push(`${t.name} (not delivered: ${e?.message ?? e})`) }
           }
@@ -786,10 +786,21 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           if (open.length && !force) return fail(`${open.length} team-board to-dos are still open (${open.map((t) => t.id).join(', ')}). Get them checked off or dropped with a note, or pass force with the reason.`)
           const others = [team.lead.id, ...team.members.map((m) => m.id), ...(team.owner ? [team.owner.id] : [])].filter((id) => id !== tabId)
           appendLog(team, { at: Date.now(), from: tabId, fromName: nameOf(team, tabId), to: others.map((id) => nameOf(team, id)), text: `Team ended: ${summary}` })
+          for (const q of teamQueued.get(team.id) ?? []) dequeue(q.tabId, q.queueId)
+          teamQueued.delete(team.id)
           for (const id of others) {
             if (!live.has(id)) continue
             const note = id === team.owner?.id ? `The team has ended: ${summary}` : `The team has ended (${summary}). Stop working and give a one-line final status.`
             await messageThread(id, `[Team "${team.name}", ${nameOf(team, tabId)}] ${note}`, 'queue', { id: tabId, title: `${team.name}: ${nameOf(team, tabId)}` }, web).catch(() => {})
+          }
+          // teammates (and a Lead the Owner's team started) close once their final status is in, instead of piling
+          // up under Waiting for you; the Owner, or a Lead that is the user's own thread, stays open with the result
+          for (const id of [...team.members.map((m) => m.id), ...(team.owner ? [team.lead.id] : [])]) {
+            const t = live.get(id)
+            if (!t) continue
+            const close = () => { t.onIdle.delete(close); if (live.get(id) === t) t.emit({ type: 'hive_organize', action: 'close' }) }
+            if (id === tabId || t.turns.isBusy()) t.onIdle.add(close)
+            else close()
           }
           endTeam(team)
           return ok(`Team "${team.name}" ended.`)
@@ -1154,7 +1165,11 @@ export const liveThreads = () => [...live.entries()].map(([id, t]) => ({ tabId: 
 
 // One thread's message into another: the receiving tab shows it as from that thread; a busy receiver gets it queued
 // (or steered in); a thread that is not running is resumed from its Claude session.
-export async function messageThread(ref: string, text: string, mode: 'queue' | 'steer', from: From, web: WebContents): Promise<string> {
+// team posts still waiting in a busy teammate's queue (team id -> thread, queue id): end_team drops them, else every
+// teammate woke once per stale post after the team ended, each turn saying "the team has ended, I did nothing"
+const teamQueued = new Map<string, { tabId: string; queueId: string }[]>()
+
+export async function messageThread(ref: string, text: string, mode: 'queue' | 'steer', from: From, web: WebContents, teamId?: string): Promise<string> {
   const id = resolveThread(ref, live)
   if (id === from.id) throw new Error('That is this thread itself.')
   if (id) {
@@ -1166,6 +1181,7 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
       const queueId = randomUUID()
       t.emit({ ...ev, queueId })
       t.turns.submit(queueId, m)
+      if (teamId) teamQueued.set(teamId, [...(teamQueued.get(teamId) ?? []), { tabId: id, queueId }])
       return `Queued for thread "${titleOf(id)}" (${id}); it goes in when its running turn ends.`
     }
     t.emit({ ...ev, ...(busy ? { steer: true } : {}) })

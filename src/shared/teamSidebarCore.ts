@@ -4,10 +4,10 @@
 import type { Team } from './teamCore'
 
 export type RosterPerson = { id: string; name: string; role: string; sessionId?: string }
-export type Roster = { id: string; name: string; pausedAt?: number; people: RosterPerson[] }
+export type Roster = { id: string; name: string; pausedAt?: number; endedAt?: number; people: RosterPerson[] }
 
 export const rosterOf = (t: Team): Roster => ({
-  id: t.id, name: t.name, ...(t.pausedAt ? { pausedAt: t.pausedAt } : {}),
+  id: t.id, name: t.name, ...(t.pausedAt ? { pausedAt: t.pausedAt } : {}), ...(t.endedAt ? { endedAt: t.endedAt } : {}),
   people: [
     { id: t.lead.id, name: 'Lead', role: 'lead', ...(t.lead.sessionId ? { sessionId: t.lead.sessionId } : {}) },
     ...t.members.map((m) => ({ id: m.id, name: m.name, role: m.role, ...(m.sessionId ? { sessionId: m.sessionId } : {}) })),
@@ -16,6 +16,14 @@ export const rosterOf = (t: Team): Roster => ({
 
 // the running teams only: an ended team's threads go back to the normal lists
 export const runningRosters = (teams: Team[]): Roster[] => teams.filter((t) => !t.endedAt).map(rosterOf)
+
+// an ended team's people by tab id and session id: their threads sit in the normal lists, still marked with the
+// role icon and word so a team thread is not mistaken for an ordinary one
+export function pastTeamPeople(rosters: Roster[]): Map<string, RosterPerson> {
+  const m = new Map<string, RosterPerson>()
+  for (const r of rosters) if (r.endedAt) for (const p of r.people) { m.set(p.id, p); if (p.sessionId) m.set(p.sessionId, p) }
+  return m
+}
 
 // every tab id and session id of a running team's people, to keep them out of Waiting / Working and the saved lists
 export const teamThreadIds = (rosters: Roster[]): Set<string> =>
