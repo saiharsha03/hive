@@ -3,7 +3,7 @@
 // The only write is running your deploy.sh (HIVE_DEPLOY_SCRIPT), and only from the user's click (IPC, never a Claude tool).
 // AWS calls are read-only (describe / list / s3 cp to stdout).
 import { BrowserWindow, type WebContents } from 'electron'
-import { execFile, spawn } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import {
@@ -46,8 +46,15 @@ const repoDir = (repo: string) => {
 const scriptPath = (p: string) => (isAbsolute(p) ? p : resolve(root, p))
 const deployScript = () => scriptPath(dc().script)
 // On Windows a bare `bash` resolves to System32\bash.exe (WSL), not Git Bash, so run the scripts with Git Bash like a terminal does
-const gitBash = join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
-const BASH = process.platform === 'win32' && existsSync(gitBash) ? gitBash : 'bash'
+// (git --exec-path is <git root>\mingw64\libexec\git-core, so Git installed anywhere on PATH is found too)
+let bashPath = ''
+function findBash(): string {
+  if (process.platform !== 'win32') return 'bash'
+  const roots = [join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git')]
+  try { roots.push(resolve(execFileSync('git', ['--exec-path'], { encoding: 'utf8', windowsHide: true }).trim(), '..', '..', '..')) } catch { /* git not on PATH */ }
+  return roots.map((r) => join(r, 'bin', 'bash.exe')).find((p) => existsSync(p)) ?? 'bash'
+}
+const BASH = () => (bashPath ||= findBash())
 
 const run = (cmd: string, args: string[], opts: { cwd?: string; timeout?: number } = {}) =>
   new Promise<string>((ok, bad) => {
@@ -82,7 +89,7 @@ function runDiffsScript(suite: Suite): Promise<string> {
   const script = scriptPath(dc().diffsScript)
   if (!existsSync(script)) throw new Error(`diffs.sh not found at ${script} (set HIVE_DIFFS_SCRIPT)`)
   return new Promise((ok, bad) => {
-    const child = spawn(BASH, [basename(script), suite], { cwd: dirname(script), windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
+    const child = spawn(BASH(), [basename(script), suite], { cwd: dirname(script), windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
     let out = ''
     let err = ''
     const timer = setTimeout(() => child.kill(), 180_000)
@@ -157,7 +164,7 @@ export async function startDeploy(sender: WebContents, repo: string, target: Tar
   running.add(repo)
   const send = (ch: string, ...a: unknown[]) => { if (!sender.isDestroyed()) sender.send(ch, runId, ...a) }
   send('deploy:out', `$ bash deploy.sh ${target}   (in ${repo})\n`)
-  const child = spawn(BASH, [deployScript(), target], { cwd, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
+  const child = spawn(BASH(), [deployScript(), target], { cwd, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
   child.stdout.on('data', (b) => send('deploy:out', b.toString()))
   child.stderr.on('data', (b) => send('deploy:out', b.toString()))
   child.on('error', (e) => { running.delete(repo); send('deploy:end', -1, `Could not start bash: ${e.message}`, '', '') })
