@@ -35,6 +35,7 @@ type Props = {
   activeId: string | null; onOpen: (s: SessionInfo) => void; live: Live; onActivate: (id: string) => void; onCloseLive: (id: string) => void
   onNew?: () => void; footer?: ReactNode; title?: string
   onTeam?: (teamId: string) => void // a team's row: open the Team view on it
+  onSaved?: (list: SessionInfo[]) => void // the saved threads as just read (tabs take their titles from it)
 }
 
 // the app asks every sidebar to re-read the saved threads (new threads, new titles), at most every 2 s
@@ -42,7 +43,7 @@ const refreshers = new Set<() => void>()
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 export const refreshThreadList = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refreshers.forEach((f) => f()), 2000) }
 
-export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew, footer, title = 'Threads', onTeam }: Props) {
+export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew, footer, title = 'Threads', onTeam, onSaved }: Props) {
   const [listed, setSessions] = useState<SessionInfo[] | null>(null)
   // a watcher's thread shows under the watcher's name, not Claude's auto title
   const { watchers } = useWatchers()
@@ -74,9 +75,11 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const hover = useRef(false)
   const states = useThreads()
 
+  const savedRef = useRef(onSaved)
+  savedRef.current = onSaved
   // the saved threads: at start, and again whenever the app says one changed (a turn ended, a thread renamed itself)
   useEffect(() => {
-    const load = () => { void window.api.listSessions().then(setSessions) }
+    const load = () => { void window.api.listSessions().then((list) => { setSessions(list); savedRef.current?.(list) }) }
     load()
     refreshers.add(load)
     return () => { refreshers.delete(load) }
