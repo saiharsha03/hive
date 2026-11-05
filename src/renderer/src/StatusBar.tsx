@@ -45,11 +45,11 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   const name = useAppName()
   const { ui, theme } = useAppearance()
 
-  // account, limits and connectors: every minute
+  // account, limits and connectors: every 15 s (a live thread's limits read in a few ms)
   useEffect(() => {
     const load = () => window.api.getStatus().then(setStatus).catch(() => {})
     load()
-    const t = setInterval(load, 60_000)
+    const t = setInterval(load, 15_000)
     return () => clearInterval(t)
   }, [])
   // a new Hive release: downloaded and waiting for a restart, or (portable) available on GitHub

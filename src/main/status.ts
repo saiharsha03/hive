@@ -29,7 +29,7 @@ const loginStamp = () => { try { return statSync(credentials()).mtimeMs } catch 
 let startedOn = 0
 function current(): Query {
   const stamp = loginStamp()
-  if (q && stamp !== startedOn) { q.close(); q = null; usage = null; lastTry = 0 }
+  if (q && stamp !== startedOn) { q.close(); q = null; usage = null; lastIdleTry = 0 }
   if (!q) { q = idleQuery(); startedOn = stamp }
   return q
 }
@@ -50,27 +50,30 @@ export const idle = (): Query => current()
 
 const limit = (w: any): Limit => (w ? afterReset({ pct: w.utilization ?? null, resetsAt: w.resets_at ?? null }) : null)
 
-// Plan limits. Only a process that has talked to the API carries them, so a live thread's usage answer comes first
-// (the app sets the reader), then the idle process's. The endpoint is rate limited and sometimes answers with a
-// placeholder: one try per READ_MS, and only a real answer replaces the reading. The reading keeps its time, so the
-// bar can show how old it is instead of guessing.
+// Plan limits. Only a process that has talked to the API carries them: a live thread answers from its last reply's
+// headers in a few ms (the same numbers the terminal's status line gets), so it is read on every poll. Only when no
+// thread has them is the idle process asked, which goes to the rate-limited usage endpoint and sometimes answers with
+// a placeholder: that read is tried at most once per IDLE_MS. Only a real answer replaces the reading, which keeps its
+// time so the bar can say how old it is.
 let liveUsage: () => Promise<any | null> = async () => null
 export const setLiveUsage = (f: () => Promise<any | null>) => { liveUsage = f }
-const READ_MS = 5 * 60_000
+const IDLE_MS = 5 * 60_000
 let usage: { limits: any; plan: string | null; at: number } | null = null
-let lastTry = 0
+let lastIdleTry = 0
 let trying: Promise<void> | null = null
 const within = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
   Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))])
+const keep = (u: any): boolean => {
+  if (!realLimits(u?.rate_limits)) return false
+  usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at: Date.now() }
+  return true
+}
 function readUsage(force = false): Promise<void> {
-  if (trying || (!force && Date.now() - lastTry < READ_MS)) return trying ?? Promise.resolve()
-  lastTry = Date.now()
-  trying = (async () => {
-    const q = current()
-    for (const read of [liveUsage, () => q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true })]) {
-      const u: any = await within(read(), 20_000)
-      if (realLimits(u?.rate_limits)) { usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at: Date.now() }; return }
-    }
+  trying ??= (async () => {
+    if (keep(await within(liveUsage(), 10_000))) return
+    if (!force && Date.now() - lastIdleTry < IDLE_MS) return
+    lastIdleTry = Date.now()
+    keep(await within(current().usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }), 20_000))
   })().finally(() => { trying = null })
   return trying
 }
@@ -102,7 +105,7 @@ export async function getStatus(): Promise<Status> {
 
 // the 7-day limit for watchers' adaptive schedules: the latest reading, read again when it is older than maxAgeMs
 export type Weekly = { pct: number | null; readAt: number; error: string }
-export async function weeklyUsage(maxAgeMs = READ_MS): Promise<Weekly> {
+export async function weeklyUsage(maxAgeMs = IDLE_MS): Promise<Weekly> {
   if (!usage || Date.now() - usage.at > maxAgeMs) await readUsage(true)
   const pct = limit(usage?.limits?.seven_day)?.pct
   return typeof pct === 'number' && Number.isFinite(pct)
