@@ -72,7 +72,23 @@ export function openTerminal(id: string, cwd: string, cols: number, rows: number
     if (terms.get(id) === t) terms.delete(id)
     sink.exit(id, exitCode, t.closing)
   })
+  flushQueued(id, t)
   return { scrollback: '', fresh: true, shell: file, cwd: dir }
+}
+
+// a line to type into a tab's shell: now when it is open, else as soon as it starts (an interactive Claude Code
+// command the SDK cannot run, opened in the real CLI)
+const queued = new Map<string, string>()
+export function typeInTerminal(id: string, line: string) {
+  const t = terms.get(id)
+  if (t) t.p.write(`${line}\r`)
+  else queued.set(id, line)
+}
+const flushQueued = (id: string, t: Term) => {
+  const line = queued.get(id)
+  if (!line) return
+  queued.delete(id)
+  setTimeout(() => { if (terms.get(id) === t) t.p.write(`${line}\r`) }, 800) // after the shell's first prompt
 }
 
 export function writeTerminal(id: string, data: string) {
