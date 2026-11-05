@@ -2,7 +2,7 @@
 // folder; the thread starter and thread state are fakes (the SDK is exercised separately).
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, symlinkSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -267,7 +267,11 @@ test('Stop hook: a run that saved nothing (or, self-scheduled, set no next wake)
   setup()
   createWatcher({ name: 'Saver', goal: 'g', schedule: { every: '1h' } }, 'test')
   const tab = calls[0].tabId
-  await new Promise((r) => setTimeout(r, 20))
+  // what createWatcher wrote is from before the run: backdated, as a fast file system can stamp it at or after the
+  // run's start (CI on Linux), which read as "the run saved something"
+  const old = new Date(Date.now() - 3_600_000)
+  const backdate = (dir: string): void => { for (const f of readdirSync(dir, { withFileTypes: true })) { const p = join(dir, f.name); if (f.isDirectory()) backdate(p); utimesSync(p, old, old) } }
+  backdate(join(root, 'saver'))
   assert.match(watcherStopReason(tab) ?? '', /save what the next run needs/)
   mkdirSync(join(root, 'saver', 'memory', 'projects'), { recursive: true })
   writeFileSync(join(root, 'saver', 'memory', 'projects', 'notes.md'), 'checked x') // deep: the folder time is not enough
