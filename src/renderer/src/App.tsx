@@ -120,6 +120,22 @@ export function App() {
   const [leftW, setLeftW, saveLeftW] = useSize(`${ui}.left`, ui === 'workbench' ? 280 : 300)
   const [rightW, setRightW, saveRightW] = useSize(`${ui}.right`, ui === 'strip' ? 420 : ui === 'workbench' ? 440 : 520)
   const [bottomH, setBottomH, saveBottomH] = useSize(`${ui}.bottom`, 240)
+  // the Team tab shows only while a team runs (null: not read yet, shown); when the last one ends an open Team tab
+  // clears out, instead of sitting on the ended team's office
+  const [teamsRunning, setTeamsRunning] = useState<number | null>(null)
+  useEffect(() => {
+    const load = () => void window.api.teamsList().then((ts) => setTeamsRunning(ts.filter((t) => !t.endedAt).length)).catch(() => {})
+    load()
+    return window.api.onTeamsChanged(load)
+  }, [])
+  const ranTeams = useRef(false)
+  const bottomViews = teamsRunning === 0 ? arr.bottom.filter((v) => v !== 'team') : arr.bottom
+  const bv: ViewId = bottomViews.includes(bottomView) ? bottomView : (bottomViews[0] ?? 'agents')
+  useEffect(() => {
+    if (teamsRunning) { ranTeams.current = true; return }
+    if (teamsRunning === 0 && ranTeams.current && bottomView === 'team') { setBottomOpen(false); setBottomView(bv) }
+    ranTeams.current = false
+  }, [teamsRunning]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // a preview opens over the whole window (Esc or x closes it); "Side panel" docks it in the preview view instead
   const [previewFull, setPreviewFull] = useState(false)
@@ -773,7 +789,7 @@ export function App() {
     <>
       {!bottomMax && <Divider dir="h" size={bottomH} setSize={setBottomH} save={saveBottomH} sign={-1} min={90} max={Math.round(innerHeight * 0.8)} testid="divider-bottom" />}
       <div className={bottomMax ? 'bottomwrap max' : 'bottomwrap'} style={bottomMax ? undefined : { height: bottomH }}>
-        <BottomPanel views={arr.bottom} current={bottomView} onPick={setBottomView} onClose={() => { setBottomOpen(false); setBottomMax(false) }} onMax={() => setBottomMax((m) => !m)} max={bottomMax} render={renderView} badges={badges} />
+        <BottomPanel views={bottomViews} current={bv} onPick={setBottomView} onClose={() => { setBottomOpen(false); setBottomMax(false) }} onMax={() => setBottomMax((m) => !m)} max={bottomMax} render={renderView} badges={badges} />
       </div>
     </>
   )
