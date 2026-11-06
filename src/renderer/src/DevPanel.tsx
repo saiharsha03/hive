@@ -103,7 +103,7 @@ export function DevPanel({ state, setState, onClose }: Props) {
             {state!.docker.phase === 'error' && <div className="derr">{state!.docker.message}</div>}
             {state!.stacks.length === 0 && <div className="dnote">No stacks are defined in .env (HIVE_STACKS).</div>}
             {msg && <pre className="dmsg">{msg}</pre>}
-            {state!.stacks.map((st) => {
+            <div className="dstacks">{state!.stacks.map((st) => {
               const svcs = st.services.map((n) => byName.get(n)).filter((s): s is DevService => !!s)
               const up = svcs.filter((s) => s.state === 'running').length
               const live = svcs.some(isLive)
@@ -142,7 +142,7 @@ export function DevPanel({ state, setState, onClose }: Props) {
                   </table>
                 </div>
               )
-            })}
+            })}</div>
             {logFor && <pre className="dout" ref={pre}>{logText || '(no output yet)'}</pre>}
           </>
         )}
