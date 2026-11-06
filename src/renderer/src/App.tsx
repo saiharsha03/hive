@@ -453,7 +453,7 @@ export function App() {
     setSessions((all) => all.filter((s) => !closing.includes(s.id)))
     closing.forEach((id) => { if (!fileOfTab(id) && !id.startsWith('tool:')) void window.api.chatClose(id) })
   }
-  const closeSession = (id: string) => (id.startsWith('script:') ? void window.api.scriptsStop(id.slice(7)) : id.startsWith('dev:') ? void (id !== 'dev:docker' && window.api.devStop(id.slice(4))) : id === 'deploy' ? (deploy.w.phase !== 'deploying' && deploy.act({ t: 'stop' })) : closeTabs([id]))
+  const closeSession = (id: string) => (id.startsWith('script:') ? void window.api.scriptsStop(id.slice(7)) : id.startsWith('dev:') ? void (id !== 'dev:docker' && id.slice(4).split(',').forEach((n) => window.api.devStop(n))) : id === 'deploy' ? (deploy.w.phase !== 'deploying' && deploy.act({ t: 'stop' })) : closeTabs([id]))
   const paneTabsOf = (id: string) => panes.panes.find((p) => p.tabs.includes(id))?.tabs ?? [id]
   const tabAction = (target: string, a: TabCloseAction) => closeTabs(tabsToClose(paneTabsOf(target), target, a))
 
