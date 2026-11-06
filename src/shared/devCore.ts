@@ -207,9 +207,12 @@ export const ownerLabel = (o: Owner | null) => (!o ? '' : o.kind === 'user' ? 'y
 export const canControl = (owner: Owner | null, caller: Owner): boolean =>
   caller.kind === 'user' || !owner || (owner.kind === 'thread' && owner.id === caller.id)
 
-export function decideStart(i: { running: boolean; runningDir: string | null; owner: Owner | null; wantDir: string; caller: Owner }):
+// keepRunning (the Stacks tab's Start): a service that came up since the tab last looked is left as it is, never
+// restarted onto another folder
+export function decideStart(i: { running: boolean; runningDir: string | null; owner: Owner | null; wantDir: string; caller: Owner; keepRunning?: boolean }):
   { act: 'start' | 'reuse' | 'restart' | 'busy'; msg: string } {
   if (!i.running) return { act: 'start', msg: '' }
+  if (i.keepRunning) return { act: 'reuse', msg: `already running (started by ${ownerLabel(i.owner)}); left as it is` }
   if (i.runningDir && samePath(i.runningDir, i.wantDir)) return { act: 'reuse', msg: `already running from that folder (started by ${ownerLabel(i.owner)})` }
   if (canControl(i.owner, i.caller)) return { act: 'restart', msg: '' }
   return { act: 'busy', msg: `in use by ${ownerLabel(i.owner)}` }

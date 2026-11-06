@@ -250,11 +250,11 @@ async function stopProc(p: Proc, port: number | null) {
   }
 }
 
-async function startProc(svc: SvcDef, src: Source, caller: Owner): Promise<string> {
+async function startProc(svc: SvcDef, src: Source, caller: Owner, keepRunning = false): Promise<string> {
   const { dir, label: from } = await resolveDir(svc.repo, src)
   await refreshPorts()
   const old = procs.get(svc.name)
-  const d = decideStart({ running: !!old && !old.exited, runningDir: old?.dir ?? null, owner: old?.owner ?? null, wantDir: dir, caller })
+  const d = decideStart({ running: !!old && !old.exited, runningDir: old?.dir ?? null, owner: old?.owner ?? null, wantDir: dir, caller, keepRunning })
   if (d.act === 'busy') throw new Error(d.msg)
   if (d.act === 'reuse') return `${svc.name}: ${d.msg}`
   if (d.act === 'restart') await stopProc(old!, svc.port)
@@ -358,7 +358,7 @@ async function dockerUp(defs: SvcDef[]): Promise<string[]> {
 }
 
 // only: start just these services of the stack (all when omitted)
-export async function startStack(stackId: string, srcs: Record<string, Source>, caller: Owner, only?: string[]): Promise<string[]> {
+export async function startStack(stackId: string, srcs: Record<string, Source>, caller: Owner, only?: string[], keepRunning = false): Promise<string[]> {
   const stack = cfg().stacks.find((s) => s.id === stackId)
   if (!stack) throw new Error(`Unknown stack ${stackId}. Known: ${cfg().stacks.map((s) => s.id).join(', ')}`)
   const defs = stack.services.filter((n) => !only?.length || only.includes(n)).map(svcByName)
@@ -368,7 +368,7 @@ export async function startStack(stackId: string, srcs: Record<string, Source>, 
     lines.push(...(await dockerUp(defs)))
   }
   await Promise.all(defs.filter((s) => s.kind === 'process').map((s) =>
-    startProc(s, srcs[s.repo] ?? { kind: 'main' }, caller).then((m) => lines.push(m)).catch((e) => lines.push(`${s.name}: not started: ${(e as Error).message}`))))
+    startProc(s, srcs[s.repo] ?? { kind: 'main' }, caller, keepRunning).then((m) => lines.push(m)).catch((e) => lines.push(`${s.name}: not started: ${(e as Error).message}`))))
   return lines
 }
 
