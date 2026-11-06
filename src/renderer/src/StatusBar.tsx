@@ -121,6 +121,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
         </Item>
       )}
       <Item testid="status-appearance" title="UI and theme" onClick={onAppearance}><Icon name="layout" />{getUIs().find((u) => u.id === ui)?.label} UI, {getThemes(ui).find((t) => t.id === theme)?.label} theme</Item>
+      <Item testid="status-version" title="Hive version">v{__APP_VERSION__}</Item>
       {usageAt && status && (
         <Popover anchor={usageAt} onClose={() => setUsageAt(null)} width={300} align="right" testid="usage-pop">
           <div className="usage-pop">

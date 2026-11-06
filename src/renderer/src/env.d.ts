@@ -69,6 +69,8 @@ type DeployEnvStatus = {
   web: import('../../shared/deployCore').StatusCell & { detail: string }
 }
 
+declare const __APP_VERSION__: string
+
 interface Window {
   api: {
     uiLoad: (name: 'threads' | 'prefs') => Record<string, unknown>
