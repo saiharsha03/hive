@@ -4,6 +4,10 @@
 export type Phase = 'sent' | 'steered' | 'removed'
 export type Priority = 'next' | 'later'
 
+// a turn the SDK stopped while its prompt hooks still ran (an interrupt landed then): its message never reached Claude
+export const promptNeverChecked = (r: { subtype?: string; errors?: string[] }): boolean =>
+  r.subtype === 'error_during_execution' && (r.errors ?? []).some((e) => e.startsWith('prompt_check:'))
+
 export function turnQueue<T>(deliver: (msg: T, priority?: Priority) => void, notify: (id: string, phase: Phase) => void) {
   const waiting: { id: string; msg: T }[] = []
   let busy = false

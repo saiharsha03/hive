@@ -1,7 +1,7 @@
 // the queue of messages waiting for Claude's turn to end: an interrupt goes ahead of older queued ones
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { turnQueue } from '../../src/main/queueCore'
+import { promptNeverChecked, turnQueue } from '../../src/main/queueCore'
 
 test('an interrupt waits ahead of messages queued before it; others keep their order', () => {
   const got: string[] = []
@@ -40,4 +40,10 @@ test('a held queue takes a message even when idle, and hands it over on release'
   assert.equal(q.isHeld(), true)
   q.hold(false)
   assert.deepEqual(got, ['while paused'])
+})
+
+test('a turn stopped before its prompt was checked is told apart from other errors and interrupts', () => {
+  assert.equal(promptNeverChecked({ subtype: 'error_during_execution', errors: ['prompt_check: the turn was stopped before its prompt was checked'] }), true)
+  assert.equal(promptNeverChecked({ subtype: 'error_during_execution', errors: ['aborted'] }), false)
+  assert.equal(promptNeverChecked({ subtype: 'success' }), false)
 })

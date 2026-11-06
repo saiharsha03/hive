@@ -169,7 +169,7 @@ export function worthListing(t: Task, now: number): boolean {
 }
 
 // what the thread's own lists show: running work, and finished work for a minute after it ended (it then drops out
-// by itself; the Agents view keeps every result)
+// by itself; the Agents view uses the same rule)
 export const DONE_SHOWN_MS = 60_000
 export const inThreadList = (t: Task, now: number): boolean =>
   worthListing(t, now) && (t.status === 'running' || (!!t.endedAt && now - t.endedAt < DONE_SHOWN_MS))

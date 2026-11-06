@@ -16,7 +16,7 @@ import { claudeExecutable } from './engine'
 import { ORGANIZE_ACTIONS, checkOrganize, localNow } from './organize'
 import { searchInSession, searchSessions, sessionMeta } from './search'
 import { formatChunks, formatSessions } from './searchCore'
-import { turnQueue } from './queueCore'
+import { promptNeverChecked, turnQueue } from './queueCore'
 import { addTodo } from './todos'
 import { addToNote } from './notes'
 import { listSessions } from './sessions'
@@ -151,6 +151,9 @@ type Live = {
   waitingReason?: string // organize_thread "waiting", until the next message comes in
   lastReply: string | null // the final text of the last finished turn
   lastReplyAt?: number // when that turn finished
+  // the message that started the current turn, until Claude starts answering it: an interrupt that lands while its
+  // prompt hooks still run ends the turn with "prompt_check" and the message never reaches Claude, so it goes again
+  unchecked?: SDKUserMessage | null
   lastOk: boolean | null // whether the last finished turn succeeded (null: none yet)
   onIdle: Set<() => void> // wait_for_thread callers, told when the thread has no turn running and nothing queued
   emit: (event: unknown) => void // an event to this thread's tab
@@ -1019,7 +1022,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           if (cmd) { typeInTerminal(tabId, cliLine(cmd)); send({ type: 'hive_open_terminal', command: cmd }) }
         }
         observe(tabId, m, (id) => transcriptPath(cwd, id), q)
-        if (m.type === 'stream_event' && !m.parent_tool_use_id) s.turns.markBusy()
+        if (m.type === 'stream_event' && !m.parent_tool_use_id) { s.turns.markBusy(); s.unchecked = null } // Claude is answering it
         if (m.type === 'assistant' && !m.parent_tool_use_id) {
           const t = ((m.message?.content ?? []) as any[]).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
           if (t.trim()) lastText = t
@@ -1050,7 +1053,13 @@ ${s.lastReply}`, Date.now())
           limited = false; limitReset = null; limitKind = undefined
           lastText = ''
           longCommands.clear()
+          // stopped before its prompt was checked: that message never reached Claude, so it goes again, ahead of
+          // whatever was queued behind it (the interrupting message)
+          const lost = promptNeverChecked(r) ? s.unchecked : null
+          s.unchecked = null
+          if (lost) s.push({ ...lost, uuid: randomUUID() } as SDKUserMessage)
           s.turns.turnEnded()
+          if (lost) { s.turns.markBusy(); s.unchecked = lost }
           steersDelivered(tabId) // a message steered into this turn went in with it
           if (!s.turns.isBusy()) wake(s)
           // a background thread (not a watcher: they say themselves when they need you) finished: tell the phone
@@ -1129,6 +1138,7 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   }
   const go = () => {
     if (msg.mode === 'queue' && msg.queueId) return cur.turns.submit(msg.queueId, m, !!msg.interrupt) // an interrupt goes ahead of older queued messages
+    if (!cur.turns.isBusy() && msg.mode !== 'steer') cur.unchecked = m
     cur.turns.markBusy()
     cur.push(msg.mode === 'steer' ? ({ ...m, priority: 'next' } as SDKUserMessage) : m)
   }
