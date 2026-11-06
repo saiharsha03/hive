@@ -223,7 +223,7 @@ interface Window {
     devState: () => Promise<import('../../shared/devCore').DevState>
     devSnapshot: () => Promise<import('../../shared/devCore').DevState>
     devSources: (repo: string) => Promise<import('../../shared/devCore').SourceOption[]>
-    devStack: (id: string, sources: Record<string, import('../../shared/devCore').Source>) => Promise<string[]>
+    devStack: (id: string, sources: Record<string, import('../../shared/devCore').Source>, only?: string[]) => Promise<string[]>
     devStart: (name: string, source: import('../../shared/devCore').Source) => Promise<string>
     devStop: (name: string) => Promise<string>
     devStopAll: () => Promise<string[]>

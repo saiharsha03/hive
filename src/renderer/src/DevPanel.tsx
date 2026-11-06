@@ -10,12 +10,19 @@ const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase()
 const isLive = (s: DevService) => s.state === 'starting' || s.state === 'running'
 
 // what Shut down stops: the stack's live services (not ones run outside Hive), minus any service another stack
-// still uses because that stack has a live service of its own (helix_api stays up for a running HelixCMMS stack)
+// still uses because that stack has a live service of its own, even one run outside Hive (helix_api stays up for a
+// running HelixCMMS stack)
 export function shutdownNames(st: StackDef, stacks: StackDef[], services: DevService[]): string[] {
-  const live = new Set(services.filter((s) => isLive(s) && !s.external).map((s) => s.name))
+  const live = new Set(services.filter(isLive).map((s) => s.name))
+  const ours = new Set(services.filter((s) => isLive(s) && !s.external).map((s) => s.name))
   const keptByOther = (n: string) => stacks.some((o) => o.id !== st.id && o.services.includes(n) && o.services.some((m) => live.has(m) && !st.services.includes(m)))
-  return st.services.filter((n) => live.has(n) && !keptByOther(n))
+  return st.services.filter((n) => ours.has(n) && !keptByOther(n))
 }
+
+// what Start brings up: only the stack's services that are not running, so a service another thread runs from its
+// worktree is never restarted onto another folder
+export const startNames = (st: StackDef, services: DevService[]): string[] =>
+  st.services.filter((n) => { const s = services.find((x) => x.name === n); return !!s && !isLive(s) })
 
 export function DevPanel({ state, setState, onClose }: Props) {
   const [opts, setOpts] = useState<Record<string, SourceOption[]>>({})
@@ -59,12 +66,16 @@ export function DevPanel({ state, setState, onClose }: Props) {
     fn().then((r) => setMsg(Array.isArray(r) ? r.join('\n') : r)).catch((e) => setMsg(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
       .finally(() => { setBusy(null); loadSources(); window.api.devState().then(setState).catch(() => {}) })
   }
-  // a running service keeps the folder it runs from; the others start from the row's pick
+  // the services Start brings up run from their row's pick (running ones are left alone, see startNames)
   const sourcesFor = (names: string[]) => {
     const out: Record<string, Source> = {}
-    for (const s of state?.services ?? []) if (names.includes(s.name) && s.kind === 'process') out[s.repo] = sourceOf(s.repo, valueOf(s))
+    for (const s of state?.services ?? []) if (names.includes(s.name) && s.kind === 'process') out[s.repo] = sourceOf(s.repo, choice[s.repo] ?? 'main')
     return out
   }
+  const start = (st: StackDef) => act(st.id, async () => {
+    const names = startNames(st, state!.services)
+    return names.length ? window.api.devStack(st.id, sourcesFor(names), names) : 'Everything in this stack is already running.'
+  })
   const pick = (s: DevService, value: string) => {
     setChoice((c) => ({ ...c, [s.repo]: value }))
     // switching restarts only this service from the new folder
@@ -102,7 +113,7 @@ export function DevPanel({ state, setState, onClose }: Props) {
                     <span className="dtitle">{st.label}</span>
                     <span className="dnote">{up}/{svcs.length} running</span>
                     <span className="dspace" />
-                    <button data-testid={`stack-start-${st.id}`} className="dbtn primary" disabled={!!busy || up === svcs.length} onClick={() => act(st.id, () => window.api.devStack(st.id, sourcesFor(st.services)))}>{busy === st.id ? 'Working…' : live ? 'Start the rest' : 'Start'}</button>
+                    <button data-testid={`stack-start-${st.id}`} className="dbtn primary" disabled={!!busy || !svcs.some((s) => !isLive(s))} onClick={() => start(st)}>{busy === st.id ? 'Working…' : live ? 'Start the rest' : 'Start'}</button>
                     <button data-testid={`stack-stop-${st.id}`} className="dbtn" disabled={!!busy || !live} onClick={() => shutDown(st)}>Shut down</button>
                   </div>
                   <table className="dtable">

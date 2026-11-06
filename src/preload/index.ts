@@ -246,7 +246,7 @@ contextBridge.exposeInMainWorld('api', {
   devState: () => ipcRenderer.invoke('dev:state'),
   devSnapshot: () => ipcRenderer.invoke('dev:snapshot'),
   devSources: (repo: string) => ipcRenderer.invoke('dev:sources', repo),
-  devStack: (id: string, sources: Record<string, unknown>) => ipcRenderer.invoke('dev:stack', id, sources),
+  devStack: (id: string, sources: Record<string, unknown>, only?: string[]) => ipcRenderer.invoke('dev:stack', id, sources, only),
   devStart: (name: string, source: unknown) => ipcRenderer.invoke('dev:start', name, source),
   devStop: (name: string) => ipcRenderer.invoke('dev:stop', name),
   devStopAll: () => ipcRenderer.invoke('dev:stopAll'),

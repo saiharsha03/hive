@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shutdownNames } from '../../src/renderer/src/DevPanel'
+import { shutdownNames, startNames } from '../../src/renderer/src/DevPanel'
 import type { DevService, StackDef } from '../../src/shared/devCore'
 
 const svc = (name: string, state: DevService['state'], external = false) =>
@@ -16,5 +16,19 @@ describe('shutdownNames', () => {
   it('keeps shared services another running stack still uses, and skips ones run outside Hive', () => {
     const live = [svc('helix_db', 'running'), svc('helix_api', 'running'), svc('prevent_api', 'running'), svc('prevent_web', 'running', true), svc('helix_web', 'running')]
     expect(shutdownNames(prevent, [prevent, cmms], live)).toEqual(['prevent_api'])
+  })
+})
+
+describe('shutdownNames with a stack run outside Hive', () => {
+  it('keeps shared services when the other stack runs only outside Hive', () => {
+    const live = [svc('helix_db', 'running'), svc('helix_api', 'running'), svc('prevent_api', 'running'), svc('prevent_web', 'stopped'), svc('helix_web', 'running', true)]
+    expect(shutdownNames(prevent, [prevent, cmms], live)).toEqual(['prevent_api'])
+  })
+})
+
+describe('startNames', () => {
+  it('starts only what is not running, so running services keep their folder', () => {
+    const live = [svc('helix_db', 'running'), svc('helix_api', 'failed'), svc('prevent_api', 'starting'), svc('prevent_web', 'stopped')]
+    expect(startNames(prevent, live)).toEqual(['helix_api', 'prevent_web'])
   })
 })

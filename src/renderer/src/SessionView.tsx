@@ -281,7 +281,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   useEffect(() => {
     if (!focused) return
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (!e.ctrlKey || e.shiftKey || e.altKey || e.key !== 'ArrowDown') return
+      if (e.defaultPrevented || !e.ctrlKey || e.shiftKey || e.altKey || e.key !== 'ArrowDown') return
       if ((document.activeElement as HTMLElement | null)?.closest('.xterm, .monaco-editor')) return
       const el = thread.current
       if (!el) return
