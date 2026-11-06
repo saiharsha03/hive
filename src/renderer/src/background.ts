@@ -3,7 +3,7 @@ import { applyEvent, toolLine, type Session } from './chat'
 
 export type LiveState = 'working' | 'waiting' | null
 // kind 'deploy' / 'dev' / 'script' are the Deploy wizard's, Dev stack's and Scripts' items (not Claude sessions)
-export type LiveRow = { id: string; kind?: 'deploy' | 'dev' | 'script'; sessionId?: string; title: string; state: 'working' | 'waiting'; note: string; since: number }
+export type LiveRow = { id: string; kind?: 'deploy' | 'script'; sessionId?: string; title: string; state: 'working' | 'waiting'; note: string; since: number }
 
 // waiting (Claude asked, or a background turn ended) wins over working; the visible active tab never carries waiting
 export const stateOf = (s: Session): LiveState => (s.waitingSince ? 'waiting' : s.busy ? 'working' : null)

@@ -390,7 +390,6 @@ export function App() {
   // show a session (bringing a backgrounded one back) and clear its waiting
   const activate = (id: string) => {
     if (id === 'deploy') { setModal('deploy'); return }
-    if (id.startsWith('dev:')) { openTool('dev'); return }
     if (id.startsWith('script:')) { showView('scripts'); return }
     setSessions((all) => activateSession(all, id))
     setPaneState((p) => activateIn(p, id))
@@ -453,7 +452,7 @@ export function App() {
     setSessions((all) => all.filter((s) => !closing.includes(s.id)))
     closing.forEach((id) => { if (!fileOfTab(id) && !id.startsWith('tool:')) void window.api.chatClose(id) })
   }
-  const closeSession = (id: string) => (id.startsWith('script:') ? void window.api.scriptsStop(id.slice(7)) : id.startsWith('dev:') ? void (id !== 'dev:docker' && id.slice(4).split(',').forEach((n) => window.api.devStop(n))) : id === 'deploy' ? (deploy.w.phase !== 'deploying' && deploy.act({ t: 'stop' })) : closeTabs([id]))
+  const closeSession = (id: string) => (id.startsWith('script:') ? void window.api.scriptsStop(id.slice(7)) : id === 'deploy' ? (deploy.w.phase !== 'deploying' && deploy.act({ t: 'stop' })) : closeTabs([id]))
   const paneTabsOf = (id: string) => panes.panes.find((p) => p.tabs.includes(id))?.tabs ?? [id]
   const tabAction = (target: string, a: TabCloseAction) => closeTabs(tabsToClose(paneTabsOf(target), target, a))
 
@@ -466,7 +465,7 @@ export function App() {
   // threads still waiting on their own subagents / workflows / Codex runs count as working
   const statuses = useAllStatus()
   const agentCounts = useMemo(() => new Map([...statuses].map(([tab, st]) => [tab, st.tasks.filter((t) => t.status === 'running' && t.kind !== 'local_bash').length])), [statuses])
-  const live = useMemo(() => liveRows(sessions, [...(deploy.liveRow ? [deploy.liveRow] : []), ...dev.liveRows, ...scripts.liveRows], agentCounts), [sessions, deploy.liveRow, dev.liveRows, scripts.liveRows, agentCounts])
+  const live = useMemo(() => liveRows(sessions, [...(deploy.liveRow ? [deploy.liveRow] : []), ...scripts.liveRows], agentCounts), [sessions, deploy.liveRow, scripts.liveRows, agentCounts])
   const failedCount = live.waiting.filter((r) => liveLook(r).word === 'FAILED').length
 
   // a to-do's "Talk to Claude about this": a new thread named after it, the opening line filled in for Enter (or more)
@@ -660,17 +659,16 @@ export function App() {
     dev: devUp ? { n: devUp } : undefined,
   }
   // the sidebar's Tools: only what has no button of its own (the top bar has Files, Git, To-dos, Notes, Scripts, Deploy;
-  // the bottom panel has Agents)
+  // the bottom panel has Agents, Terminal and Stacks)
   const toolRows: ToolRow[] = [
     { id: 'pull', label: 'Pull latest', icon: pulling ? 'sync' : 'repo-pull', mk: pulling ? 'mk-pull spin' : 'mk-pull', status: pulling ? 'pulling…' : '' },
     ...(allow?.configured ? [{ id: 'allow', label: 'Allow my IP', icon: allow.running ? 'sync' : 'shield', mk: allow.running ? 'mk-other spin' : 'mk-other', status: allow.running ? 'allowing…' : allow.changed ? 'IP changed' : '', cls: allowOn ? 's-wait' : '', disabled: !allowOn, title: allowTitle }] : []),
-    { id: 'dev', label: 'Dev stack', icon: 'server-process', mk: 'mk-dev', status: dev.state?.configured ? `${devUp} up` : '', cls: devUp ? 's-done' : '' },
     { id: 'mcp', label: 'MCP servers', icon: 'plug', mk: 'mk-other' },
   ]
 
   // the Tools menu lists only views with no button of their own (the top bar has Files, Git, To-dos, Notes, Scripts,
-  // Deploy; the bottom panel has Agents and Terminal)
-  const ownButton = new Set<ViewId>(['files', 'git', 'todos', 'notes', 'scripts', 'deploy', 'agents', 'terminal'])
+  // Deploy; the bottom panel has Agents, Terminal and Stacks)
+  const ownButton = new Set<ViewId>(['files', 'git', 'todos', 'notes', 'scripts', 'deploy', 'agents', 'terminal', 'dev'])
   const viewItems = (prefix: string): MenuItem[] => (Object.keys(VIEW) as ViewId[]).filter((v) => !ownButton.has(v) && (v !== 'threads' || placeOf(ui, 'threads') !== 'left')).map((v) => ({
     label: VIEW[v].label, icon: VIEW[v].icon, onClick: (el) => openTool(v, el), testid: `${prefix}-${v}`, hint: v === 'deploy' ? 'wizard' : undefined,
   }))

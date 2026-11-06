@@ -1,21 +1,33 @@
+// Stacks: one section per stack from Hive's .env (HIVE_STACKS). Start brings up the whole stack (Docker Desktop is
+// opened first when it is not running), each repo runs from the branch / worktree picked in its row, and Shut down
+// stops the stack's services except the ones another running stack still needs.
 import { useEffect, useRef, useState } from 'react'
-import type { DevService, DevState, Source, SourceOption } from '../../shared/devCore'
+import type { DevService, DevState, Source, SourceOption, StackDef } from '../../shared/devCore'
 
 type Props = { state: DevState | null; setState: (s: DevState) => void; onClose?: () => void }
 const STATE_CLASS: Record<string, string> = { running: 'ok', starting: 'work', failed: 'bad', stopped: '' }
 const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase()
+const isLive = (s: DevService) => s.state === 'starting' || s.state === 'running'
+
+// what Shut down stops: the stack's live services (not ones run outside Hive), minus any service another stack
+// still uses because that stack has a live service of its own (helix_api stays up for a running HelixCMMS stack)
+export function shutdownNames(st: StackDef, stacks: StackDef[], services: DevService[]): string[] {
+  const live = new Set(services.filter((s) => isLive(s) && !s.external).map((s) => s.name))
+  const keptByOther = (n: string) => stacks.some((o) => o.id !== st.id && o.services.includes(n) && o.services.some((m) => live.has(m) && !st.services.includes(m)))
+  return st.services.filter((n) => live.has(n) && !keptByOther(n))
+}
 
 export function DevPanel({ state, setState, onClose }: Props) {
   const [opts, setOpts] = useState<Record<string, SourceOption[]>>({})
   const [choice, setChoice] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
   const [logFor, setLogFor] = useState<string | null>(null)
   const [logText, setLogText] = useState('')
   const pre = useRef<HTMLPreElement>(null)
   const ok = !!state?.configured
 
-  // fresh ports / docker state while the panel is open
+  // fresh ports / docker state while the tab is open
   useEffect(() => {
     if (!ok) return
     const tick = () => window.api.devState().then(setState).catch(() => {})
@@ -42,26 +54,32 @@ export function DevPanel({ state, setState, onClose }: Props) {
     const running = s.fromDir && opts[s.repo]?.find((o) => o.path && norm(o.path) === norm(s.fromDir!))
     return running ? running.value : choice[s.repo] ?? 'main'
   }
-  const act = (fn: () => Promise<string | string[]>) => {
-    setBusy(true); setMsg('')
+  const act = (key: string, fn: () => Promise<string | string[]>) => {
+    setBusy(key); setMsg('')
     fn().then((r) => setMsg(Array.isArray(r) ? r.join('\n') : r)).catch((e) => setMsg(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
-      .finally(() => { setBusy(false); loadSources(); window.api.devState().then(setState).catch(() => {}) })
+      .finally(() => { setBusy(null); loadSources(); window.api.devState().then(setState).catch(() => {}) })
   }
-  const sourcesFor = (ids: string[]) => {
+  // a running service keeps the folder it runs from; the others start from the row's pick
+  const sourcesFor = (names: string[]) => {
     const out: Record<string, Source> = {}
-    for (const s of state?.services ?? []) if (ids.includes(s.name) && s.kind === 'process') out[s.repo] = sourceOf(s.repo, choice[s.repo] ?? 'main')
+    for (const s of state?.services ?? []) if (names.includes(s.name) && s.kind === 'process') out[s.repo] = sourceOf(s.repo, valueOf(s))
     return out
   }
   const pick = (s: DevService, value: string) => {
     setChoice((c) => ({ ...c, [s.repo]: value }))
     // switching restarts only this service from the new folder
-    if (s.state === 'starting' || (s.state === 'running' && !s.external)) act(() => window.api.devStart(s.name, sourceOf(s.repo, value)))
+    if (isLive(s) && !s.external) act(s.name, () => window.api.devStart(s.name, sourceOf(s.repo, value)))
   }
+  const shutDown = (st: StackDef) => act(st.id, async () => {
+    const names = shutdownNames(st, state!.stacks, state!.services)
+    return names.length ? Promise.all(names.map((n) => window.api.devStop(n))) : 'Nothing of this stack is running.'
+  })
 
+  const byName = new Map((state?.services ?? []).map((s) => [s.name, s]))
   return (
-    <section className="tool">
+    <section className="tool" data-testid="stacks-view">
       <div className="dhead">
-        <span className="dtitle"><span className="ph ph-dev">◆</span>Dev stack</span>
+        <span className="dtitle"><span className="ph ph-dev">◆</span>Stacks</span>
         {state?.docker.phase === 'starting' && <span className="dnote"><span className="ldot work" />{state.docker.message}</span>}
         <span className="dspace" />
         {onClose && <button className="dlink" aria-label="Close" onClick={onClose} data-testid="tool-close">×</button>}
@@ -72,45 +90,48 @@ export function DevPanel({ state, setState, onClose }: Props) {
           <>
             {state!.message && <div className="dwarn">{state!.message}</div>}
             {state!.docker.phase === 'error' && <div className="derr">{state!.docker.message}</div>}
-            <div className="drow">
-              {state!.stacks.map((st) => (
-                <button data-testid="dev-button-1" key={st.id} className="dbtn primary" disabled={busy} onClick={() => act(() => window.api.devStack(st.id, sourcesFor(st.services)))}>Start {st.label}</button>
-              ))}
-              <button data-testid="dev-button-2" className="dbtn" disabled={busy} onClick={() => act(() => window.api.devStopAll())}>Stop all</button>
-              <span className="dnote">Databases are shared; Run from only changes the local servers.</span>
-            </div>
-            {msg && <pre className="dmsg">{msg}</pre>}
             {state!.stacks.length === 0 && <div className="dnote">No stacks are defined in .env (HIVE_STACKS).</div>}
-            <table className="dtable">
-              <thead><tr><th>Service</th><th>Status</th><th>Port</th><th>Run from</th><th>Started by</th><th /></tr></thead>
-              <tbody>
-                {state!.services.map((s) => {
-                  const live = s.state === 'starting' || s.state === 'running'
-                  return (
-                    <tr key={s.name}>
-                      <td>{s.label}</td>
-                      <td><span className={`pr ${STATE_CLASS[s.state]}`}>{s.state}</span>{s.note && <div className="dd">{s.note}</div>}</td>
-                      <td>{s.port ?? ''}</td>
-                      <td>
-                        {s.kind === 'process'
-                          ? <select data-testid="dev-select-3" className="dsel" value={valueOf(s)} disabled={busy || s.external} onChange={(e) => pick(s, e.target.value)}>
-                              {(opts[s.repo] ?? [{ value: 'main', label: 'main checkout' } as SourceOption]).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                          : <span className="dnote">main checkout</span>}
-                      </td>
-                      <td>{s.owner}</td>
-                      <td className="dact">
-                        {s.open && s.state === 'running' && s.port && <a className="dlink" href={`http://localhost:${s.port}`} target="_blank" rel="noreferrer">Open</a>}
-                        <button data-testid="dev-button-4" className="dlink" onClick={() => setLogFor(logFor === s.name ? null : s.name)}>{logFor === s.name ? 'Hide logs' : 'Logs'}</button>
-                        {s.kind === 'process' && live && !s.external && <button data-testid="dev-button-5" className="dlink" disabled={busy} onClick={() => act(() => window.api.devStop(s.name))}>Stop</button>}
-                        {s.kind === 'docker' && s.state === 'running' && <button data-testid="dev-button-6" className="dlink" disabled={busy} onClick={() => act(() => window.api.devStop(s.name))}>Stop</button>}
-                        {!live && <button data-testid="dev-button-7" className="dlink" disabled={busy} onClick={() => act(() => window.api.devStart(s.name, sourceOf(s.repo, choice[s.repo] ?? 'main')))}>Start</button>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            {msg && <pre className="dmsg">{msg}</pre>}
+            {state!.stacks.map((st) => {
+              const svcs = st.services.map((n) => byName.get(n)).filter((s): s is DevService => !!s)
+              const up = svcs.filter((s) => s.state === 'running').length
+              const live = svcs.some(isLive)
+              return (
+                <div key={st.id} className="dstack" data-testid={`stack-${st.id}`}>
+                  <div className="drow">
+                    <span className="dtitle">{st.label}</span>
+                    <span className="dnote">{up}/{svcs.length} running</span>
+                    <span className="dspace" />
+                    <button data-testid={`stack-start-${st.id}`} className="dbtn primary" disabled={!!busy || up === svcs.length} onClick={() => act(st.id, () => window.api.devStack(st.id, sourcesFor(st.services)))}>{busy === st.id ? 'Working…' : live ? 'Start the rest' : 'Start'}</button>
+                    <button data-testid={`stack-stop-${st.id}`} className="dbtn" disabled={!!busy || !live} onClick={() => shutDown(st)}>Shut down</button>
+                  </div>
+                  <table className="dtable">
+                    <thead><tr><th>Service</th><th>Status</th><th>Port</th><th>Run from</th><th>Started by</th><th /></tr></thead>
+                    <tbody>
+                      {svcs.map((s) => (
+                        <tr key={s.name}>
+                          <td>{s.label}</td>
+                          <td><span className={`pr ${STATE_CLASS[s.state]}`}>{s.state}</span>{s.note && <div className="dd">{s.note}</div>}</td>
+                          <td>{s.port ?? ''}</td>
+                          <td>
+                            {s.kind === 'process'
+                              ? <select data-testid={`stack-src-${st.id}-${s.name}`} className="dsel" value={valueOf(s)} disabled={!!busy || s.external} onChange={(e) => pick(s, e.target.value)}>
+                                  {(opts[s.repo] ?? [{ value: 'main', label: 'main checkout' } as SourceOption]).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                              : <span className="dnote">docker, main checkout</span>}
+                          </td>
+                          <td>{s.owner}</td>
+                          <td className="dact">
+                            {s.open && s.state === 'running' && s.port && <a className="dlink" href={`http://localhost:${s.port}`} target="_blank" rel="noreferrer">Open</a>}
+                            <button className="dlink" onClick={() => setLogFor(logFor === s.name ? null : s.name)}>{logFor === s.name ? 'Hide logs' : 'Logs'}</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })}
             {logFor && <pre className="dout" ref={pre}>{logText || '(no output yet)'}</pre>}
           </>
         )}

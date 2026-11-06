@@ -277,6 +277,22 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     if (el) scrolls.set(session.id, { top: el.scrollTop, bottom: el.scrollHeight - el.scrollTop - el.clientHeight < 40 })
   }
 
+  // Ctrl+Down: jump the focused chat to the end of the latest message (not while the terminal or the editor has the keys)
+  useEffect(() => {
+    if (!focused) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.key !== 'ArrowDown') return
+      if ((document.activeElement as HTMLElement | null)?.closest('.xterm, .monaco-editor')) return
+      const el = thread.current
+      if (!el) return
+      e.preventDefault()
+      el.scrollTop = el.scrollHeight
+      scrolls.set(session.id, { top: el.scrollTop, bottom: true })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focused, session.id])
+
   // the focused chat takes the keyboard when it becomes focused
   useEffect(() => { if (focused) box.current?.focus({ preventScroll: true }) }, [focused])
 

@@ -15,7 +15,7 @@ export const VIEW: Record<ViewId, { label: string; icon: string; mk: string }> =
   scripts: { label: 'Scripts', icon: 'play', mk: 'mk-scripts' },
   todos: { label: 'To-dos', icon: 'checklist', mk: 'mk-todos' },
   notes: { label: 'Notes', icon: 'note', mk: 'mk-todos' },
-  dev: { label: 'Dev stack', icon: 'server-process', mk: 'mk-dev' },
+  dev: { label: 'Stacks', icon: 'server-process', mk: 'mk-dev' },
   pull: { label: 'Pull latest', icon: 'repo-pull', mk: 'mk-pull' },
   team: { label: 'Team', icon: 'organization', mk: 'mk-agents' },
 }
@@ -31,27 +31,27 @@ export type Arrangement = {
   closed: Region[]
 }
 
-// the bottom panel holds only what runs: Agents and the terminal; the tools are side panel views picked from the top bar
-const BOTTOM: ViewId[] = ['agents', 'team', 'terminal']
+// the bottom panel holds what runs: Agents, the terminal and the dev Stacks; the tools are side panel views picked from the top bar
+const BOTTOM: ViewId[] = ['agents', 'team', 'terminal', 'dev']
 // Git is never a side panel view: it opens as a tab (TOOL_TABS), and two Git views would share one selected diff
 
 export const ARRANGE: Record<UIId, Arrangement> = {
   default: { left: ['threads'], right: ['files'], bottom: BOTTOM, chat: 'grid', tabs: 'full', closed: [] },
   workbench: {
-    left: ['threads', 'files', 'dev', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['deploy'], bottom: BOTTOM,
+    left: ['threads', 'files', 'scripts', 'todos', 'notes', 'watchers', 'agents'], right: ['deploy'], bottom: BOTTOM,
     chat: 'grid', tabs: 'full', closed: [],
   },
   strip: {
-    left: [], right: ['agents', 'watchers', 'dev', 'scripts', 'todos', 'notes', 'files', 'deploy'],
-    bottom: ['terminal', 'agents', 'team'], chat: 'columns', tabs: 'title', closed: ['right'],
+    left: [], right: ['agents', 'watchers', 'scripts', 'todos', 'notes', 'files', 'deploy'],
+    bottom: ['terminal', 'dev', 'agents', 'team'], chat: 'columns', tabs: 'title', closed: ['right'],
   },
   focus: {
-    left: [], right: ['files', 'todos', 'notes', 'scripts', 'deploy', 'watchers', 'dev'], bottom: BOTTOM,
+    left: [], right: ['files', 'todos', 'notes', 'scripts', 'deploy', 'watchers'], bottom: BOTTOM,
     chat: 'single', tabs: 'none', closed: ['right', 'bottom'],
   },
 }
 
-// where a view opens in a UI: its region, else a popover (Pull latest, Dev stack outside Workbench)
+// where a view opens in a UI: its region, else a popover (Pull latest)
 export function placeOf(ui: UIId, v: ViewId): Region | 'popover' {
   const a = ARRANGE[ui]
   if (v === 'threads') return a.left.includes('threads') ? 'left' : 'popover'
