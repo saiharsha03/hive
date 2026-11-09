@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -350,7 +351,7 @@ private fun Item(it: JSONObject) {
     val t = it.optString("t")
     when (it.optString("k")) {
         "you" -> Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.CenterEnd) {
-            Text(t, Modifier.background(Color(0xFF2A3140), RoundedCornerShape(12.dp)).padding(10.dp).widthIn(max = 320.dp))
+            SelectionContainer { Text(t, Modifier.background(Color(0xFF2A3140), RoundedCornerShape(12.dp)).padding(10.dp).widthIn(max = 320.dp)) }
         }
         "claude" -> ClaudeText(t)
         "tool" -> Text("› $t", Modifier.padding(vertical = 2.dp), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -363,10 +364,11 @@ private fun Item(it: JSONObject) {
 private fun ClaudeText(t: String) {
     val type = MaterialTheme.typography
     val mono = type.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-    Markdown(t, modifier = Modifier.padding(vertical = 6.dp),
+    // long-press selects and copies; one message at a time, so taps and scrolling in the list stay as they were
+    SelectionContainer { Markdown(t, modifier = Modifier.padding(vertical = 6.dp),
         colors = markdownColor(linkText = MaterialTheme.colorScheme.primary, codeBackground = Color(0xFF262930), inlineCodeBackground = Color(0xFF262930)),
         // phone sized headings: the defaults are display sizes
-        typography = markdownTypography(h1 = type.titleLarge, h2 = type.titleMedium, h3 = type.titleSmall, h4 = type.titleSmall, h5 = type.titleSmall, h6 = type.titleSmall, code = mono, inlineCode = mono))
+        typography = markdownTypography(h1 = type.titleLarge, h2 = type.titleMedium, h3 = type.titleSmall, h4 = type.titleSmall, h5 = type.titleSmall, h6 = type.titleSmall, code = mono, inlineCode = mono)) }
 }
 
 @Composable
