@@ -31,6 +31,7 @@ import { readOnlyOptions } from './readOnly'
 import { isWatcherTab, isWatcherTranscript } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
 import { notifyPhone } from './mobile'
+import { notifyDesktop } from './desktopNotify'
 import { autoBackground } from '../shared/autoBackgroundCore'
 import { realLimits } from '../shared/usageCore'
 import { parseQuestions } from '../shared/askCore'
@@ -61,6 +62,9 @@ import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
 import { forkPoint, partialRestore, rewindBlock } from '../shared/rewindCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
+
+// the events the user should hear about: the phone and the desktop get the same ones
+const notifyUser = (title: string, body: string, thread: string): void => { notifyPhone(title, body, thread); notifyDesktop(title, body, thread) }
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
 // worktrees) or runs services, so nothing it reaches through Hive escapes read-only
@@ -353,7 +357,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ action, until, reason }) => {
           const c = checkOrganize(action, until, undefined, reason)
           if (!c.ok) return { content: [{ type: 'text', text: c.error }], isError: true }
-          if (action === 'waiting') { s.waitingReason = c.reason || 'Needs your input'; notifyPhone(`Waiting: ${titleOf(tabId)}`, s.waitingReason, tabId) }
+          if (action === 'waiting') { s.waitingReason = c.reason || 'Needs your input'; notifyUser(`Waiting: ${titleOf(tabId)}`, s.waitingReason, tabId) }
           if (action === 'resolved') s.waitingReason = undefined
           send({ type: 'hive_organize', action, until: c.until, reason: c.reason })
           return { content: [{ type: 'text', text: action === 'snooze' ? `Thread snoozed until ${until}` : action === 'waiting' ? 'Thread marked as waiting for the user' : action === 'resolved' ? 'Waiting mark cleared' : `Thread: ${action} done` }] }
@@ -970,7 +974,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         s.waitingReason = reason
         send({ type: 'hive_ask', id: toolUseID, questions })
         send({ type: 'hive_organize', action: 'waiting', reason })
-        notifyPhone(`Question: ${titleOf(tabId)}`, questions[0].question, tabId)
+        notifyUser(`Question: ${titleOf(tabId)}`, questions[0].question, tabId)
         const end = await waitForAnswer(tabId, toolUseID, questions, signal)
         send({ type: 'hive_ask_done', id: toolUseID })
         // still waiting while another question of this thread is open
@@ -1046,7 +1050,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
 ${s.lastReply}`, Date.now())
             if (reset) {
               const w = scheduleContinue({ key: s.sessionId, tabId, cwd, title: titleOf(tabId), ...(limitKind ? { kind: limitKind } : {}) }, reset)
-              notifyPhone(`Usage limit: ${titleOf(tabId)}`, `Continues automatically at ${wakeLabel(w.at, Date.now())}`, tabId)
+              notifyUser(`Usage limit: ${titleOf(tabId)}`, `Continues automatically at ${wakeLabel(w.at, Date.now())}`, tabId)
             }
           }
           if (s.lastOk && !limited) limitBack(Date.now() - (Number(r.duration_ms) || 0))
@@ -1064,7 +1068,7 @@ ${s.lastReply}`, Date.now())
           if (!s.turns.isBusy()) wake(s)
           // a background thread (not a watcher: they say themselves when they need you) finished: tell the phone
           if (s.background && !tabId.startsWith('watcher-') && !s.turns.isBusy()) {
-            notifyPhone(s.lastOk ? `Finished: ${titleOf(tabId)}` : `Failed: ${titleOf(tabId)}`, (s.lastReply ?? '').split('\n').find((l) => l.trim()) ?? '', tabId)
+            notifyUser(s.lastOk ? `Finished: ${titleOf(tabId)}` : `Failed: ${titleOf(tabId)}`, (s.lastReply ?? '').split('\n').find((l) => l.trim()) ?? '', tabId)
           }
         }
       }

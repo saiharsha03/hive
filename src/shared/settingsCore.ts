@@ -13,8 +13,9 @@ import { pickTier, type Tier } from './watchCore'
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
 // '' = the default; ui / theme '' = the built-in look (the Appearance pickers fill them); appName / appTagline = what the app calls itself
+// desktopNotify: a Windows toast + taskbar flash when a thread needs you and Hive is not focused; on by default
 // chrome: threads start with Claude in Chrome (claude --chrome; needs the Claude extension in Chrome); on by default
-export type General = { shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean }
+export type General = { shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean; desktopNotify: boolean }
 export const DEFAULT_APP_NAME = 'Hive'
 export const DEFAULT_APP_TAGLINE = 'One desk, many agents'
 export type Settings = {
@@ -23,7 +24,7 @@ export type Settings = {
   scripts: unknown[] | null // the scripts.json array as written (bad entries kept so nothing is lost); null = use the file
   general: General
 }
-export const emptyGeneral = (): General => ({ shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true })
+export const emptyGeneral = (): General => ({ shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true, desktopNotify: true })
 
 // what the panel edits and gets back
 export type Draft = { env: Record<string, string>; scripts: unknown[] | null; general: General }
@@ -68,6 +69,7 @@ export function normalizeSettings(v: unknown): Settings | null {
       ui: str(g.ui), theme: str(g.theme), appName: str(g.appName) || DEFAULT_APP_NAME,
       appTagline: typeof g.appTagline === 'string' ? g.appTagline.trim() : DEFAULT_APP_TAGLINE, // '' = no tagline
       chrome: g.chrome !== false, // on unless turned off
+      desktopNotify: g.desktopNotify !== false, // on unless turned off
     },
   }
 }

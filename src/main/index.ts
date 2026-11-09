@@ -12,6 +12,7 @@ import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams
 import { cancelWakeup, initThreadWakeups, listWakeups, tick as wakeupsTick } from './threadWakeups'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
 import { resendGroups, takePending } from './pending'
+import { initDesktopNotify } from './desktopNotify'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
 import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
@@ -640,6 +641,8 @@ Menu.setApplicationMenu(null)
 app.whenReady().then(() => {
   // the laptop slept through wake-ups: fire them once it is back (after the network has had a moment)
   powerMonitor.on('resume', () => { setTimeout(() => void wakeupsTick(), 15_000) })
+  app.setAppUserModelId('io.github.saiharsha03.hive') // Windows toasts need it; same as appId in electron-builder.yml
+  initDesktopNotify(() => mainWin, (id) => { showWindow(); if (id) mainWeb()?.send('hive:activate', id) })
   handleScheme()
   createWindow()
   makeTray()
