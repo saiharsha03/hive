@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -202,6 +203,7 @@ private fun StatusLine() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> Unit, onTeams: () -> Unit, onWakeups: () -> Unit, onUnpair: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -211,15 +213,21 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
     var err by remember { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
     var unpair by remember { mutableStateOf(false) }
-    LaunchedEffect(state, changed) {
+    var query by remember { mutableStateOf("") }
+    var refreshing by remember { mutableStateOf(false) }
+    var reload by remember { mutableStateOf(0) }
+    LaunchedEffect(state, changed, reload) {
         if (state == Relay.State.Off) Relay.connect(ctx)
-        if (state != Relay.State.Online) return@LaunchedEffect
-        err = runCatching {
+        if (state == Relay.State.Online) err = runCatching {
             val a = Relay.ask("threads").getJSONArray("threads")
             rows = (0 until a.length()).map { a.getJSONObject(it) }
             ""
         }.getOrElse { it.message ?: "Failed" }
+        refreshing = false
     }
+    // the search filters the rows already here, by title and folder
+    val q = query.trim()
+    val shown = if (q.isEmpty()) rows else rows.filter { it.optString("title").contains(q, true) || it.optString("folder").contains(q, true) }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Threads", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
@@ -241,9 +249,12 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
             dismissButton = { TextButton(onClick = { unpair = false }) { Text("Cancel") } })
         StatusLine()
         if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
-        LazyColumn(Modifier.fillMaxSize().padding(top = 8.dp)) {
+        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true, placeholder = { Text("Search threads") },
+            trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("✕") } })
+        PullToRefreshBox(refreshing, { refreshing = true; reload++ }, Modifier.fillMaxSize().padding(top = 8.dp)) {
+        LazyColumn(Modifier.fillMaxSize()) {
             // Hive sends each thread's sidebar section, in order; an older Hive sends none, so the list stays flat
-            sections(rows).forEach { (section, group) ->
+            sections(shown).forEach { (section, group) ->
             if (section.isNotEmpty()) item(key = "section:$section") {
                 Text(sectionLabels[section] ?: section, style = MaterialTheme.typography.labelLarge, color = Color.Gray, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             }
@@ -259,6 +270,7 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
                 HorizontalDivider(color = Color(0x22FFFFFF))
             }
             }
+        }
         }
     }
 }
