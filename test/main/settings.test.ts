@@ -30,7 +30,7 @@ test('seed from .env and scripts.json: every non-secret key, the scripts array a
   const { HIVE_TRACKER_TOKEN: _token, SOME_API_KEY: _key, ...rest } = DOT
   assert.deepEqual(s.env, rest)
   assert.deepEqual(s.scripts, SCRIPTS) // the bad entry is kept, so nothing is lost
-  assert.deepEqual(s.general, { shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true })
+  assert.deepEqual(s.general, { shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true, desktopNotify: true })
   assert.equal(seedSettings(DOT, null).scripts, null)
   assert.equal(seedSettings(DOT, 'not json').scripts, null)
   assert.equal(seedSettings(DOT, '{"a":1}').scripts, null)
