@@ -206,6 +206,7 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var err by remember { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
+    var unpair by remember { mutableStateOf(false) }
     LaunchedEffect(state, changed) {
         if (state == Relay.State.Off) Relay.connect(ctx)
         if (state != Relay.State.Online) return@LaunchedEffect
@@ -225,10 +226,15 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
                     DropdownMenuItem(text = { Text("Teams") }, onClick = { menu = false; onTeams() })
                     DropdownMenuItem(text = { Text("Wake-ups") }, onClick = { menu = false; onWakeups() })
                     DropdownMenuItem(text = { Text("Usage") }, onClick = { menu = false; onUsage() })
-                    DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = { menu = false; onUnpair() })
+                    DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = { menu = false; unpair = true })
                 }
             }
         }
+        // unpairing means scanning a new code in Hive, so ask first
+        if (unpair) AlertDialog(onDismissRequest = { unpair = false }, title = { Text("Unpair this phone?") },
+            text = { Text("To use the app again you pair it anew in Hive on your computer.") },
+            confirmButton = { TextButton(onClick = { unpair = false; onUnpair() }) { Text("Unpair", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { unpair = false }) { Text("Cancel") } })
         StatusLine()
         if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
         LazyColumn(Modifier.fillMaxSize().padding(top = 8.dp)) {
