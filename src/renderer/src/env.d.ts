@@ -30,8 +30,8 @@ type FsEntry = { name: string; path: string; dir: boolean }
 type Item =
   | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean } }
   | { kind: 'assistant'; text: string; at?: number }
-  // patch: Claude Code's structuredPatch from an Edit / MultiEdit / Write result, for the diff
-  | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown }
+  // patch: Claude Code's structuredPatch from an Edit / MultiEdit / Write result, for the diff; output: the result as text, shown when the row is opened
+  | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown; output?: string }
   | { kind: 'show'; path: string }
   | { kind: 'error'; text: string }
   | { kind: 'note'; text: string }

@@ -2,6 +2,7 @@
 import { hookWarning, isContinuation } from '../../shared/summaryCore'
 import { isWatcherTab } from '../../shared/readOnlyCore'
 import { modelLabel } from '../../shared/statusCore'
+import { resultText } from '../../shared/toolOutputCore'
 // tools that open as tabs in the main window, like threads and files
 export type ToolTab = 'git' | 'todos' | 'notes' | 'watchers' | 'scripts' | 'deploy'
 export const TOOL_TABS: ToolTab[] = ['git', 'todos', 'notes', 'scripts', 'deploy', 'watchers']
@@ -204,7 +205,7 @@ export function applyEvent(s: Session, ev: any): Session {
         if (!r) return it
         // an Edit / MultiEdit / Write result carries the change as hunks with real line numbers
         const patch = results.length === 1 && Array.isArray(ev.tool_use_result?.structuredPatch) && ev.tool_use_result.structuredPatch.length ? ev.tool_use_result.structuredPatch : undefined
-        return { ...it, status: r.is_error ? ('error' as const) : ('done' as const), ...(patch ? { patch } : {}) }
+        return { ...it, status: r.is_error ? ('error' as const) : ('done' as const), output: resultText(r.content), ...(patch ? { patch } : {}) }
       })
       return { ...s, items }
     }

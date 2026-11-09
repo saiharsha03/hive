@@ -2,7 +2,7 @@
 // things Claude showed you, background work, and the message box (pasted / dropped images, the clipboard chip,
 // model and effort pickers, steer / queue). Scroll position is kept per thread, so switching UI or thread keeps it.
 import { getPref, setPref } from './prefs'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toolLine, SHOW, CODEX, type Session } from './chat'
@@ -12,7 +12,7 @@ import { counts, FILE_TOOLS, toolHunks, type Hunk } from '../../shared/diffCore'
 import { modeLabel } from '../../shared/modeCore'
 import type { ClipOffer } from '../../shared/clipboardCore'
 import { clearOffer, textHash, useClipboardOn, useClipOffer } from './clipboardOffer'
-import { MdBody } from './MdBody'
+import { CopyButton, MdBody } from './MdBody'
 import { ModelEffort } from './ThreadStatus'
 import { AgentsDock, RunCard } from './RunPanels'
 import { useThreadStatus } from './statusStore'
@@ -128,6 +128,31 @@ function CodexBox({ it }: { it: Extract<Item, { kind: 'codex' }> }) {
           <div className="cx-task">{it.task}{it.model ? `\n\nModel: ${it.model}` : ''}</div>
           {it.lines.length > 0 && <div className="cx-log" ref={log}>{it.lines.map((l, j) => <div key={j} className={l.startsWith('$') ? 'cmd' : ''}>{l}</div>)}</div>}
           {it.answer && <div className="body md cx-answer"><Markdown remarkPlugins={[remarkGfm]}>{it.answer}</Markdown></div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// A tool call's row. Once its result is in, it folds open to the output (and the whole command for a shell call,
+// which the one-line row cuts). Open state lives here so opening a row does not rebuild the memoized transcript.
+function ToolRow({ it, status, children }: { it: Extract<Item, { kind: 'tool' }>; status: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const can = it.output !== undefined
+  const cmd = (it.name === 'Bash' || it.name === 'PowerShell') && typeof it.input?.command === 'string' ? it.input.command as string : ''
+  const shown = [cmd && `$ ${cmd}`, it.output || '(no output)'].filter(Boolean).join('\n\n')
+  return (
+    <div className={`toolbox${open ? ' open' : ''}`}>
+      <div className={`toolrow tx ${status}${can ? ' can' : ''}`} onClick={can ? () => setOpen((o) => !o) : undefined} title={can ? (open ? 'Hide the output' : 'Show the output') : undefined}>
+        {/* the row's click toggles; the chevron is the keyboard handle */}
+        {can ? <button className="tchev" aria-expanded={open} aria-label="Show the output" data-testid="tool-output-toggle"><Icon name={open ? 'chevron-down' : 'chevron-right'} /></button> : <span />}
+        {children}
+      </div>
+      {open && (
+        <div className="cx-body">
+          <CopyButton className="toolcopy" title="Copy the command and output" onCopy={() => navigator.clipboard.writeText(shown)} />
+          {cmd && <div className="cx-task tool-cmd" data-testid="tool-output-command">{cmd}</div>}
+          <div className="cx-log tool-out" data-testid="tool-output">{it.output || '(no output)'}</div>
         </div>
       )}
     </div>
@@ -511,11 +536,11 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             const bg = bgOf.get(it.id) // its background task: running until that ends, not "done" when the call returned
             const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
             return (
-              <div key={i} className={`toolrow ${status}`}>
+              <ToolRow key={i} it={it} status={status}>
                 <Icon name={icon} className={tm} />
                 <span className={`tv ${tm}`}>{verb}</span>
                 {file && hunks && c
-                  ? <button className="tw tdiff" title={`${file}: open the diff`} onClick={() => onDiff({ t: 'edit', file, label, tool: it.name, hunks })} data-testid="chat-diff-row">
+                  ? <button className="tw tdiff" title={`${file}: open the diff`} onClick={(e) => { e.stopPropagation(); onDiff({ t: 'edit', file, label, tool: it.name, hunks }) }} data-testid="chat-diff-row">
                     {label} <span className="dv-add">+{c.add}</span> <span className="dv-del">−{c.del}</span>
                   </button>
                   : <span className="tw">{what}</span>}
@@ -523,7 +548,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
                   {it.status === 'running' && !bg && <button className="bg" onClick={() => onBackground(it.id)} title="Move to the background (Ctrl+B for all)" data-testid="tool-background">Background</button>}
                   {bg === 'running' ? <span className="s-work">running in the background</span> : status === 'running' ? <span className="s-work">running</span> : status === 'error' ? <span className="s-fail">FAILED</span> : bg === 'stopped' ? <span className="s-idle">stopped</span> : <span className="s-idle">done</span>}
                 </span>
-              </div>
+              </ToolRow>
             )
           }
           if (it.kind === 'show') return <div key={i} className="msg"><ShowCard path={it.path} onOpen={onOpen} /></div>
