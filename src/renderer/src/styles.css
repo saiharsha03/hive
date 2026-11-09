@@ -393,6 +393,7 @@ kbd { font: 11px var(--mono); color: var(--faint); }
 .sm-arg { color: var(--faint); }
 .sm-desc { flex: 1; min-width: 0; color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sm-group { font-size: 10px; color: var(--faint); white-space: nowrap; }
+.sm-row .codicon { color: var(--faint); align-self: center; }
 .sm-hint { padding: 6px 12px; color: var(--faint); font-size: 12px; }
 
 /* ---------- side views ---------- */
