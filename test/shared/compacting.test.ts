@@ -23,3 +23,15 @@ test('a compaction inside a running turn leaves the turn running', () => {
   s = applyEvent(s, { type: 'result', is_error: false, subtype: 'success' })
   assert.equal(s.busy, false)
 })
+
+test('a changed answering model adds one note; the first answer adds none', () => {
+  let s: Session = { id: 't', title: 'T', items: [], streaming: '', busy: true, loaded: true, background: false }
+  const say = (model: string) => ({ type: 'assistant', message: { model, content: [{ type: 'text', text: 'hi' }] } })
+  s = applyEvent(s, say('claude-opus-5-5'))
+  s = applyEvent(s, say('claude-opus-5-5'))
+  assert.ok(!s.items.some((i) => i.kind === 'note'))
+  s = applyEvent(s, say('claude-fable-5-2'))
+  const notes = s.items.filter((i) => i.kind === 'note') as any[]
+  assert.equal(notes.length, 1)
+  assert.equal(notes[0].text, 'Model changed: Opus 5.5 → Fable 5.2')
+})

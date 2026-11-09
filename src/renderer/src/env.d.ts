@@ -85,6 +85,7 @@ interface Window {
     listDir: (dir: string) => Promise<FsEntry[]>
     gitDecorations: (dir: string, fresh?: boolean) => Promise<import('../../shared/fileDecoCore').Decorations>
     pickFolder: () => Promise<string | null>
+    saveMarkdown: (name: string, text: string) => Promise<boolean>
     listHooks: (folder: string) => Promise<HookRow[]>
     setHook: (folder: string, id: string, enabled: boolean) => Promise<void>
     listPlugins: () => Promise<PluginInfo[]>

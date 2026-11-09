@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, shell, Tray } from 'electron'
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
-import { appendFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { appendFileSync, existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
@@ -513,6 +513,16 @@ handle('dialog:folder', async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender)!
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
   return r.canceled ? null : r.filePaths[0]
+})
+
+// save a conversation's Markdown where the user picks; false when they cancel
+handle('dialog:saveMarkdown', async (e, name: string, text: string) => {
+  const win = BrowserWindow.fromWebContents(e.sender)!
+  const safe = String(name).replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'conversation'
+  const r = await dialog.showSaveDialog(win, { defaultPath: `${safe}.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] })
+  if (r.canceled || !r.filePath) return false
+  writeFileSync(r.filePath, String(text), 'utf8')
+  return true
 })
 
 // web links open in the browser

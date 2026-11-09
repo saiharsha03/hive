@@ -1,6 +1,7 @@
 // Chat state for one tab, and how each SDK event changes it.
 import { hookWarning, isContinuation } from '../../shared/summaryCore'
 import { isWatcherTab } from '../../shared/readOnlyCore'
+import { modelLabel } from '../../shared/statusCore'
 // tools that open as tabs in the main window, like threads and files
 export type ToolTab = 'git' | 'todos' | 'notes' | 'watchers' | 'scripts' | 'deploy'
 export const TOOL_TABS: ToolTab[] = ['git', 'todos', 'notes', 'scripts', 'deploy', 'watchers']
@@ -29,6 +30,7 @@ export type Session = {
   background: boolean // live but hidden from the tab bar
   waitingReason?: string // why the user is needed (Claude's words, or Finished / Failed + first line)
   waitingSince?: number
+  answeredBy?: string // the model of the latest answer, to note when it changes
   mode?: string // the live session's permission mode (auto while in the background)
   modeError?: string // the last mode switch failed
   worktrees?: { repo: string; path: string; branch: string }[] // made by this thread through the worktree tool
@@ -168,6 +170,10 @@ export function applyEvent(s: Session, ev: any): Session {
     }
     case 'assistant': {
       const items = [...s.items]
+      // the model that answered changed (a /model switch or a fallback): say so once; no note for the first answer
+      const model: string | undefined = ev.message?.model
+      const answeredBy = model && model !== '<synthetic>' ? model : s.answeredBy
+      if (answeredBy && s.answeredBy && answeredBy !== s.answeredBy) items.push({ kind: 'note', text: `Model changed: ${modelLabel(s.answeredBy)} → ${modelLabel(answeredBy)}` })
       for (const b of ev.message?.content ?? []) {
         if (b.type === 'text' && b.text.trim()) items.push({ kind: 'assistant', text: b.text, at: Date.now() })
         else if (b.type === 'tool_use') {
@@ -175,7 +181,7 @@ export function applyEvent(s: Session, ev: any): Session {
           items.push({ kind: 'tool', id: b.id, name: b.name, input: b.input, status: 'running' })
         }
       }
-      return { ...s, items, streaming: '' }
+      return { ...s, items, answeredBy, streaming: '' }
     }
     case 'user': {
       // a message another agent sent in (codex-panel delivers Codex's replies this way)

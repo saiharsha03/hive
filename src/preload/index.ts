@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   listDir: (dir: string) => ipcRenderer.invoke('fs:list', dir),
   gitDecorations: (dir: string, fresh?: boolean) => ipcRenderer.invoke('fs:gitDeco', dir, fresh),
   pickFolder: () => ipcRenderer.invoke('dialog:folder'),
+  saveMarkdown: (name: string, text: string) => ipcRenderer.invoke('dialog:saveMarkdown', name, text),
   listHooks: (folder: string) => ipcRenderer.invoke('hooks:list', folder),
   setHook: (folder: string, id: string, enabled: boolean) => ipcRenderer.invoke('hooks:set', folder, id, enabled),
   listPlugins: () => ipcRenderer.invoke('plugins:list'),
