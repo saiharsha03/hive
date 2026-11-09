@@ -109,6 +109,9 @@ interface Window {
     listNotes: () => Promise<import('../../shared/notesCore').NoteInfo[]>
     saveNote: (id: string | null, text: string) => Promise<string>
     deleteNote: (id: string) => Promise<void>
+    findRun: (text: string, forward: boolean, next: boolean) => Promise<void>
+    findStop: () => Promise<void>
+    onFindResult: (cb: (r: { active: number; total: number }) => void) => () => void
     onNotesChanged: (cb: () => void) => () => void
     listTodos: () => Promise<Todo[]>
     addTodo: (text: string, due?: string) => Promise<Todo>

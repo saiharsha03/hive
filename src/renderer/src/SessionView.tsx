@@ -183,6 +183,28 @@ type Props = {
   compactHead?: boolean
 }
 
+// Ctrl+F in the focused chat: a small find bar (Enter next, Shift+Enter previous, Esc closes)
+function FindBar({ onClose }: { onClose: () => void }) {
+  const [text, setText] = useState('')
+  const [res, setRes] = useState({ active: 0, total: 0 })
+  useEffect(() => { const off = window.api.onFindResult(setRes); return () => { off(); void window.api.findStop() } }, [])
+  const go = (forward: boolean, next: boolean) => { void window.api.findRun(text, forward, next) }
+  return (
+    <div className="findbar" data-testid="findbar">
+      <input autoFocus placeholder="Find in conversation" value={text} data-testid="findbar-input"
+        onChange={(e) => { setText(e.target.value); setRes({ active: 0, total: 0 }); void window.api.findRun(e.target.value, true, false) }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); go(!e.shiftKey, true) }
+          else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() }
+        }} />
+      <span className="findbar-n" data-testid="findbar-count">{text ? `${res.active} of ${res.total}` : ''}</span>
+      <button className="ibtn" title="Previous (Shift+Enter)" onClick={() => go(false, true)} disabled={!res.total} data-testid="findbar-prev"><Icon name="arrow-up" /></button>
+      <button className="ibtn" title="Next (Enter)" onClick={() => go(true, true)} disabled={!res.total} data-testid="findbar-next"><Icon name="arrow-down" /></button>
+      <button className="ibtn" title="Close (Esc)" onClick={onClose} data-testid="findbar-close"><Icon name="close" /></button>
+    </div>
+  )
+}
+
 type UserItem = Extract<Item, { kind: 'user' }>
 // Rewind a turn: what the dry run said would change, then the real rewind
 type Rewind = { it: UserItem; index: number; preview: RewindFiles | null; error?: string; working?: boolean; partial?: { missing: string[]; skipped: number } }
@@ -292,6 +314,16 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [focused, session.id])
+
+  const [finding, setFinding] = useState(false)
+  useEffect(() => {
+    if (!focused) { setFinding(false); return }
+    const key = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f' && !(document.activeElement as HTMLElement | null)?.closest('.xterm, .monaco-editor')) { e.preventDefault(); setFinding(true) }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [focused])
 
   // the focused chat takes the keyboard when it becomes focused
   useEffect(() => { if (focused) box.current?.focus({ preventScroll: true }) }, [focused])
@@ -569,6 +601,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
       )}
 
       <div className="thread-wrap">
+      {finding && <FindBar onClose={() => { setFinding(false); box.current?.focus({ preventScroll: true }) }} />}
       <RunCard tabId={session.id} busy={session.busy} onSend={onSend} onInterrupt={async () => { await onStop() }} />
       <div className="thread" ref={thread} onScroll={onScroll}>
         {transcript}

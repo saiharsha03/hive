@@ -49,6 +49,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('mobile:status', fn)
     return () => ipcRenderer.removeListener('mobile:status', fn)
   },
+  findRun: (text: string, forward: boolean, next: boolean) => ipcRenderer.invoke('find:run', text, forward, next),
+  findStop: () => ipcRenderer.invoke('find:stop'),
+  onFindResult: (cb: (r: { active: number; total: number }) => void) => {
+    const fn = (_e: unknown, r: { active: number; total: number }) => cb(r)
+    ipcRenderer.on('find:result', fn)
+    return () => ipcRenderer.removeListener('find:result', fn)
+  },
   listNotes: () => ipcRenderer.invoke('notes:list'),
   saveNote: (id: string | null, text: string) => ipcRenderer.invoke('notes:save', id, text),
   deleteNote: (id: string) => ipcRenderer.invoke('notes:delete', id),
