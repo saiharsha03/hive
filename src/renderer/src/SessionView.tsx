@@ -18,6 +18,8 @@ import { AgentsDock, RunCard } from './RunPanels'
 import { useThreadStatus } from './statusStore'
 import { SummaryRow, WarningRow } from './ChatRows'
 import { useSlashMenu } from './SlashMenu'
+import { useMentionMenu } from './MentionMenu'
+import { mentionText } from '../../shared/mentionCore'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
 import { Icon, Modal, Popover, anchorOf, type Anchor } from './ui'
 import { conversationMarkdown } from '../../shared/exportCore'
@@ -273,7 +275,9 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   const fileInput = useRef<HTMLInputElement>(null)
   const [sendMode, setSendMode] = useState<SendMode>(loadMode)
   const [boxFocus, setBoxFocus] = useState(false)
+  const [caret, setCaret] = useState(0) // where the cursor is, for the "@" menu
   const slash = useSlashMenu(session.id, draft, setDraft)
+  const mention = useMentionMenu(session.cwd ?? '', draft, caret, box, setDraft)
   const ultra = hasUltrathink(draft)
   const mirror = useRef<HTMLDivElement>(null)
   const pickMode = (m: SendMode) => { setSendMode(m); setPref(MODE_KEY, m) }
@@ -339,6 +343,17 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     if (imgs.length) {
       const read = await Promise.all(imgs.map(readImage))
       setImages((cur) => [...cur, ...read])
+    }
+    // Claude reads other files by path, so the path in the text is enough
+    const paths = files.filter((f) => !f.type.startsWith('image/')).map((f) => window.api.pathForFile(f)).filter(Boolean)
+    if (!paths.length) return
+    const text = paths.map(mentionText).join('')
+    const el = box.current
+    if (!el) { setDraft((d) => d + text); return }
+    el.focus()
+    if (!document.execCommand('insertText', false, text)) {
+      const [a, b] = [el.selectionStart, el.selectionEnd]
+      setDraft((d) => d.slice(0, a) + text + d.slice(b))
     }
   }
   const onPaste = (e: ClipboardEvent) => {
@@ -434,6 +449,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   // Enter sends (or steers while Claude works), Shift+Enter adds a new line, Esc stops Claude
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (slash.onKey(e)) return // the "/" menu has the keys while it is open
+    if (mention.onKey(e)) return // so does the "@" menu
     // Ctrl+Shift+Enter sends, then moves this thread to the background
     if (e.key === 'Enter' && e.ctrlKey && e.shiftKey) {
       e.preventDefault()
@@ -655,6 +671,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
       {banner}
       <div className="composer" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onDrop}>
         {slash.menu}
+        {mention.menu}
         <div className={boxFocus ? 'box focus' : 'box'}>
           {(shownClip || images.length > 0) && (
             <div className="atts">
@@ -674,9 +691,10 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
               ref={box}
               className={ultra ? 'ultra' : undefined}
               onScroll={(e) => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop }}
-              placeholder={session.busy ? `Claude is working. Enter to ${sendMode}, Alt+Enter to ${other(sendMode)}, Ctrl+Enter to interrupt and send, Esc to stop` : 'Message Claude, paste or drop images, / for commands'}
+              placeholder={session.busy ? `Claude is working. Enter to ${sendMode}, Alt+Enter to ${other(sendMode)}, Ctrl+Enter to interrupt and send, Esc to stop` : 'Message Claude, paste or drop files, / for commands, @ for files'}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => { setDraft(e.target.value); setCaret(e.target.selectionStart) }}
+              onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
               onKeyDown={onKey}
               onPaste={onPaste}
               onFocus={() => setBoxFocus(true)}
@@ -685,8 +703,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             />
           </div>
           <div className="bar">
-            <button className="ibtn" title="Attach images" onClick={() => fileInput.current?.click()} data-testid="composer-attach"><Icon name="add" /></button>
-            <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />
+            <button className="ibtn" title="Attach files" onClick={() => fileInput.current?.click()} data-testid="composer-attach"><Icon name="add" /></button>
+            <input ref={fileInput} type="file" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />
             <ModelEffort tabId={session.id} ultra={ultra} />
             {ultra && <span className="thinknote" data-testid="ultra-note"><Icon name="flame" />ultrathink: max effort for this turn</span>}
             <span className="sp" />

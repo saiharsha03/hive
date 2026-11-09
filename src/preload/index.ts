@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   sessionStats: (path: string) => ipcRenderer.invoke('session:stats', path),
   getStatus: () => ipcRenderer.invoke('status:get'),
   listDir: (dir: string) => ipcRenderer.invoke('fs:list', dir),
+  // every file under a folder (relative, forward slashes), for the "@" mention
+  listAllFiles: (dir: string): Promise<string[]> => ipcRenderer.invoke('fs:listAll', dir),
   gitDecorations: (dir: string, fresh?: boolean) => ipcRenderer.invoke('fs:gitDeco', dir, fresh),
   pickFolder: () => ipcRenderer.invoke('dialog:folder'),
   saveMarkdown: (name: string, text: string) => ipcRenderer.invoke('dialog:saveMarkdown', name, text),

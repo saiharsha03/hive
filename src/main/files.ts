@@ -58,3 +58,28 @@ export async function gitDecorations(root: string, fresh = false): Promise<Decor
   const statuses = await Promise.all([...tops].map((t) => repoStatus(t, fresh)))
   return buildDecorations(root, statuses.filter((s): s is RepoStatus => !!s))
 }
+
+// Every file under a folder for the "@" mention: the git way (tracked + untracked, minus ignored) in a repo,
+// otherwise a plain walk. Forward slashes, relative to the folder; cached a few seconds while the user types.
+const listCache = new Map<string, { at: number; p: Promise<string[]> }>()
+
+async function walk(root: string, rel: string, out: string[]): Promise<void> {
+  let items: Dirent[]
+  try { items = await readdir(join(root, rel), { withFileTypes: true }) } catch { return }
+  for (const d of items) {
+    if (d.name.startsWith('.') || SKIP.has(d.name)) continue
+    const r = rel ? `${rel}/${d.name}` : d.name
+    if (d.isDirectory()) await walk(root, r, out)
+    else out.push(r)
+  }
+}
+
+export function listFiles(root: string): Promise<string[]> {
+  const hit = listCache.get(root)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.p
+  const p = gitOut(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z']).then(
+    (z) => z.split('\0').filter(Boolean),
+    async () => { const out: string[] = []; await walk(root, '', out); return out })
+  listCache.set(root, { at: Date.now(), p })
+  return p
+}
