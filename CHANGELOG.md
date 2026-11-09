@@ -8,6 +8,7 @@ All notable changes to Hive are documented here. The format follows
 
 ### Fixed
 
+- Run from source, Hive no longer shows a second taskbar icon beside its pinned shortcut.
 - The status bar no longer runs off the right edge of a narrow window: it drops the secondary words first (reset
   times, plan, MCP detail, UI and theme names), then the account and "cache"; the hover titles keep them.
 

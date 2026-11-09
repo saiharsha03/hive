@@ -663,7 +663,9 @@ Menu.setApplicationMenu(null)
 app.whenReady().then(() => {
   // the laptop slept through wake-ups: fire them once it is back (after the network has had a moment)
   powerMonitor.on('resume', () => { setTimeout(() => void wakeupsTick(), 15_000) })
-  app.setAppUserModelId('io.github.saiharsha03.hive') // Windows toasts need it; same as appId in electron-builder.yml
+  // Windows toasts need it; same as appId in electron-builder.yml. Only the installed app: run from source it would
+  // split the window from the taskbar shortcut it was started from (a second icon)
+  if (app.isPackaged) app.setAppUserModelId('io.github.saiharsha03.hive')
   initDesktopNotify(() => mainWin, (id) => { showWindow(); if (id) mainWeb()?.send('hive:activate', id) })
   handleScheme()
   createWindow()
