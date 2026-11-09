@@ -6,8 +6,21 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-09
+
 ### Added
 
+- **Tool rows open.** Click a tool call to see the whole command and its output (a FAILED one too), with Copy.
+- **Desktop notifications.** A Windows toast and a taskbar flash when a thread waits for you, asks a question,
+  finishes, fails or hits the usage limit while Hive is not focused; clicking it opens that thread. Settings has
+  the switch (on by default).
+- **Drafts and tabs survive a restart.** Unsent message text and the open thread tabs come back.
+- **Model change note.** A line in the conversation when the answering model changes.
+- **Export.** Copy or save a conversation as Markdown from the chat header.
+- **Files in the message box.** Attach or drop any file (its path goes in as `@path`), and type `@` for a file
+  picker.
+- **Phone app.** Claude's replies render as Markdown, message text can be selected, the thread list has search,
+  pull to refresh and a time on each row.
 - **Command palette finds files.** From two typed characters, files under the current folder whose name or path
   match are listed under Files (Enter opens one as a tab); matches rank label-starts-with first, then word-start,
   then anywhere.
@@ -20,6 +33,13 @@ All notable changes to Hive are documented here. The format follows
 ### Changed
 
 - Spinners and blinking dots stop under `prefers-reduced-motion`, not only the office view.
+
+### Fixed
+
+- Threads mark themselves waiting again: the prompt's waiting instruction named no tool and read as the dev
+  stack's, so the sidebar and the phone were not told.
+- Phone app: the thread no longer jumps to the bottom on every refresh, a failed send keeps the text, and Unpair
+  asks first.
 
 ## [1.0.0] - 2026-11-09
 
@@ -90,6 +110,7 @@ First public release.
   Python), ESLint with typescript-eslint and react-hooks, GitHub Actions CI on Windows and Ubuntu, and an
   electron-builder Windows installer and portable build published from version tags.
 
-[Unreleased]: https://github.com/saiharsha03/hive/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/saiharsha03/hive/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/saiharsha03/hive/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/saiharsha03/hive/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/saiharsha03/hive/releases/tag/v0.1.0
