@@ -83,6 +83,7 @@ interface Window {
     sessionStats: (path: string) => Promise<SessionStats>
     getStatus: () => Promise<Status>
     listDir: (dir: string) => Promise<FsEntry[]>
+    searchFiles: (dir: string, q: string) => Promise<string[]>
     gitDecorations: (dir: string, fresh?: boolean) => Promise<import('../../shared/fileDecoCore').Decorations>
     pickFolder: () => Promise<string | null>
     listHooks: (folder: string) => Promise<HookRow[]>

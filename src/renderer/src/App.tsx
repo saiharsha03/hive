@@ -720,6 +720,14 @@ export function App() {
     ...getUIs().map((u) => ({ id: `ui:${u.id}`, group: 'UI', label: `UI: ${u.label}`, hint: ui === u.id ? 'current' : u.description, icon: 'layout', run: () => setUI(u.id) })),
     ...getThemes(ui).map((t) => ({ id: `theme:${t.id}`, group: 'Theme', label: `Theme: ${t.label}`, hint: themeNow === t.id ? `current for ${getUIs().find((u) => u.id === ui)?.label}` : t.description, icon: 'symbol-color', run: () => setTheme(t.id) })),
   ]
+  const loadFiles = async (q: string): Promise<Command[]> => {
+    if (!folder) return []
+    const sep = folder.includes('\\') ? '\\' : '/'
+    return (await window.api.searchFiles(folder, q)).map((rel) => {
+      const i = rel.lastIndexOf('/')
+      return { id: `file:${rel}`, group: 'Files', label: rel.slice(i + 1), hint: i < 0 ? '' : rel.slice(0, i), icon: 'file', run: () => openInEditor(folder.replace(/[\\/]$/, '') + sep + rel.split('/').join(sep)) }
+    })
+  }
   const loadThreads = async (): Promise<Command[]> => (await window.api.listSessions()).filter((s) => !s.watcherRun).map((s) => ({ id: `saved:${s.id}`, group: 'Threads', label: s.title, hint: s.project, icon: 'history', run: () => openSession(s) }))
 
   // ---- views ----
@@ -990,7 +998,7 @@ export function App() {
         </Modal>
       )}
       {modal === 'settings' && <SettingsPanel onClose={() => setModal(null)} onWatchers={() => { setModal(null); showView('watchers') }} />}
-      {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} loadThreads={loadThreads} />}
+      {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} loadThreads={loadThreads} loadFiles={loadFiles} />}
 
       {dropped && <DropPrompt path={dropped} choices={dropChoices} onPick={(c) => startFromFile(c, dropped)} onCancel={() => setDropped(null)} />}
       {notices.length > 0 && (

@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, type Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileRank } from '../shared/paletteRank'
 import { buildDecorations, type Decorations, type RepoStatus } from '../shared/fileDecoCore'
 
 export type Entry = { name: string; path: string; dir: boolean }
@@ -57,4 +58,33 @@ export async function gitDecorations(root: string, fresh = false): Promise<Decor
   for (const dir of await nestedRepos(root, 2)) tops.add(dir)
   const statuses = await Promise.all([...tops].map((t) => repoStatus(t, fresh)))
   return buildDecorations(root, statuses.filter((s): s is RepoStatus => !!s))
+}
+
+// File names under a folder for the Ctrl+K palette: git's own list inside a repo (so ignored folders stay out),
+// else a plain walk. One list per folder, kept a few seconds.
+const fileLists = new Map<string, { at: number; p: Promise<string[]> }>()
+
+async function walk(root: string, dir: string, out: string[]): Promise<void> {
+  let items: Dirent[]
+  try { items = await readdir(join(root, dir), { withFileTypes: true }) } catch { return }
+  for (const d of items) {
+    if (d.name.startsWith('.') || SKIP.has(d.name)) continue
+    if (d.isDirectory()) await walk(root, dir ? `${dir}/${d.name}` : d.name, out)
+    else out.push(dir ? `${dir}/${d.name}` : d.name)
+  }
+}
+
+function fileList(root: string): Promise<string[]> {
+  const hit = fileLists.get(root)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.p
+  const p = gitOut(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z']).then((z) => z.split('\0').filter(Boolean), async () => { const out: string[] = []; await walk(root, '', out); return out })
+  fileLists.set(root, { at: Date.now(), p })
+  return p
+}
+
+// relative paths (forward slashes) whose name or path matches, best first
+export async function searchFiles(root: string, q: string, max = 30): Promise<string[]> {
+  const ranked: { rel: string; r: number }[] = []
+  for (const rel of await fileList(root)) { const r = fileRank(rel, q); if (r !== null) ranked.push({ rel, r }) }
+  return ranked.sort((a, b) => a.r - b.r || a.rel.length - b.rel.length).slice(0, max).map((x) => x.rel)
 }

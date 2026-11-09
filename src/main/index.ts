@@ -27,7 +27,7 @@ import { lspChange, lspClose, lspOpen, lspRequest, lspSaved, setDiagnosticsSink,
 import type { AllowStatus } from '../shared/allowCore'
 import { watcherStopReason } from './watchers'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail, watcherTabFor } from './watchers'
-import { gitDecorations, listDir } from './files'
+import { gitDecorations, listDir, searchFiles } from './files'
 import { uiLoad, uiSave } from './uiStore'
 import { phoneThreads, type ThreadMap } from '../shared/threadsCore'
 import { CONTINUE_PROMPT } from '../shared/continueCore'
@@ -324,6 +324,7 @@ handle('search:status', () => searchStatus())
 handle('session:stats', (_e, path: string) => sessionStats(path))
 handle('status:get', () => getStatus())
 handle('fs:list', (_e, dir: string) => listDir(dir))
+handle('fs:search', (_e, dir: string, q: string) => searchFiles(String(dir), String(q)))
 handle('fs:gitDeco', (_e, dir: string, fresh?: boolean) => gitDecorations(String(dir), !!fresh))
 handle('hooks:list', (_e, folder: string) => listHooks(folder))
 handle('hooks:set', (_e, folder: string, id: string, enabled: boolean) => setHook(folder, id, enabled))

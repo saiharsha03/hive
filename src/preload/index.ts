@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   sessionStats: (path: string) => ipcRenderer.invoke('session:stats', path),
   getStatus: () => ipcRenderer.invoke('status:get'),
   listDir: (dir: string) => ipcRenderer.invoke('fs:list', dir),
+  searchFiles: (dir: string, q: string) => ipcRenderer.invoke('fs:search', dir, q),
   gitDecorations: (dir: string, fresh?: boolean) => ipcRenderer.invoke('fs:gitDeco', dir, fresh),
   pickFolder: () => ipcRenderer.invoke('dialog:folder'),
   listHooks: (folder: string) => ipcRenderer.invoke('hooks:list', folder),
