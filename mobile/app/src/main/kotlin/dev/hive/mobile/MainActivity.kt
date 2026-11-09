@@ -263,7 +263,8 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
                 Column(Modifier.fillMaxWidth().clickable { onOpen(t.getString("id")) }.padding(vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (st != "idle") Text(if (st == "working") "● " else "◆ ", color = if (st == "working") Color(0xFF5BA8F0) else Color(0xFFE0A030))
-                        Text(t.optString("title"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+                        Text(t.optString("title"), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+                        Text(whenLabel(t.optLong("updated")), Modifier.padding(start = 8.dp), fontSize = 12.sp, color = Color.Gray)
                     }
                     Text(listOf(t.optString("folder"), t.optString("note")).filter { it.isNotEmpty() }.joinToString(" · "), fontSize = 12.sp, color = Color.Gray, maxLines = 1)
                 }
@@ -273,6 +274,19 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
         }
         }
     }
+}
+
+// a thread's last change: the time if today, else the date ("" from an older Hive that sends none)
+private fun whenLabel(ms: Long): String {
+    if (ms <= 0) return ""
+    val at = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault())
+    val today = java.time.LocalDate.now()
+    val f = when {
+        at.toLocalDate() == today -> java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
+        at.year == today.year -> java.time.format.DateTimeFormatter.ofPattern("MMM d")
+        else -> java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.SHORT)
+    }
+    return at.format(f)
 }
 
 private val sectionOrder = listOf("watchers", "pinned", "waiting", "working", "dependabot", "recent")
