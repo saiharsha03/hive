@@ -280,6 +280,8 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
     var err by remember { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
     val list = rememberLazyListState()
+    // follow the end on the first load, after a send, and while the reader is already at the bottom; not when scrolled up
+    var follow by remember(id) { mutableStateOf(true) }
     androidx.activity.compose.BackHandler(onBack = onBack)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(id, state, changed, tick) {
@@ -290,6 +292,8 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             title = t.optString("title")
             working = t.optBoolean("working")
             val a = t.getJSONArray("items")
+            val seen = list.layoutInfo
+            if ((seen.visibleItemsInfo.lastOrNull()?.index ?: -1) >= seen.totalItemsCount - 2) follow = true
             items = (0 until a.length()).map { a.getJSONObject(it) }
             // Claude's open questions (an older Hive sends none)
             val q = t.optJSONArray("asks")
@@ -299,7 +303,8 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             tasks = if (b == null) emptyList() else (0 until b.length()).map { b.getJSONObject(it) }
             ""
         }.getOrElse { it.message ?: "Failed" }
-        if (items.isNotEmpty()) list.scrollToItem(items.size - 1 + asks.size)
+        if (follow && items.isNotEmpty()) list.scrollToItem(items.size - 1 + asks.size)
+        follow = false
     }
     // while Claude or its background work runs, look again every few seconds
     val running = working || tasks.isNotEmpty()
@@ -329,7 +334,7 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             OutlinedTextField(draft, { draft = it }, Modifier.weight(1f), placeholder = { Text(if (working) "Steer Claude…" else "Message Claude…") }, maxLines = 6)
             Spacer(Modifier.width(8.dp))
             Button(enabled = draft.isNotBlank() && state == Relay.State.Online, onClick = {
-                val text = draft.trim(); draft = ""
+                val text = draft.trim(); draft = ""; follow = true
                 scope.launch { err = runCatching { Relay.ask("send", mapOf("id" to id, "text" to text)); working = true; tick++; "" }.getOrElse { it.message ?: "Failed" } }
             }) { Text("Send") }
         }
