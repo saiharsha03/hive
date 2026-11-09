@@ -6,6 +6,49 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Command palette finds files.** From two typed characters, files under the current folder whose name or path
+  match are listed under Files (Enter opens one as a tab); matches rank label-starts-with first, then word-start,
+  then anywhere.
+- **Keyboard shortcuts.** Ctrl+N new thread, Ctrl+W close the tab, Ctrl+Tab / Ctrl+Shift+Tab next / previous tab,
+  Ctrl+1 to 9 the Nth tab of the focused pane. Not while the terminal or the editor has the focus (except Ctrl+Tab).
+- **Find in conversation.** Ctrl+F in a chat opens a find bar at the top right of the thread with n of m,
+  previous / next and close.
+- **Sidebar arrow keys.** Up / Down (and Home / End) move between thread rows.
+
+### Changed
+
+- Spinners and blinking dots stop under `prefers-reduced-motion`, not only the office view.
+
+## [1.0.0] - 2026-11-09
+
+### Added
+
+- **Teams.** Ask a thread for a team: a Lead plans the job on a shared board, picks teammates from a role library,
+  each teammate runs as its own thread. Team view with an animated office, chat with a teammate, pause and resume,
+  and a memory per role kept across teams.
+- **Wake-ups that survive restarts.** A thread can schedule its own follow-up; Hive keeps it on disk and wakes the
+  thread after a restart or sleep.
+- **Rewind a turn.** Put back the files Claude changed since one of your messages and fork the conversation from
+  before it, or rewind the conversation only.
+- **Auto-update.** The installed app checks GitHub Releases at start and every 6 hours, downloads in the background
+  and offers Restart to update in the status bar; the portable build shows the new version. Check for updates is
+  in the command palette.
+- **Phone app 2.0.** The Android app gets a Teams screen (state words, members, latest posts, Pause / Resume).
+- **Deploy watch command.** `HIVE_DEPLOY_WATCH_CMD` runs your own landed check after the push and streams its
+  lines into the deploy wizard.
+- **Interactive CLI commands in the terminal.** Claude Code commands only the interactive CLI runs
+  (`/design-login`, `/login`, `/mcp`, ...) open in the thread's terminal.
+- **Claude in Chrome setting.** Threads Hive starts can use your Chrome through the Claude extension
+  (`claude --chrome`); on by default, switchable in Settings.
+
+### Changed
+
+- **Usage in the status bar** reads the limits from the running threads within seconds of each reply, shows only
+  the windows your plan has, and a thread that hits a limit continues by itself after the reset.
+
+
 ## [0.1.0] - 2026-10-31
 
 First public release.
@@ -47,5 +90,6 @@ First public release.
   Python), ESLint with typescript-eslint and react-hooks, GitHub Actions CI on Windows and Ubuntu, and an
   electron-builder Windows installer and portable build published from version tags.
 
-[Unreleased]: https://github.com/saiharsha03/hive/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/saiharsha03/hive/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/saiharsha03/hive/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/saiharsha03/hive/releases/tag/v0.1.0
