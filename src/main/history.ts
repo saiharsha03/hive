@@ -3,11 +3,12 @@ import { open, readFile } from 'node:fs/promises'
 import { parseFromThread } from '../shared/threadTalkCore'
 import { isContinuation } from '../shared/summaryCore'
 import { appName } from '../shared/appName'
+import { resultText } from '../shared/toolOutputCore'
 
 export type Item =
   | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string } // images as data: URLs; at = when it was sent (ms); uuid = its transcript entry (Rewind)
   | { kind: 'assistant'; text: string; at?: number } // at = when Claude wrote it
-  | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown }
+  | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown; output?: string }
   | { kind: 'show'; path: string }
   | { kind: 'note'; text: string }
   | { kind: 'summary'; text: string } // the compaction summary a continued session starts from, shown collapsed
@@ -101,7 +102,7 @@ function parseHistory(text: string): Item[] {
       if (!Array.isArray(c)) continue
       for (const b of c) if (b.type === 'tool_result') {
         const t = tools.get(b.tool_use_id)
-        if (t) t.status = b.is_error ? 'error' : 'done'
+        if (t) { t.status = b.is_error ? 'error' : 'done'; t.output = resultText(b.content) }
         // an Edit / MultiEdit / Write result carries the change as hunks with real line numbers
         if (t && Array.isArray(e.toolUseResult?.structuredPatch) && e.toolUseResult.structuredPatch.length) t.patch = e.toolUseResult.structuredPatch
         // the codex tool's result names the task id its answer will come back under

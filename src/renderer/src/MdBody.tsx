@@ -30,7 +30,7 @@ async function write(html: string, plain: string): Promise<void> {
   })])
 }
 
-function CopyButton({ className, title, onCopy }: { className: string; title: string; onCopy: () => Promise<void> }) {
+export function CopyButton({ className, title, onCopy }: { className: string; title: string; onCopy: () => Promise<void> }) {
   const [done, setDone] = useState<'' | 'Copied' | 'Failed'>('')
   const click = () => {
     onCopy().then(() => setDone('Copied'), () => setDone('Failed'))
