@@ -2,6 +2,7 @@
 // things Claude showed you, background work, and the message box (pasted / dropped images, the clipboard chip,
 // model and effort pickers, steer / queue). Scroll position is kept per thread, so switching UI or thread keeps it.
 import { getPref, setPref } from './prefs'
+import { saveDraft, savedDrafts } from './restore'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -39,7 +40,8 @@ const MODE_HINT: Record<SendMode, string> = {
 const attachmentOf = (url: string): Attachment => ({ url, mediaType: url.slice(5, url.indexOf(';')), data: url.slice(url.indexOf(',') + 1) })
 
 // unsent text and images per thread, so switching threads or UI doesn't lose them
-const drafts = new Map<string, { text: string; images: Attachment[] }>()
+// (the text of a saved thread's draft is also kept across a restart, by session id: restore.ts)
+const drafts = new Map<string, { text: string; images: Attachment[] }>(Object.entries(savedDrafts()).map(([id, text]) => [id, { text, images: [] }]))
 // fill a thread's message box without sending (e.g. the Deploy wizard's Diagnose)
 export const prefillDraft = (id: string, text: string) => { drafts.set(id, { text, images: [] }) }
 // nothing typed or attached yet
@@ -241,7 +243,10 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   }, [session.id, session.sessionId, session.continueRev])
   const [draft, setDraft] = useState(() => drafts.get(session.id)?.text ?? '')
   const [images, setImages] = useState<Attachment[]>(() => drafts.get(session.id)?.images ?? [])
-  useEffect(() => { drafts.set(session.id, { text: draft, images }) }, [session.id, draft, images])
+  useEffect(() => {
+    drafts.set(session.id, { text: draft, images })
+    if (session.sessionId) saveDraft(session.sessionId, draft) // a never-sent new thread's draft is not kept
+  }, [session.id, session.sessionId, draft, images])
   const thread = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)

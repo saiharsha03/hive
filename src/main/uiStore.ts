@@ -1,5 +1,5 @@
 // UI state that must not depend on how Hive was started (dev server vs built app have different browser storage):
-// thread pins / snoozes / closes and small UI preferences, kept as JSON files under ~/.claude.
+// thread pins / snoozes / closes, small UI preferences and what a restart restores, kept as JSON files under ~/.claude.
 import { readFileSync } from 'node:fs'
 import { writeFileSafe } from './safeWrite'
 import { dataDir } from './testMode'
@@ -8,6 +8,7 @@ import { join } from 'node:path'
 const FILES: Record<string, string> = {
   threads: join(dataDir(), 'hive-threads.json'),
   prefs: join(dataDir(), 'hive-prefs.json'),
+  restore: join(dataDir(), 'hive-restore.json'), // drafts + open tabs, written often, so not in prefs
 }
 
 export function uiLoad(name: string): Record<string, unknown> {

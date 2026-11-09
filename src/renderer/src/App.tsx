@@ -52,6 +52,8 @@ import { ARRANGE, VIEW, placeOf, type Region, type ViewId } from './views'
 import { WatcherRows, WatchersPopover, useWatcherCounts } from './watchers'
 import { Divider, Icon, Modal, Popover, anchorOf, useSize, type Anchor } from './ui'
 import { getPref, setPref } from './prefs'
+import { pruneDrafts, saveTabs, savedTabs } from './restore'
+import { tabsToRestore, tabsToSave } from '../../shared/restoreCore'
 import { useAppName, useAppTagline } from './appSettings'
 import { HiveMark } from './HiveMark'
 
@@ -436,6 +438,25 @@ export function App() {
     window.api.loadRecentHistory(info.path).then(({ items, more }) =>
       setSessions((all) => all.map((s) => (s.id === info.id ? { ...s, items: [...items, ...s.items], loaded: true, history: { count: items.length, more } } : s))))
   }
+  // after a restart (an update) the saved threads that were open come back as tabs, history only: nothing is sent and
+  // no Claude process starts until the next message. Background threads are not: their process ended with the app.
+  // Runs once per window load (a dev reload starts with no tabs too); tabs are saved only after it, so the list is not
+  // overwritten with the empty start.
+  const restored = useRef(false)
+  const openSessionRef = useRef(openSession)
+  openSessionRef.current = openSession
+  useEffect(() => {
+    void window.api.listSessions().then((list) => {
+      pruneDrafts(new Set(list.map((x) => x.id)))
+      const { open, focus } = tabsToRestore(savedTabs(), list)
+      for (const info of open) if (!findSession(sessionsRef.current, info.id)) openSessionRef.current(info)
+      if (focus) setPaneState((p) => activateIn(p, focus))
+      restored.current = true
+    }).catch(() => { restored.current = true })
+  }, [])
+  useEffect(() => {
+    if (restored.current) saveTabs(tabsToSave(sessions, panes.panes.flatMap((p) => p.tabs), activeId))
+  }, [sessions, panes, activeId])
   // the rest of a long thread's transcript, on request: the full history replaces the recent part, live items stay
   const loadEarlier = (id: string) => {
     const s = sessionsRef.current.find((x) => x.id === id)
