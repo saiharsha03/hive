@@ -79,6 +79,8 @@ It started as a personal replacement for an editor plus a terminal, and is share
   message back in the box to edit and resend. Or rewind the conversation only.
 - **Find** (Ctrl+F) searches the conversation; **Export** copies or saves it as Markdown.
 - Unsent drafts and the open thread tabs come back after a restart.
+- **Handoff**: a thread that has grown large or just compacted is offered a fresh one. Claude writes a handoff
+  file, and a new thread in the same folder starts by reading it.
 - **Clean copy** puts a reply on the clipboard as both HTML and plain text, so tables paste properly.
 - Security warnings from hooks and plugins show in the thread, not just in a log.
 - **★ Insight** boxes from the Learning and Explanatory output styles render as callouts.

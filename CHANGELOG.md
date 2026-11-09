@@ -52,6 +52,11 @@ All notable changes to Hive are documented here. The format follows
   thread after a restart or sleep.
 - **Rewind a turn.** Put back the files Claude changed since one of your messages and fork the conversation from
   before it, or rewind the conversation only.
+- **Handoff offer.** A thread that has grown large (200k tokens of context by default, `HIVE_HANDOFF_AT`) or has
+  just compacted is offered a fresh thread: Claude writes a handoff file and a new thread in the same folder starts
+  by reading it, taking the worktrees with it.
+- **Switch account** in the status bar (Claude Code's own browser sign-in, then the app restarts on the new login).
+- **`agent_status` tool.** What a thread's subagents, shells, workflows and Codex runs are doing right now.
 - **Auto-update.** The installed app checks GitHub Releases at start and every 6 hours, downloads in the background
   and offers Restart to update in the status bar; the portable build shows the new version. Check for updates is
   in the command palette.
