@@ -6,6 +6,11 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The status bar no longer runs off the right edge of a narrow window: it drops the secondary words first (reset
+  times, plan, MCP detail, UI and theme names), then the account and "cache"; the hover titles keep them.
+
 ## [1.1.0] - 2026-11-09
 
 ### Added

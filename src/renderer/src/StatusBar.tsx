@@ -99,7 +99,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   const lim = (label: string, l: Limit, id: string) => l && l.pct !== null && (
     <Item testid={`status-${id}`} cls={asOf ? 's-idle' : undefined} title={`${l.resetsAt ? `${label} limit, resets in ${left(l.resetsAt, now)}` : `${label} limit`}${asOf ? `, as of ${asOf}` : ''}. Click for all limits`} onClick={(el) => setUsageAt(anchorOf(el))}>
       <span className="lbl">{label}</span><Meter pct={l.pct} t={tone(l.pct)} /><span className={tone(l.pct) === 'ok' ? '' : `s-${tone(l.pct) === 'bad' ? 'fail' : 'wait'}`}>{Math.round(l.pct)}%</span>
-      {l.resetsAt && <span className="lbl">resets {left(l.resetsAt, now)}</span>}
+      {l.resetsAt && <span className="lbl opt">resets {left(l.resetsAt, now)}</span>}
     </Item>
   )
 
@@ -125,7 +125,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
         </Item>
       )}
       {!status && <Item testid="status-connecting">Connecting…</Item>}
-      {status?.account && <Item testid="status-account" onClick={() => setSwitching(true)} title={`${status.engine?.version ? `Claude Code ${status.engine.version}${status.engine.installed ? '' : ' (bundled with the SDK)'}. ` : ''}Click to switch account`}><Icon name="account" />{status.account}{status.plan ? `, ${status.plan[0].toUpperCase()}${status.plan.slice(1)}` : ''}</Item>}
+      {status?.account && <Item testid="status-account" onClick={() => setSwitching(true)} title={`${status.engine?.version ? `Claude Code ${status.engine.version}${status.engine.installed ? '' : ' (bundled with the SDK)'}. ` : ''}Click to switch account`}><Icon name="account" /><span className="opt2">{status.account}</span>{status.plan ? <span className="opt">, {status.plan[0].toUpperCase()}{status.plan.slice(1)}</span> : null}</Item>}
       {status && lim('5h', status.five, 'five')}
       {status && lim('7d', status.seven, 'seven')}
       {asOf && (status?.five || status?.seven) && <span className="sbi s-idle" data-testid="status-usage-asof">as of {asOf}</span>}
@@ -136,16 +136,16 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
       )}
       {cacheLeft != null && (
         <Item testid="status-cache" cls={cacheLeft > 0 ? '' : 's-fail'} title={stats?.compactions ? `${stats.compactions} compaction(s) in this thread` : 'Prompt cache'}>
-          <Icon name="flame" className={cacheLeft > 0 ? 's-done' : ''} />{cacheLeft > 0 ? `cache warm ${mmss(cacheLeft)}` : 'cache cold'}
+          <Icon name="flame" className={cacheLeft > 0 ? 's-done' : ''} /><span className="opt2">cache </span>{cacheLeft > 0 ? `warm ${mmss(cacheLeft)}` : 'cold'}
         </Item>
       )}
       <ModelBadge tabId={tabId} />
       {c && (
         <Item testid="status-mcp" cls={c.failed ? 's-fail' : c.needsAuth ? 's-wait' : ''} title="MCP servers" onClick={onMcp}>
-          <Icon name="plug" />MCP {c.connected}/{c.total}{c.needsAuth ? `, ${c.needsAuth} sign-in` : ''}{c.failed ? `, ${c.failed} failed` : ''}
+          <Icon name="plug" />MCP {c.connected}/{c.total}<span className="opt">{c.needsAuth ? `, ${c.needsAuth} sign-in` : ''}{c.failed ? `, ${c.failed} failed` : ''}</span>
         </Item>
       )}
-      <Item testid="status-appearance" title="UI and theme" onClick={onAppearance}><Icon name="layout" />{getUIs().find((u) => u.id === ui)?.label} UI, {getThemes(ui).find((t) => t.id === theme)?.label} theme</Item>
+      <Item testid="status-appearance" title={`${getUIs().find((u) => u.id === ui)?.label} UI, ${getThemes(ui).find((t) => t.id === theme)?.label} theme. Click to change`} onClick={onAppearance}><Icon name="layout" /><span className="opt">{getUIs().find((u) => u.id === ui)?.label} UI, {getThemes(ui).find((t) => t.id === theme)?.label} theme</span></Item>
       <Item testid="status-version" title="Hive version">v{__APP_VERSION__}</Item>
       {usageAt && status && (
         <Popover anchor={usageAt} onClose={() => setUsageAt(null)} width={300} align="right" testid="usage-pop">
