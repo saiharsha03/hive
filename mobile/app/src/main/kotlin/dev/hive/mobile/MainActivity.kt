@@ -34,6 +34,9 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -349,10 +352,21 @@ private fun Item(it: JSONObject) {
         "you" -> Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.CenterEnd) {
             Text(t, Modifier.background(Color(0xFF2A3140), RoundedCornerShape(12.dp)).padding(10.dp).widthIn(max = 320.dp))
         }
-        "claude" -> Text(t, Modifier.padding(vertical = 6.dp))
+        "claude" -> ClaudeText(t)
         "tool" -> Text("› $t", Modifier.padding(vertical = 2.dp), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
         else -> Text(t, Modifier.padding(vertical = 4.dp), fontSize = 12.sp, color = Color.Gray)
     }
+}
+
+// Claude writes Markdown. Takes the text alone so a refresh that brings the same text skips it (no re-parse)
+@Composable
+private fun ClaudeText(t: String) {
+    val type = MaterialTheme.typography
+    val mono = type.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+    Markdown(t, modifier = Modifier.padding(vertical = 6.dp),
+        colors = markdownColor(linkText = MaterialTheme.colorScheme.primary, codeBackground = Color(0xFF262930), inlineCodeBackground = Color(0xFF262930)),
+        // phone sized headings: the defaults are display sizes
+        typography = markdownTypography(h1 = type.titleLarge, h2 = type.titleMedium, h3 = type.titleSmall, h4 = type.titleSmall, h5 = type.titleSmall, h6 = type.titleSmall, code = mono, inlineCode = mono))
 }
 
 @Composable
