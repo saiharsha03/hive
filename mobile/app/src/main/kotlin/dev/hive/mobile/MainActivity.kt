@@ -21,7 +21,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +36,9 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -198,6 +203,7 @@ private fun StatusLine() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> Unit, onTeams: () -> Unit, onWakeups: () -> Unit, onUnpair: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -206,15 +212,22 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var err by remember { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
-    LaunchedEffect(state, changed) {
+    var unpair by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var refreshing by remember { mutableStateOf(false) }
+    var reload by remember { mutableStateOf(0) }
+    LaunchedEffect(state, changed, reload) {
         if (state == Relay.State.Off) Relay.connect(ctx)
-        if (state != Relay.State.Online) return@LaunchedEffect
-        err = runCatching {
+        if (state == Relay.State.Online) err = runCatching {
             val a = Relay.ask("threads").getJSONArray("threads")
             rows = (0 until a.length()).map { a.getJSONObject(it) }
             ""
         }.getOrElse { it.message ?: "Failed" }
+        refreshing = false
     }
+    // the search filters the rows already here, by title and folder
+    val q = query.trim()
+    val shown = if (q.isEmpty()) rows else rows.filter { it.optString("title").contains(q, true) || it.optString("folder").contains(q, true) }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Threads", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
@@ -225,15 +238,23 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
                     DropdownMenuItem(text = { Text("Teams") }, onClick = { menu = false; onTeams() })
                     DropdownMenuItem(text = { Text("Wake-ups") }, onClick = { menu = false; onWakeups() })
                     DropdownMenuItem(text = { Text("Usage") }, onClick = { menu = false; onUsage() })
-                    DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = { menu = false; onUnpair() })
+                    DropdownMenuItem(text = { Text("Unpair this phone") }, onClick = { menu = false; unpair = true })
                 }
             }
         }
+        // unpairing means scanning a new code in Hive, so ask first
+        if (unpair) AlertDialog(onDismissRequest = { unpair = false }, title = { Text("Unpair this phone?") },
+            text = { Text("To use the app again you pair it anew in Hive on your computer.") },
+            confirmButton = { TextButton(onClick = { unpair = false; onUnpair() }) { Text("Unpair", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { unpair = false }) { Text("Cancel") } })
         StatusLine()
         if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error)
-        LazyColumn(Modifier.fillMaxSize().padding(top = 8.dp)) {
+        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true, placeholder = { Text("Search threads") },
+            trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { query = "" }) { Text("✕") } })
+        PullToRefreshBox(refreshing, { refreshing = true; reload++ }, Modifier.fillMaxSize().padding(top = 8.dp)) {
+        LazyColumn(Modifier.fillMaxSize()) {
             // Hive sends each thread's sidebar section, in order; an older Hive sends none, so the list stays flat
-            sections(rows).forEach { (section, group) ->
+            sections(shown).forEach { (section, group) ->
             if (section.isNotEmpty()) item(key = "section:$section") {
                 Text(sectionLabels[section] ?: section, style = MaterialTheme.typography.labelLarge, color = Color.Gray, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
             }
@@ -242,7 +263,8 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
                 Column(Modifier.fillMaxWidth().clickable { onOpen(t.getString("id")) }.padding(vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (st != "idle") Text(if (st == "working") "● " else "◆ ", color = if (st == "working") Color(0xFF5BA8F0) else Color(0xFFE0A030))
-                        Text(t.optString("title"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+                        Text(t.optString("title"), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+                        Text(whenLabel(t.optLong("updated")), Modifier.padding(start = 8.dp), fontSize = 12.sp, color = Color.Gray)
                     }
                     Text(listOf(t.optString("folder"), t.optString("note")).filter { it.isNotEmpty() }.joinToString(" · "), fontSize = 12.sp, color = Color.Gray, maxLines = 1)
                 }
@@ -250,7 +272,21 @@ private fun Threads(onOpen: (String) -> Unit, onNew: () -> Unit, onUsage: () -> 
             }
             }
         }
+        }
     }
+}
+
+// a thread's last change: the time if today, else the date ("" from an older Hive that sends none)
+private fun whenLabel(ms: Long): String {
+    if (ms <= 0) return ""
+    val at = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault())
+    val today = java.time.LocalDate.now()
+    val f = when {
+        at.toLocalDate() == today -> java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
+        at.year == today.year -> java.time.format.DateTimeFormatter.ofPattern("MMM d")
+        else -> java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.SHORT)
+    }
+    return at.format(f)
 }
 
 private val sectionOrder = listOf("watchers", "pinned", "waiting", "working", "dependabot", "recent")
@@ -274,6 +310,8 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
     var err by remember { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
     val list = rememberLazyListState()
+    // follow the end on the first load, after a send, and while the reader is already at the bottom; not when scrolled up
+    var follow by remember(id) { mutableStateOf(true) }
     androidx.activity.compose.BackHandler(onBack = onBack)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(id, state, changed, tick) {
@@ -284,6 +322,8 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             title = t.optString("title")
             working = t.optBoolean("working")
             val a = t.getJSONArray("items")
+            val seen = list.layoutInfo
+            if ((seen.visibleItemsInfo.lastOrNull()?.index ?: -1) >= seen.totalItemsCount - 2) follow = true
             items = (0 until a.length()).map { a.getJSONObject(it) }
             // Claude's open questions (an older Hive sends none)
             val q = t.optJSONArray("asks")
@@ -293,7 +333,8 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             tasks = if (b == null) emptyList() else (0 until b.length()).map { b.getJSONObject(it) }
             ""
         }.getOrElse { it.message ?: "Failed" }
-        if (items.isNotEmpty()) list.scrollToItem(items.size - 1 + asks.size)
+        if (follow && items.isNotEmpty()) list.scrollToItem(items.size - 1 + asks.size)
+        follow = false
     }
     // while Claude or its background work runs, look again every few seconds
     val running = working || tasks.isNotEmpty()
@@ -323,8 +364,9 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             OutlinedTextField(draft, { draft = it }, Modifier.weight(1f), placeholder = { Text(if (working) "Steer Claude…" else "Message Claude…") }, maxLines = 6)
             Spacer(Modifier.width(8.dp))
             Button(enabled = draft.isNotBlank() && state == Relay.State.Online, onClick = {
-                val text = draft.trim(); draft = ""
-                scope.launch { err = runCatching { Relay.ask("send", mapOf("id" to id, "text" to text)); working = true; tick++; "" }.getOrElse { it.message ?: "Failed" } }
+                val text = draft.trim(); draft = ""; follow = true
+                // a failed send puts the text back, unless something new was typed meanwhile
+                scope.launch { err = runCatching { Relay.ask("send", mapOf("id" to id, "text" to text)); working = true; tick++; "" }.getOrElse { if (draft.isEmpty()) draft = text; it.message ?: "Failed" } }
             }) { Text("Send") }
         }
     }
@@ -335,12 +377,24 @@ private fun Item(it: JSONObject) {
     val t = it.optString("t")
     when (it.optString("k")) {
         "you" -> Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.CenterEnd) {
-            Text(t, Modifier.background(Color(0xFF2A3140), RoundedCornerShape(12.dp)).padding(10.dp).widthIn(max = 320.dp))
+            SelectionContainer { Text(t, Modifier.background(Color(0xFF2A3140), RoundedCornerShape(12.dp)).padding(10.dp).widthIn(max = 320.dp)) }
         }
-        "claude" -> Text(t, Modifier.padding(vertical = 6.dp))
+        "claude" -> ClaudeText(t)
         "tool" -> Text("› $t", Modifier.padding(vertical = 2.dp), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
         else -> Text(t, Modifier.padding(vertical = 4.dp), fontSize = 12.sp, color = Color.Gray)
     }
+}
+
+// Claude writes Markdown. Takes the text alone so a refresh that brings the same text skips it (no re-parse)
+@Composable
+private fun ClaudeText(t: String) {
+    val type = MaterialTheme.typography
+    val mono = type.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+    // long-press selects and copies; one message at a time, so taps and scrolling in the list stay as they were
+    SelectionContainer { Markdown(t, modifier = Modifier.padding(vertical = 6.dp),
+        colors = markdownColor(linkText = MaterialTheme.colorScheme.primary, codeBackground = Color(0xFF262930), inlineCodeBackground = Color(0xFF262930)),
+        // phone sized headings: the defaults are display sizes
+        typography = markdownTypography(h1 = type.titleLarge, h2 = type.titleMedium, h3 = type.titleSmall, h4 = type.titleSmall, h5 = type.titleSmall, h6 = type.titleSmall, code = mono, inlineCode = mono)) }
 }
 
 @Composable
