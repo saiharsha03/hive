@@ -62,18 +62,23 @@ It started as a personal replacement for an editor plus a terminal, and is share
 ### Chat
 
 - Streaming replies, one-line tool rows, and file edits shown as `+12 −3 src/foo.ts` rows that open the diff.
+  Click a tool row to see the whole command and its output, so a failed step explains itself.
 - **Steer or queue**: send while a turn is running to steer it, or queue the message for after.
-- Paste or drop images and files. A clipboard chip offers the latest screenshot or copied text as an attachment.
+- Paste or drop images and files (a file goes in as `@path`), or type **`@`** to pick a file from the thread's
+  folder. A clipboard chip offers the latest screenshot or copied text as an attachment.
 - The **`/` menu** lists every slash command the engine supports, including `/goal`, `/loop`, `/clear`,
   `/insights` and your own skills.
 - **`/btw <question>`** asks a quick side question about the thread. The answer shows above the message box and
   stays out of the conversation (a throwaway fork answers it, without tools).
-- **Model and effort pickers** switch the running session live. `ultrathink` is highlighted as you type.
+- **Model and effort pickers** switch the running session live. `ultrathink` is highlighted as you type. A line in
+  the conversation says when the answering model changes.
 - A **status strip** shows an active goal and its running time, loops, subagents, live workflow progress and
   background tasks, each with a Stop button.
 - **Rewind**: hover one of your messages and rewind to just before it. Hive previews the files Claude changed since
   (with +/- counts), puts them back, cuts the chat to that point (the old transcript is kept as it was) and puts your
   message back in the box to edit and resend. Or rewind the conversation only.
+- **Find** (Ctrl+F) searches the conversation; **Export** copies or saves it as Markdown.
+- Unsent drafts and the open thread tabs come back after a restart.
 - **Clean copy** puts a reply on the clipboard as both HTML and plain text, so tables paste properly.
 - Security warnings from hooks and plugins show in the thread, not just in a log.
 - **★ Insight** boxes from the Learning and Explanatory output styles render as callouts.
@@ -193,15 +198,23 @@ Push, merge and deploy decisions go back to you; the Lead does not make them.
   from the running threads within seconds of each reply, and **Switch account** (Claude Code's own
   browser sign-in, then the app restarts on the new login). A thread that hits a usage limit continues by itself
   after the reset, or as soon as any turn goes through again.
+- **Desktop notifications**: a Windows toast and a taskbar flash when a thread waits for you, asks a question,
+  finishes, fails or hits the usage limit while Hive is not focused. Clicking it opens the thread; Settings has the
+  switch.
 - **Allow my IP**: a button for your own allowlist command (`HIVE_ALLOWLIST_CMD`), lit when your public IP changes.
-- MCP server status (connected, needs sign-in, failed), hooks and plugins switches, a command palette (Ctrl+K), and a
-  full-window preview for what Claude shows you.
+- MCP server status (connected, needs sign-in, failed), hooks and plugins switches, a command palette (Ctrl+K) that finds
+  threads, tools and files, and a full-window preview for what Claude shows you.
+- **Keys**: Ctrl+N new thread, Ctrl+W close the tab, Ctrl+Tab and Ctrl+1 to 9 switch tabs, Ctrl+\ split,
+  Ctrl+` terminal, Ctrl+J bottom panel; Up / Down move through the thread list.
 
 ### Phone app
 
 An Android app (`mobile/`) for when you're away from the computer:
 - Claude's notifications reach your phone: the `notify_phone` tool, a thread waiting for you, a background thread finished.
-- You can read threads, send or steer, stop Claude, and start a new thread in any repo.
+- You can read threads (replies render as Markdown), send or steer, answer Claude's questions, stop Claude or one
+  of its background tasks, and start a new thread in any repo. The thread list has search and pull to refresh.
+- Teams (members, latest posts, Pause / Resume), scheduled wake-ups (with Cancel) and plan usage have their own
+  screens.
 - A fingerprint (or the screen lock) opens the app.
 
 The phone and Hive never talk directly. Both dial out to a small **relay** (`relay/relay.mjs`), so neither has to be
