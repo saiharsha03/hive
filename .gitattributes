@@ -1,0 +1,4 @@
+# keep LF in the repo and in checkouts on every OS (matches .editorconfig)
+* text=auto eol=lf
+*.png binary
+*.ico binary

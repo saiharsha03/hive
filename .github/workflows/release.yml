@@ -1,0 +1,52 @@
+name: Release
+
+# Pushing a v* tag (e.g. v1.0.4) builds and publishes that release. CI is the only publisher, so the installer,
+# its blockmap and latest.yml (the auto-update feed) always come from the same build. Release:
+#   npm version 1.0.5 --no-git-tag-version, commit, git tag v1.0.5, push main + the tag
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # the tag and package.json must agree, or latest.yml would advertise a different version than the tag
+      - name: Tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != package.json v$v"; exit 1; }
+
+      - name: Install
+        run: npm ci
+
+      - name: Check
+        run: npm run check
+
+      # the dist script already passes --publish never (a second one makes electron-builder try to publish itself)
+      - name: Build installer
+        run: npm run dist
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hive ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml

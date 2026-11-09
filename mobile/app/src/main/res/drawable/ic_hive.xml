@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- a hexagon: the app and notification icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFC83D" android:pathData="M12,2L20.66,7L20.66,17L12,22L3.34,17L3.34,7Z" />
+</vector>
