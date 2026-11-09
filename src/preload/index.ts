@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   listDir: (dir: string) => ipcRenderer.invoke('fs:list', dir),
   // every file under a folder (relative, forward slashes), for the "@" mention
   listAllFiles: (dir: string): Promise<string[]> => ipcRenderer.invoke('fs:listAll', dir),
+  searchFiles: (dir: string, q: string) => ipcRenderer.invoke('fs:search', dir, q),
   gitDecorations: (dir: string, fresh?: boolean) => ipcRenderer.invoke('fs:gitDeco', dir, fresh),
   pickFolder: () => ipcRenderer.invoke('dialog:folder'),
   saveMarkdown: (name: string, text: string) => ipcRenderer.invoke('dialog:saveMarkdown', name, text),
@@ -50,6 +51,13 @@ contextBridge.exposeInMainWorld('api', {
     const fn = (_e: unknown, s: unknown) => cb(s)
     ipcRenderer.on('mobile:status', fn)
     return () => ipcRenderer.removeListener('mobile:status', fn)
+  },
+  findRun: (text: string, forward: boolean, next: boolean) => ipcRenderer.invoke('find:run', text, forward, next),
+  findStop: () => ipcRenderer.invoke('find:stop'),
+  onFindResult: (cb: (r: { active: number; total: number }) => void) => {
+    const fn = (_e: unknown, r: { active: number; total: number }) => cb(r)
+    ipcRenderer.on('find:result', fn)
+    return () => ipcRenderer.removeListener('find:result', fn)
   },
   listNotes: () => ipcRenderer.invoke('notes:list'),
   saveNote: (id: string | null, text: string) => ipcRenderer.invoke('notes:save', id, text),

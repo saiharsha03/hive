@@ -28,7 +28,7 @@ import { lspChange, lspClose, lspOpen, lspRequest, lspSaved, setDiagnosticsSink,
 import type { AllowStatus } from '../shared/allowCore'
 import { watcherStopReason } from './watchers'
 import { configureWatchers, createWatcher, deleteWatcher, initWatchers, listWatchersView, runWatcherNow, setWatcherEnabled, updateWatcher, watcherDetail, watcherTabFor } from './watchers'
-import { gitDecorations, listDir, listFiles } from './files'
+import { gitDecorations, listDir, listFiles, searchFiles } from './files'
 import { uiLoad, uiSave } from './uiStore'
 import { phoneThreads, type ThreadMap } from '../shared/threadsCore'
 import { CONTINUE_PROMPT } from '../shared/continueCore'
@@ -326,6 +326,17 @@ handle('session:stats', (_e, path: string) => sessionStats(path))
 handle('status:get', () => getStatus())
 handle('fs:list', (_e, dir: string) => listDir(dir))
 handle('fs:listAll', (_e, dir: string) => listFiles(String(dir)))
+// Find in conversation: the window's own find, so it searches the whole window (message box and side panels too).
+// The result (n of m) goes back as find:result.
+const finding = new WeakSet<Electron.WebContents>()
+handle('find:run', (e, text: string, forward: boolean, next: boolean) => {
+  const wc = e.sender
+  if (!finding.has(wc)) { finding.add(wc); wc.on('found-in-page', (_ev, r) => { if (!wc.isDestroyed()) wc.send('find:result', { active: r.activeMatchOrdinal, total: r.matches }) }) }
+  if (String(text)) wc.findInPage(String(text), { forward: !!forward, findNext: !!next })
+  else wc.stopFindInPage('clearSelection')
+})
+handle('find:stop', (e) => e.sender.stopFindInPage('clearSelection'))
+handle('fs:search', (_e, dir: string, q: string) => searchFiles(String(dir), String(q)))
 handle('fs:gitDeco', (_e, dir: string, fresh?: boolean) => gitDecorations(String(dir), !!fresh))
 handle('hooks:list', (_e, folder: string) => listHooks(folder))
 handle('hooks:set', (_e, folder: string, id: string, enabled: boolean) => setHook(folder, id, enabled))

@@ -647,6 +647,14 @@ export function App() {
   }
 
   // ---- keyboard ----
+  // the terminal and the editor keep Ctrl+N / W / 1-9 / F for themselves
+  const inTerminalOrEditor = () => !!(document.activeElement as HTMLElement | null)?.closest('.xterm, .monaco-editor')
+  // Ctrl+Tab: the next / previous tab of the focused pane, wrapping round
+  const stepTab = (d: number) => {
+    const tabs = panes.panes.find((p) => p.id === panes.focus)?.tabs ?? []
+    const at = activeId ? tabs.indexOf(activeId) : -1
+    if (tabs.length > 1 && at >= 0) activate(tabs[(at + d + tabs.length) % tabs.length])
+  }
   const toggleRegion = (r: Region) => (r === 'left' ? setLeftOpen(!leftOpen) : r === 'right' ? setRightOpen(!rightOpen) : setBottomOpen(!bottomOpen))
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -660,6 +668,14 @@ export function App() {
       }
       else if (e.ctrlKey && !e.shiftKey && e.key === ',') { e.preventDefault(); setModal('settings') }
       else if (e.ctrlKey && !e.shiftKey && e.key === '\\') { e.preventDefault(); newBeside(panes.focus) }
+      else if (e.ctrlKey && !e.altKey && e.key === 'Tab') { e.preventDefault(); stepTab(e.shiftKey ? -1 : 1) }
+      else if (e.ctrlKey && !e.shiftKey && !e.altKey && !inTerminalOrEditor() && (k === 'n' || k === 'w' || /^[1-9]$/.test(k))) {
+        e.preventDefault()
+        const tabs = panes.panes.find((p) => p.id === panes.focus)?.tabs ?? []
+        if (k === 'n') newSession()
+        else if (k === 'w') { if (activeId) closeSession(activeId) }
+        else if (tabs[Number(k) - 1]) activate(tabs[Number(k) - 1])
+      }
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
@@ -695,11 +711,11 @@ export function App() {
   }))
   const menus: Menu[] = [
     { label: 'Thread', items: [
-      { label: 'New thread', hint: '', icon: 'add', onClick: newSession, testid: 'menu-thread-new' },
+      { label: 'New thread', hint: 'Ctrl+N', icon: 'add', onClick: newSession, testid: 'menu-thread-new' },
       { label: 'New thread beside', hint: 'Ctrl+\\', icon: 'split-horizontal', onClick: () => newBeside(panes.focus), testid: 'menu-thread-split', disabled: panes.panes.length >= 4 },
       { label: 'All threads…', icon: 'list-unordered', onClick: (el) => showView('threads', el), testid: 'menu-thread-all' },
       { label: 'Move to background', hint: 'Ctrl+Shift+B', icon: 'eye-closed', onClick: () => activeId && moveToBackground(activeId), testid: 'menu-thread-background', disabled: !activeId, sep: true },
-      { label: 'Close thread', icon: 'close', onClick: () => activeId && closeTabs([activeId]), testid: 'menu-thread-close', disabled: !activeId },
+      { label: 'Close thread', hint: 'Ctrl+W', icon: 'close', onClick: () => activeId && closeTabs([activeId]), testid: 'menu-thread-close', disabled: !activeId },
       { label: `Quit ${appName}`, hint: 'Ctrl+Q', icon: 'sign-out', onClick: () => void window.api.quitApp(), testid: 'menu-thread-quit', sep: true },
     ] },
     { label: 'View', items: [
@@ -724,10 +740,13 @@ export function App() {
   for (const it of menus[1].items) if (it.testid === `menu-view-theme-${themeNow}`) it.checked = true
 
   const commands: Command[] = [
-    { id: 'new', group: 'Actions', label: 'New thread', icon: 'add', run: newSession },
+    { id: 'new', group: 'Actions', label: 'New thread', hint: 'Ctrl+N', icon: 'add', run: newSession },
     { id: 'new-beside', group: 'Actions', label: 'New thread beside (split)', hint: 'Ctrl+\\', icon: 'split-horizontal', run: () => newBeside(panes.focus) },
     { id: 'toggle-bottom', group: 'Actions', label: bottomOpen ? 'Hide bottom panel' : 'Show bottom panel', hint: 'Ctrl+J', icon: 'layout-panel', run: () => toggleRegion('bottom') },
     { id: 'toggle-right', group: 'Actions', label: rightOpen ? 'Hide right side' : 'Show right side', icon: 'layout-sidebar-right', run: () => toggleRegion('right') },
+    ...(activeId ? [{ id: 'close-tab', group: 'Actions', label: 'Close this tab', hint: 'Ctrl+W', icon: 'close', run: () => closeSession(activeId) }] : []),
+    { id: 'next-tab', group: 'Actions', label: 'Next tab', hint: 'Ctrl+Tab', icon: 'arrow-right', run: () => stepTab(1) },
+    { id: 'prev-tab', group: 'Actions', label: 'Previous tab', hint: 'Ctrl+Shift+Tab', icon: 'arrow-left', run: () => stepTab(-1) },
     ...(activeId ? [{ id: 'bg', group: 'Actions', label: 'Move this thread to the background', hint: 'Ctrl+Shift+B', icon: 'eye-closed', run: () => moveToBackground(activeId) }] : []),
     ...[...live.waiting, ...live.working].map((r) => ({ id: `live:${r.id}`, group: 'Live threads', label: r.title, hint: liveLook(r).word.toLowerCase(), icon: liveLook(r).icon, mk: liveLook(r).cls, run: () => activate(r.id) })),
     ...sessions.filter((s) => !s.background && !live.working.some((r) => r.id === s.id) && !live.waiting.some((r) => r.id === s.id)).map((s) => ({ id: `open:${s.id}`, group: 'Open threads', label: s.title, icon: 'comment-discussion', run: () => activate(s.id) })),
@@ -741,6 +760,14 @@ export function App() {
     ...getUIs().map((u) => ({ id: `ui:${u.id}`, group: 'UI', label: `UI: ${u.label}`, hint: ui === u.id ? 'current' : u.description, icon: 'layout', run: () => setUI(u.id) })),
     ...getThemes(ui).map((t) => ({ id: `theme:${t.id}`, group: 'Theme', label: `Theme: ${t.label}`, hint: themeNow === t.id ? `current for ${getUIs().find((u) => u.id === ui)?.label}` : t.description, icon: 'symbol-color', run: () => setTheme(t.id) })),
   ]
+  const loadFiles = async (q: string): Promise<Command[]> => {
+    if (!folder) return []
+    const sep = folder.includes('\\') ? '\\' : '/'
+    return (await window.api.searchFiles(folder, q)).map((rel) => {
+      const i = rel.lastIndexOf('/')
+      return { id: `file:${rel}`, group: 'Files', label: rel.slice(i + 1), hint: i < 0 ? '' : rel.slice(0, i), icon: 'file', run: () => openInEditor(folder.replace(/[\\/]$/, '') + sep + rel.split('/').join(sep)) }
+    })
+  }
   const loadThreads = async (): Promise<Command[]> => (await window.api.listSessions()).filter((s) => !s.watcherRun).map((s) => ({ id: `saved:${s.id}`, group: 'Threads', label: s.title, hint: s.project, icon: 'history', run: () => openSession(s) }))
 
   // ---- views ----
@@ -1011,7 +1038,7 @@ export function App() {
         </Modal>
       )}
       {modal === 'settings' && <SettingsPanel onClose={() => setModal(null)} onWatchers={() => { setModal(null); showView('watchers') }} />}
-      {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} loadThreads={loadThreads} />}
+      {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} loadThreads={loadThreads} loadFiles={loadFiles} />}
 
       {dropped && <DropPrompt path={dropped} choices={dropChoices} onPick={(c) => startFromFile(c, dropped)} onCancel={() => setDropped(null)} />}
       {notices.length > 0 && (

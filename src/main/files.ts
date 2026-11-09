@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, type Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileRank } from '../shared/paletteRank'
 import { buildDecorations, type Decorations, type RepoStatus } from '../shared/fileDecoCore'
 
 export type Entry = { name: string; path: string; dir: boolean }
@@ -82,4 +83,11 @@ export function listFiles(root: string): Promise<string[]> {
     async () => { const out: string[] = []; await walk(root, '', out); return out })
   listCache.set(root, { at: Date.now(), p })
   return p
+}
+
+// relative paths (forward slashes) whose name or path matches, best first
+export async function searchFiles(root: string, q: string, max = 30): Promise<string[]> {
+  const ranked: { rel: string; r: number }[] = []
+  for (const rel of await listFiles(root)) { const r = fileRank(rel, q); if (r !== null) ranked.push({ rel, r }) }
+  return ranked.sort((a, b) => a.r - b.r || a.rel.length - b.rel.length).slice(0, max).map((x) => x.rel)
 }

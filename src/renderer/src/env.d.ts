@@ -84,6 +84,7 @@ interface Window {
     getStatus: () => Promise<Status>
     listDir: (dir: string) => Promise<FsEntry[]>
     listAllFiles: (dir: string) => Promise<string[]>
+    searchFiles: (dir: string, q: string) => Promise<string[]>
     gitDecorations: (dir: string, fresh?: boolean) => Promise<import('../../shared/fileDecoCore').Decorations>
     pickFolder: () => Promise<string | null>
     saveMarkdown: (name: string, text: string) => Promise<boolean>
@@ -110,6 +111,9 @@ interface Window {
     listNotes: () => Promise<import('../../shared/notesCore').NoteInfo[]>
     saveNote: (id: string | null, text: string) => Promise<string>
     deleteNote: (id: string) => Promise<void>
+    findRun: (text: string, forward: boolean, next: boolean) => Promise<void>
+    findStop: () => Promise<void>
+    onFindResult: (cb: (r: { active: number; total: number }) => void) => () => void
     onNotesChanged: (cb: () => void) => () => void
     listTodos: () => Promise<Todo[]>
     addTodo: (text: string, due?: string) => Promise<Todo>

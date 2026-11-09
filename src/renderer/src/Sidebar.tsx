@@ -262,8 +262,20 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     </div>
   )
 
+
+  // Up / Down (Home / End) move the focus between the visible rows, in page order
+  const rowArrows = (e: React.KeyboardEvent<HTMLElement>) => {
+    const keys: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, Home: -Infinity, End: Infinity }
+    const t = e.target as HTMLElement
+    if (!(e.key in keys) || e.ctrlKey || e.altKey || e.shiftKey || !t.classList.contains('th')) return
+    const rows = [...e.currentTarget.querySelectorAll<HTMLElement>('.th')]
+    const at = rows.indexOf(t)
+    const to = Math.max(0, Math.min(rows.length - 1, Number.isFinite(keys[e.key]) ? at + keys[e.key] : keys[e.key] < 0 ? 0 : rows.length - 1))
+    e.preventDefault()
+    rows[to]?.focus()
+  }
   return (
-    <aside className="side threads" ref={side} onMouseEnter={() => { hover.current = true }} onMouseLeave={() => { hover.current = false }} data-testid="sidebar">
+    <aside className="side threads" ref={side} onMouseEnter={() => { hover.current = true }} onMouseLeave={() => { hover.current = false }} onKeyDown={rowArrows} data-testid="sidebar">
       <div className="sidehead">
         <span>{archiveView ? 'Archived' : title}</span>
         <span className="sidehead-acts">
