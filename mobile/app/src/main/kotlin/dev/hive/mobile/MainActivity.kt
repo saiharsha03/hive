@@ -335,7 +335,8 @@ private fun ThreadScreen(id: String, onBack: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             Button(enabled = draft.isNotBlank() && state == Relay.State.Online, onClick = {
                 val text = draft.trim(); draft = ""; follow = true
-                scope.launch { err = runCatching { Relay.ask("send", mapOf("id" to id, "text" to text)); working = true; tick++; "" }.getOrElse { it.message ?: "Failed" } }
+                // a failed send puts the text back, unless something new was typed meanwhile
+                scope.launch { err = runCatching { Relay.ask("send", mapOf("id" to id, "text" to text)); working = true; tick++; "" }.getOrElse { if (draft.isEmpty()) draft = text; it.message ?: "Failed" } }
             }) { Text("Send") }
         }
     }
