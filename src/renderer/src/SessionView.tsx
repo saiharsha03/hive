@@ -19,7 +19,8 @@ import { useThreadStatus } from './statusStore'
 import { SummaryRow, WarningRow } from './ChatRows'
 import { useSlashMenu } from './SlashMenu'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
-import { Icon, Modal } from './ui'
+import { Icon, Modal, Popover, anchorOf, type Anchor } from './ui'
+import { conversationMarkdown } from '../../shared/exportCore'
 import { AskCard } from './AskCard'
 import { wakeLabel } from '../../shared/continueCore'
 
@@ -251,6 +252,18 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   const ultra = hasUltrathink(draft)
   const mirror = useRef<HTMLDivElement>(null)
   const pickMode = (m: SendMode) => { setSendMode(m); setPref(MODE_KEY, m) }
+  // Export: the conversation as Markdown, to the clipboard or a file. Earlier history is loaded first when it is not
+  const [exportAt, setExportAt] = useState<Anchor | null>(null)
+  const exportAs = async (to: 'copy' | 'save') => {
+    setExportAt(null)
+    let items = session.items
+    if (session.path && session.history?.more) {
+      items = await window.api.loadHistory(session.path).then((h) => [...h, ...session.items.slice(session.history!.count)]).catch(() => items)
+    }
+    const md = conversationMarkdown(session.title, items, (n, i) => { const t = toolLine(n, i); return `${n}: ${t.what || t.verb}` }, items === session.items && !!session.history?.more)
+    if (to === 'copy') await navigator.clipboard.writeText(md)
+    else await window.api.saveMarkdown(session.title, md)
+  }
   // /btw answers, shown above the message box until dismissed (never part of the conversation)
   const [btws, setBtws] = useState<{ q: string; a: string | null }[]>([])
   const askBtw = (question: string) => {
@@ -555,10 +568,19 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
           <span className="acts">
             <button onClick={onTerminal} title="This thread's terminal, in the bottom panel (Ctrl+`)" data-testid="terminal-toggle"><Icon name="terminal" />Terminal</button>
             <button onClick={onChanges} title="Changed files and the split diff" data-testid="chat-changes"><Icon name="diff" />Changes</button>
+            <button onClick={(e) => setExportAt(anchorOf(e.currentTarget))} title="Copy or save this conversation as Markdown" data-testid="chat-export"><Icon name="export" />{!compactHead && 'Export'}</button>
             {onSplit && <button onClick={onSplit} title="Open beside (split, up to four chats)" data-testid="chat-split"><Icon name="split-horizontal" />Split</button>}
           </span>
         </div>
       </div>
+      {exportAt && (
+        <Popover anchor={exportAt} onClose={() => setExportAt(null)} align="right" testid="export-menu">
+          <div className="poplist">
+            <button className="pop-row" onClick={() => { void exportAs('copy') }} data-testid="export-copy">Copy as Markdown</button>
+            <button className="pop-row" onClick={() => { void exportAs('save') }} data-testid="export-save">Save as Markdown…</button>
+          </div>
+        </Popover>
+      )}
       {wakeAt && (
         <div className="endedrun s-wait" data-testid="auto-continue"><Icon name="clock" />Usage limit reached; this thread continues automatically at {wakeLabel(wakeAt, Date.now())}.
           <button className="linkbtn" onClick={() => { void window.api.chatCancelContinue(session.sessionId ?? session.id).then(() => setWakeAt(null)) }} data-testid="auto-continue-cancel">Cancel</button>
