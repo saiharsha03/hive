@@ -1161,3 +1161,5 @@ button.sbi:hover { background: var(--hover); }
 
 /* a team member's role word in the sidebar */
 .th .trole { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--dim); }
+/* spinners and blinking dots stop for people who ask for less motion */
+@media (prefers-reduced-motion: reduce) { .spin, .codicon-loading, .blink, .ldot.wait { animation: none; } }
