@@ -155,6 +155,11 @@ following Quarry's `docs/embedding.md`):
   against a real Quarry only when `HIVE_QUARRY_EXE` names one. That e2e launch alone sets `HIVE_E2E_QUARRY=1`, the one
   case test mode starts Quarry: its data then lives in the run's folder (Quarry's `QUARRY_HOME`, no registry entry, an
   in-memory keyring, nothing to import), so it starts with no connections and opens none.
+  `e2e/09-quarry-db.spec.ts` (also needs Docker with the `postgres:17` image already pulled; it never pulls) starts a
+  throwaway Postgres container on a loopback port with an invented `orchard` schema, makes two connections through
+  Quarry's bridge, runs the thread tools' own handlers against them (`quarry:e2eTool`, registered only in that run):
+  list, schema, rows, a write that asks on a card and runs only on "Run it", a read-only connection that refuses it,
+  and a CSV export from the embedded page (the save dialog answers a path in the run folder), then removes the container.
 
 ## The worktree model
 

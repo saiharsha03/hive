@@ -266,6 +266,7 @@ interface Window {
     // per-thread status: model / effort switches, the lists the session offers, stopping background work
     chatSetModel: (tabId: string, model: string) => Promise<void>
     chatSetEffort: (tabId: string, level: string) => Promise<void>
+    quarryE2eTool: (tabId: string, tool: string, args: object) => Promise<{ ok: boolean; text: string }>
     quarryStatus: () => Promise<{ available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }>
     onQuarryChanged: (cb: (s: { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }) => void) => () => void
     chatSetAdvisor: (tabId: string, model: string) => Promise<void>

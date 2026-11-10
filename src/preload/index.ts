@@ -316,6 +316,8 @@ contextBridge.exposeInMainWorld('api', {
   chatSetModel: (tabId: string, model: string) => ipcRenderer.invoke('chat:setModel', tabId, model),
   chatSetEffort: (tabId: string, level: string) => ipcRenderer.invoke('chat:setEffort', tabId, level),
   // Quarry, the SQL app: whether it is installed and usable here (the Quarry page and rail link exist only then)
+  // the opt-in e2e with a real Quarry only (main answers it then, and refuses otherwise): run one quarry_ tool handler
+  quarryE2eTool: (tabId: string, tool: string, args: object): Promise<{ ok: boolean; text: string }> => ipcRenderer.invoke('quarry:e2eTool', tabId, tool, args),
   quarryStatus: (): Promise<{ available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }> => ipcRenderer.invoke('quarry:status'),
   onQuarryChanged: (cb: (s: { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }) => void) => {
     const fn = (_e: unknown, s: { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }) => cb(s)

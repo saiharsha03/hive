@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, p
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
@@ -42,7 +42,8 @@ import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { checkForUpdates, applyUpdate, startUpdater, updateState } from './updater'
 import { latestEngine, updateEngine } from './engine'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
-import { configureQuarry, onQuarryChange, quarryCall, quarryStatus, stopQuarry } from './quarry'
+import { configureQuarry, e2eQuarry, onQuarryChange, quarryCall, quarryStatus, stopQuarry } from './quarry'
+import { confirmByCard, quarryConnections, quarryExplain, quarryQuery, quarrySchema } from './quarryTools'
 import { QuarryError, uiRequest } from './quarryCore'
 import { saveSearchNow, searchSessions, searchStatus, setSearchBusy, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
@@ -735,10 +736,25 @@ ipcMain.handle('quarry:invoke', (e, method: string, params: unknown) => {
 })
 ipcMain.handle('quarry:saveFile', async (e, name: string) => {
   if (!quarryViews.has(e.sender.id) || !mainWin) throw new Error('Not allowed')
+  // the opt-in e2e with a real Quarry cannot click a native dialog: the file goes in the run's own folder
+  if (e2eQuarry()) { const dir = join(dataDir(), 'quarry-export'); mkdirSync(dir, { recursive: true }); return join(dir, basename(String(name || 'export.csv')).replace(/[^\w.-]+/g, '_')) }
   const r = await dialog.showSaveDialog(mainWin, { defaultPath: String(name || 'export.csv'), filters: [{ name: 'CSV', extensions: ['csv'] }] })
   return r.canceled || !r.filePath ? null : r.filePath
 })
 handle('quarry:status', () => quarryStatus())
+// Only in the opt-in e2e with a real Quarry (test mode, HIVE_E2E_QUARRY=1, HIVE_QUARRY_EXE): the thread tools' own
+// handlers run against it without a Claude turn; a write's question card goes to the tab named, as in a real thread
+if (e2eQuarry()) {
+  handle('quarry:e2eTool', (e, tabId: string, toolName: string, args: Record<string, unknown>) => {
+    const a = (args ?? {}) as { connection: string; sql: string; schema?: string; table?: string; allow_write?: boolean; analyze?: boolean }
+    const emit = (ev: unknown) => { if (!e.sender.isDestroyed()) e.sender.send('chat:event', String(tabId), ev) }
+    if (toolName === 'quarry_connections') return quarryConnections()
+    if (toolName === 'quarry_schema') return quarrySchema(a)
+    if (toolName === 'quarry_explain') return quarryExplain(a)
+    if (toolName === 'quarry_query') return quarryQuery(a, confirmByCard(String(tabId), emit, new AbortController().signal))
+    throw new Error(`no tool ${toolName}`)
+  })
+}
 // quarry://app/...: the UI's files, from the serve process (ui.index, ui.asset); anything else is not found
 function handleQuarryScheme(): void {
   protocol.handle('quarry', async (req) => {
