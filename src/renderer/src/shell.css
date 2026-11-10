@@ -108,7 +108,8 @@ button.rail-gh:hover { color: var(--hi); }
 .rail-row.picked { background: var(--selin); }
 .rail-row.member { padding-left: 28px; }
 .rail-l1 { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: baseline; }
-.rail-t { color: var(--hi); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rail-t { color: var(--hi); font-size: 13px; white-space: nowrap; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.rail-t .tt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .rail-age { color: var(--faint); font: 11px var(--mono); }
 .rail-l2 { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin-top: 1px; font-size: 12px; color: var(--dim); white-space: nowrap; align-items: baseline; }
 .rail-l2 .rail-now { overflow: hidden; text-overflow: ellipsis; }
@@ -270,7 +271,7 @@ button.rail-gh:hover { color: var(--hi); }
 .pal-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
 .pal-hint { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 .pal-empty { padding: 10px 14px; color: var(--dim); font-size: 12.5px; }
-.rail-kd { font-size: 11px; color: var(--faint); margin-left: 4px; }
+.rail-kd { font-size: 11px; color: var(--faint); flex: none; }
 @media (max-height: 760px) { .rail-view.settings { display: none; } }
 /* the full-window preview */
 .pv-full { position: fixed; inset: 40px 0 26px 0; z-index: 45; background: var(--bg); display: flex; flex-direction: column; }

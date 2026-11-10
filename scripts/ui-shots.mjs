@@ -120,6 +120,7 @@ const saved = [
   S('s-copy', 'Onboarding checklist copy pass', 'ledger-web', 4 * 24 * H),
   S('s-index', 'Search index rebuild after the schema change', 'ledger-api', 9 * 24 * H),
   S('s-sweep', 'Nightly error sweep', 'ledger-api', 41 * M),
+  S('s-android', 'Android app drops drafts on relock', 'fieldbook', 22 * M),
 ].sort((a, b) => b.updated - a.updated)
 const history = {
   [join(RUN, 't', 's-rename.jsonl')]: [
@@ -190,6 +191,16 @@ const fixtures = {
   ].map(([sha, title, author]) => ({ sha, title, author })) }], changelog: '## 4.18.0\n- Workspaces rename\n- CSV export fix', output: 'ledger-web: 8 commits to prod', root: REPOS },
   'deploy:status': [],
   'handoff:at': 400000,
+  'todos:list': [
+    { id: 'td1', text: 'Ask the bank for the new payout file format', status: 'todo', done: false, due: local(NOW + 24 * H).slice(0, 10), createdAt: NOW - 3 * H, source: 'user' },
+    { id: 'td2', text: 'Review the refund retry PR once tests pass', status: 'todo', done: false, createdAt: NOW - H, source: 'claude' },
+    { id: 'td3', text: 'Talk through the export queue limits with the team', status: 'talk', done: false, createdAt: NOW - 26 * H, source: 'user' },
+    { id: 'td4', text: 'Rotate the staging deploy key', status: 'done', done: true, createdAt: NOW - 50 * H, doneAt: NOW - 20 * H, source: 'user' },
+  ],
+  'notes:list': [
+    { id: 'n1', title: 'Release checklist', updated: NOW - 2 * H, text: ['# Release checklist', '', '- Staging landed check', '- Freeze window', '- Changelog'].join(String.fromCharCode(10)) },
+    { id: 'n2', title: 'Payout file fields', updated: NOW - 30 * H, text: ['# Payout file fields', '', 'Amount, currency, reference, value date.'].join(String.fromCharCode(10)) },
+  ],
   // Settings without the weekly usage reading (that reads the Claude login): the run's own keys only
   'settings:get': {
     file: join(DATA, 'hive-settings.json'), envFile: join(RUN, 'workspace.env'), scriptsFile: join(RUN, 'scripts.json'),

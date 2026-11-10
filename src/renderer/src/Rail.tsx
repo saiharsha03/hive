@@ -14,9 +14,10 @@ import { isDependabotTab } from '../../shared/dependabotCore'
 import { nextRunLabel } from '../../shared/threadsCore'
 import { groupTeams, pastTeamPeople, teamThreadIds, type Roster, type RosterPerson } from '../../shared/teamSidebarCore'
 import { live as liveStore, activate, newSession, offerUndo, openBeside, openPage, openPageBeside, openSession, closeSession } from './actions'
-import { panes, useStore, shallowEq } from './store'
+import { panes, sessions as sessionStore, useStore, shallowEq } from './store'
+import { onWakeupsChanged, wakeupsList } from './api/next'
 import { focusedTab } from './panes'
-import { age, State, type Tone } from './kit'
+import { age, clock, State, type Tone } from './kit'
 import { PAGE_LABEL, type ToolTab } from './chat'
 
 // a live row's state word: waiting (amber), failed (red), finished (green), working (cyan)
@@ -88,6 +89,18 @@ const rowKeys = (e: React.KeyboardEvent<HTMLElement>) => {
 
 const RailList = memo(function RailList({ live, focus, shown }: { live: { waiting: LiveRow[]; working: LiveRow[] }; focus: string | null; shown: Set<string> }) {
   const listed = useSavedThreads()
+  // threads running in the background (no tab) carry the kind word "background"
+  const background = useStore(sessionStore, (all) => all.filter((s) => s.background).map((s) => s.id).join(' '))
+  const bgIds = useMemo(() => new Set(background.split(' ').filter(Boolean)), [background])
+  // threads stopped by a usage limit that continue by themselves: PAUSED in Working, with the time
+  const [continues, setContinues] = useState<Map<string, number>>(new Map())
+  useEffect(() => {
+    const load = () => void wakeupsList().then((r) => setContinues(new Map(r.ok ? r.data.continues.flatMap((c) => [[c.key, c.at] as const, [c.tabId, c.at] as const]) : [])))
+    load()
+    const t = setInterval(load, 60_000)
+    const off = onWakeupsChanged(load)
+    return () => { clearInterval(t); off() }
+  }, [])
   const { watchers } = useWatchers()
   const latestRun = (w: (typeof watchers)[number]) => w.sessionId ?? w.sessionIds?.at(-1) ?? null
   const olderRuns = useMemo(() => new Set(watchers.flatMap((w) => (w.sessionIds ?? []).filter((id) => id !== latestRun(w)))), [watchers])
@@ -130,10 +143,11 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
   const waitingRows = live.waiting.filter((r) => !isTeam(r))
   const workingRows = live.working.filter((r) => !isTeam(r))
   const liveIds = useMemo(() => new Set([...live.waiting, ...live.working].flatMap((r) => [r.id, r.sessionId ?? ''])), [live])
+  const pausedRows = useMemo(() => (archiveView ? [] : (sessions ?? []).filter((s) => continues.has(s.id) && !liveIds.has(s.id))), [sessions, continues, liveIds, archiveView])
   const savedRows = useMemo(() => {
     if (archiveView) return sessions ?? []
-    return (sessions ?? []).filter((s) => !liveIds.has(s.id) && !teamIds.has(s.id))
-  }, [sessions, liveIds, archiveView, teamIds])
+    return (sessions ?? []).filter((s) => !liveIds.has(s.id) && !teamIds.has(s.id) && !continues.has(s.id))
+  }, [sessions, liveIds, archiveView, teamIds, continues])
   const sections = useMemo(() => buildSections(savedRows, states, now, '', archiveView, groupBy, watcherIds, dependabotIds), [savedRows, states, now, archiveView, groupBy, watcherIds, dependabotIds])
   const archived = useMemo(() => (sessions ?? []).filter((s) => states[s.id]?.archivedAt).length, [sessions, states])
   const shownOf = useCallback((sec: Section<SessionInfo>) => (more.has(sec.key) || sec.items.length <= CAP ? sec.items : sec.items.slice(0, CAP)), [more])
@@ -181,14 +195,14 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
   const liveRow = (r: LiveRow, opts: { kind?: string; who?: RosterPerson; member?: boolean } = {}) => {
     const look = liveLook(r)
     const w = watcherFor(r)
-    const kind = opts.who ? opts.who.role : opts.kind ?? (w ? 'watcher' : isBot(r) ? 'dependabot' : r.kind === 'deploy' ? 'deploy' : r.kind === 'script' ? 'script' : '')
+    const kind = opts.who ? opts.who.role : opts.kind ?? (w ? 'watcher' : isBot(r) ? 'dependabot' : r.kind === 'deploy' ? 'deploy' : r.kind === 'script' ? 'script' : bgIds.has(r.id) ? 'background' : '')
     const title = w?.name ?? r.title
     return (
       <div key={`l:${r.id}`} className={`rail-row${isOn(r.id, r.sessionId) ? ' on' : ''}${isShown(r.id, r.sessionId) ? ' vis' : ''}${opts.member ? ' member' : ''}`} role="button" tabIndex={0} title={title}
         onClick={() => activate(r.id)}
         onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter') { e.preventDefault(); activate(r.id) } else if (e.key === ' ' && !r.kind) { e.preventDefault(); openBeside(r.id) } }}
         data-testid="live-row" data-id={r.id}>
-        <div className="rail-l1"><span className="rail-t">{title}{kind && <span className="rail-kd"> {kind}</span>}</span><span className="rail-age">{r.since ? age(r.since, now) : ''}</span></div>
+        <div className="rail-l1"><span className="rail-t"><span className="tt">{title}</span>{kind && <span className="rail-kd">{kind}</span>}</span><span className="rail-age">{r.since ? age(r.since, now) : ''}</span></div>
         <div className="rail-l2"><State word={look.word} tone={look.tone} /><span className="rail-now">{noteOf(r)}</span></div>
         {!r.kind && <button className="more" aria-label="Close thread" title="Close (stops it)" onClick={(e) => { e.stopPropagation(); closeSession(r.id) }} data-testid={`thread-live-close-${r.id}`}>×</button>}
       </div>
@@ -199,7 +213,9 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
   const savedRow = (s: SessionInfo, section: string, who?: RosterPerson, member = false) => {
     const st = states[s.id]
     const w = watcherOf.get(s.id)
-    const second: [string, Tone, string] = w ? ['IDLE', 'idle', nextRunLabel(w, now) || s.project]
+    const resumeAt = continues.get(s.id)
+    const second: [string, Tone, string] = resumeAt ? ['PAUSED', 'hold', `Usage limit. Continues at ${clock(resumeAt)}`]
+      : w ? ['IDLE', 'idle', nextRunLabel(w, now) || s.project]
       : section === 'snoozed' && st?.snoozedUntil ? ['SNOOZED', 'hold', `until ${untilLabel(st.snoozedUntil, now)}`]
         : section === 'returned' ? ['BACK', 'wait', 'back from snooze']
           : st?.archivedAt ? ['ARCHIVED', 'idle', s.project] : st?.closedAt ? ['CLOSED', 'idle', s.project]
@@ -216,7 +232,7 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
         }}
         onContextMenu={(e) => { e.preventDefault(); openMenu(s.id, e.clientX, e.clientY) }}
         data-testid="thread-row" data-id={s.id}>
-        <div className="rail-l1"><span className="rail-t">{s.title}{kind && <span className="rail-kd"> {kind}</span>}</span><span className="rail-age">{age(s.updated, now)}</span></div>
+        <div className="rail-l1"><span className="rail-t"><span className="tt">{s.title}</span>{kind && <span className="rail-kd">{kind}</span>}</span><span className="rail-age">{age(s.updated, now)}</span></div>
         <div className="rail-l2"><State word={second[0]} tone={second[1]} /><span className="rail-now">{second[2]}</span></div>
         <button className="more" aria-label="Thread actions" onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); openMenu(s.id, r.left, r.bottom) }} data-testid="thread-actions">⋯</button>
       </div>
@@ -239,7 +255,7 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
       <div key={key} data-testid="team-group" data-id={g.roster.id}>
         <div className="rail-row" role="button" tabIndex={0} title={g.roster.name} onClick={openLead}
           onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter') { e.preventDefault(); openLead() } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); toggle(key) } }} data-testid="team-row">
-          <div className="rail-l1"><span className="rail-t">{g.roster.name}<span className="rail-kd"> lead</span></span>
+          <div className="rail-l1"><span className="rail-t"><span className="tt">{g.roster.name}</span><span className="rail-kd">lead</span></span>
             <button className="rail-age" style={{ background: 'none', border: 0, cursor: 'pointer' }} aria-label={folded ? 'Show members' : 'Hide members'} onClick={(e) => { e.stopPropagation(); toggle(key) }} data-testid="team-fold">{folded ? `+${g.total}` : 'hide'}</button></div>
           <div className="rail-l2">{folded && waiting ? <State word={`${waiting} WAITING`} tone="wait" /> : <State word={g.word} tone={tone} />}<span className="rail-now">Team of {g.total}, {g.working} working</span></div>
         </div>
@@ -281,11 +297,12 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
             {teamsWaiting.map(teamBlock)}
           </div>
         )}
-        {(workingRows.length > 0 || teamsWorking.length > 0) && (
+        {(workingRows.length > 0 || teamsWorking.length > 0 || pausedRows.length > 0) && (
           <div data-testid="section-working">
-            {head('working', 'Working', workingRows.length + teamsWorking.length)}
+            {head('working', 'Working', workingRows.length + teamsWorking.length + pausedRows.length)}
             {workingRows.map((r) => liveRow(r))}
             {teamsWorking.map(teamBlock)}
+            {pausedRows.map((s) => savedRow(s, 'paused'))}
           </div>
         )}
         <div data-testid="section-recent">

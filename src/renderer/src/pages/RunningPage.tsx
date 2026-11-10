@@ -60,7 +60,7 @@ export function RunningPage() {
                       <td>{kindLabel(t.kind)}</td>
                       <td className="run-what">{t.title}</td>
                       <td className="run-thread">{r.thread}</td>
-                      <td className="num run-for">{running ? dur(now - t.startedAt) : `ended ${age(t.endedAt ?? t.startedAt, now)} ago`}</td>
+                      <td className="num run-for">{running ? dur(now - t.startedAt) : now - (t.endedAt ?? t.startedAt) < 60_000 ? 'just ended' : `ended ${age(t.endedAt ?? t.startedAt, now)} ago`}</td>
                       <td className="out" title={lastOutput(t)}>{lastOutput(t)}</td>
                       <td className="acts">
                         {running && <Btn kind="link" onClick={() => { setAsking(asking === k ? null : k); setText('') }}>Message</Btn>}
