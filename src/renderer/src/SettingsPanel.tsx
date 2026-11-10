@@ -1,7 +1,7 @@
 // Settings: one modal over the app (never a strip that pushes the layout) for everything that used to live in the
 // .env and scripts.json. Edits a draft; Save validates in the main process, writes ~/.claude/hive-settings.json and
 // re-applies it to every feature. Credential-looking keys never come here: the panel only says whether they are set.
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   EFFORTS, envKey, isSecretKey, joinList, sectionOf, splitList,
   type Draft, type General, type Problem, type SettingsView,
@@ -14,6 +14,7 @@ import { appName } from '../../shared/appName'
 import { setClipboardOn, useClipboardOn } from './clipboardOffer'
 import { getPref, setPref } from './prefs'
 import { applyGeneral } from './appSettings'
+import { Confirm, useEscape, useFocusTrap } from './ui'
 
 const SECTIONS = [
   ['watch', 'Watchers'], ['dependabot', 'Dependabot watcher'], ['scripts', 'Scripts'], ['deploy', 'Deploy'],
@@ -62,7 +63,14 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   const clipOn = useClipboardOn()
   const [clip, setClip] = useState(clipOn)
   const [sendMode, setSendMode] = useState(['queue', 'interrupt'].includes(getPref<string>('sendMode', 'steer')) ? getPref<string>('sendMode', 'steer') : 'steer')
-  const [newKey, setNewKey] = useState('')
+  // what is being typed into each "new id" box, the script being edited, the new key under Other, and the list
+  // rows just added that hold nothing yet: each its own state, so one never wipes another
+  const [adds, setAdds] = useState<Record<string, string>>({})
+  const [openScript, setOpenScript] = useState(-1)
+  const [otherNew, setOtherNew] = useState('')
+  const [blank, setBlank] = useState<Record<string, boolean>>({})
+  const [asking, setAsking] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
 
   const load = () => window.api.settingsGet(true).then((v) => {
     const d = { env: v.env, scripts: v.scripts, general: v.general }
@@ -80,12 +88,9 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   }, [draft])
 
   const dirty = !!draft && (JSON.stringify(draft) !== saved || clip !== clipOn || sendMode !== getPref<string>('sendMode', 'steer'))
-  const close = () => { if (!dirty || window.confirm('Discard unsaved settings?')) onClose() }
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
-    document.addEventListener('keydown', key)
-    return () => document.removeEventListener('keydown', key)
-  })
+  const close = () => { if (dirty) setAsking(true); else onClose() }
+  useEscape(() => close())
+  useFocusTrap(box)
 
   const env: Env = draft?.env ?? {}
   const get = (k: string) => env[k] ?? ''
@@ -120,16 +125,18 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   // a comma list edited as rows (repos, folders)
   const listRows = (k: string, placeholder: string) => {
     const xs = splitList(get(k))
-    const put = (next: string[]) => set(k, next.join(','))
+    // a row just added is empty (the example shows as a hint) until something is typed in it: only typed values are saved
+    const rows = blank[k] ? [...xs, ''] : xs
+    const put = (next: string[]) => { set(k, next.filter((x) => x.trim()).join(',')); setBlank((b) => ({ ...b, [k]: false })) }
     return (
       <div className="slist">
-        {xs.map((x, i) => (
+        {rows.map((x, i) => (
           <div key={i} className="sline">
-            <input className="sin wide" value={x} spellCheck={false} onChange={(e) => put(xs.map((y, j) => (j === i ? e.target.value : y)))} />
-            <button className="dlink" onClick={() => put(xs.filter((_, j) => j !== i))}>Remove</button>
+            <input className="sin wide" value={x} placeholder={placeholder} spellCheck={false} autoFocus={!!blank[k] && i === xs.length} onChange={(e) => put(rows.map((y, j) => (j === i ? e.target.value : y)))} />
+            <button className="dlink" onClick={() => put(rows.filter((_, j) => j !== i))}>Remove</button>
           </div>
         ))}
-        <button className="dlink" onClick={() => set(k, xs.length ? `${get(k)},${placeholder}` : placeholder)}>Add</button>
+        <button className="dlink" disabled={!!blank[k]} onClick={() => setBlank((b) => ({ ...b, [k]: true }))}>Add</button>
       </div>
     )
   }
@@ -138,11 +145,12 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   type F = { f: string; label: string; hint?: string; choices?: string[] }
   const group = (title: string, listKey: string, prefix: string, fields: F[], what: string) => {
     const ids = splitList(get(listKey))
-    const [adding, setAdding] = [newKey.startsWith(`${listKey}=`) ? newKey.slice(listKey.length + 1) : '', (v: string) => setNewKey(`${listKey}=${v}`)]
+    const adding = adds[listKey] ?? ''
+    const setAdding = (v: string) => setAdds((a) => ({ ...a, [listKey]: v }))
     const add = () => {
       const id = adding.trim()
       if (!id || ids.includes(id)) return
-      set(listKey, joinList([...ids, id])); setNewKey('')
+      set(listKey, joinList([...ids, id])); setAdding('')
     }
     const remove = (id: string) => setEnv((e) => {
       const p = `${prefix}${envKey(id)}_`
@@ -191,7 +199,6 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
 
   // ---- Scripts ----
   const scripts = (draft?.scripts ?? []).map(asScript)
-  const [openScript, setOpenScript] = [newKey.startsWith('script=') ? Number(newKey.slice(7)) : -1, (i: number) => setNewKey(`script=${i}`)]
   const putScript = (i: number, s: Partial<Script>) => setScripts(scripts.map((x, j) => (j === i ? { ...x, ...s } : x)))
   const scriptsSec = (
     <>
@@ -203,7 +210,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
             <b>{s.name || '(no name)'}</b><span className="dnote">{s.options.length} option{s.options.length === 1 ? '' : 's'}</span>
             <span className="dspace" />
             <button className="dlink" onClick={() => setOpenScript(openScript === i ? -1 : i)}>{openScript === i ? 'Done' : 'Edit'}</button>
-            <button className="dlink" onClick={() => { setScripts(scripts.filter((_, j) => j !== i)); setNewKey('') }}>Remove</button>
+            <button className="dlink" onClick={() => { setScripts(scripts.filter((_, j) => j !== i)); setOpenScript(-1) }}>Remove</button>
           </div>
           {openScript === i && (
             <>
@@ -232,7 +239,6 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
 
   // ---- Other keys + credentials ----
   const otherKeys = Object.keys(env).filter((k) => sectionOf(k) === 'other').sort()
-  const [otherNew, setOtherNew] = [newKey.startsWith('other=') ? newKey.slice(6) : '', (v: string) => setNewKey(`other=${v}`)]
   const otherBad = otherNew && (!/^[A-Za-z_]\w*$/.test(otherNew) ? 'Not a KEY name' : isSecretKey(otherNew) ? 'Looks like a credential: keep it in the vault or the .env, not here' : otherNew in env ? 'Already listed' : '')
   const other = (
     <>
@@ -244,7 +250,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
       ))}
       <div className="sline">
         <input className="sin" placeholder="NEW_KEY" value={otherNew} onChange={(e) => setOtherNew(e.target.value.trim())} />
-        <button className="dbtn" disabled={!otherNew || !!otherBad} onClick={() => { set(otherNew, ''); setNewKey('') }}>Add key</button>
+        <button className="dbtn" disabled={!otherNew || !!otherBad} onClick={() => { set(otherNew, ''); setOtherNew('') }}>Add key</button>
         {otherBad && <span className="serr">{otherBad}</span>}
       </div>
       <div className="sgroup">
@@ -337,7 +343,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
 
   return (
     <div className="sback" onMouseDown={(e) => { if (e.target === e.currentTarget) close() }}>
-      <div data-testid="settings" className="smodal" role="dialog" aria-label="Settings">
+      <div data-testid="settings" className="smodal" role="dialog" aria-modal="true" aria-label="Settings" tabIndex={-1} ref={box}>
         <div className="shead">
           <span className="dtitle">Settings</span>
           {view && <span className="dnote" title={view.file}>{view.file}</span>}
@@ -366,6 +372,11 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
           <button className="dbtn" onClick={close}>Close</button>
           <button data-testid="settings-save" className="dbtn primary" disabled={!dirty || busy || errors.length > 0} onClick={() => void save()}>{busy ? 'Saving' : 'Save'}</button>
         </div>
+        {asking && (
+          <Confirm title="Discard unsaved settings?" action="Discard" danger testid="settings-discard" onCancel={() => setAsking(false)} onConfirm={() => { setAsking(false); onClose() }}>
+            <div>The changes you made here have not been saved.</div>
+          </Confirm>
+        )}
       </div>
     </div>
   )
