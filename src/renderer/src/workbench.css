@@ -103,3 +103,8 @@ body.side-drag { cursor: col-resize; user-select: none; }
 .full-notes .nt-list { border-right: 1px solid var(--rule); padding-right: 12px !important; }
 .full-notes .nt-edit { min-height: 0; }
 .full-notes .nt-text, .full-notes .nt-preview { flex: 1; min-height: 0; height: 100%; }
+
+/* whole pages: the small helper lines are not smaller than the UI text, and a note is written at the editor's size */
+.full-col .dnote { font-size: 13px; }
+.full-notes .nt-text { font: 14px/1.55 var(--mono); }
+.full-notes .nt-preview { font-size: 14px; }

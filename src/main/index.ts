@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, p
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, statSync, watch, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
@@ -836,7 +836,23 @@ function createWindow(): void {
   guardWindow(web)
   guardWebviews(web)
   // the app menu is removed (own top bar), which also removed its shortcuts: dev tools, Quit, and reload only in dev
+  // Text size, the way a code editor does it: Ctrl+= larger, Ctrl+- smaller, Ctrl+0 back to the usual size. The whole
+  // window scales (text, icons, spacing) and the size is kept for the next start.
+  const zoomFile = join(dataDir(), 'hive-zoom.json')
+  const DEFAULT_ZOOM = 0.5
+  let zoom = DEFAULT_ZOOM
+  try { const z = Number(JSON.parse(readFileSync(zoomFile, 'utf8')).level); if (Number.isFinite(z)) zoom = Math.max(-2, Math.min(4, z)) } catch { /* the usual size */ }
+  const setZoom = (z: number) => {
+    zoom = Math.max(-2, Math.min(4, Math.round(z * 2) / 2))
+    web.setZoomLevel(zoom)
+    try { mkdirSync(dataDir(), { recursive: true }); writeFileSync(zoomFile, JSON.stringify({ level: zoom })) } catch { /* kept for this run only */ }
+  }
+  web.on('did-finish-load', () => web.setZoomLevel(zoom))
   web.on('before-input-event', (e, input) => {
+    if (input.type === 'keyDown' && input.control && !input.alt && !input.shift) {
+      const step = input.key === '=' || input.key === '+' ? 0.5 : input.key === '-' ? -0.5 : input.key === '0' ? 0 : null
+      if (step !== null) { e.preventDefault(); setZoom(step === 0 ? DEFAULT_ZOOM : zoom + step); return }
+    }
     const act = keyAction(input, !!DEV_URL)
     if (!act) return
     e.preventDefault()
