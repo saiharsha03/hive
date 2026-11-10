@@ -1,0 +1,156 @@
+{
+  "about": "Sealed blobs both sides must agree on. cases and bad were sealed by src/main/mobileLink.ts, fromApp by the app (Link.kt). The key is a test value (bytes 00..1f).",
+  "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "notifyKey": "OwbV34oBvREMNXz47X2fCqX8SvmUXlougXahF9ZWK/E=",
+  "pair": "00112233445566778899aabbccddeeff",
+  "cases": [
+    {
+      "name": "a reply from Hive",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "CuEIptg4uGcaiq4TAzSVQYz2rSTul2VES8h36PuA/YZwO3pUKOcpCj4+uXNmhGuMAbxgTf2Y2jKwAOYXHQthM0EOMFMtiKwnDOtCOTf659/4o1HYoVhqENtASgKJvkAZe4ybgG72BFweZsc4/JKoh/IRK0/N2wfit1yZkSA0/tOjv5YWNKHWCzZ+i7zsxJytBsD9Q1Z6Iq9s/E3iHaSpzA08",
+      "msg": {
+        "re": 1700000000001,
+        "seq": 41,
+        "at": 1700000000500,
+        "threads": [
+          {
+            "id": "t1",
+            "title": "Fix \"quotes\" / slashes\nand lines",
+            "folder": "Hive"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a request from the phone",
+      "dir": "p2d",
+      "key": "pair",
+      "blob": "CYzLgzdsgpQKtsc9rzYDW7mziYB/HVJWw2+xhwZ+9X/JXovwpHQLeLGVQvrGRlmnIMgs9qM/YnkfShbQvHtnvtq0fy8mO4yAaFLCTKaF3a1n0Oizo1ekLvNmjgAOd4KbfdPXMCOuyRL1iIVZMd9i8nbWgGkzo3uEqgDmoWEpeMeAabvct9I=",
+      "msg": {
+        "op": "send",
+        "id": "t1",
+        "text": "héllo 漢字 🙂",
+        "mid": "a1b2c3",
+        "rid": 1700000000002,
+        "seq": 1700000000002
+      }
+    },
+    {
+      "name": "a notification under the notification key",
+      "dir": "d2n",
+      "key": "notify",
+      "blob": "/yfaKZ1DT8Ec2/Y3Dx6MJz2vWDFvDadtHRTonx3iQzPQuIP1MsBjGqz28Cvd993QwUJMuMeaAjWLG/HLKcdK6bk7HDjChLr552Ry3iraiQ1iOIjwfxNBIQtaiuAA1Y6n5Ru9ThLo90WeXIJSpu+XW63eTGFTRcFiBLL3oFenAwCxA21IzA==",
+      "msg": {
+        "op": "notify",
+        "title": "Claude",
+        "body": "Done: 3 files changed",
+        "thread": "t1",
+        "seq": 42,
+        "at": 1700000000900
+      }
+    }
+  ],
+  "bad": [
+    {
+      "name": "the other direction",
+      "dir": "p2d",
+      "key": "pair",
+      "blob": "CuEIptg4uGcaiq4TAzSVQYz2rSTul2VES8h36PuA/YZwO3pUKOcpCj4+uXNmhGuMAbxgTf2Y2jKwAOYXHQthM0EOMFMtiKwnDOtCOTf659/4o1HYoVhqENtASgKJvkAZe4ybgG72BFweZsc4/JKoh/IRK0/N2wfit1yZkSA0/tOjv5YWNKHWCzZ+i7zsxJytBsD9Q1Z6Iq9s/E3iHaSpzA08"
+    },
+    {
+      "name": "the notification key on a reply",
+      "dir": "d2p",
+      "key": "notify",
+      "blob": "CuEIptg4uGcaiq4TAzSVQYz2rSTul2VES8h36PuA/YZwO3pUKOcpCj4+uXNmhGuMAbxgTf2Y2jKwAOYXHQthM0EOMFMtiKwnDOtCOTf659/4o1HYoVhqENtASgKJvkAZe4ybgG72BFweZsc4/JKoh/IRK0/N2wfit1yZkSA0/tOjv5YWNKHWCzZ+i7zsxJytBsD9Q1Z6Iq9s/E3iHaSpzA08"
+    },
+    {
+      "name": "the pairing key on a notification",
+      "dir": "d2n",
+      "key": "pair",
+      "blob": "/yfaKZ1DT8Ec2/Y3Dx6MJz2vWDFvDadtHRTonx3iQzPQuIP1MsBjGqz28Cvd993QwUJMuMeaAjWLG/HLKcdK6bk7HDjChLr552Ry3iraiQ1iOIjwfxNBIQtaiuAA1Y6n5Ru9ThLo90WeXIJSpu+XW63eTGFTRcFiBLL3oFenAwCxA21IzA=="
+    },
+    {
+      "name": "a notification read as a reply",
+      "dir": "d2p",
+      "key": "notify",
+      "blob": "/yfaKZ1DT8Ec2/Y3Dx6MJz2vWDFvDadtHRTonx3iQzPQuIP1MsBjGqz28Cvd993QwUJMuMeaAjWLG/HLKcdK6bk7HDjChLr552Ry3iraiQ1iOIjwfxNBIQtaiuAA1Y6n5Ru9ThLo90WeXIJSpu+XW63eTGFTRcFiBLL3oFenAwCxA21IzA=="
+    },
+    {
+      "name": "another pair id",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "i718fykKJsrJ3JDIXJuH0/AQ82A42+/+JNiOM8NX4Gr7sB0LdOomQSoMrarBegXjWdCXVxH+9B4HjIk8mGT/03KGPLdmR7VqG9NyEi2H+6m9ZSlPQutKnW3+IA+/HFP8xttz6dfNVjNT/vQOH6PNrNVw0NEbq/xYcQ7wOYbzHhG7Q4iDY4Dju1TQUSDlLU4nScogm9TISRVSVZmBv8p4NFGV"
+    },
+    {
+      "name": "one bit of the nonce changed",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "C+EIptg4uGcaiq4TAzSVQYz2rSTul2VES8h36PuA/YZwO3pUKOcpCj4+uXNmhGuMAbxgTf2Y2jKwAOYXHQthM0EOMFMtiKwnDOtCOTf659/4o1HYoVhqENtASgKJvkAZe4ybgG72BFweZsc4/JKoh/IRK0/N2wfit1yZkSA0/tOjv5YWNKHWCzZ+i7zsxJytBsD9Q1Z6Iq9s/E3iHaSpzA08"
+    },
+    {
+      "name": "one bit of the text changed",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "CuEIptg4uGcaiq4TAzSVQYz2rSTvl2VES8h36PuA/YZwO3pUKOcpCj4+uXNmhGuMAbxgTf2Y2jKwAOYXHQthM0EOMFMtiKwnDOtCOTf659/4o1HYoVhqENtASgKJvkAZe4ybgG72BFweZsc4/JKoh/IRK0/N2wfit1yZkSA0/tOjv5YWNKHWCzZ+i7zsxJytBsD9Q1Z6Iq9s/E3iHaSpzA08"
+    },
+    {
+      "name": "one bit of the tag changed",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "CuEIptg4uGcaiq4TAzSVQYz2rSTul2VES8h36PuA/YZwO3pUKOcpCj4+uXNmhGuMAbxgTf2Y2jKwAOYXHQthM0EOMFMtiKwnDOtCOTf659/4o1HYoVhqENtASgKJvkAZe4ybgG72BFweZsc4/JKoh/IRK0/N2wfit1yZkSA0/tOjv5YWNKHWCzZ+i7zsxJytBsD9Q1Z6Iq9s/E3iHaSpzA09"
+    },
+    {
+      "name": "cut short",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "CuEIptg4uGcaiq4TAzSVQYz2rSTul2VES8h3"
+    },
+    {
+      "name": "the tag cut off",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "CuEIptg4uGcaiq4TAzSVQYz2rSTul2VES8h36PuA/YZwO3pUKOcpCj4+uXNmhGuMAbxgTf2Y2jKwAOYXHQthM0EOMFMtiKwnDOtCOTf659/4o1HYoVhqENtASgKJvkAZe4ybgG72BFweZsc4/JKoh/IRK0/N2wfit1yZkSA0/tOjv5YWNKHWCzZ+i7zsxJytBsD9Q1Z6Iq9s/E3iHaQ="
+    },
+    {
+      "name": "not an object",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": "gFt6sKibV5fTtGC05jts064AEHBjGx/zoQWTCicSXMcq"
+    },
+    {
+      "name": "empty",
+      "dir": "d2p",
+      "key": "pair",
+      "blob": ""
+    }
+  ],
+  "fromApp": [
+    {
+      "msg": {
+        "op": "send",
+        "mid": "a1b2c3",
+        "id": "t1",
+        "text": "héllo 漢字 🙂 \"q\" / \\ \n",
+        "rid": 1700000000002,
+        "seq": 1700000000002
+      },
+      "blob": "AlPqh/x0F+cOPgjI5p0uwuHt839mtqPxECbURB3OYL44KlOZcNP395bOkv2p5HcE6R5AmTPxoG5Pj3mL3vqC9g63oIuitwD8si1590xQWGA9GsOztvdEXfJp7rWxssfxzKlazdFBv8dJ9vvlKR/5BFk85lv0sKC7CybPJ3EWYKmv/KzSvczeOAuBmn6CQATuedSsAg==",
+      "name": "a send sealed by the app",
+      "dir": "p2d",
+      "key": "pair"
+    },
+    {
+      "msg": {
+        "op": "hello",
+        "v": 2,
+        "rid": 1700000000003,
+        "seq": 1700000000003
+      },
+      "blob": "hFrvDSu8led2ku6Edtfea+idiX9REZRWCDD+JLU8B/JjbmLZaLcI1fwCB7FC6gpPoiAFy8FfCke2bgMeNnkJzfUfs+HfcQirBjy1p8ojUj+M29ndXoj8zQ==",
+      "name": "hello sealed by the app",
+      "dir": "p2d",
+      "key": "pair"
+    }
+  ]
+}
