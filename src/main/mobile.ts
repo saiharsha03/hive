@@ -240,7 +240,7 @@ let staleSaid = 0
 
 // ---- what the 2.0 app asks for, from the optional deps or from the ones every Hive has ----
 // which optional requests this Hive answers; the app hides the screens and buttons for the others
-const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
+const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
 
 async function peekThread(d: Deps, id: string): Promise<PhonePeek | null> {
   if (d.peek) return d.peek(id)
