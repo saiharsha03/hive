@@ -3,8 +3,11 @@
 // back as { ok: false, error } and is thrown as Quarry's own ApiError object, which is what its UI expects.
 import { contextBridge, ipcRenderer } from 'electron'
 
+// the theme and fonts Hive's page passes in the address (pages/QuarryPage.tsx); later changes come through
+// window.quarrySetTheme / quarrySetFonts, which the page calls in this view
 const q = new URLSearchParams(location.search)
 const theme = q.get('theme') || undefined
+const fonts = { ...(q.get('ui') ? { ui: q.get('ui')! } : {}), ...(q.get('code') ? { code: q.get('code')! } : {}) }
 
 contextBridge.exposeInMainWorld('quarryHost', {
   invoke: async (method: string, params: object) => {
@@ -15,6 +18,6 @@ contextBridge.exposeInMainWorld('quarryHost', {
   // CSV export: where to save it (null = cancelled)
   saveFile: (defaultName: string): Promise<string | null> => ipcRenderer.invoke('quarry:saveFile', String(defaultName ?? 'export.csv')),
   ...(theme ? { theme } : {}),
-  // Hive's own type: Space Grotesk and Space Mono (each wins over the font the user stored in Quarry, not saved)
-  fonts: { ui: 'space-grotesk', code: 'space-mono' },
+  // Hive's own fonts (Settings > Appearance): each wins over the font the user stored in Quarry, and is not saved there
+  ...(fonts.ui || fonts.code ? { fonts } : {}),
 })

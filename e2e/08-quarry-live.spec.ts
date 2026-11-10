@@ -37,6 +37,14 @@ test('the Quarry page draws Quarry, calls it through the bridge, takes Hive\'s t
     const want = quarryTheme(hiveTheme)
     expect(want).not.toBe('graphite') // Quarry's own default: a match below is Hive's theme winning, not a coincidence
     expect(await inView<string>("document.documentElement.getAttribute('data-theme')")).toBe(want)
+    // Hive's UI font, passed on the bridge, is the one Quarry draws in: the first family of Quarry's body starts with
+    // the first word of Hive's own UI family (Hive's Inter is "Inter Variable", Quarry's is "Inter")
+    const first = (stack: string) => stack.split(',')[0].trim().replace(/^["']|["']$/g, '')
+    const hiveFont = first(await l.page.evaluate(() => getComputedStyle(document.body).fontFamily))
+    const quarryFont = first(await inView<string>('getComputedStyle(document.body).fontFamily'))
+    expect(hiveFont.length).toBeGreaterThan(0)
+    expect(quarryFont.toLowerCase().startsWith(hiveFont.split(' ')[0].toLowerCase())).toBe(true)
+    expect(quarryFont).not.toMatch(/space/i)
     // it never leaves Quarry: another origin and a new window are both refused
     await inView<void>("location.href = 'file:///'; void 0").catch(() => {})
     await new Promise((r) => setTimeout(r, 800))

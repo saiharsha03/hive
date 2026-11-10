@@ -14,3 +14,12 @@ export function quarryTheme(hive: string | undefined): (typeof QUARRY_THEMES)[nu
   if (/light|paper|day/.test(t)) return 'light'
   return 'graphite'
 }
+
+// Hive's fonts (Settings > Appearance) in Quarry's names. Quarry's UI fonts: inter, segoe, plex-sans, space-grotesk,
+// system; code: cascadia, jetbrains, plex-mono, space-mono, consolas. Geist has no match in Quarry: Inter stands in;
+// Hive's system monospace becomes Consolas (Quarry has no system mono).
+export function quarryFonts(f: { ui: string; code: string }): { ui: string; code: string } {
+  const ui: Record<string, string> = { inter: 'inter', segoe: 'segoe', plex: 'plex-sans', geist: 'inter', system: 'system' }
+  const code: Record<string, string> = { cascadia: 'cascadia', consolas: 'consolas', 'plex-mono': 'plex-mono', system: 'consolas' }
+  return { ui: ui[f.ui] ?? 'inter', code: code[f.code] ?? 'cascadia' }
+}
