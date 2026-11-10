@@ -72,7 +72,7 @@ Claude Code process. The conversation continues, the prompt cache stays warm, an
   the order they were made (an `ultrathink` message waits for its effort change; the ones after it wait for it). A
   paused team holds its threads' queues for team posts; what the user typed still goes through. Messages Hive
   delivers on someone's behalf (the phone, watcher runs, automatic continues) take the same path as a window message.
-- **Nothing lost.** A message sent or queued while Claude works is kept in `~/.claude/hive-pending.json` (pictures
+- **Nothing lost.** A message sent or queued while Claude works is kept in `~/.hive/hive-pending.json` (pictures
   as files) until Claude takes it in: the CLI echoes each message back (`replay-user-messages`) with its uuid, and
   the echo removes it (`hive_seen`); the end of the turn it rode is the fallback. On the next start what is left goes
   to its threads again, after the page has reset. When a thread's process ends by itself with messages queued or
@@ -173,7 +173,7 @@ branch, or a ticket key plus a few words (`PROJ-123 Fix login` becomes `feat/PRO
    branch starts from a freshly fetched `origin/<default>`, the repo's untracked root `.env` files are copied in,
    `node_modules` is linked from the main checkout, and no upstream is set, so nothing is pushed by accident.
 3. `main/threadWorktrees.ts` records the link from the Claude session to the worktree in
-   `~/.claude/hive-thread-worktrees.json`, so cleanup still happens after a restart.
+   `~/.hive/hive-thread-worktrees.json`, so cleanup still happens after a restart.
 4. When the thread is closed or archived, uncommitted work is saved as a `WIP: auto-saved when thread closed`
    commit on the branch (the copied `.env` files are never included), the worktree folder is removed and the
    branch is kept. A failing commit hook, a dev service still running from that folder, or the main checkout
@@ -185,7 +185,7 @@ review, commit and push what a thread did. Commits always run the repo's hooks; 
 ## Watchers
 
 A watcher (`main/watchers.ts`, `shared/watchersCore.ts`, `shared/watchCore.ts`) is a scheduled agent. Each one is a
-folder under `~/.claude/hive/watchers/<id>/`:
+folder under `~/.hive/hive/watchers/<id>/`:
 
 ```
 watcher.json     name, enabled, schedule (interval or adaptive tiers, daily / weekly report times), prompt file
@@ -235,18 +235,18 @@ Hive keeps its own state as small JSON files; the settings store and UI state ar
 
 | Where | What |
 | --- | --- |
-| `~/.claude/hive-settings.json` | The settings store behind the Settings tab. Seeded once from `.env` and `scripts.json`; afterwards it wins. Keys that look like credentials never enter it and stay in `.env`. |
-| `~/.claude/hive-threads.json`, `~/.claude/hive-prefs.json` | Thread pins, snoozes, closes and small UI preferences (`main/uiStore.ts`), independent of how Hive was started. |
-| `~/.claude/hive-thread-worktrees.json` | Which worktrees each session created, for cleanup. |
-| `~/.claude/hive-todos.json` | The to-do list. |
-| `~/.claude/hive-disabled-hooks.json` | Hooks switched off in the Hooks menu (Claude Code has no per-hook off flag). Every settings write first saves a `.hive-bak` copy. |
-| `~/.claude/hive/watchers/` | One folder per watcher, see above. |
-| `~/.claude/hive-pending.json`, `~/.claude/hive-pending/` | Messages that have not reached Claude yet, and their pictures. |
-| `~/.claude/hive-autocontinue.json`, `~/.claude/hive/thread-wakeups.db` | Automatic continues after a usage limit, and scheduled wake-ups. |
-| `~/.claude/hive/roles/` | The team role library and each role's memory (`shared-memory.md` for all roles). |
-| `~/.claude/hive/accounts/` | Saved logins: `<id>.json` holds exactly `{ claudeAiOauth, oauthAccount }` (tokens; never sent to the page or the phone), `index.json` the email, plan and dates, `backups/` the two files before each of the last five switches (`main/accounts.ts`). |
-| `~/.claude/hive-quiet.json`, `~/.claude/hive-usage-guard.json` | Quiet hours shared with the phone; which usage-guard steps the phone was already told. |
-| `~/.claude/hive-allowlist.json` | Every public IP the allowlist command succeeded for, with when (`main/allowKnown.ts`). |
+| `~/.hive/hive-settings.json` | The settings store behind the Settings tab. Seeded once from `.env` and `scripts.json`; afterwards it wins. Keys that look like credentials never enter it and stay in `.env`. |
+| `~/.hive/hive-threads.json`, `~/.hive/hive-prefs.json` | Thread pins, snoozes, closes and small UI preferences (`main/uiStore.ts`), independent of how Hive was started. |
+| `~/.hive/hive-thread-worktrees.json` | Which worktrees each session created, for cleanup. |
+| `~/.hive/hive-todos.json` | The to-do list. |
+| `~/.hive/hive-disabled-hooks.json` | Hooks switched off in the Hooks menu (Claude Code has no per-hook off flag). Every settings write first saves a `.hive-bak` copy. |
+| `~/.hive/hive/watchers/` | One folder per watcher, see above. |
+| `~/.hive/hive-pending.json`, `~/.hive/hive-pending/` | Messages that have not reached Claude yet, and their pictures. |
+| `~/.hive/hive-autocontinue.json`, `~/.hive/hive/thread-wakeups.db` | Automatic continues after a usage limit, and scheduled wake-ups. |
+| `~/.hive/hive/roles/` | The team role library and each role's memory (`shared-memory.md` for all roles). |
+| `~/.hive/hive/accounts/` | Saved logins: `<id>.json` holds exactly `{ claudeAiOauth, oauthAccount }` (tokens; never sent to the page or the phone), `index.json` the email, plan and dates, `backups/` the two files before each of the last five switches (`main/accounts.ts`). |
+| `~/.hive/hive-quiet.json`, `~/.hive/hive-usage-guard.json` | Quiet hours shared with the phone; which usage-guard steps the phone was already told. |
+| `~/.hive/hive-allowlist.json` | Every public IP the allowlist command succeeded for, with when (`main/allowKnown.ts`). |
 | `~/.claude/usage/latest.json` | The latest plan-limit reading, for a usage-guard hook (`main/usageFile.ts`); written, never read. |
 | `userData/search`, `userData/sessions-cache.json` | Search index and the session list cache. |
 | `.env`, `scripts.json` next to the app | Workspace-specific configuration and credentials; git-ignored. |

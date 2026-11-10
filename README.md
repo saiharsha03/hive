@@ -26,6 +26,9 @@ It started as a personal replacement for an editor plus a terminal, and is share
 
 ## Highlights
 
+- **Laid out like a code editor.** An icon bar down the left, one icon per section. Files, Threads and Git open a
+  side bar beside your tabs; Codex, Environments, Allow IP, Deploy, Notes, To do, Watchers, Running, Scheduled, Usage
+  and the rest are whole pages. Your own terminals sit in a panel along the bottom. Hive's state lives in `~/.hive`.
 - **Many threads, one window.** Up to four chats side by side; drag a tab onto a chat's edge to split. Every past
   session sits in a searchable sidebar (keyword search), grouped by date or project, with pin, snooze, close and
   archive. Threads name themselves after what you are doing, and long ones open at once (newest messages first).
@@ -230,6 +233,8 @@ An Android app (`mobile/`) for when you're away from the computer:
   of its background tasks, and start a new thread in any repo. The thread list has search and pull to refresh.
 - Teams (members, latest posts, Pause / Resume), scheduled wake-ups (with Cancel) and plan usage have their own
   screens.
+- Per thread: its permission mode, model and effort, and Queue or Interrupt while Claude works. Notes, To do and
+  Watchers (with Run now) have screens too.
 - A fingerprint (or the screen lock) opens the app.
 
 The phone and Hive never talk directly. Both dial out to a small **relay** (`relay/relay.mjs`), so neither has to be

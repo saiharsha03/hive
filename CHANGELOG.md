@@ -4,6 +4,19 @@ All notable changes to Hive are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-11-10
+
+### Changed
+
+- Hive keeps its own state in `~/.hive`, not inside Claude Code's folder.
+- Title bar, tabs, status line and the older pages follow the new frame.
+
+### Added
+
+- **Threads cut off when Hive closed carry on at the next start**: one message from Hive, a notice, a phone notification.
+- **Phone 1.1**: a thread's mode, model and effort, Queue and Interrupt, Notes, To do, Watchers; messages as bubbles.
+- The status line shows a per-model weekly limit when the plan reports one.
+
 ## [1.1.0] - 2026-11-10
 
 ### Changed
