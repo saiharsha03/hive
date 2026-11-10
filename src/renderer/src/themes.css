@@ -106,11 +106,15 @@
 
 /* the names older components use, mapped onto the design's set (one place, every theme) */
 :root, [data-theme] {
+  /* calm: colour only for what needs you (WAITING amber) or has failed (red); every other state word is ink or grey,
+     told apart by weight. The blue accent marks three things only: the selected row's bar, the active tab's rule and
+     the one primary button; everything else that used to be blue uses --mark (neutral) or --link (dim). */
+  --work: var(--ink); --done: var(--dim); --hold: var(--dim); --link: var(--dim); --mark: var(--hi);
   --line: var(--rule); --line2: var(--rule2); --panel: var(--side); --panel2: var(--raised); --input: transparent;
   --sel-ink: var(--hi); --ghost: var(--faint); --accent-hover: var(--accent); --focus: var(--accent);
   --badge-bg: transparent; --badge-ink: var(--dim); --head: var(--dim); --brand: var(--hi);
   --git-renamed: var(--git-modified); --git-conflict: var(--fail); --git-dot: var(--git-modified);
-  --diff-add-num: var(--diff-add-bg); --diff-del-num: var(--diff-del-bg); --diff-add-ink: var(--done); --diff-del-ink: var(--fail);
+  --diff-add-num: var(--diff-add-bg); --diff-del-num: var(--diff-del-bg); --diff-add-ink: var(--git-added); --diff-del-ink: var(--git-deleted);
   --diff-empty: transparent; --diff-gap: var(--hover);
   --you-bg: var(--band); --you-edge: var(--rule2); --you-ink: var(--hi); --you-name: var(--dim);
   --claude: var(--hi); --agent: var(--ink); --agent-edge: var(--rule2); --thread: var(--ink); --thread-edge: var(--rule2); --tool-verb: var(--dim);

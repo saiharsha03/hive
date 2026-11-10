@@ -323,7 +323,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
         <div key={key} className={`msg you${it.steer ? ' steer' : ''}`} title={it.steer && it.during ? `Steered while Claude was on: ${it.during}` : undefined} data-testid="msg-user">
           {/* seen: Claude took the message in (at once for a normal send, at its next step for a steered one) */}
           {it.seen ? <span className="seen sw sw-done" title="Claude has read this message" data-testid="msg-seen">SEEN BY CLAUDE</span>
-            : it.steer && it.uuid && session.busy && <span className="seen sw sw-wait" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">NOT READ YET</span>}
+            : it.steer && it.uuid && session.busy && <span className="seen sw sw-idle" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">NOT READ YET</span>}
           {it.failed && <span className="seen sw sw-fail" title={it.failed} data-testid="msg-failed">NOT SENT</span>}
           {it.images.length > 0 && <div className="imgs">{it.images.map((src, j) => <button key={j} className="thumb" onClick={() => st.open(src)} data-testid="chat-image"><img src={src} alt="" /></button>)}</div>}
           {it.text && <div className="body">{it.text}</div>}

@@ -11,6 +11,7 @@ import { live as liveStore, activate, openSession } from './actions'
 import { liveLook } from './Rail'
 import { useStore } from './store'
 import { AccountSwitcher, useAccountSummary } from './AccountSwitcher'
+import { WARN_PCT } from './kit'
 
 export type Command = { id: string; group: 'Threads' | 'Files' | 'Views' | 'Actions' | 'Claude commands' | 'Your skills' | 'Notes'; label: string; hint?: string; run: () => void }
 
@@ -141,7 +142,7 @@ function AccountButton({ open, setOpen }: { open: boolean; setOpen: (b: boolean)
       <button className={`tb-acct${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title="Accounts (Ctrl+Alt+1..3 switches)" data-testid="account-button">
         <span>{a.label || 'Account'}</span>
         {a.plan && <i className="lim">{a.plan}</i>}
-        {a.five != null && <span className={`lim${a.five > 60 ? ' warm' : ''}`}>5h {pct(a.five)}</span>}
+        {a.five != null && <span className={`lim${a.five > WARN_PCT ? ' warm' : ''}`}>5h {pct(a.five)}</span>}
         {a.seven != null && <i className="lim">7d {pct(a.seven)}</i>}
       </button>
       {open && <AccountSwitcher onClose={() => setOpen(false)} />}

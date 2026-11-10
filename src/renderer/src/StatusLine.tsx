@@ -10,7 +10,7 @@ import { quietHoursGet, type QuietHours } from './api/next'
 type KnownIp = { ip: string; at: number | null; label?: string }
 import type { AllowStatus } from '../../shared/allowCore'
 import type { UpdateState } from '../../shared/versionCore'
-import { tokens as fmtTokens, clock, Btn, when } from './kit'
+import { tokens as fmtTokens, clock, Btn, when, WARN_PCT } from './kit'
 import { useEscape, useFocusTrap } from './ui'
 import { useRef } from 'react'
 import { pickSettingsSection } from './pages/SettingsPage'
@@ -118,8 +118,8 @@ export function StatusLine() {
     <footer className="sline" data-testid="status-bar">
       {branch && <span className="branch" data-testid="status-branch">{branch}</span>}
       {ctx && <span data-testid="status-context">Context <b className="num">{fmtTokens(ctx.total)}</b>{ctx.max ? <> of <b>{fmtTokens(ctx.max)}</b></> : null}</span>}
-      {five?.pct != null && <button className={five.pct > 60 ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-five">5-hour <b className="num">{Math.round(five.pct)}%</b>{five.resetsAt ? `, resets ${left(five.resetsAt)}` : ''}</button>}
-      {seven?.pct != null && <button className={seven.pct > 60 ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-seven">7-day <b className="num">{Math.round(seven.pct)}%</b></button>}
+      {five?.pct != null && <button className={five.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-five">5-hour <b className="num">{Math.round(five.pct)}%</b>{five.resetsAt ? `, resets ${left(five.resetsAt)}` : ''}</button>}
+      {seven?.pct != null && <button className={seven.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-seven">7-day <b className="num">{Math.round(seven.pct)}%</b></button>}
       {c && <button onClick={() => openPage('status')} className={c.failed ? 'warm' : ''} data-testid="status-mcp">MCP <b className="num">{c.connected} of {c.total}</b>{c.needsAuth ? `, ${c.needsAuth} needs sign-in` : ''}{c.failed ? `, ${c.failed} failed` : ''}</button>}
       {phone?.paired && <span data-testid="status-phone">{phone.connected ? 'Phone paired' : 'Phone away'}</span>}
       <span className="r" />

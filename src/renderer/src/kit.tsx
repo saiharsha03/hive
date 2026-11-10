@@ -65,10 +65,12 @@ export function Btn({ kind = 'plain', children, onClick, disabled, title, testid
 // a keyboard hint: "Ctrl K", drawn underlined like the mockups
 export const Keys = ({ k }: { k: string }) => <kbd className="keys">{k}</kbd>
 
-// a thin bar: the part used, coloured only when it carries meaning (above 60% the wait colour)
+// usage above this is a warning (amber); below it every percentage and bar is neutral
+export const WARN_PCT = 80
+// a thin bar: the part used, coloured only when it carries meaning (above WARN_PCT the wait colour)
 export function Bar({ pct, tone, width }: { pct: number; tone?: Tone; width?: number | string }) {
   const p = Math.max(0, Math.min(100, pct))
-  const t = tone ?? (p >= 90 ? 'fail' : p > 60 ? 'wait' : 'accent')
+  const t = tone ?? (p >= 95 ? 'fail' : p > WARN_PCT ? 'wait' : 'accent')
   return <span className="bar" style={width !== undefined ? { width } : undefined}><span className={`bar-in bar-${t}`} style={{ width: `${p}%` }} /></span>
 }
 

@@ -2,7 +2,7 @@
 // Reads main through the adapter (api/next.ts); where a call is not there yet it falls back to getStatus() and
 // chatMcp(), so the page is useful before the main-process update lands.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Bar, Btn, Empty, KV, PageHead, Section, State, Unavailable, tokens } from '../kit'
+import { Bar, Btn, Empty, KV, PageHead, Section, State, Unavailable, WARN_PCT, tokens } from '../kit'
 import { statusView, type Avail, type ThreadStatusView, type UsageRow } from '../api/next'
 import { usePanes, useSessionMetas, type SessionMeta } from '../store'
 import { focusedTab } from '../panes'
@@ -213,7 +213,7 @@ export function StatusPage() {
             {limits.length === 0 ? <Unavailable reason={base?.error ?? 'No usage reading yet'} /> : limits.map((l) => {
               const reset = resetMs(l.resetsAt)
               const f = forecast(readings.get(l.key) ?? [], reset, now)
-              const warm = l.pct > 60
+              const warm = l.pct > WARN_PCT
               return (
                 <div key={l.key} className="stp-lim" data-testid="limit-row" data-window={windowOf(l.label, l.key)}>
                   <span className="stp-ln">{l.label}</span>

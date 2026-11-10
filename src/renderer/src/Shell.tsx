@@ -35,7 +35,7 @@ import { SettingsPage, pickSettingsSection } from './pages/SettingsPage'
 import { DiffPage } from './pages/DiffPage'
 import { insertIntoComposer } from './SessionView'
 import { accountsList, accountUse, engineCommands, onWakeupsChanged, wakeupsList } from './api/next'
-import { Boundary, Btn } from './kit'
+import { Boundary, Btn, WARN_PCT } from './kit'
 
 // slash commands that print a screen in the terminal open a real view here instead
 const SLASH_VIEW: Record<string, ToolTab | 'accounts' | 'settings-claude'> = {
@@ -83,7 +83,7 @@ export function Shell() {
     running: { text: `${runningTasks} now` },
     scheduled: nextWake ? { text: `next ${new Date(nextWake).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` } : { text: '' },
     deploys: deploy.liveRow ? { text: deploy.liveRow.state === 'waiting' ? 'waiting' : 'deploying', warm: deploy.liveRow.state === 'waiting' } : { text: '' },
-    status: five != null ? { text: `5h ${Math.round(five)}%`, warm: five > 60 } : { text: '' },
+    status: five != null ? { text: `5h ${Math.round(five)}%`, warm: five > WARN_PCT } : { text: '' },
     watchers: wc.waiting ? { text: 'finding', warm: true } : { text: `${wc.on} on` },
     workspace: { text: scripts.runs.some((r) => r.phase === 'running') ? 'script running' : 'scripts, stacks' },
     settings: { text: 'Ctrl ,' },
