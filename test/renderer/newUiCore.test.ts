@@ -2,19 +2,21 @@
 // line and tool-row words, and the stores' selectors (a streaming reply must not change what the shell selects).
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { DEFAULT_LAYOUT, migrate, themeOf } from '../../src/renderer/src/layoutCore'
+import { DEFAULT_FONTS, DEFAULT_LAYOUT, migrate, themeOf } from '../../src/renderer/src/layoutCore'
 import { errorLine, nowLine, sinceSummary, toolResult, toolVerb } from '../../src/renderer/src/conversationCore'
 import { createStore, listEq, metaOf, shallowEq } from '../../src/renderer/src/store'
 
 test('old layouts and themes fold into the one layout and three themes without an error', () => {
-  assert.deepEqual(migrate({}), { theme: 'dark', layout: DEFAULT_LAYOUT })
-  assert.deepEqual(migrate({ ui: 'focus', themeByUI: { focus: 'light' } }), { theme: 'light', layout: { ...DEFAULT_LAYOUT, focus: true } })
+  assert.deepEqual(migrate({}), { theme: 'dark', layout: DEFAULT_LAYOUT, fonts: DEFAULT_FONTS })
+  assert.deepEqual(migrate({ ui: 'focus', themeByUI: { focus: 'light' } }), { theme: 'light', layout: { ...DEFAULT_LAYOUT, focus: true }, fonts: DEFAULT_FONTS })
   assert.equal(migrate({ ui: 'workbench', themeByUI: { workbench: 'mono' } }).theme, 'dark')
   assert.equal(migrate({ ui: 'strip', themeByUI: { strip: 'hc' } }).theme, 'hc')
   assert.equal(migrate({ ui: 'strip', themeByUI: { strip: 'colour' } }).layout.focus, false)
   // junk in any field is ignored, never thrown on
-  assert.deepEqual(migrate({ ui: 42, themeByUI: 'nope' }), { theme: 'dark', layout: DEFAULT_LAYOUT })
-  assert.deepEqual(migrate({ appearance: { theme: 'light', layout: { rail: false, drawer: 'yes', bogus: true } } }), { theme: 'light', layout: { ...DEFAULT_LAYOUT, rail: false } })
+  assert.deepEqual(migrate({ ui: 42, themeByUI: 'nope' }), { theme: 'dark', layout: DEFAULT_LAYOUT, fonts: DEFAULT_FONTS })
+  assert.deepEqual(migrate({ appearance: { theme: 'light', layout: { rail: false, drawer: 'yes', bogus: true } } }), { theme: 'light', layout: { ...DEFAULT_LAYOUT, rail: false }, fonts: DEFAULT_FONTS })
+  // a saved font choice is kept; an unknown one falls back to Inter and Cascadia Mono
+  assert.deepEqual(migrate({ appearance: { theme: 'dark', fonts: { ui: 'plex', code: 'nope' } } }).fonts, { ui: 'plex', code: 'cascadia' })
   for (const t of ['default', 'mono', 'colour', undefined, null]) assert.equal(themeOf(t), 'dark')
 })
 

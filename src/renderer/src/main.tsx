@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client'
+import '@fontsource-variable/inter'
 import './assets/codicon.css'
 import './themes.css'
 import './styles.css'

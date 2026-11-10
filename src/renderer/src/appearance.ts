@@ -8,8 +8,8 @@
 import { useSyncExternalStore } from 'react'
 import { getPref, setPref } from './prefs'
 
-import { THEMES, migrate, type Appearance, type Layout, type ThemeId, type ThemeInfo } from './layoutCore'
-export { migrate, themeOf, type Appearance, type Layout, type ThemeId, type ThemeInfo } from './layoutCore'
+import { THEMES, codeFontStack, migrate, uiFontStack, type Appearance, type Fonts, type Layout, type ThemeId, type ThemeInfo } from './layoutCore'
+export { migrate, themeOf, UI_FONTS, CODE_FONTS, type Appearance, type Fonts, type Layout, type ThemeId, type ThemeInfo } from './layoutCore'
 
 let state: Appearance = migrate({ appearance: getPref<unknown>('appearance', undefined), ui: getPref<unknown>('ui', undefined), themeByUI: getPref<unknown>('themeByUI', undefined) })
 const listeners = new Set<() => void>()
@@ -19,6 +19,9 @@ function apply() {
   const root = document.documentElement
   root.dataset.theme = state.theme
   root.dataset.focus = state.layout.focus ? '1' : '0'
+  // the two type tokens; everything else reads them
+  root.style.setProperty('--sans', uiFontStack(state.fonts.ui))
+  root.style.setProperty('--mono', codeFontStack(state.fonts.code))
   // the Windows min / max / close buttons follow the theme
   requestAnimationFrame(() => {
     const cs = getComputedStyle(root)
@@ -45,6 +48,7 @@ export function setTheme(id: ThemeId) {
 export function setLayout(patch: Partial<Layout>) {
   set({ ...state, layout: { ...state.layout, ...patch } })
 }
+export const setFonts = (patch: Partial<Fonts>) => set({ ...state, fonts: { ...state.fonts, ...patch } })
 export const toggleLayout = (k: keyof Layout) => setLayout({ [k]: !state.layout[k] })
 export const getAppearance = (): Appearance => state
 

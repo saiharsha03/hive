@@ -10,7 +10,7 @@ import { PhonePairing } from './PhonePairing'
 import { HooksMenu } from './HooksMenu'
 import { PluginsMenu } from './PluginsMenu'
 import { Btn, Unavailable } from './kit'
-import { getThemes, setLayout, setTheme, useAppearance, type Layout } from './appearance'
+import { getThemes, setLayout, setTheme, useAppearance, type Layout, setFonts, UI_FONTS, CODE_FONTS } from './appearance'
 import { quietHoursGet, quietHoursSet, type QuietHours } from './api/next'
 import { useStore } from './store'
 import { place } from './actions'
@@ -392,6 +392,26 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
               <label key={t.id} className="scheck set-radio">
                 <input type="radio" name="theme" data-testid={`appearance-theme-${t.id}`} checked={app.theme === t.id} onChange={() => setTheme(t.id)} />
                 <span className="set-rl">{t.label}</span><span className="dnote">{t.description}</span>
+              </label>
+            ))}
+          </div>
+        </Row>
+        <Row label="UI font" hint="The font of everything but code. Applies at once.">
+          <div className="set-radios" role="radiogroup" aria-label="UI font">
+            {UI_FONTS.map((f) => (
+              <label key={f.id} className="scheck set-radio">
+                <input type="radio" name="ui-font" data-testid={`appearance-ui-font-${f.id}`} checked={app.fonts.ui === f.id} onChange={() => setFonts({ ui: f.id })} />
+                <span className="set-rl" style={{ fontFamily: f.stack }}>{f.label}</span>
+              </label>
+            ))}
+          </div>
+        </Row>
+        <Row label="Code font" hint="Tool rows, the terminal and the editor. Applies at once.">
+          <div className="set-radios" role="radiogroup" aria-label="Code font">
+            {CODE_FONTS.map((f) => (
+              <label key={f.id} className="scheck set-radio">
+                <input type="radio" name="code-font" data-testid={`appearance-code-font-${f.id}`} checked={app.fonts.code === f.id} onChange={() => setFonts({ code: f.id })} />
+                <span className="set-rl" style={{ fontFamily: f.stack }}>{f.label}</span>
               </label>
             ))}
           </div>

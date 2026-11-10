@@ -16,7 +16,7 @@ import { useDeploy } from './useDeploy'
 import { useScripts } from './useScripts'
 import { useWatcherCounts } from './watchers'
 import { useAllStatus } from './statusStore'
-import { getAppearance, getThemes, setLayout, setTheme, toggleLayout, useAppearance } from './appearance'
+import { CODE_FONTS, UI_FONTS, getAppearance, getThemes, setFonts, setLayout, setTheme, toggleLayout, useAppearance } from './appearance'
 import { DROP_TYPES, dropMessage, dropTitle, pickDropFile, type DropChoice } from '../../shared/dropCore'
 import {
   activate, activeId, closeSession, dismissNotice, focusPaneAt, live as liveStore, moveToBackground, newBeside, newSession, nextNeedsMe, notice, notices,
@@ -106,6 +106,8 @@ export function Shell() {
     { id: 'terminal', group: 'Actions', label: 'Terminal', hint: 'Ctrl+`', run: () => toggleTerminal() },
     { id: 'rail-right', group: 'Actions', label: getAppearance().layout.railRight ? 'Rail on the left' : 'Rail on the right', run: () => toggleLayout('railRight') },
     ...getThemes().map((t): Command => ({ id: `theme:${t.id}`, group: 'Actions', label: `Theme: ${t.label}`, hint: t.description, run: () => setTheme(t.id) })),
+    ...UI_FONTS.map((f): Command => ({ id: `font:${f.id}`, group: 'Actions', label: `UI font: ${f.label}`, run: () => setFonts({ ui: f.id }) })),
+    ...CODE_FONTS.map((f): Command => ({ id: `code-font:${f.id}`, group: 'Actions', label: `Code font: ${f.label}`, run: () => setFonts({ code: f.id }) })),
     ...(focus && focused && !focused.tool && !focused.file ? [
       { id: 'bg', group: 'Actions' as const, label: 'Move this thread to the background', run: () => moveToBackground(focus) },
       { id: 'close', group: 'Actions' as const, label: 'Close this tab', hint: 'Ctrl+W', run: () => closeSession(focus) },

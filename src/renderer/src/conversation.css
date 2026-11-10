@@ -1,5 +1,5 @@
 /* The conversation in a pane, built to the design: full-width zones, 15 px reading type, your messages as a band,
-   tool rows in Space Mono with a coloured verb, the queue box and the underline composer. */
+   tool rows in the code font, the queue box and the underline composer. */
 
 .pane { container-type: inline-size; container-name: pane; }
 .session { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--bg); position: relative; }
