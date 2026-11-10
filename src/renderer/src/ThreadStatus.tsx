@@ -231,10 +231,10 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   return (
     <>
       <button ref={mref} className="pick" onClick={openModels} title={err || 'Model for this thread'} aria-haspopup="listbox" data-testid="model-picker">
-        <i>Model</i>{st.model ? modelLabel(st.model) : dfl.own.model ? nameOf(dfl.own.model) : seen.model ? modelLabel(seen.model) : 'default'}
+        <i>Model</i>{st.model ? modelLabel(st.model) : dfl.model ? `${nameOf(dfl.model)} (default)` : seen.model ? `${modelLabel(seen.model)} (default)` : 'default'}
       </button>
       <button ref={eref} className={thinking ? 'pick ultra' : 'pick'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} aria-haspopup="listbox" data-testid="effort-picker">
-        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? (dfl.own.effort || seen.effort || 'default')}
+        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? (dfl.own.effort ? `${dfl.own.effort} (default)` : seen.effort ? `${seen.effort} (default)` : 'medium (default)')}
       </button>
       <button ref={aref} className="pick" onClick={openAdvisor} title="The advisor for this thread: a second model Claude can ask for advice" aria-haspopup="listbox" data-testid="advisor-picker">
         <i>Advisor</i>{word ? word.replace(/^advisor /, 'advisor ') : 'advisor off'}

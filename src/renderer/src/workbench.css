@@ -216,3 +216,22 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .gate-s { font-size: 12px; font-weight: 600; white-space: nowrap; }
 .gate-pass, .gate-fixed { color: var(--git-added); } .gate-na { color: var(--dim); font-weight: 400; } .gate-wait { color: var(--signal); }
 .gate-row.todo .gate-t { color: var(--hi); }
+
+/* ---------- Environments as a page: each stack named, its buttons beside the name, every stack's table on the same columns ---------- */
+.full-col .dstack .drow .dtitle { display: inline; font: 600 14px var(--sans); color: var(--hi); }
+.full-col .dstack .drow { gap: 12px; align-items: center; margin: 0 0 6px; }
+.full-col .dstack .drow .dspace { display: none; }
+.full-col .dstack, .full-col .dstack:first-child { padding: 0; margin: 0; }
+.full-col .dstack + .dstack { margin: 26px 0 0; border: 0; }
+.full-col .dstack .dtable { table-layout: fixed; width: 100%; max-width: 1180px; border-collapse: collapse; }
+.full-col .dstack .dtable th, .full-col .dstack .dtable td { text-align: left; padding: 5px 12px 5px 0; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.full-col .dstack .dtable th { font-weight: 400; font-size: 12px; color: var(--dim); }
+.full-col .dstack .dtable th:nth-child(1) { width: 200px; }
+.full-col .dstack .dtable th:nth-child(2) { width: 150px; }
+.full-col .dstack .dtable th:nth-child(3) { width: 80px; }
+.full-col .dstack .dtable th:nth-child(5) { width: 110px; }
+.full-col .dstack .dtable th:nth-child(6) { width: 110px; }
+.full-col .dstack .dtable td .dd { white-space: normal; font-size: 12px; color: var(--dim); }
+.full-col .dstack .dsel { width: 100%; max-width: 420px; }
+.full-col .dstack .dtable td.dact { text-align: left; }
+.full-col .dmsg { max-width: 1180px; }

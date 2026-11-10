@@ -54,7 +54,7 @@ import { cancelContinue, continueAt, continueNow, initAutoContinue, listContinue
 import { readTodos } from './teamTodos'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
-import { checkLogin, closeStatus, getStatus, restartStatus, setLiveUsage, weeklyUsage } from './status'
+import { checkLogin, closeStatus, getStatus, idle, restartStatus, setLiveUsage, weeklyUsage } from './status'
 import { loadConfig, readDotEnv } from './devConfig'
 import { loadSettings, saveSettings, sessionFlags, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
@@ -578,11 +578,17 @@ handle('gate:read', (_e, dir: unknown) => readGate(String(dir ?? '')))
 handle('versions:check', () => checkVersions())
 // what a thread started with no model or effort of its own runs on: this app's defaults (Settings > General), else Claude
 // Code's own (~/.claude/settings.json)
-handle('defaults:get', () => {
-  let claude: { model?: unknown; effortLevel?: unknown } = {}
-  try { claude = JSON.parse(readFileSync(join(homedir(), '.claude', 'settings.json'), 'utf8')) } catch { /* none */ }
-  const str = (v: unknown) => (typeof v === 'string' ? v : '')
-  return { model: settings.general.model || str(claude.model), effort: settings.general.effort || str(claude.effortLevel), own: { model: settings.general.model, effort: settings.general.effort } }
+let engineDefault: { at: number; model: string } | null = null
+handle('defaults:get', async () => {
+  // what the engine itself runs a thread on when no model is named: its model list says (the "default" row's resolved
+  // model), which is not always the model in Claude Code's settings file; asked at most every ten minutes
+  if (!engineDefault || Date.now() - engineDefault.at > 10 * 60_000) {
+    try {
+      const list = await Promise.race([idle().supportedModels(), new Promise<never>((_r, rej) => setTimeout(() => rej(new Error('slow')), 15_000))]) as { value: string; resolvedModel?: string }[]
+      engineDefault = { at: Date.now(), model: list.find((m) => m.value === 'default')?.resolvedModel ?? '' }
+    } catch { engineDefault = engineDefault ?? { at: 0, model: '' } }
+  }
+  return { model: settings.general.model || engineDefault.model, effort: settings.general.effort || '', own: { model: settings.general.model, effort: settings.general.effort } }
 })
 // Accounts. Nothing restarts when the login changes: the status process starts again on the new login, every quiet
 // thread closes its process (tab and session stay; the next message resumes it on the new login) and a busy one does
