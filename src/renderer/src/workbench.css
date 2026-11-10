@@ -92,3 +92,14 @@ body.side-drag { cursor: col-resize; user-select: none; }
 .side .side.files .frow.file .fname { margin-left: 16px; }
 .side .side.files .frow .gletter { font: 400 12px var(--sans); padding-right: 12px; }
 .side .side.files .sidehead { font: 400 11px var(--sans); }
+
+/* whole-page sections use the whole window: all the width, and the height where there is something to fill it */
+.full-page { padding: 14px 20px 16px; display: flex; flex-direction: column; }
+.full-col, .full-col.wide { max-width: none; margin: 0; flex: 1; min-height: 0; }
+.full-col > .page-head { margin-bottom: 2px; }
+/* Notes: the list down the left, the note taking everything else */
+.full-notes .full-col.ws-page .tool.notes { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.full-notes .full-col.ws-page .nt-body { flex: 1; min-height: 0; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; }
+.full-notes .nt-list { border-right: 1px solid var(--rule); padding-right: 12px !important; }
+.full-notes .nt-edit { min-height: 0; }
+.full-notes .nt-text, .full-notes .nt-preview { flex: 1; min-height: 0; height: 100%; }
