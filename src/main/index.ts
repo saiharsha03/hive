@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, p
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
@@ -840,6 +840,23 @@ function createWindow(): void {
 
   if (DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(APP_HTML)
+
+  // Run from source while it is being rebuilt: a new build of the page (npm run build) shows by itself. Never while a
+  // thread has a live process, because a reloaded page stops it: then Ctrl+R (or F5) loads the build when you choose.
+  if (NEXT && !DEV_URL && !app.isPackaged && !TEST_MODE) {
+    let timer: NodeJS.Timeout | null = null
+    try {
+      const w = watch(join(__dirname, '../renderer'), { recursive: true }, () => {
+        if (timer) clearTimeout(timer)
+        timer = setTimeout(() => {
+          if (win.isDestroyed() || !existsSync(APP_HTML)) return
+          if (liveThreads().length) void web.executeJavaScript("window.dispatchEvent(new CustomEvent('hive:build'))").catch(() => {})
+          else web.reload()
+        }, 900)
+      })
+      win.on('closed', () => w.close())
+    } catch { /* no watch: Ctrl+R still loads a new build */ }
+  }
 }
 
 let quitting = false

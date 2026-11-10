@@ -37,3 +37,7 @@ body.side-drag { cursor: col-resize; user-select: none; }
 /* the side bar's own heading names the view, so a panel's title is not said twice */
 .side .ws-page .dtitle { display: none; }
 .side .ws-page .dhead { padding-top: 0; }
+
+/* nothing open: the message sits in the middle of the editor area */
+.panes > .pane-empty { max-width: none; align-items: center; text-align: center; padding: 24px; }
+.panes > .pane-empty > div { max-width: 520px; }

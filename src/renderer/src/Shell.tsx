@@ -35,6 +35,7 @@ import { DiffPage } from './pages/DiffPage'
 import { insertIntoComposer } from './SessionView'
 import { accountsList, accountUse, engineCommands } from './api/next'
 import { Boundary, Btn } from './kit'
+import { NEXT } from '../../shared/edition'
 
 // slash commands that print a screen in the terminal open a real view here instead
 const SLASH_VIEW: Record<string, ToolTab | 'accounts' | 'settings-claude'> = {
@@ -110,6 +111,13 @@ export function Shell() {
     },
   }), [commands, focused])
 
+  // a new build is on disk but a thread is working, so the page was not reloaded by itself
+  useEffect(() => {
+    const say = () => notice('A new build is ready. Ctrl+R loads it; threads that are working stop.')
+    window.addEventListener('hive:build', say)
+    return () => window.removeEventListener('hive:build', say)
+  }, [])
+
   // ---- keyboard ----
   useEffect(() => {
     const inTermOrEditor = () => !!(document.activeElement as HTMLElement | null)?.closest('.xterm, .monaco-editor')
@@ -117,6 +125,8 @@ export function Shell() {
       const k = e.key.toLowerCase()
       const ctrl = e.ctrlKey && !e.metaKey
       if (ctrl && e.altKey && e.key === 'Escape') { e.preventDefault(); void stopEverything(); return }
+      // while the app is being rebuilt: F5, or Ctrl+R outside a terminal (where it searches the shell's history), loads the newest build
+      if (NEXT && (e.key === 'F5' || (ctrl && !e.shiftKey && !e.altKey && k === 'r' && !(document.activeElement as HTMLElement | null)?.closest('.xterm')))) { e.preventDefault(); location.reload(); return }
       // Ctrl+Alt+T: the next theme (Shift: the one before), at once and kept
       if (ctrl && e.altKey && e.code === 'KeyT') { e.preventDefault(); notice(`Theme: ${cycleTheme(e.shiftKey ? -1 : 1).label}`); return }
       if (ctrl && e.altKey && /^[1-9]$/.test(k)) {
@@ -192,7 +202,7 @@ export function Shell() {
   const empty = (
     <div className="pane-empty" data-testid="welcome">
       <div className="pe-t">No thread open</div>
-      <div>Start one, or pick one from the rail. The command field finds threads, files and commands.</div>
+      <div>Start one, or pick one from Threads. The command field finds threads, files and commands.</div>
       <div style={{ display: 'flex', gap: 8, marginTop: 6 }}><Btn kind="primary" onClick={() => newSession()} testid="welcome-new">New thread</Btn><Btn kind="plain" onClick={() => setPaletteN((n) => n + 1)} testid="welcome-palette">Ctrl K</Btn></div>
     </div>
   )
