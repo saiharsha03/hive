@@ -31,12 +31,21 @@ export function parseEvery(v: string): number | null | undefined {
   return ms > 0 ? ms : null
 }
 
+// The shortest sweep interval. Every sweep is a whole Claude session, and "1s" used to be accepted: a run on every
+// scheduler tick. A schedule that asks for less is refused when it is saved (tooShort); one already on disk is read
+// as this floor (atLeastMin), never thrown away.
+export const MIN_EVERY_MS = 5 * MIN
+export const MIN_EVERY_TEXT = '5m'
+export const tooShort = (ms: number | null | undefined): boolean => typeof ms === 'number' && ms < MIN_EVERY_MS
+export const atLeastMin = (ms: number | null): number | null => (ms === null ? null : Math.max(ms, MIN_EVERY_MS))
+
 // adaptive sweeps: below `below` % of the weekly limit, sweep every `everyMs` (null = no sweeps in that tier)
 export type Tier = { below: number; everyMs: number | null }
 export const DEFAULT_TIERS = '50:1h,60:3h,70:6h,100:1d'
 
-// "50:1h,60:3h,70:6h,100:1d": thresholds must rise, each between 1 and 100; intervals like parseEvery
-export function parseTiers(v: string): { tiers: Tier[] | null; problem: string } {
+// "50:1h,60:3h,70:6h,100:1d": thresholds must rise, each between 1 and 100; intervals like parseEvery, none under the
+// floor. clamp (reading a table already saved): a too-short interval becomes the floor instead of a problem
+export function parseTiers(v: string, clamp = false): { tiers: Tier[] | null; problem: string } {
   const parts = v.split(',').map((x) => x.trim()).filter(Boolean)
   if (!parts.length) return { tiers: null, problem: 'no tiers' }
   const tiers: Tier[] = []
@@ -47,8 +56,9 @@ export function parseTiers(v: string): { tiers: Tier[] | null; problem: string }
     if (!(below > 0 && below <= 100)) return { tiers: null, problem: `${p}: the threshold must be between 1 and 100` }
     const everyMs = parseEvery(m[2])
     if (everyMs === undefined) return { tiers: null, problem: `${p}: ${m[2]} is not like 60m, 2h, 1d or off` }
+    if (tooShort(everyMs) && !clamp) return { tiers: null, problem: `${p}: the shortest interval is ${MIN_EVERY_TEXT}` }
     if (tiers.length && below <= tiers[tiers.length - 1].below) return { tiers: null, problem: `${p}: thresholds must rise` }
-    tiers.push({ below, everyMs })
+    tiers.push({ below, everyMs: atLeastMin(everyMs) })
   }
   return { tiers, problem: '' }
 }
