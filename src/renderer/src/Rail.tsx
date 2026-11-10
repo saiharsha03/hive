@@ -13,7 +13,7 @@ import { useWatchers } from './useWatchers'
 import { isDependabotTab } from '../../shared/dependabotCore'
 import { nextRunLabel } from '../../shared/threadsCore'
 import { groupTeams, pastTeamPeople, teamThreadIds, type Roster, type RosterPerson } from '../../shared/teamSidebarCore'
-import { live as liveStore, activate, newSession, openBeside, openPage, openSession, closeSession } from './actions'
+import { live as liveStore, activate, newSession, offerUndo, openBeside, openPage, openPageBeside, openSession, closeSession } from './actions'
 import { panes, useStore, shallowEq } from './store'
 import { focusedTab } from './panes'
 import { age, State, type Tone } from './kit'
@@ -65,7 +65,7 @@ export function Rail({ views, currentPage }: { views: ViewSummary; currentPage: 
       <RailList live={live} focus={scr.focus} shown={shown} />
       <nav className="rail-views" aria-label="Views">
         {(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings'] as ToolTab[]).map((v) => (
-          <button key={v} className={`rail-view${currentPage === v ? ' on' : ''}${v === 'settings' ? ' settings' : ''}`} onClick={() => openPage(v)} data-testid={`rail-view-${v}`}>
+          <button key={v} className={`rail-view${currentPage === v ? ' on' : ''}${v === 'settings' ? ' settings' : ''}`} onClick={(e) => (e.shiftKey ? openPageBeside(v) : openPage(v))} title="Shift+click opens it beside the current pane" data-testid={`rail-view-${v}`}>
             <span>{PAGE_LABEL[v]}</span>{views[v] && <b className={views[v]!.warm ? 'warm' : ''}>{views[v]!.text}</b>}
           </button>
         ))}
@@ -148,7 +148,12 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
   }, picked.size > 0)
   const apply = (fn: (id: string) => void) => { ids.forEach(fn); clearPicked() }
   // closing or archiving deletes the worktrees a thread made: ask first when there are any
-  const doRetire = (kind: Retiring['kind'], targets: string[]) => { targets.forEach((id) => (kind === 'close' ? close(id, true) : archive(id, true))); clearPicked() }
+  const doRetire = (kind: Retiring['kind'], targets: string[]) => {
+    targets.forEach((id) => (kind === 'close' ? close(id, true) : archive(id, true)))
+    clearPicked()
+    const n = targets.length === 1 ? (byId.get(targets[0])?.title ?? 'the thread') : `${targets.length} threads`
+    offerUndo(`${kind === 'close' ? 'Closed' : 'Archived'} ${n}`, () => targets.forEach((id) => (kind === 'close' ? close(id, false) : archive(id, false))))
+  }
   const retire = async (kind: Retiring['kind'], targets: string[]) => {
     const titleOf = (id: string) => byId.get(id)?.title ?? id
     const per = await Promise.all(targets.map((id) => window.api.worktreeLinks(id).then((links) => links.map((l) => ({ thread: titleOf(id), repo: l.repo, branch: l.branch, path: l.path }))).catch(() => [])))
@@ -259,7 +264,7 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
           {flagActions(states, ids, 'archivedAt').map((a) => <button key={a.label} onClick={() => (a.on ? void retire('archive', ids) : apply((id) => archive(id, false)))} data-testid="bulk-archive">{a.label}</button>)}
           <button onClick={() => setPicked(new Set(order))} data-testid="bulk-all">Select all</button>
           <button onClick={clearPicked} data-testid="bulk-clear">Clear</button>
-          {snoozing && <div style={{ width: '100%', display: 'flex', gap: 12 }}>{PRESETS.map((p) => <button key={p.id} onClick={() => { const t = presetTime(p.id, Date.now()); apply((id) => snooze(id, t)) }} data-testid={`bulk-snooze-${p.id}`}>{p.label}</button>)}</div>}
+          {snoozing && <div style={{ width: '100%', display: 'flex', gap: 12 }}>{PRESETS.map((p) => <button key={p.id} onClick={() => { const t = presetTime(p.id, Date.now()); const these = ids; apply((id) => snooze(id, t)); offerUndo(`Snoozed ${these.length} threads`, () => these.forEach(clearSnooze)) }} data-testid={`bulk-snooze-${p.id}`}>{p.label}</button>)}</div>}
         </div>
       )}
       {archiveView ? (

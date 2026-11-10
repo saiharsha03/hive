@@ -208,8 +208,8 @@ button.rail-gh:hover { color: var(--hi); }
 .sline b { color: var(--ink); font-weight: 500; }
 .sline .warm, .sline .warm b { color: var(--wait); }
 .sline .r { margin-left: auto; }
-.sline button { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; white-space: nowrap; }
-.sline button:hover { color: var(--hi); }
+.sline > button, .sline > .undo > button { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; white-space: nowrap; }
+.sline > button:hover { color: var(--hi); }
 .sline .branch { color: var(--hi); font-weight: 600; }
 .sline .undo { color: var(--hi); }
 .sline .undo button { color: var(--link); margin-left: 8px; }
@@ -299,7 +299,12 @@ button.rail-gh:hover { color: var(--hi); }
 .side.files .frow .ficon, .side.files .frow .gdot { display: none; }
 .side.files .frow .chev { color: var(--faint); width: 12px; display: inline-block; }
 .side.files .frow .gletter { margin-left: auto; font: 700 11px var(--mono); }
-.side.files .frow.g-deleted .fname { text-decoration: line-through; }
+.side.files .frow.file.g-deleted .fname { text-decoration: line-through; }
 .side.files .frow.sel { box-shadow: inset 2px 0 0 var(--accent); }
 .ichanges { display: flex; flex-direction: column; min-height: 0; }
 .igit { min-height: 0; }
+.insp .igit { padding: 0 14px 14px; overflow: visible; }
+.insp .igit .gitgrid { grid-template-columns: 1fr; gap: 12px; }
+.insp .igit .ginput { width: 100%; }
+.insp .igit .gtitle { max-width: 220px; }
+.ichanges > *, .ichanges .changes, .ichanges .tool { flex: none; min-height: auto; }

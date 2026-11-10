@@ -222,7 +222,8 @@ export function Shell() {
   )
   const currentPage = focused?.tool ?? null
   const showRail = layout.rail && !layout.focus
-  const showInsp = layout.inspector && !layout.focus && !focused?.tool
+  // pages take the whole centre; threads, files and a diff keep the inspector
+  const showInsp = layout.inspector && !layout.focus && (!focused?.tool || focused.tool === 'diff')
 
   return (
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>

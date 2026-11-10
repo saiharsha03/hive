@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PRESETS, archive, clearSnooze, close, pin, presetTime, snooze, type ThreadMap } from './threads'
 import { flagActions } from './selection'
 import { useEscape, useMenuKeys } from './ui'
+import { offerUndo } from './actions'
 
 // ids: the threads the menu acts on (one row, or the whole selection); onDone runs after an action;
 // onRetire: close or archive them (the list asks first when that would delete worktrees)
@@ -41,9 +42,11 @@ export function ThreadMenu({ ids, states, x, y, onClose, onDone, onRetire }: Pro
   }, [])
 
   const act = (fn: () => void) => () => { fn(); onDone(); onClose() }
+  // a snooze can be taken back for 5 seconds from the status line (or Ctrl+Z)
+  const snoozeAll = (t: number) => { each((id) => snooze(id, t)); offerUndo(`Snoozed ${many ? `${ids.length} threads` : 'the thread'}`, () => each(clearSnooze)) }
   const setPick = () => {
     const t = new Date(when).getTime()
-    if (Number.isFinite(t)) { each((id) => snooze(id, t)); onDone(); onClose() }
+    if (Number.isFinite(t)) { snoozeAll(t); onDone(); onClose() }
   }
 
   return (
@@ -52,7 +55,7 @@ export function ThreadMenu({ ids, states, x, y, onClose, onDone, onRetire }: Pro
       <button data-testid="threadmenu-button-2" onClick={() => setSnoozing(!snoozing)}>{of('Snooze')}<span className="chev" style={{ transform: snoozing ? 'rotate(90deg)' : undefined }}>›</span></button>
       {snoozing && (
         <div className="tsub">
-          {PRESETS.map((p) => <button data-testid="threadmenu-button-3" key={p.id} onClick={act(() => { const t = presetTime(p.id, Date.now()); each((id) => snooze(id, t)) })}>{p.label}</button>)}
+          {PRESETS.map((p) => <button data-testid="threadmenu-button-3" key={p.id} onClick={act(() => snoozeAll(presetTime(p.id, Date.now())))}>{p.label}</button>)}
           {picking ? (
             <div className="tpick">
               <input data-testid="threadmenu-input-4" type="datetime-local" value={when} min={local(Date.now())} autoFocus onChange={(e) => setWhen(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') setPick() }} />

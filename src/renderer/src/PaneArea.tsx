@@ -2,7 +2,7 @@
 // focused one carries the accent rule. One to four panes: two side by side, three as columns, four as 2 by 2. Drag
 // a tab onto a pane to move it there, onto a pane's right or bottom edge to split. Each pane draws only its own
 // active tab, so a reply streaming in one pane does not re-render the others.
-import { memo, useCallback, useState, type DragEvent, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { activate, closeSession, moveToBackground, newSession, visibleNow, setPanes } from './actions'
 import { activate as activateIn, focusPane, moveTab, reconcile, splitWith, MAX_PANES } from './panes'
 import { panes as panesStore, useSessionMetas, useStore, shallowEq, setSessions, getSessions, type SessionMeta } from './store'
@@ -50,9 +50,12 @@ export function TabRow() {
   const shown = new Set(p.panes.map((x) => x.active))
   const tabs = p.panes.flatMap((pane) => pane.tabs.map((id) => ({ id, pane: pane.id })))
   const paneTabsOf = (id: string) => p.panes.find((x) => x.tabs.includes(id))?.tabs ?? [id]
+  // the focused tab is always in view on a crowded row
+  const row = useRef<HTMLDivElement>(null)
+  useEffect(() => { row.current?.querySelector('.tab.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }, [focused])
   const onClose = (id: string) => closeSession(id)
   return (
-    <div className="tabrow" role="tablist" aria-label="Open tabs" data-testid="tabrow"
+    <div className="tabrow" ref={row} role="tablist" aria-label="Open tabs" data-testid="tabrow"
       onDragOver={(e) => { if (e.dataTransfer.types.includes(TAB_MIME)) e.preventDefault() }}
       onDrop={(e) => { const tab = e.dataTransfer.getData(TAB_MIME); if (tab) { e.preventDefault(); moveTabTo(tab, p.focus) } }}>
       {tabs.map(({ id, pane }, i) => {

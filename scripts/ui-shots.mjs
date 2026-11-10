@@ -402,6 +402,24 @@ await page.mouse.move(700, 880)
 if (await tid('drawer').isVisible().catch(() => false)) await tid('drawer-close').click()
 await shot('A-main')
 
+// a streaming reply changes its own pane only: count DOM changes in the other regions while 60 chunks arrive
+await tid('insp-files').click()
+await page.waitForTimeout(800)
+await page.evaluate(() => {
+  const w = window
+  w.__mut = {}
+  for (const [k, sel] of [['rail', '.rail'], ['tabrow', '.tabrow'], ['otherPane', '[data-testid="chat-t-ship"]'], ['inspector', '.insp'], ['statusLine', '.sline'], ['ownPane', '[data-testid="chat-t-invoice"] .thread']]) {
+    const el = document.querySelector(sel)
+    w.__mut[k] = el ? 0 : -1
+    if (el) new MutationObserver((l) => { w.__mut[k] += l.length }).observe(el, { subtree: true, childList: true, characterData: true, attributes: true })
+  }
+})
+for (let i = 0; i < 60; i++) await send([['chat:event', 't-invoice', { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: `word${i} ` } } }]])
+await page.waitForTimeout(600)
+console.log('STREAM CHECK (DOM changes per region while 60 reply chunks streamed into one thread):', JSON.stringify(await page.evaluate(() => window.__mut)))
+await send([['chat:event', 't-invoice', assistant(text('Streamed reply, settled.'))]])
+await tid('insp-activity').click()
+
 // the accounts switcher over the main view
 await tid('account-button').click()
 await shot('A-accounts')
@@ -427,6 +445,37 @@ for (const v of ['watchers', 'workspace', 'settings']) {
   await shot(`A-${v}`)
 }
 
+// every Workspace tab and the Teams tab
+await tid('rail-view-workspace').click()
+for (const t of ['stacks', 'scripts', 'git', 'todos', 'notes', 'dependabot']) {
+  await tid(`ws-tab-${t}`).click()
+  await page.waitForTimeout(900)
+  await shot(`X-workspace-${t}`)
+}
+await tid('ws-tab-pull').click()
+await tid('rail-view-watchers').click()
+await tid('wt-tab-teams').click().catch(() => {})
+await page.waitForTimeout(800)
+await shot('X-teams')
+await tid('wt-tab-watchers').click().catch(() => {})
+
+// the inspector's Changes and Status for the invoice thread; a thread's menu in the rail; Allow my IP
+await page.locator('[data-testid="tab"][data-id="t-invoice"]').click()
+await tid('insp-changes').click()
+await page.waitForTimeout(1200)
+await shot('X-insp-changes')
+await tid('insp-status').click()
+await page.waitForTimeout(600)
+await shot('X-insp-status')
+await page.locator('[data-testid="thread-row"]').first().click({ button: 'right' })
+await page.waitForTimeout(300)
+await shot('X-thread-menu')
+await page.keyboard.press('Escape')
+await tid('status-allow').click()
+await page.waitForTimeout(500)
+await shot('X-allow-ip')
+await page.keyboard.press('Escape')
+
 // the editor beside the thread, Files in the inspector
 await page.locator('[data-testid="tab"][data-id="t-invoice"]').click()
 await tid('insp-files').click()
@@ -434,7 +483,15 @@ await page.waitForTimeout(600)
 await page.getByText('billing', { exact: true }).first().click().catch(() => {})
 await page.waitForTimeout(400)
 await page.getByText('invoice.py', { exact: true }).first().click().catch(() => {})
-await page.waitForTimeout(2500)
+await page.waitForTimeout(1500)
+// the file beside its thread: drag its tab onto the right edge of the pane
+const fileTab = page.locator('[data-testid="tab"][data-id$="invoice.py"]').first()
+const paneBox = await page.locator('[data-testid="chat-pane"]').first().boundingBox()
+if (paneBox) await fileTab.dragTo(page.locator('[data-testid="chat-pane"]').first(), { targetPosition: { x: paneBox.width - 40, y: paneBox.height / 2 } }).catch(() => {})
+await page.waitForTimeout(400)
+await page.locator('[data-testid="tab"][data-id="t-invoice"]').click()
+await page.locator('[data-testid="tab"][data-id$="invoice.py"]').first().click()
+await page.waitForTimeout(2000)
 await shot('A-editor')
 
 // the command field with Claude commands

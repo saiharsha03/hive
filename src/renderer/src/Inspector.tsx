@@ -1,10 +1,11 @@
 // The inspector: the focused thread's Activity (what runs in it, what is scheduled for it, what finished, and what
 // runs elsewhere), its Changes (git for its repo: stage, commit, push), its Files (tree with git colours) and a short
 // Status. With a page or a file focused it keeps showing the thread that was last on screen.
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { activate, diffSpec, inspectorTab, openPage, send, setPreview, showDiff, type InspectorTab } from './actions'
 import { useAllStatus, useThreadStatus } from './statusStore'
-import { panes as panesStore, useSession, useSessionMetas, useStore, type SessionMeta } from './store'
+import { panes as panesStore, sessions, shallowEq, useSessionMetas, useStore, type SessionMeta } from './store'
+import type { Session } from './chat'
 import { focusedTab } from './panes'
 import { State, Btn, Bar, KV, dur, clock, relative, taskState, tokens as fmtTokens } from './kit'
 import { shellName, kindLabel, type Task } from '../../shared/taskCore'
@@ -21,6 +22,16 @@ import { getPref, setPref } from './prefs'
 import { wakeupsList, onWakeupsChanged, type Wakeups } from './api/next'
 
 type ITab = InspectorTab
+
+// the parts of a thread the inspector draws: they do not change while a reply streams, so a token re-renders nothing here
+type Slice = Pick<Session, 'id' | 'title' | 'items' | 'cwd' | 'worktrees' | 'sessionId' | 'busy' | 'background' | 'loaded' | 'streaming'>
+function useThreadSlice(id: string | undefined): Session | undefined {
+  const sel = useCallback((all: Session[]): Slice | undefined => {
+    const s = id ? all.find((x) => x.id === id) : undefined
+    return s && { id: s.id, title: s.title, items: s.items, cwd: s.cwd, worktrees: s.worktrees, sessionId: s.sessionId, busy: s.busy, background: s.background, loaded: s.loaded, streaming: '' }
+  }, [id])
+  return useStore(sessions, sel, shallowEq) as Session | undefined
+}
 inspectorTab.set(getPref<ITab>('inspector.tab', 'activity'))
 
 // the thread the inspector follows: the focused tab when it is a thread, else the last thread that was
@@ -96,7 +107,7 @@ function TaskItem({ t, tabId, thread, busy, elsewhere }: { t: Task; tabId: strin
 function Activity({ s }: { s?: SessionMeta }) {
   const all = useAllStatus()
   const metas = useSessionMetas()
-  const session = useSession(s?.id)
+  const session = useThreadSlice(s?.id)
   const now = useNow(true)
   const st = s ? all.get(s.id) : undefined
   const name = useMemo(() => describer(session?.items ?? []), [session?.items])
@@ -151,16 +162,23 @@ function Activity({ s }: { s?: SessionMeta }) {
 
 // ---- Changes: the thread's changed files, then its repo's git (stage, commit, push) ----
 function Changes({ id }: { id: string }) {
-  const session = useSession(id)
+  const session = useThreadSlice(id)
   const shownDiff = useStore(diffSpec, (d) => d)
   const [focus, setFocus] = useState<{ dir: string; n: number } | null>(null)
+  // the Git part opens on this thread's repository (its newest worktree, else its folder)
+  const dir = session?.worktrees?.at(-1)?.path ?? session?.cwd
+  useEffect(() => {
+    let alive = true
+    if (dir) void window.api.gitLocate(`${dir}/.`).then((at) => { if (alive && at) setFocus({ dir: at.dir, n: Date.now() }) }).catch(() => {})
+    return () => { alive = false }
+  }, [dir])
   if (!session) return null
   return (
     <div className="ichanges" data-testid="inspector-changes">
-      <ChangesView session={session} diff={shownDiff} shown={!!shownDiff} onDiff={showDiff}
-        onOpenGit={() => { const dir = session.worktrees?.at(-1)?.path ?? session.cwd; if (dir) void window.api.gitLocate(dir).then((at) => at && setFocus({ dir: at.dir, n: Date.now() })) }} />
+      <ChangesView session={session} diff={shownDiff} shown onDiff={(d) => d && showDiff(d)}
+        onOpenGit={() => { if (dir) void window.api.gitLocate(`${dir}/.`).then((at) => at && setFocus({ dir: at.dir, n: Date.now() })) }} />
       <div className="isec"><span>Repository</span></div>
-      <div className="igit"><GitPanel onDiff={showDiff} focus={focus} /></div>
+      <div className="igit ws-page"><GitPanel onDiff={showDiff} focus={focus} /></div>
     </div>
   )
 }
@@ -195,7 +213,7 @@ function MiniStatus({ s }: { s: SessionMeta }) {
       <KV rows={[
         ['Model', st.model ? `${modelLabel(st.model)}` : 'default'],
         ['Effort', st.ultrathink ? 'max for this turn' : st.effort ?? 'default'],
-        ['Mode', modeLabel(s.mode ?? (s.background ? 'auto' : 'default'))],
+        ['Mode', modeLabel(s.mode ?? (s.background ? 'auto' : 'default')).replace(/ mode$/i, '').toLowerCase()],
         ['Folder', wt ? `${wt.repo} worktree on ${wt.branch}` : s.cwd ?? ''],
         ['Goal', st.goal ? `${st.goal.condition}` : 'none'],
         ['Compacted', String(s.compactions ?? 0)],
