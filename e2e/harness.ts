@@ -1,8 +1,13 @@
 // Launches the built Hive (out/main/index.js) under Playwright with test mode on: no outside effects, every state
 // file in a temp folder, and a throwaway git repo as the workspace root. One temp folder per `npm run e2e`.
+//
+// What a run still uses of yours: the Claude login. The session specs send real turns, so they count against your
+// usage; every thread (background ones too) is therefore started on Haiku at low effort, through the run's own
+// settings file. Claude Code writes those sessions' transcripts under its own projects folder; global-teardown.ts
+// deletes them, and the run folder, when the run ends.
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -49,22 +54,26 @@ export function makeWorkspace(): void {
   writeFileSync(join(RUN, 'scripts.json'), JSON.stringify([
     { name: 'Weekly report', cwd: SCRIPT_CWD, options: [{ label: 'Full run', cmd: 'echo ran > marker.txt' }] },
   ], null, 2))
-  // seed Electron's caches from the real Hive (read-only copy) so the session list and search start warm
-  const real = join(process.env.APPDATA ?? '', 'hive')
-  const ud = join(DATA, 'userData')
-  if (!existsSync(ud)) {
-    mkdirSync(ud, { recursive: true })
-    for (const n of ['sessions-cache.json', 'search', 'models']) {
-      if (existsSync(join(real, n))) cpSync(join(real, n), join(ud, n), { recursive: true })
-    }
-  }
+  // Nothing of the real Hive is copied in: its session cache and search index hold real conversation text, and no
+  // spec needs them (the thread list is built from the transcripts either way, only a little slower the first time).
 }
 
-// The deploy launch needs the real repos root and the HIVE_DEPLOY_* keys (diffs.sh only fetches); nothing else is
-// copied. Source: HIVE_E2E_DEPLOY_ENV, else Hive's own .env. null when neither exists.
+// The settings every launch starts from, written before the app first runs (it would otherwise seed its own with the
+// account's default model): Haiku at low effort for every thread, the background ones started by a tool included; no
+// Claude in Chrome and no desktop toasts. env stays empty so the launch's .env is what counts, scripts null so the
+// run's scripts.json is.
+export const TEST_GENERAL = { shell: '', model: 'haiku', effort: 'low', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: false, desktopNotify: false }
+export function seedSettings(data: string): void {
+  const file = join(data, 'hive-settings.json')
+  if (!existsSync(file)) writeFileSync(file, JSON.stringify({ version: 1, env: {}, scripts: null, general: TEST_GENERAL }, null, 2) + '\n')
+}
+
+// The deploy spec is opt-in: it runs your real diffs.sh, which fetches in the real repos and copies its message to
+// the real clipboard. It needs HIVE_E2E_DEPLOY_ENV to name a .env with the repos root and the HIVE_DEPLOY_* keys;
+// Hive's own .env is never picked up by itself. Only those keys are copied. null = not asked for (the spec skips).
 export function deployEnvFile(): string | null {
-  const src = process.env.HIVE_E2E_DEPLOY_ENV || join(ROOT, '.env')
-  if (!existsSync(src)) return null
+  const src = process.env.HIVE_E2E_DEPLOY_ENV
+  if (!src || !existsSync(src)) return null
   const keep = readFileSync(src, 'utf8').split(/\r?\n/).filter((l) => /^(HIVE_REPOS_ROOT|HIVE_DEPLOY_[A-Z0-9_]+|HIVE_DIFFS_SCRIPT)=/.test(l))
   if (!keep.some((l) => l.startsWith('HIVE_DEPLOY_SUITES='))) return null
   const out = join(RUN, 'deploy.env')
@@ -79,6 +88,7 @@ const quitting = new WeakSet<ElectronApplication>()
 export async function launch(opts: { envFile?: string; data?: string } = {}): Promise<Launched> {
   const data = opts.data ?? DATA
   mkdirSync(data, { recursive: true })
+  seedSettings(data)
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   delete env.ELECTRON_RUN_AS_NODE

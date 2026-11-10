@@ -1,5 +1,6 @@
 // Deploy against the real repos: diffs.sh only fetches (and copies its message to the clipboard, as by hand); the run
-// step is a stub in test mode, so deploy.sh never spawns. Skipped without a .env that has the HIVE_DEPLOY_* keys.
+// step is a stub in test mode, so deploy.sh never spawns. Opt-in, because diffs.sh touches the real repos and the real
+// clipboard: it runs only when HIVE_E2E_DEPLOY_ENV names a .env with the repos root and the HIVE_DEPLOY_* keys.
 import { expect, test } from '@playwright/test'
 import { join } from 'node:path'
 import { close, deployEnvFile, launch, RUN, shot } from './harness'
@@ -7,7 +8,7 @@ import { Hive } from './hive'
 
 test('deploy shows diffs.sh output and the run step is a stub', async () => {
   const envFile = deployEnvFile()
-  test.skip(!envFile, 'no deploy config: set HIVE_E2E_DEPLOY_ENV to a .env with HIVE_DEPLOY_* keys')
+  test.skip(!envFile, 'opt-in: set HIVE_E2E_DEPLOY_ENV to a .env with the repos root and the HIVE_DEPLOY_* keys')
   const l = await launch({ envFile: envFile!, data: join(RUN, 'data-deploy') })
   const h = new Hive(l.page)
   try {
