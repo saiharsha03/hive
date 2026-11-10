@@ -5,6 +5,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from
 import { join } from 'node:path'
 import { dataDir } from './testMode'
 import { writeFileSafe } from './safeWrite'
+import { teamMemoryBytes } from './settings'
 import { DEFAULT_ROLES, memoryLine, parseRole, roleBrief, roleFile, roleId, type Role } from '../shared/roleCore'
 
 export const rolesDir = () => process.env.HIVE_ROLES_DIR || join(dataDir(), 'hive', 'roles')
@@ -47,10 +48,27 @@ export function ensureRole(role: string): Role {
 export const roleMemoryPath = (id: string) => join(rolesDir(), id, 'memory.md')
 export const sharedMemoryPath = () => sharedFile()
 
-// the role part of a teammate's brief, with both memories as they are now
-export function briefForRole(role: string): string {
+// The newest entries of a memory file that fit in `bytes` (the file itself keeps everything): the brief carries those and
+// says how many older ones are in the file. Lines that are not entries (the heading) are left out of the count.
+export function newestWithin(text: string, bytes: number, file: string): string {
+  const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim() && !l.startsWith('#'))
+  const keep: string[] = []
+  let used = 0
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const n = Buffer.byteLength(lines[i], 'utf8') + 1
+    if (used + n > bytes) break
+    keep.unshift(lines[i])
+    used += n
+  }
+  const left = lines.length - keep.length
+  return [...(left ? [`(${left} older entr${left === 1 ? 'y' : 'ies'} not shown; the whole memory is in ${file})`] : []), ...keep].join('\n')
+}
+
+// the role part of a teammate's brief, with the newest entries of both memories (Settings > General teamMemoryKb each)
+export function briefForRole(role: string, budget = teamMemoryBytes()): string {
   const r = ensureRole(role)
-  return roleBrief(r, read(roleMemoryPath(r.id)), read(sharedFile()), { role: roleMemoryPath(r.id), shared: sharedFile() })
+  const roleFile = roleMemoryPath(r.id)
+  return roleBrief(r, newestWithin(read(roleFile), budget, roleFile), newestWithin(read(sharedFile()), budget, sharedFile()), { role: roleFile, shared: sharedFile() })
 }
 
 export function remember(scope: 'role' | 'shared', role: string, text: string, by: string, now = Date.now()): string {

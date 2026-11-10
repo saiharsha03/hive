@@ -41,3 +41,19 @@ test('the Lead defines a new role; it stays in the library and keeps its memory'
   assert.equal(r.summary, 'Orders the steps of a data migration.')
   assert.match(roles.briefForRole('migration planner'), /Write the step order[\s\S]*Order: schema, backfill, swap reads/)
 })
+
+test('a brief carries the newest memory entries within the budget; the file keeps them all', async () => {
+  const roles = await import('../../src/main/roles')
+  for (let i = 0; i < 400; i++) roles.remember('role', 'Researcher', `lesson number ${i} with some words to take up room`, 'R', Date.UTC(2026, 0, 1))
+  const file = roles.roleMemoryPath('researcher')
+  assert.equal(readFileSync(file, 'utf8').split('\n').filter((l) => l.startsWith('- lesson')).length, 400) // nothing cut on disk
+  const cut = roles.newestWithin(readFileSync(file, 'utf8'), 1024, file)
+  assert.ok(Buffer.byteLength(cut) < 1024 + 200)
+  assert.match(cut, /^\(\d+ older entries not shown; the whole memory is in .*memory\.md\)/)
+  assert.match(cut, /lesson number 399 /)
+  assert.doesNotMatch(cut, /lesson number 0 /)
+  const b = roles.briefForRole('researcher', 6 * 1024)
+  assert.match(b, /lesson number 399 /)
+  assert.doesNotMatch(b, /lesson number 10 /)
+  assert.equal(roles.newestWithin('# head\n- a (x, 2026-01-01)\n', 1024, file), '- a (x, 2026-01-01)') // all fits: no note
+})
