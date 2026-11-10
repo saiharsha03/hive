@@ -209,8 +209,9 @@ const mobileDeps = () => ({
     // only a folder this app offered the phone (folders below); empty = the workspace root
     const cwd = folder ? phoneFolder(folder, mobileDeps().folders()) : appConfig.config?.root || homedir()
     if (!cwd) throw new Error('That folder is not one the phone can start a thread in')
-    runInThread({ tabId: `phone-${Date.now()}`, cwd, title: text.replace(/\s+/g, ' ').slice(0, 50), prompt: text, user: true }, w.webContents)
-    return 'started'
+    const tabId = `phone-${Date.now()}`
+    runInThread({ tabId, cwd, title: text.replace(/\s+/g, ' ').slice(0, 50), prompt: text, user: true }, w.webContents)
+    return { id: tabId } // the phone opens the thread it just started
   },
   stop: async (id: string) => { const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id); if (l) await interrupt(l.tabId) },
   // the folders a new thread can start in: the workspace root and the git repos directly under it
