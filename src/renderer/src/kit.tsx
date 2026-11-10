@@ -1,14 +1,14 @@
 // The design's small parts, shared by every region and page: state words, page and section heads, key-value lists,
 // buttons, bars, the confirm bar, and the number and time formats. Styles in shell.css under "kit".
-// Rules (the owner's): state is a coloured uppercase word, never a dot or pill; no middle-dot strings; no em dashes;
-// numbers are tabular and right-aligned; zones are flat with full-width rules; one accent for the primary action.
+// Rules (the owner's): state is a sentence-case word, coloured only for waiting and failed, never a dot or pill; no
+// middle-dot strings; no em dashes; numbers are tabular; zones are told apart by surface, not rules; one primary button.
 import { Component, type ReactNode } from 'react'
 
 export type Tone = 'work' | 'wait' | 'fail' | 'done' | 'hold' | 'idle' | 'accent'
 
 // WORKING, WAITING, FAILED, DONE, PAUSED, LOOP ...
 export function State({ word, tone, title, testid }: { word: string; tone: Tone; title?: string; testid?: string }) {
-  return <span className={`sw sw-${tone}`} title={title} data-testid={testid}>{word.toUpperCase()}</span>
+  return <span className={`sw sw-${tone}`} title={title} data-testid={testid}>{word.toLowerCase()}</span>
 }
 // a task's or run's status as its word and tone
 export function taskState(status: string): { word: string; tone: Tone } {
