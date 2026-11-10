@@ -60,6 +60,7 @@ import { appName, setAppName, windowTitle } from '../shared/appName'
 import { dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
 import { isAppPage, rosterOf, teamWindowSearch } from '../shared/teamSidebarCore'
+import { keyAction, phoneFolder, readyGate } from './windowCore'
 
 // test mode: Electron's own storage (search index, sessions cache, page storage) lives in the test data folder
 if (TEST_MODE) app.setPath('userData', join(dataDir(), 'userData'))
@@ -87,8 +88,10 @@ initScripts(APP_DIR, (runs) => {
 let mainWin: BrowserWindow | null = null
 let teamWin: BrowserWindow | null = null
 const mainWeb = () => (mainWin && !mainWin.isDestroyed() && !mainWin.webContents.isDestroyed() ? mainWin.webContents : null)
+// the main window's page has loaded and has reset (chat:reset, its first effect): only then can it be handed threads
+const page = readyGate()
 // Hive's own background threads (Dependabot reviewers) open as background tabs in the app window
-const appWindow = () => { const w = mainWeb(); return w && !w.isLoading() ? mainWin! : undefined }
+const appWindow = () => { const w = mainWeb(); return w && !w.isLoading() && page.ready() ? mainWin! : undefined }
 function spawnThread(t: BackgroundThread) {
   const w = appWindow()
   if (!w) throw new Error(`The ${appName()} window is not ready`)
@@ -192,7 +195,9 @@ const mobileDeps = () => ({
   start: async (folder: string, text: string) => {
     const w = appWindow()
     if (!w) throw new Error(`The ${appName()} window is not open`)
-    const cwd = folder || appConfig.config?.root || homedir()
+    // only a folder this app offered the phone (folders below); empty = the workspace root
+    const cwd = folder ? phoneFolder(folder, mobileDeps().folders()) : appConfig.config?.root || homedir()
+    if (!cwd) throw new Error('That folder is not one the phone can start a thread in')
     runInThread({ tabId: `phone-${Date.now()}`, cwd, title: text.replace(/\s+/g, ' ').slice(0, 50), prompt: text }, w.webContents)
     return 'started'
   },
@@ -378,8 +383,18 @@ handle('chat:setBackground', (e, tabId: string, on: boolean) => setBackground(ta
 handle('worktree:links', (_e, thread: string) => threadLinks(String(thread)))
 handle('worktree:cleanup', (_e, thread: string) => cleanupThread(String(thread)))
 handle('worktree:move', (_e, from: string, to: string) => moveThreadLinks(String(from), String(to)))
-// the page (re)loaded: no tab is showing any live session any more, so stop them all
-handle('chat:reset', () => { killAllTerminals(); return closeAll() })
+// the page (re)loaded: no tab is showing any live session any more, so stop them all. The main window's page is ready
+// for threads from now on; messages left unsent when Hive last closed go out once, after its first reset
+let resent = false
+handle('chat:reset', (e) => {
+  killAllTerminals()
+  closeAll()
+  if (e.sender !== mainWeb()) return
+  page.reset()
+  if (resent) return
+  resent = true
+  setTimeout(() => resendPending(e.sender), 1000)
+})
 handle('chat:mode', () => PERMISSION_MODE)
 handle('chat:context', (_e, tabId: string) => contextUsage(tabId))
 // Watchers: the list, one watcher's detail, and the same actions the agent tools have
@@ -573,6 +588,14 @@ function openTeamWindow(teamId: string | null): void {
   else void win.loadFile(APP_HTML, { search })
 }
 
+// messages that had not reached Claude when Hive last closed go to their threads again (chat:reset, once)
+function resendPending(web: Electron.WebContents): void {
+  for (const p of TEST_MODE ? [] : resendGroups(takePending())) {
+    // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
+    try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: p.prompt, foreground: p.background === false, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
+  }
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     title: windowTitle(),
@@ -592,26 +615,21 @@ function createWindow(): void {
   watchClipboard(win)
   // the window only ever shows the app; links in chat replies go to the browser instead
   guardWindow(web)
-  // the app menu is removed (own top bar), which also removed its shortcuts: bring back reload and dev tools
+  // the app menu is removed (own top bar), which also removed its shortcuts: dev tools, Quit, and reload only in dev
   web.on('before-input-event', (e, input) => {
-    if (input.type !== 'keyDown') return
-    const key = input.key.toLowerCase()
-    if ((input.control && key === 'r') || key === 'f5') { e.preventDefault(); web.reload() }
-    else if (input.control && input.shift && key === 'i') { e.preventDefault(); web.toggleDevTools() }
-    else if (input.control && !input.shift && key === 'q') { e.preventDefault(); quitting = true; app.quit() } // Quit (the × only hides to the tray)
+    const act = keyAction(input, !!DEV_URL)
+    if (!act) return
+    e.preventDefault()
+    if (act === 'reload') web.reload()
+    else if (act === 'devtools') web.toggleDevTools()
+    else { quitting = true; app.quit() } // Quit (the × only hides to the tray)
   })
+  // a page that loads again (a dev reload, a crash) is not ready for threads until it has reset
+  web.on('did-start-loading', () => page.loading())
 
   // closing the window hides it to the tray (like Slack or Teams): threads, watchers and the phone link keep running.
   // Quit is in the tray menu. Test mode closes for real, so the tests can end the app.
   win.on('close', (e) => { if (!quitting && !TEST_MODE) { e.preventDefault(); win.hide() } })
-
-  // messages that had not reached Claude when Hive last closed go to their threads again, once the window is up
-  web.once('did-finish-load', () => setTimeout(() => {
-    for (const p of TEST_MODE ? [] : resendGroups(takePending())) {
-      // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
-      try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: p.prompt, foreground: p.background === false, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
-    }
-  }, 4000))
 
   if (DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(APP_HTML)
