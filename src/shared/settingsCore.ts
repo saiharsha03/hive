@@ -1,3 +1,4 @@
+import { PRODUCT } from './edition'
 // Hive settings: pure logic for the one settings store (~/.claude/hive-settings.json). It keeps the same KEY=VALUE
 // names as the .env (so every feature keeps parsing its own keys) plus the scripts list and a few thread defaults.
 // First run seeds it from the .env and scripts.json; afterwards it wins and those files are only fallbacks.
@@ -30,7 +31,7 @@ export type General = {
 }
 export const DEFAULT_IDLE_CLOSE_MINUTES = 30
 export const DEFAULT_TEAM_MEMORY_KB = 6
-export const DEFAULT_APP_NAME = 'Hive'
+export const DEFAULT_APP_NAME = PRODUCT
 export const DEFAULT_APP_TAGLINE = 'One desk, many agents'
 export type Settings = {
   version: 1

@@ -1,6 +1,6 @@
 {
-  "name": "hive",
-  "productName": "Hive",
+  "name": "hive-next",
+  "productName": "Hive Next",
   "version": "1.0.0",
   "private": true,
   "description": "One desk, many agents: a desktop orchestrator for Claude Code agents",

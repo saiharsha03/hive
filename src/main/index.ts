@@ -65,6 +65,7 @@ import * as dev from './devStack'
 import { killAllTerminals, killTerminal, openTerminal, resizeTerminal, setTerminalSink, writeTerminal } from './terminal'
 import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
+import { APP_ID, NEXT, PRODUCT } from '../shared/edition'
 import { blocked, dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
 import { isAppPage, rosterOf, teamWindowSearch } from '../shared/teamSidebarCore'
@@ -72,6 +73,8 @@ import { keyAction, phoneFolder, readyGate } from './windowCore'
 
 // test mode: Electron's own storage (search index, sessions cache, page storage) lives in the test data folder
 if (TEST_MODE) app.setPath('userData', join(dataDir(), 'userData'))
+// beside Hive: its own name and its own Electron storage, so the two apps keep separate locks, caches and windows
+else if (NEXT) { app.setName(PRODUCT); app.setPath('userData', join(app.getPath('appData'), PRODUCT)) }
 // test mode only: what the e2e specs read straight from the main process (e2e/10-idle-close, e2e/11-live-settings).
 // facts: a thread's live process (null once it has none); settings: the running Claude process's own answer to the
 // get_settings control request (the SDK sends it with Query.getSettings, which its types do not list)
@@ -870,17 +873,17 @@ app.on('second-instance', showWindow)
 // button then shows Hive's icon, and pinning it starts this checkout. Not in tests.
 function sourceRunIdentity(): void {
   if (process.platform !== 'win32' || TEST_MODE || !process.env.APPDATA) return
-  const id = 'io.github.saiharsha03.hive.source'
+  const id = `${APP_ID}.source`
   try {
     const programs = join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
     const root = app.getAppPath()
-    const options = { target: process.execPath, args: `"${root}"`, cwd: root, icon: join(root, 'build', 'icon.ico'), iconIndex: 0, appUserModelId: id, description: 'Hive' }
+    const options = { target: process.execPath, args: `"${root}"`, cwd: root, icon: join(root, 'build', 'icon.ico'), iconIndex: 0, appUserModelId: id, description: PRODUCT }
     // a "Hive" shortcut that already starts this Electron (made by hand, also the one in Startup) is the one to keep;
     // otherwise a "Hive (source)" one is made, so an installed Hive's own shortcut is never touched
     const mine = (f: string) => { try { return shell.readShortcutLink(f).target.toLowerCase() === process.execPath.toLowerCase() } catch { return false } }
-    const own = [join(programs, 'Hive.lnk'), join(programs, 'Startup', 'Hive.lnk'), join(app.getPath('desktop'), 'Hive.lnk')].filter(mine)
+    const own = [join(programs, `${PRODUCT}.lnk`), join(programs, 'Startup', `${PRODUCT}.lnk`), join(app.getPath('desktop'), `${PRODUCT}.lnk`)].filter(mine)
     for (const f of own) shell.writeShortcutLink(f, 'update', options)
-    const link = join(programs, 'Hive (source).lnk')
+    const link = join(programs, `${PRODUCT} (source).lnk`)
     if (!own.length) shell.writeShortcutLink(link, existsSync(link) ? 'update' : 'create', options)
     app.setAppUserModelId(id)
   } catch { /* the taskbar keeps Electron's icon */ }
@@ -891,7 +894,7 @@ app.whenReady().then(() => {
   // the laptop slept through wake-ups: fire them once it is back (after the network has had a moment)
   powerMonitor.on('resume', () => { setTimeout(() => void wakeupsTick(), 15_000) })
   // Windows toasts need it; same as appId in electron-builder.yml.
-  if (app.isPackaged) app.setAppUserModelId('io.github.saiharsha03.hive')
+  if (app.isPackaged) app.setAppUserModelId(APP_ID)
   else sourceRunIdentity()
   initDesktopNotify(() => mainWin, (id) => { showWindow(); if (id) mainWeb()?.send('hive:activate', id) })
   // the account signed in now is kept as a profile (its newest tokens), so it can be switched back to later
