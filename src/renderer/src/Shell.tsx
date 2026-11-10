@@ -3,7 +3,7 @@
 // or the deploy / scripts rows change, never for a streaming reply.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TitleBar, type Command, type PaletteSources } from './TitleBar'
-import { ActivityBar, SideBar } from './Workbench'
+import { ActivityBar, SideBar, Welcome } from './Workbench'
 import { Panes, TabRow } from './PaneArea'
 import { Inspector } from './Inspector'
 import { StatusLine, runPull } from './StatusLine'
@@ -199,13 +199,7 @@ export function Shell() {
     if (s.tool) return <Boundary key={s.id} name={PAGE_LABEL[s.tool]}><PageFor page={s.tool} deploy={deploy} onAccounts={() => setAccountsOpen(true)} /></Boundary>
     return <Boundary key={s.id} name="This thread"><ThreadPane id={s.id} focused={isFocused} /></Boundary>
   }
-  const empty = (
-    <div className="pane-empty" data-testid="welcome">
-      <div className="pe-t">No thread open</div>
-      <div>Start one, or pick one from Threads. The command field finds threads, files and commands.</div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}><Btn kind="primary" onClick={() => newSession()} testid="welcome-new">New thread</Btn><Btn kind="plain" onClick={() => setPaletteN((n) => n + 1)} testid="welcome-palette">Ctrl K</Btn></div>
-    </div>
-  )
+  const empty = <Welcome onPalette={() => setPaletteN((n) => n + 1)} />
   const currentPage = focused?.tool ?? null
   const showRail = layout.rail && !layout.focus
   // pages take the whole centre; threads, files and a diff keep the inspector. It follows what is on screen, not which
