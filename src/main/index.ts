@@ -20,7 +20,7 @@ import { threadStatusView } from './statusView'
 import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
-import { allowStatus, initAllowlist, runAllowlist } from './ipAllow'
+import { allowStatus, forgetAllowed, initAllowlist, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
 import { cancelSwitch, switchAccount } from './account'
 import { askBtw } from './btw'
@@ -476,6 +476,8 @@ handle('pull:run', (_e, dry: boolean) => {
 })
 handle('allow:status', () => allowStatus())
 handle('allow:run', () => runAllowlist())
+// forget an allowed address, so it can be allowed again (its rule expired or was removed on the other side)
+handle('allow:forget', (_e, address: string) => forgetAllowed(String(address ?? '')))
 // updates from GitHub Releases (packaged builds only)
 handle('update:state', () => updateState())
 handle('update:check', () => checkForUpdates())

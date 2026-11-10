@@ -219,6 +219,7 @@ contextBridge.exposeInMainWorld('api', {
   pullRun: (dry: boolean) => ipcRenderer.invoke('pull:run', dry),
   allowStatus: () => ipcRenderer.invoke('allow:status'),
   allowRun: () => ipcRenderer.invoke('allow:run'),
+  allowForget: (address: string) => ipcRenderer.invoke('allow:forget', address),
   updateState: () => ipcRenderer.invoke('update:state'),
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateApply: () => ipcRenderer.invoke('update:apply'),

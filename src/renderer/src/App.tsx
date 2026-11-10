@@ -242,10 +242,12 @@ export function App() {
   const [allowFail, setAllowFail] = useState<string | null>(null)
   useEffect(() => { void window.api.allowStatus().then(setAllow); return window.api.onAllowStatus(setAllow) }, [])
   const allowOn = !!allow?.changed && !allow.running
+  // known: every address the command already allowed (home and office both count); a failed read is not a change
+  const knownList = (allow?.known ?? []).map((k) => `${k.ip}${k.trusted ? '' : ' (expired)'}`).join(', ')
   const allowTitle = !allow ? '' : allow.running ? 'Allowing your IP…'
-    : !allow.ip ? `IP allowlist: ${allow.error || 'public IP not read yet'}. Click to run it anyway`
-    : allow.changed ? `Your IP is now ${allow.ip} (last allowed: ${allow.lastIp ?? 'never'}). Click to allow it`
-    : `Your IP ${allow.ip} is already allowed`
+    : !allow.ip ? `Could not read the public IP${allow.error ? ` (${allow.error.replace(/^could not read the public IP:\s*/, '')})` : ''}${knownList ? `. Allowed so far: ${knownList}` : ''}`
+    : allow.changed ? `Your IP is now ${allow.ip}, not one allowed yet${knownList ? ` (allowed: ${knownList})` : ''}. Click to allow it`
+    : `Your IP ${allow.ip} is already allowed${knownList ? ` (allowed: ${knownList})` : ''}`
   const runAllow = async () => {
     if (!allowOn) return
     try {
@@ -738,7 +740,7 @@ export function App() {
   // the bottom panel has Agents, Terminal and Stacks)
   const toolRows: ToolRow[] = [
     { id: 'pull', label: 'Pull latest', icon: pulling ? 'sync' : 'repo-pull', mk: pulling ? 'mk-pull spin' : 'mk-pull', status: pulling ? 'pulling…' : '' },
-    ...(allow?.configured ? [{ id: 'allow', label: 'Allow my IP', icon: allow.running ? 'sync' : 'shield', mk: allow.running ? 'mk-other spin' : 'mk-other', status: allow.running ? 'allowing…' : allow.changed ? 'IP changed' : '', cls: allowOn ? 's-wait' : '', disabled: !allowOn, title: allowTitle }] : []),
+    ...(allow?.configured ? [{ id: 'allow', label: 'Allow my IP', icon: allow.running ? 'sync' : 'shield', mk: allow.running ? 'mk-other spin' : 'mk-other', status: allow.running ? 'allowing…' : allow.changed ? 'new IP' : allow.unreadable ? 'IP unknown' : '', cls: allowOn ? 's-wait' : '', disabled: !allowOn, title: allowTitle }] : []),
     { id: 'mcp', label: 'MCP servers', icon: 'plug', mk: 'mk-other' },
   ]
 

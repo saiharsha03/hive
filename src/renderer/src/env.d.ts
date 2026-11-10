@@ -208,6 +208,7 @@ interface Window {
     handoffReady: (file: string, since: number) => Promise<boolean>
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
+    allowForget: (address: string) => Promise<import('../../shared/allowCore').AllowStatus>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
     updateState: () => Promise<import('../../shared/versionCore').UpdateState | null>
     updateCheck: () => Promise<void>
