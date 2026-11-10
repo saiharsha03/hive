@@ -5,7 +5,6 @@ type Props = { runs: ScriptRun[]; onOpen: (path: string) => void }
 type Cfg = { scripts: ScriptView[]; message: string; path: string }
 
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-const dot = (r: ScriptRun) => (r.phase === 'running' ? 'ldot work' : r.phase === 'ok' ? 'dot ok' : r.phase === 'failed' ? 'dot bad' : 'dot')
 const state = (r: ScriptRun) => (r.phase === 'ok' ? 'pass' : r.phase === 'failed' ? 'fail' : r.phase)
 
 function Card({ s, run, onOpen }: { s: ScriptView; run?: ScriptRun; onOpen: (path: string) => void }) {
@@ -38,7 +37,6 @@ function Card({ s, run, onOpen }: { s: ScriptView; run?: ScriptRun; onOpen: (pat
       {err && <div className="derr">{err}</div>}
       {run && (
         <div className="ckrow">
-          <span className={dot(run)} />
           <span className="ckl">{run.label}</span>
           <span data-testid="script-state" className={`ckst ${state(run)}`}>{running ? 'running' : run.phase}</span>
           <span className="dnote">{run.note}</span>
@@ -63,7 +61,7 @@ export function ScriptsPanel({ runs, onOpen }: Props) {
   return (
     <section data-testid="scripts-panel" className="tool">
       <div className="dhead">
-        <span className="dtitle"><span className="ph ph-scripts">▶</span>Scripts</span>
+        <span className="dtitle">Scripts</span>
         <span className="dnote">Runs a command from scripts.json in its folder and shows the output. The last 400 lines show here; the log has all of it.</span>
         <span className="dspace" />
         <button data-testid="scripts-button-4" className="dlink" onClick={reload}>Reload</button>

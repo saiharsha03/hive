@@ -1,26 +1,43 @@
-// Settings: one modal over the app (never a strip that pushes the layout) for everything that used to live in the
+// Settings: a page (a section list on the left, the form on the right) for everything that used to live in the
 // .env and scripts.json. Edits a draft; Save validates in the main process, writes ~/.claude/hive-settings.json and
 // re-applies it to every feature. Credential-looking keys never come here: the panel only says whether they are set.
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   EFFORTS, envKey, isSecretKey, joinList, sectionOf, splitList,
   type Draft, type General, type Problem, type SettingsView,
 } from '../../shared/settingsCore'
-import { WatchersToggleList } from './WatchersView'
 import { PhonePairing } from './PhonePairing'
+import { HooksMenu } from './HooksMenu'
+import { PluginsMenu } from './PluginsMenu'
+import { Btn, Unavailable } from './kit'
+import { getThemes, setLayout, setTheme, useAppearance, type Layout } from './appearance'
+import { quietHoursGet, quietHoursSet, type QuietHours } from './api/next'
+import { useStore } from './store'
+import { place } from './actions'
 import { ENVS } from '../../shared/deployCore'
-import { AppearancePicker } from './AppearancePicker'
 import { appName } from '../../shared/appName'
 import { setClipboardOn, useClipboardOn } from './clipboardOffer'
 import { getPref, setPref } from './prefs'
 import { applyGeneral } from './appSettings'
-import { Confirm, useEscape, useFocusTrap } from './ui'
+import { Confirm } from './ui'
 
 const SECTIONS = [
-  ['watch', 'Watchers'], ['dependabot', 'Dependabot watcher'], ['scripts', 'Scripts'], ['deploy', 'Deploy'],
-  ['dev', 'Dev stack and Pull latest'], ['general', 'General'], ['appearance', 'Appearance'], ['other', 'Other keys'],
+  ['watch', 'Watchers'], ['dependabot', 'Dependabot'], ['scripts', 'Scripts'], ['deploy', 'Deploy'],
+  ['dev', 'Dev stack and Pull latest'], ['general', 'General'], ['appearance', 'Appearance'], ['accounts', 'Accounts'],
+  ['phone', 'Phone'], ['claude', 'Claude Code'], ['notify', 'Notifications'], ['other', 'Other keys'],
 ] as const
 type Sec = (typeof SECTIONS)[number][0]
+export type SettingsSectionId = Sec
+
+// which section to show: set from the palette or a link elsewhere, before or while the page is up
+let wantedSection: Sec | null = null
+const sectionPickers = new Set<(id: Sec) => void>()
+export const pickSettingsSection = (id: Sec) => { wantedSection = id; sectionPickers.forEach((f) => f(id)) }
+
+const LAYOUT_ROWS: { k: keyof Layout; label: string; keys: string }[] = [
+  { k: 'rail', label: 'Rail', keys: 'Ctrl [' }, { k: 'inspector', label: 'Inspector', keys: 'Ctrl ]' }, { k: 'drawer', label: 'Drawer', keys: 'Ctrl `' },
+  { k: 'focus', label: 'Focus: hide the rail and the inspector', keys: 'Ctrl Shift F' }, { k: 'railRight', label: 'Rail on the right', keys: '' },
+]
 type Env = Record<string, string>
 type Script = { name: string; cwd: string; open: string; options: { label: string; cmd: string }[] }
 
@@ -50,12 +67,18 @@ function Row({ label, hint, children, problems = [] }: { label: string; hint?: s
   )
 }
 
-// onWatchers: open the Watchers view, on that watcher when one was clicked
-export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; onWatchers?: (id?: string) => void }) {
+// onWatchers: open the Watchers page; onAccounts: open the account switcher; onClose: called after Cancel discards
+export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: () => void; onWatchers?: (id?: string) => void; onAccounts?: () => void }) {
   const [view, setView] = useState<SettingsView | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saved, setSaved] = useState('') // JSON of the draft as last loaded / saved, for "unsaved changes"
-  const [sec, setSec] = useState<Sec>('watch')
+  const [sec, setSec] = useState<Sec>(wantedSection ?? 'watch')
+  const app = useAppearance()
+  const workspace = useStore(place, (p) => p.workspace)
+  // quiet hours live in main, apart from the settings file: null = not read yet, 'na' = the adapter has no answer
+  const [quiet, setQuiet] = useState<QuietHours | null>(null)
+  const [quietSaved, setQuietSaved] = useState('')
+  const [quietNa, setQuietNa] = useState('')
   const [problems, setProblems] = useState<Problem[]>([])
   const [notes, setNotes] = useState<string[]>([])
   const [err, setErr] = useState('')
@@ -71,7 +94,15 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   const [otherNew, setOtherNew] = useState('')
   const [blank, setBlank] = useState<Record<string, boolean>>({})
   const [asking, setAsking] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    wantedSection = null
+    const pick = (id: Sec) => { wantedSection = null; setSec(id) }
+    sectionPickers.add(pick)
+    return () => { sectionPickers.delete(pick) }
+  }, [])
+  const loadQuiet = () => quietHoursGet().then((r) => {
+    if (r.ok) { setQuiet(r.data); setQuietSaved(JSON.stringify(r.data)); setQuietNa('') } else { setQuiet(null); setQuietNa(r.reason) }
+  })
 
   const load = () => window.api.settingsGet(true).then((v) => {
     const d = { env: v.env, scripts: v.scripts, general: v.general }
@@ -79,6 +110,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   }).catch((e) => setErr(clean(e)))
   useEffect(() => {
     void load()
+    void loadQuiet()
   }, [])
 
   // validate as you type (paths are checked by the main process)
@@ -88,10 +120,13 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
     return () => clearTimeout(t)
   }, [draft])
 
-  const dirty = !!draft && (JSON.stringify(draft) !== saved || clip !== clipOn || sendMode !== getPref<string>('sendMode', 'steer'))
-  const close = () => { if (dirty) setAsking(true); else onClose() }
-  useEscape(() => close())
-  useFocusTrap(box)
+  const dirty = !!draft && (JSON.stringify(draft) !== saved || clip !== clipOn || sendMode !== getPref<string>('sendMode', 'steer') || (!!quiet && JSON.stringify(quiet) !== quietSaved))
+  // Cancel: put every field back as last saved
+  const discard = () => {
+    setAsking(false); setClip(clipOn); setSendMode(getPref<string>('sendMode', 'steer')); setNotes([])
+    void load(); void loadQuiet()
+    onClose?.()
+  }
 
   const env: Env = draft?.env ?? {}
   const get = (k: string) => env[k] ?? ''
@@ -110,6 +145,10 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
       setProblems(r.problems)
       if (!r.ok) { setNotes([]); return }
       const extra: string[] = []
+      if (quiet && JSON.stringify(quiet) !== quietSaved) {
+        const q = await quietHoursSet(quiet)
+        if (q.ok) setQuietSaved(JSON.stringify(quiet)); else extra.push(`Quiet hours not saved: ${q.reason}`)
+      }
       if (clip !== clipOn) setClipboardOn(clip)
       if (sendMode !== getPref<string>('sendMode', 'steer')) { setPref('sendMode', sendMode); extra.push('Steer, queue or interrupt: used by threads you open or switch to from now on.') }
       applyGeneral(draft.general)
@@ -189,12 +228,12 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
   // ---- Watchers: each has its own folder and schedule now (the Watchers view and the agent tools edit them) ----
   const watch = (
     <>
-      <Row label="Watchers" hint="Each watcher has its own folder, schedule and thread (~/.claude/hive/watchers). Switches apply at once: off ends its thread, on starts a fresh one.">
-        <WatchersToggleList onPick={onWatchers} />
+      <Row label="Watchers" hint="Each watcher has its own folder, schedule and thread (~/.claude/hive/watchers). Make, switch on or off, schedule and run them on the Watchers and teams page.">
+        {onWatchers && <div><Btn onClick={() => onWatchers()} testid="settings-open-watchers">Open Watchers</Btn></div>}
       </Row>
-      <Row label="" hint={view?.weekly ? `Weekly usage now: ${view.weekly.pct === null ? `unreadable (${view.weekly.error})` : `${Math.round(view.weekly.pct)}%`}; adaptive watchers pick their tier from it.` : undefined}>
-        {onWatchers && <button className="dbtn" onClick={() => onWatchers()}>Open Watchers</button>}
-      </Row>
+      {view?.weekly && <Row label="Weekly use" hint="Adaptive watchers pick their tier from it.">{view.weekly.pct === null ? `unreadable (${view.weekly.error})` : `${Math.round(view.weekly.pct)}%`}</Row>}
+      {field('HIVE_WATCHERS_REPORTS_DIR', 'Reports folder', 'Each watcher saves its reports in a folder named after it here. Empty = "Watch reports" in the repos root; a relative path is under the repos root; "-" keeps them inside each watcher folder.', 'Watch reports')}
+      {field('HIVE_WATCHER_POST_SHA256', 'Alert channels', 'Watchers are read-only; they may still POST to these: comma-separated SHA-256 fingerprints of host + path (e.g. of hooks.slack.com/services/... for an alert channel\'s webhook), so the webhook itself is not stored here.', '')}
     </>
   )
 
@@ -314,14 +353,8 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
       <>
         <Row label="App name" hint="Top bar and window title." problems={of('general.appName')}><input data-testid="settings-app-name" className="sin" value={g.appName} onChange={(e) => setGeneral({ appName: e.target.value })} /></Row>
         <Row label="Tagline" hint="Shown beside the name in the top bar. Empty = none." problems={of('general.appTagline')}><input className="sin wide" value={g.appTagline} onChange={(e) => setGeneral({ appTagline: e.target.value })} /></Row>
-        {field('HIVE_WATCHERS_REPORTS_DIR', 'Watcher reports folder', 'Each watcher saves its reports in a folder named after it here. Empty = "Watch reports" in the repos root; a relative path is under the repos root; "-" keeps them inside each watcher folder.', 'Watch reports')}
-        {field('HIVE_WATCHER_POST_SHA256', 'Watcher alert channels', 'Watchers are read-only; they may still POST to these: comma-separated SHA-256 fingerprints of host + path (e.g. of hooks.slack.com/services/... for an alert channel\'s webhook), so the webhook itself is not stored here.', '')}
-        {field('HIVE_MOBILE_RELAY', 'Phone app: relay', 'The relay the Hive phone app and this computer both connect to (https://...). See Phone app in README.md: on a server, or on this computer behind cloudflared.', 'https://hive-relay.example.com')}
-        {field('HIVE_MOBILE_ADMIN_TOKEN', 'Phone app: relay admin token', 'The HIVE_RELAY_ADMIN_TOKEN the relay runs with, so this computer can register a paired phone.', '')}
-        <Row label="Phone app" hint="Pair once by scanning a code with the phone app. Claude can then notify the phone (notify_phone), and you get a notification when a thread waits for you or a background thread finishes."><PhonePairing /></Row>
         {field('HIVE_ALLOWLIST_CMD', 'IP allowlist command', 'Runs from the "Allow my IP" button, which turns on when your public IP changes. It should add the current IP wherever it must be allowed. Empty = no button.', '')}
         <Row label="Claude in Chrome" hint="Threads started after saving can use your Chrome through the Claude extension (claude --chrome). Needs the extension installed and signed in."><label className="scheck"><input type="checkbox" data-testid="settings-chrome" checked={g.chrome} onChange={(e) => setGeneral({ chrome: e.target.checked })} /> Let threads use Chrome</label></Row>
-        <Row label="Desktop notifications" hint="A Windows notification and a flashing taskbar icon when a thread is waiting for you, asks a question, finishes or fails while Hive is not the focused window."><label className="scheck"><input type="checkbox" data-testid="settings-desktop-notify" checked={g.desktopNotify} onChange={(e) => setGeneral({ desktopNotify: e.target.checked })} /> Notify me on the desktop</label></Row>
         <Row label="Clipboard suggestions"><label className="scheck"><input type="checkbox" checked={clip} onChange={(e) => setClip(e.target.checked)} /> Offer copied text and images to the active thread</label></Row>
         <Row label="While Claude works" hint="What Enter does; Alt+Enter does the other.">
           <select className="sin" value={sendMode} onChange={(e) => setSendMode(e.target.value)}><option value="steer">Steer the running turn</option><option value="queue">Queue for the next turn</option><option value="interrupt">Interrupt Claude and send now</option></select>
@@ -337,20 +370,74 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
     ),
     // UI and Theme apply live and are kept with the other page preferences (each UI remembers its own theme), so they
     // are not part of the Save below
-    appearance: <AppearancePicker />,
+    appearance: (
+      <>
+        <Row label="Theme" hint="Applies at once and is kept; it is not part of Save.">
+          <div className="set-radios" role="radiogroup" aria-label="Theme">
+            {getThemes().map((t) => (
+              <label key={t.id} className="scheck set-radio">
+                <input type="radio" name="theme" data-testid={`appearance-theme-${t.id}`} checked={app.theme === t.id} onChange={() => setTheme(t.id)} />
+                <span className="set-rl">{t.label}</span><span className="dnote">{t.description}</span>
+              </label>
+            ))}
+          </div>
+        </Row>
+        <Row label="Layout" hint="Applies at once. The same toggles are in the palette.">
+          <div className="set-radios">
+            {LAYOUT_ROWS.map((r) => (
+              <label key={r.k} className="scheck set-radio">
+                <input type="checkbox" data-testid={`appearance-layout-${r.k}`} checked={app.layout[r.k]} onChange={(e) => setLayout({ [r.k]: e.target.checked })} />
+                <span className="set-rl">{r.label}</span>{r.keys && <span className="dnote">{r.keys}</span>}
+              </label>
+            ))}
+          </div>
+        </Row>
+      </>
+    ),
+    accounts: (
+      <Row label="Accounts" hint="Sign in, add and switch accounts in the account switcher at the top right. Threads that are running keep the account they started on.">
+        <div><Btn onClick={() => onAccounts?.()} disabled={!onAccounts} testid="settings-open-accounts">Open the account switcher</Btn></div>
+      </Row>
+    ),
+    phone: (
+      <>
+        {field('HIVE_MOBILE_RELAY', 'Relay', 'The relay the Hive phone app and this computer both connect to (https://...). See Phone app in README.md: on a server, or on this computer behind cloudflared.', 'https://hive-relay.example.com')}
+        {field('HIVE_MOBILE_ADMIN_TOKEN', 'Relay admin token', 'The HIVE_RELAY_ADMIN_TOKEN the relay runs with, so this computer can register a paired phone.', '')}
+        <Row label="Phone app" hint="Pair once by scanning a code with the phone app. Claude can then notify the phone (notify_phone), and you get a notification when a thread waits for you or a background thread finishes."><PhonePairing /></Row>
+      </>
+    ),
+    claude: (
+      <>
+        <Row label="Hooks" hint={workspace ? 'Hooks of the workspace folder, its project and your user settings.' : 'No workspace folder is set: only your user hooks show.'}><HooksMenu folder={workspace} /></Row>
+        <Row label="Plugins"><PluginsMenu /></Row>
+      </>
+    ),
+    notify: g && (
+      <>
+        <Row label="Desktop notifications" hint="A Windows notification and a flashing taskbar icon when a thread is waiting for you, asks a question, finishes or fails while Hive is not the focused window."><label className="scheck"><input type="checkbox" data-testid="settings-desktop-notify" checked={g.desktopNotify} onChange={(e) => setGeneral({ desktopNotify: e.target.checked })} /> Notify me on the desktop</label></Row>
+        <Row label="Quiet hours" hint="No desktop or phone ring between the two times, except failures and deploys when kept on below.">
+          {quiet ? (
+            <div className="slist">
+              <label className="scheck"><input type="checkbox" data-testid="quiet-on" checked={quiet.on} onChange={(e) => setQuiet({ ...quiet, on: e.target.checked })} /> Keep quiet</label>
+              <div className="sline">
+                <span className="dnote">from</span><input className="sin num" data-testid="quiet-from" value={quiet.from} placeholder="22:00" disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, from: e.target.value })} />
+                <span className="dnote">to</span><input className="sin num" data-testid="quiet-to" value={quiet.to} placeholder="07:00" disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, to: e.target.value })} />
+              </div>
+              <label className="scheck"><input type="checkbox" checked={quiet.ringFailures} disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, ringFailures: e.target.checked })} /> Still ring for failures</label>
+              <label className="scheck"><input type="checkbox" checked={quiet.ringDeploys} disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, ringDeploys: e.target.checked })} /> Still ring for deploys</label>
+            </div>
+          ) : quietNa ? <Unavailable reason={quietNa} /> : <div className="dnote">Reading</div>}
+        </Row>
+      </>
+    ),
     other,
   }
   const count = (s: Sec) => problems.filter((p) => secOfProblem(p.key) === s && p.level === 'error').length
 
   return (
-    <div className="sback" onMouseDown={(e) => { if (e.target === e.currentTarget) close() }}>
-      <div data-testid="settings" className="smodal" role="dialog" aria-modal="true" aria-label="Settings" tabIndex={-1} ref={box}>
-        <div className="shead">
-          <span className="dtitle">Settings</span>
-          {view && <span className="dnote" title={view.file}>{view.file}</span>}
-          <span className="dspace" />
-          <button className="dlink" aria-label="Close" onClick={close}>×</button>
-        </div>
+    <div className="set-wrap">
+      <div data-testid="settings" className="smodal set-body" aria-label="Settings">
+        {view && <div className="set-file dnote" title={view.file}>{view.file}</div>}
         <div className="smain">
           <nav className="snav">
             {SECTIONS.map(([id, label]) => (
@@ -370,11 +457,11 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
             : notes.length > 0 ? <span data-testid="settings-notes" className="sok">{notes.join(' ')}</span>
             : <span className="dnote">{dirty ? 'Unsaved changes' : 'No changes'}</span>}
           <span className="dspace" />
-          <button className="dbtn" onClick={close}>Close</button>
-          <button data-testid="settings-save" className="dbtn primary" disabled={!dirty || busy || errors.length > 0} onClick={() => void save()}>{busy ? 'Saving' : 'Save'}</button>
+          <Btn onClick={() => (dirty ? setAsking(true) : onClose?.())} testid="settings-cancel">Cancel</Btn>
+          <Btn kind="primary" testid="settings-save" disabled={!dirty || busy || errors.length > 0} onClick={() => void save()}>{busy ? 'Saving' : 'Save'}</Btn>
         </div>
         {asking && (
-          <Confirm title="Discard unsaved settings?" action="Discard" danger testid="settings-discard" onCancel={() => setAsking(false)} onConfirm={() => { setAsking(false); onClose() }}>
+          <Confirm title="Discard unsaved settings?" action="Discard" danger testid="settings-discard" onCancel={() => setAsking(false)} onConfirm={discard}>
             <div>The changes you made here have not been saved.</div>
           </Confirm>
         )}
@@ -388,6 +475,8 @@ function secOfProblem(key: string): Sec {
   if (key === 'scripts') return 'scripts'
   if (key === 'deploy') return 'deploy'
   if (key === 'dev') return 'dev'
+  if (key === 'HIVE_MOBILE_RELAY' || key === 'HIVE_MOBILE_ADMIN_TOKEN') return 'phone'
+  if (key === 'HIVE_WATCHERS_REPORTS_DIR' || key === 'HIVE_WATCHER_POST_SHA256') return 'watch'
   if (key === 'general.ui' || key === 'general.theme') return 'appearance'
   if (key.startsWith('general.')) return 'general'
   const s = sectionOf(key)

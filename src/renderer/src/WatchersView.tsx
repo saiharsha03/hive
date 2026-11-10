@@ -6,6 +6,7 @@ import { DAYS, DEFAULT_TIERS, parseEvery, parseTiers, parseWeekly, pickTier, typ
 import { checkDraft, draftOf, tierRows, type ScheduleDraft, type ScheduleMode, type TierRow, type WatcherDetail } from '../../shared/watchersCore'
 import { reloadWatchers, useWatchers, type WatcherRow } from './useWatchers'
 import { Confirm } from './ui'
+import { State, type Tone } from './kit'
 
 export type OpenThread = { tabId: string | null; sessionId: string | null; path: string | null; cwd: string; title: string; at: number }
 type Props = { onOpen: (path: string) => void; onOpenThread: (t: OpenThread) => void }
@@ -14,7 +15,8 @@ const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error
 const when = (t: number | null | undefined) => (t ? new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-')
 const mins = (ms: number) => (ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`)
 const every = (ms: number | null) => (ms === null ? 'off' : ms % 86_400_000 === 0 ? `${ms / 86_400_000}d` : ms % 3_600_000 === 0 ? `${ms / 3_600_000}h` : `${Math.round(ms / 60_000)}m`)
-const dotOf = (s: WatcherRow['state']) => (s === 'running' ? 'ldot work' : s === 'failed' ? 'dot bad' : s === 'waiting' ? 'dot warn' : s === 'idle' ? 'dot ok' : 'dot')
+const TONE: Record<string, Tone> = { running: 'work', failed: 'fail', waiting: 'wait', idle: 'done' }
+const stateWord = (s: WatcherRow['state']) => <State word={s} tone={TONE[s] ?? 'idle'} />
 
 // which watcher to show: set from a watcher's name in the sidebar, the title-bar list or Settings, before or while
 // the view is up
@@ -38,7 +40,7 @@ export function WatchersToggleList({ onPick }: { onPick?: (id: string) => void }
       {watchers.map((w) => (
         <div key={w.id} className="wtl-row" title={w.message || w.goal}>
           <input type="checkbox" checked={w.enabled} disabled={!!busy[w.id]} onChange={(e) => void setEnabled(w.id, e.target.checked)} aria-label={`${w.name} on/off`} />
-          <span className={dotOf(w.state)} />
+          {stateWord(w.state)}
           <button className="dlink wtl-name" onClick={() => onPick?.(w.id)}>{w.name}</button>
           <span className="dnote">{w.waiting ? 'waiting' : w.state === 'running' ? 'running' : w.nextRun ? `next ${when(w.nextRun)}` : w.enabled ? '' : 'off'}</span>
         </div>
@@ -193,7 +195,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
   // follow the row: a new run, a finished turn or a new finding refreshes the detail
   useEffect(() => { void load() }, [id, row.lastRun, row.state, row.findings, row.enabled])
 
-  if (row.builtin) return <div className="wdetail"><div className="dnote">{row.goal}</div>{row.message && <div className="derr">{row.message}</div>}<div className="dnote">Last run {when(row.lastRun)} · next {when(row.nextRun)} · {row.findings} PRs reviewed so far. Its review threads show in the sidebar.</div></div>
+  if (row.builtin) return <div className="wdetail"><div className="dnote">{row.goal}</div>{row.message && <div className="derr">{row.message}</div>}<div className="dnote">Last run {when(row.lastRun)}, next {when(row.nextRun)}, {row.findings} PRs reviewed so far. Its review threads show in the rail.</div></div>
   if (!d) return <div className="wdetail">{err ? <div className="derr">{err}</div> : <div className="dnote">Loading</div>}</div>
   const latest = d.runs.find((r) => r.sessionId) ?? null
   const openThread = () => onOpenThread({ tabId: d.tabId, sessionId: d.sessionId ?? latest?.sessionId ?? null, path: latest?.path ?? null, cwd: latest?.cwd ?? '', title: `Watcher: ${d.name}`, at: latest?.startedAt ?? Date.now() })
@@ -229,7 +231,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
       {tab === 'findings' && (d.findingsList.length ? d.findingsList.map((f, i) => (
         <div key={i} className="wfind">
           <div className="ckrow">
-            <span className={`dot ${f.kind === 'good' ? 'ok' : f.kind === 'bad' ? 'bad' : ''}`} />
+            {f.kind === 'good' ? <State word="good" tone="done" /> : f.kind === 'bad' ? <State word="bad" tone="fail" /> : null}
             <span className="ckl">{f.title}</span>
             <span className="dspace" />
             <span className="dnote">{f.at ? when(Date.parse(f.at)) : ''}</span>
@@ -247,9 +249,9 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
       )) : <div className="dnote">No reports yet.</div>)}
       {tab === 'runs' && (d.runs.length ? d.runs.map((r) => (
         <div key={r.id} className="ckrow">
-          <span className={r.error ? 'dot bad' : r.endedAt ? 'dot ok' : 'ldot work'} />
+          {r.error ? <State word="failed" tone="fail" /> : r.endedAt ? <State word="done" tone="done" /> : <State word="working" tone="work" />}
           <span className="ckl">{r.kind}</span>
-          <span className="dnote">{when(r.startedAt)}{r.endedAt ? ` · ${mins(r.endedAt - r.startedAt)}` : ' · working'}</span>
+          <span className="dnote">{when(r.startedAt)}{r.endedAt ? `, ${mins(r.endedAt - r.startedAt)}` : ''}</span>
           {r.error && <span className="derr">{r.error}</span>}
           <span className="dspace" />
           {(r.path || r.tabId) && <button className="dlink" onClick={() => onOpenThread({ tabId: r.tabId, sessionId: r.sessionId ?? null, path: r.path, cwd: r.cwd, title: `Watcher: ${d.name}`, at: r.startedAt })}>Open thread</button>}
@@ -280,10 +282,10 @@ export function WatchersView({ onOpen, onOpenThread }: Props) {
   useEffect(() => { if (!sel && watchers.length && !creating) setSel(watchers[0].id) }, [watchers.length])
 
   return (
-    <section data-testid="watchers-panel" className="deploy watchers">
+    <section data-testid="watchers-panel" className="deploy watchers wt-view">
       <div className="dhead">
         <span className="dtitle">Watchers</span>
-        <span data-testid="watchers-summary" className="dnote">{watchers.filter((w) => w.enabled).length}/{watchers.length} on{list?.testMode ? ' · test mode: nothing runs on its own' : ''}</span>
+        <span data-testid="watchers-summary" className="dnote">{watchers.filter((w) => w.enabled).length}/{watchers.length} on{list?.testMode ? ', test mode: nothing runs on its own' : ''}</span>
         <span className="dspace" />
         <button data-testid="watcher-new" className="dlink" onClick={() => { setCreating(true); setSel(null) }}>New watcher</button>
         <button data-testid="watchers-reload" className="dlink" onClick={() => void reload()}>Reload</button>
@@ -295,9 +297,9 @@ export function WatchersView({ onOpen, onOpenThread }: Props) {
               onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSel(w.id); setCreating(false) } }} title={w.message || w.goal}>
               <input data-testid="watcher-toggle" type="checkbox" checked={w.enabled} disabled={!!busy[w.id]} onClick={(e) => e.stopPropagation()} onChange={(e) => void setEnabled(w.id, e.target.checked)} aria-label={`${w.name} on/off`} />
               <div className="wmain">
-                <div className="wname"><span className={dotOf(w.state)} /> {w.name}{w.builtin ? <span className="dnote"> built in</span> : null}<span className="dspace" /><span className="dnote">{w.state}</span></div>
+                <div className="wname">{w.name}{w.builtin ? <span className="dnote"> built in</span> : null}<span className="dspace" />{stateWord(w.state)}</div>
                 <div className="dnote">{plan(w)}</div>
-                <div className="dnote">last {when(w.lastRun)} · next {when(w.nextRun)} · {w.findings} {w.builtin ? 'reviewed' : 'findings'}</div>
+                <div className="dnote">last {when(w.lastRun)}, next {when(w.nextRun)}, {w.findings} {w.builtin ? 'reviewed' : 'findings'}</div>
                 {w.message && <div className="dnote wwarn">{w.message}</div>}
               </div>
             </div>

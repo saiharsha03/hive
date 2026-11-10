@@ -21,6 +21,9 @@ type Say = (threadId: string, text: string) => boolean | Promise<boolean>
 let wanted: string | null = null
 const pickers = new Set<(id: string) => void>()
 export const pickTeam = (id: string) => { wanted = id; pickers.forEach((f) => f(id)) }
+// for a page that lists the teams itself: the team asked for, and a way to hear when one is asked for
+export const wantedTeam = () => wanted
+export const onTeamPicked = (f: (id: string) => void) => { pickers.add(f); return () => { pickers.delete(f) } }
 
 // the scene itself is plain DOM/SVG driven by office/engine; React owns only the container
 function OfficeScene({ v, mode, onPick, nod }: { v: View; mode: Mode; onPick: (id: string) => void; nod: { id: string; n: number } | null }) {
@@ -137,7 +140,8 @@ function Chat({ v, id, sent, onSend, onOpen, onClose }: { v: View; id: string; s
 }
 
 // inWindow: shown in the pop-out Team window (no "Open in window" there)
-export function TeamView({ onActivate, onMessage, inWindow }: { onActivate: (threadId: string) => void; onMessage: Say; inWindow?: boolean }) {
+// bare: the page already lists the teams, so the picker is left out
+export function TeamView({ onActivate, onMessage, inWindow, bare }: { onActivate: (threadId: string) => void; onMessage: Say; inWindow?: boolean; bare?: boolean }) {
   const [teams, setTeams] = useState<Row[]>([])
   const [pick, setPick] = useState<string | null>(wanted)
   const [v, setV] = useState<View | null>(null)
@@ -172,14 +176,16 @@ export function TeamView({ onActivate, onMessage, inWindow }: { onActivate: (thr
   return (
     <div className="teamview" data-testid="team-view">
       <div className="tv-head">
-        <select className="tv-pick" value={id ?? ''} onChange={(e) => setPick(e.target.value)} data-testid="team-pick">
-          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}{t.endedAt ? ' (ended)' : ''}</option>)}
-        </select>
+        {bare ? <span className="tv-name">{teams.find((t) => t.id === id)?.name}</span> : (
+          <select className="tv-pick" value={id ?? ''} onChange={(e) => setPick(e.target.value)} data-testid="team-pick">
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}{t.endedAt ? ' (ended)' : ''}</option>)}
+          </select>
+        )}
         {v && <span className="tv-goal" title={v.team.goal}>{v.team.goal}</span>}
         {v?.team.owner && <button className="link" onClick={() => onActivate(v.team.owner!.id)} title="The thread that started this team; the Lead reports to it">Owner: {v.team.owner.title}</button>}
         <div className="seg" title="How the office is drawn">{(['side', 'plan'] as const).map((m) => <button key={m} className={mode === m ? 'on' : ''} onClick={() => pickMode(m)} data-testid={`team-mode-${m}`}>{m === 'side' ? 'Side' : 'Plan'}</button>)}</div>
         {v && !v.team.endedAt && <PauseButton v={v} />}
-        {!inWindow && <button className="ibtn" onClick={() => void window.api.teamOpenWindow(id ?? undefined)} title="Open in its own window" data-testid="team-open-window"><Icon name="link-external" /></button>}
+        {!inWindow && <button className="ibtn" onClick={() => void window.api.teamOpenWindow(id ?? undefined)} title="Open in its own window" data-testid="team-open-window">{bare ? 'Open in window' : <Icon name="link-external" />}</button>}
         {v && <span className="tv-meta">{v.team.members.length + 1} members, started {time(v.team.createdAt)}{v.team.endedAt ? `, ended ${time(v.team.endedAt)}` : ''}</span>}
       </div>
       {v && (

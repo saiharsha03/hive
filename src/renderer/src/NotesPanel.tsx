@@ -87,7 +87,7 @@ export function NotesPanel() {
   return (
     <section data-testid="notes-panel" className="tool notes">
       <div className="dhead">
-        <span className="dtitle"><span className="ph ph-notes">✎</span>Notes</span>
+        <span className="dtitle">Notes</span>
         <span className="dnote">{notes.length} note{notes.length === 1 ? '' : 's'}, saved as markdown in ~/.claude/hive/notes</span>
         <span className="dspace" />
         <button className="dlink" onClick={create} data-testid="notes-new">New note</button>

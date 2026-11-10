@@ -142,7 +142,7 @@ export function TodoPanel({ todos, today, error, reload, onTalk }: Props) {
   return (
     <section data-testid="todos-panel" className="tool todos">
       <div className="dhead">
-        <span className="dtitle"><span className="ph ph-todos">✓</span>To-dos</span>
+        <span className="dtitle">To-dos</span>
         <span className="dnote">{open.length} open{late ? `, ${late} overdue` : ''}. Claude and the terminal helper can add here too.</span>
         <span className="dspace" />
       </div>

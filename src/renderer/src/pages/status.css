@@ -1,0 +1,58 @@
+/* Status and usage page (stp-) and the account switcher (acct-). Tokens only. */
+.stp-dim { color: var(--dim); }
+.stp-small { font-size: 12px; padding-top: 4px; }
+.stp-mono { font-family: var(--mono); font-size: 12px; }
+.stp-ver { display: inline-flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.stp-num { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* context */
+.stp-ctx { padding: 8px 0; }
+.stp-ctxbar { position: relative; display: flex; height: 8px; background: var(--rule); }
+.stp-seg { display: block; height: 100%; }
+.stp-seg-system { background: var(--dim); }
+.stp-seg-memory { background: var(--faint); }
+.stp-seg-messages, .stp-seg-used { background: var(--ink); }
+.stp-seg-free { background: transparent; }
+.stp-tick { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--hi); }
+.stp-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 11.5px; color: var(--dim); padding-top: 6px; }
+.stp-key { display: inline-block; width: 8px; height: 8px; margin-right: 5px; vertical-align: 0; }
+.stp-key.stp-seg-free { background: var(--rule); }
+.stp-key-tick { width: 1px; height: 10px; background: var(--hi); margin-right: 7px; vertical-align: -1px; }
+
+/* MCP */
+.stp-mcp-row { display: grid; grid-template-columns: 1fr 120px 90px; gap: 14px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 12.5px; }
+.stp-mcp-name { color: var(--hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* limits */
+.stp-lim { display: grid; grid-template-columns: 150px 52px 1fr; grid-template-rows: auto auto; column-gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--rule); align-items: center; }
+.stp-ln { color: var(--hi); }
+.stp-lp { font-size: 18px; font-weight: 600; color: var(--hi); text-align: right; font-variant-numeric: tabular-nums; }
+.stp-lp.warm { color: var(--wait); }
+.stp-lr { grid-column: 1; color: var(--dim); font-size: 12px; padding-top: 3px; }
+.stp-lf { grid-column: 2 / 4; font-size: 12px; color: var(--dim); padding-top: 3px; }
+.stp-lf.warn { color: var(--wait); }
+
+/* tokens table */
+.stp-tbl .stp-thread { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* account switcher */
+.acct-row { display: grid; grid-template-columns: 220px 150px 1fr 80px 92px; gap: 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--rule); outline: none; }
+.acct-row:focus-visible { background: var(--hover); }
+.acct-row.on { box-shadow: inset 3px 0 0 var(--accent); background: var(--sel); }
+.acct-name b { display: block; color: var(--hi); font-size: 14px; }
+.acct-name span { font-size: 12px; color: var(--dim); }
+.acct-plan { color: var(--ink); }
+.acct-use { display: grid; grid-template-columns: 24px 1fr; gap: 3px 8px; align-items: center; font-size: 11.5px; color: var(--dim); }
+.acct-bar { display: grid; grid-template-columns: 1fr 36px; gap: 8px; align-items: center; }
+.acct-pct { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.acct-threads { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.acct-act { text-align: right; }
+.acct-keys { background: none; border: 0; padding: 0; cursor: pointer; font: 12px var(--mono); color: var(--dim); text-decoration: underline; text-decoration-color: var(--rule2); text-underline-offset: 3px; }
+.acct-keys:hover { color: var(--hi); }
+.acct-old { padding: 10px 14px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.acct-dim { color: var(--dim); font-size: 12px; }
+.acct-flow { display: flex; gap: 14px; align-items: baseline; width: 100%; }
+.acct-flow .uline { flex: 1; }
+.acct-log { width: 100%; max-height: 140px; margin: 0; }
+.acct-foot { display: flex; gap: 18px; padding: 10px 14px; font-size: 12px; color: var(--dim); align-items: baseline; }
+.acct-foot span { flex: 1; }

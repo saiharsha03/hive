@@ -3,9 +3,11 @@
 // stops the stack's services except the ones another running stack still needs.
 import { useEffect, useRef, useState } from 'react'
 import type { DevService, DevState, Source, SourceOption, StackDef } from '../../shared/devCore'
+import { State, type Tone } from './kit'
 
-type Props = { state: DevState | null; setState: (s: DevState) => void; onClose?: () => void }
-const STATE_CLASS: Record<string, string> = { running: 'ok', starting: 'work', failed: 'bad', stopped: '' }
+// onLogs: show a service's log somewhere else (the drawer); without it the log opens under the stacks
+type Props = { state: DevState | null; setState: (s: DevState) => void; onClose?: () => void; onLogs?: (name: string) => void }
+const STATE_TONE: Record<string, Tone> = { running: 'done', starting: 'wait', failed: 'fail', stopped: 'idle' }
 const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase()
 const isLive = (s: DevService) => s.state === 'starting' || s.state === 'running'
 
@@ -24,7 +26,7 @@ export function shutdownNames(st: StackDef, stacks: StackDef[], services: DevSer
 export const startNames = (st: StackDef, services: DevService[]): string[] =>
   st.services.filter((n) => { const s = services.find((x) => x.name === n); return !!s && !isLive(s) })
 
-export function DevPanel({ state, setState, onClose }: Props) {
+export function DevPanel({ state, setState, onClose, onLogs }: Props) {
   const [opts, setOpts] = useState<Record<string, SourceOption[]>>({})
   const [choice, setChoice] = useState<Record<string, string>>({})
   const [msg, setMsg] = useState('')
@@ -90,8 +92,8 @@ export function DevPanel({ state, setState, onClose }: Props) {
   return (
     <section className="tool" data-testid="stacks-view">
       <div className="dhead">
-        <span className="dtitle"><span className="ph ph-dev">◆</span>Stacks</span>
-        {state?.docker.phase === 'starting' && <span className="dnote"><span className="ldot work" />{state.docker.message}</span>}
+        <span className="dtitle">Stacks</span>
+        {state?.docker.phase === 'starting' && <span className="dnote">{state.docker.message}</span>}
         <span className="dspace" />
         {onClose && <button className="dlink" aria-label="Close" onClick={onClose} data-testid="tool-close">×</button>}
       </div>
@@ -122,7 +124,7 @@ export function DevPanel({ state, setState, onClose }: Props) {
                       {svcs.map((s) => (
                         <tr key={s.name}>
                           <td>{s.label}</td>
-                          <td><span className={`pr ${STATE_CLASS[s.state]}`}>{s.state}</span>{s.note && <div className="dd">{s.note}</div>}</td>
+                          <td><State word={s.state} tone={STATE_TONE[s.state] ?? 'idle'} />{s.note && <div className="dd">{s.note}</div>}</td>
                           <td>{s.port ?? ''}</td>
                           <td>
                             {s.kind === 'process'
@@ -134,7 +136,7 @@ export function DevPanel({ state, setState, onClose }: Props) {
                           <td>{s.owner}</td>
                           <td className="dact">
                             {s.open && s.state === 'running' && s.port && <a className="dlink" href={`http://localhost:${s.port}`} target="_blank" rel="noreferrer">Open</a>}
-                            <button className="dlink" onClick={() => setLogFor(logFor === s.name ? null : s.name)}>{logFor === s.name ? 'Hide logs' : 'Logs'}</button>
+                            <button className="dlink" data-testid={`stack-logs-${s.name}`} onClick={() => (onLogs ? onLogs(s.name) : setLogFor(logFor === s.name ? null : s.name))}>{!onLogs && logFor === s.name ? 'Hide logs' : 'Logs'}</button>
                           </td>
                         </tr>
                       ))}

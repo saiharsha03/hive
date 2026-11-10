@@ -30,7 +30,7 @@ export function GitPanel({ onDiff, focus }: { onDiff: (s: DiffSpec) => void; foc
   return (
     <section data-testid="git-panel" className="tool gitpanel">
       <div className="dhead">
-        <span className="dtitle"><span className="ph ph-git">⎇</span>Git</span>
+        <span className="dtitle">Git</span>
         {sel
           ? <><button data-testid="git-button-1" className="dlink" onClick={() => { setSel(null); loadList() }}>‹ All repos</button><span className="dnote">{sel.name}</span></>
           : <span className="dnote">Repos and worktrees under the workspace root. Plain git; diffs open on the right.</span>}
