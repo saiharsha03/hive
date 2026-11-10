@@ -244,7 +244,9 @@ and phone have. A relay that gets broken into can't read or send your messages; 
 
 The pushes are data-only and still sealed: the app opens them on the phone, so Google never sees the text.
 
-**2. Run the relay**, in one of two ways (Node 20+; `cd relay && npm install`):
+**2. Run the relay**, in one of two ways (Node 20+; `cd relay && npm install`). A relay you already run must be updated
+to this version for the 2.0 app's notification buttons (Stop, a one-tap answer) to work: they post through its new
+`POST /v1/send` while the app is closed.
 
 - **On a server you have (VPS)**, behind a reverse proxy with TLS. With Caddy:
 

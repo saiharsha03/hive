@@ -4,7 +4,7 @@
 // a row that came due while Hive was closed (or asleep) fires once when it is back and says how late it is.
 // A repeating row then moves to its next slot after now: missed slots are not replayed one by one.
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { dataDir, TEST_MODE } from './testMode'
 import { localIso } from '../shared/watchCore'
@@ -116,8 +116,37 @@ type Deliver = (sessionId: string, text: string) => Promise<unknown>
 let deliver: Deliver | null = null
 let ticking = false
 
+// Paused ("stop everything" with its pause switch, from the phone or the window): no wake-up fires until it is resumed.
+// Nothing is dropped or moved: what came due meanwhile fires once on resume, saying how late it is, as after a
+// restart. Kept on disk (next to the table), so a pause outlives Hive closing too.
+const pauseFile = () => `${wakeupsFile()}.paused`
+export const wakeupsPaused = (): boolean => { try { readFileSync(pauseFile()); return true } catch { return false } }
+export function pauseWakeups(on: boolean): void {
+  try {
+    if (on) { mkdirSync(dirname(pauseFile()), { recursive: true }); writeFileSync(pauseFile(), new Date().toISOString()) } else rmSync(pauseFile(), { force: true })
+  } catch { /* the next pause or resume tries again */ }
+  tell()
+  if (!on) void tick()
+}
+
+// one pending wake-up, now (Run now from the phone or the window), even while wake-ups are paused: a repeating one
+// then moves to its next slot as if it had fired on time
+export async function runWakeupNow(id: number, now = Date.now()): Promise<boolean> {
+  if (!deliver) return false
+  const r = listWakeups().find((x) => x.id === id)
+  if (!r) return false
+  try { await deliver(r.session_id, wakeMessage({ ...r, wake_at: localIso(new Date(now)) }, now)) } catch (e) {
+    const m = (e as Error).message ?? String(e)
+    if (/No thread or session/.test(m)) { markFailed(r, m); tell() }
+    return false
+  }
+  markFired({ ...r, wake_at: r.every_minutes ? r.wake_at : localIso(new Date(now)) }, now)
+  tell()
+  return true
+}
+
 export async function tick(now = Date.now()): Promise<number> {
-  if (!deliver || ticking) return 0
+  if (!deliver || ticking || wakeupsPaused()) return 0
   ticking = true
   let fired = 0
   try {

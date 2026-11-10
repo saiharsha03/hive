@@ -23,10 +23,15 @@ function arm(w: Wake): void {
   timers.set(w.key, setTimeout(() => void due(w.key), ms))
 }
 
-async function due(key: string): Promise<void> {
+// paused with the wake-ups ("stop everything"): a continue that comes due waits, checked again every minute
+let paused: () => boolean = () => false
+export const setContinuesPaused = (f: () => boolean) => { paused = f }
+
+async function due(key: string, force = false): Promise<void> {
   const w = wakes.find((x) => x.key === key)
   if (!w || !deps) return
-  if (w.at > Date.now() + 1000) return arm(w)
+  if (w.at > Date.now() + 1000 && !force) return arm(w)
+  if (paused() && !force) { clearTimeout(timers.get(w.key)); timers.set(w.key, setTimeout(() => void due(key), 60_000)); return }
   const ok = await deps.fire(w, CONTINUE_PROMPT).catch(() => false)
   if (!ok) { w.at = Date.now() + 60_000; save(); return arm(w) }
   drop(key)
@@ -75,6 +80,14 @@ export function cancelContinue(id: string): boolean {
   if (!w) return false
   drop(w.key)
   return true
+}
+
+// Run now (the phone or the window): continue this thread at once, paused or not; false when none is waiting
+export async function continueNow(id: string): Promise<boolean> {
+  const w = wakes.find((x) => x.key === id || x.tabId === id)
+  if (!w || !deps) return false
+  await due(w.key, true)
+  return !wakes.some((x) => x.key === w.key)
 }
 
 export const continueAt = (id: string): number | null => wakes.find((x) => x.key === id || x.tabId === id)?.at ?? null

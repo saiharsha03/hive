@@ -47,6 +47,9 @@ object Relay {
     val changed = MutableStateFlow(0) // bumped when Hive sends anything unasked, so open screens refresh
     val skew = MutableStateFlow(0L) // the computer's clock minus the phone's, in ms, from Hive's last message
     val trouble = MutableStateFlow("") // something the user has to fix (the pairing no longer matches)
+    // which of the optional requests this Hive answers (its hello says): the screens hide the rest. Empty for a Hive
+    // from before the 2.0 app, which knows none of them.
+    val can = MutableStateFlow<Set<String>>(emptySet())
 
     // the thread on screen, and whether the app is: no notification for what the user is looking at
     @Volatile var viewing: String? = null
@@ -178,7 +181,7 @@ object Relay {
         val s = ws
         greeting = appScope.launch {
             while (ws === s && state.value != State.Online && state.value != State.RelayOnly) {
-                runCatching { ask("hello", mapOf("v" to 2)) }
+                runCatching { ask("hello", mapOf("v" to 3)) }.onSuccess { can.value = strs(it.optJSONArray("can")).toSet() }.onFailure { can.value = emptySet() }
                 if (state.value != State.Online) delay(5_000)
             }
         }
@@ -214,6 +217,15 @@ object Relay {
         Vault.clear(context.applicationContext)
         return told
     }
+
+    // The press of a notification's button, while the app may be locked or closed: one blob sealed with the
+    // notification key, posted to the relay (no socket). True when the relay handed it to the computer, false when the
+    // computer is not connected, null when the relay could not be reached or does not know this (an older relay).
+    fun post(k: Known, msg: JSONObject): Boolean? = runCatching {
+        val body = JSONObject().put("pair", k.pair).put("blob", Seal.seal(k.notifyKey, k.pair, "n2d", msg)).toString()
+        val req = Request.Builder().url("${k.relay}/v1/send").header("Authorization", "Bearer ${k.token}").post(body.toRequestBody("application/json".toMediaType())).build()
+        http.newCall(req).execute().use { r -> if (!r.isSuccessful) null else JSONObject(r.body?.string() ?: "{}").optBoolean("delivered") }
+    }.getOrNull()
 
     // Tell the relay where to push notifications for this phone (Firebase token); the relay never sees what is in
     // them. Tried again with a growing wait until the relay has it (it forgets the token when Firebase refuses one).

@@ -1234,6 +1234,55 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   }, boost && !interrupt ? boost : null, (e: any) => cur.emit({ type: 'hive_error', message: `The message was not sent: ${e?.message ?? e}` }))
 }
 
+// every running background task of every live thread (the phone's Running screen), Codex runs included
+export const runningEverywhere = (): { tabId: string; title: string; task: Task }[] =>
+  [...live.entries()].flatMap(([id, s]) => s.status.tasks.filter((t) => t.status === 'running').map((task) => ({ tabId: id, title: titleOf(id), task })))
+
+// Stop everything (the phone, the window): every working thread's turn is interrupted and every background task and
+// Codex run stopped. Wake-ups are the caller's (index.ts pauses them when asked); a thread's /loop crons live inside
+// its Claude process and keep their schedule (only ending the process would remove them)
+// Every queue is held as well, so what was queued does not start the next turn the moment the stopped one ends; your
+// own messages still go through a hold, as with a paused team. resumeEverything lets the queues go again.
+const stopHeld = new Set<string>()
+export async function stopEverything(): Promise<{ threads: number; tasks: number }> {
+  let threads = 0
+  let tasks = 0
+  for (const [id, s] of [...live]) {
+    if (!s.turns.isHeld()) { s.turns.hold(true); stopHeld.add(id) } // held first: the interrupt below must not hand over the next one
+    for (const t of s.status.tasks.filter((x) => x.status === 'running')) {
+      if (t.id.startsWith('codex:')) continue // the Codex runs: killed below, once each
+      try { await s.q.stopTask(t.id); tasks++ } catch { /* already ended */ }
+    }
+    for (const p of codexRuns.get(id) ?? []) { p.kill(); tasks++ }
+    if (s.turns.isBusy()) { await interrupt(id).catch(() => {}); threads++ }
+  }
+  return { threads, tasks }
+}
+
+// after Stop everything: the queues it held go again (a paused team's stay held until the team resumes)
+export function resumeEverything(): number {
+  let n = 0
+  for (const id of stopHeld) {
+    const s = live.get(id)
+    if (!s || teamOf(id)?.pausedAt) continue
+    s.turns.hold(false)
+    n++
+  }
+  stopHeld.clear()
+  return n
+}
+// how many queues Stop everything still holds (the window offers Resume while any are)
+export const stoppedQueues = (): number => [...stopHeld].filter((id) => live.has(id)).length
+
+// what you wrote to a live thread that Claude has not taken in yet (queued, or handed over and not echoed): the
+// phone shows them as not seen yet
+export function unreadOf(tabId: string): string[] {
+  const s = live.get(tabId)
+  if (!s) return []
+  const handed = [...s.outbox.values()].filter((u) => u.source === 'you').map((u) => u.text)
+  return handed.filter((t) => t.trim())
+}
+
 // a transcript whose thread is working now: search leaves it until the turn ends
 export const busyTranscript = (path: string): boolean =>
   [...live.values()].some((s) => !!s.sessionId && s.turns.isBusy() && transcriptPath(s.cwd, s.sessionId) === path)

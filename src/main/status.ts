@@ -117,6 +117,21 @@ export async function weeklyUsage(maxAgeMs = IDLE_MS): Promise<Weekly> {
     : { pct: null, readAt: Date.now(), error: 'no 7-day limit in the usage answer' }
 }
 
+// after an account switch: does the login now in the files answer? A rejected usage read that talks about the login
+// or a token means it no longer works (sign in with the browser again); a slow or other answer is taken as fine
+export async function checkLogin(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await Promise.race([
+      current().usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
+      new Promise((r) => setTimeout(r, 20_000)),
+    ])
+    return { ok: true }
+  } catch (e) {
+    const m = String((e as Error)?.message ?? e)
+    return /auth|login|token|401|403|expired|credential|unauthori/i.test(m) ? { ok: false, error: m.slice(0, 300) } : { ok: true }
+  }
+}
+
 export function closeStatus(): void {
   q?.close()
   q = null

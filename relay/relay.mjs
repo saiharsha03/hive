@@ -65,7 +65,7 @@ async function push(pair, blob) {
   } catch (e) { console.error('push failed:', e.message) }
 }
 
-// ---- HTTP: health, pairing (Hive, with the admin token), the phone's push token ----
+// ---- HTTP: health, pairing (Hive, with the admin token), the phone's push token, one blob from the phone ----
 const body = (req) => new Promise((res, rej) => {
   let s = ''
   req.on('data', (c) => { s += c; if (s.length > 64 * 1024) { rej(new Error('too big')); req.destroy() } })
@@ -100,6 +100,17 @@ const server = createServer(async (req, res) => {
       pairs[b.pair].fcm = String(b.fcm ?? '').slice(0, 4096)
       save()
       return reply(res, 200, { ok: true })
+    }
+    // one sealed blob from the phone to the computer without a socket: a notification's button (answer, stop) is
+    // pressed while the app is closed. delivered: whether the computer was connected to take it.
+    if (req.method === 'POST' && url.pathname === '/v1/send') {
+      const b = await body(req)
+      if (!authed(b.pair, 'phone', bearer(req))) return reply(res, 401, { error: 'unauthorized' })
+      if (typeof b.blob !== 'string' || !b.blob) return reply(res, 400, { error: 'no blob' })
+      const desk = sockets.get(b.pair)?.get('desk')
+      const delivered = desk?.readyState === 1
+      if (delivered) desk.send(JSON.stringify({ blob: b.blob }))
+      return reply(res, 200, { ok: true, delivered })
     }
     reply(res, 404, { error: 'not found' })
   } catch (e) {

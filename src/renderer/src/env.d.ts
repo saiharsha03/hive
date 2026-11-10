@@ -221,11 +221,23 @@ interface Window {
     accountCancel: () => Promise<void>
     onAccountOutput: (cb: (t: string) => void) => () => void
     onAccountSwitched: (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => () => void
+    accountsList: () => Promise<{ id: string; email: string; organization: string | null; plan: string | null; savedAt: number; lastUsed: number | null; active: boolean }[]>
+    accountsSwitch: (id: string) => Promise<{ ok: boolean; account: string | null; closed: number; waiting: number; warning?: string; needsSignIn?: boolean; error?: string }>
+    accountsRemove: (id: string) => Promise<boolean>
+    onAccountsChanged: (cb: () => void) => () => void
     wakeupsList: () => Promise<{
+      paused: boolean
+      held: number
       wakeups: { id: number; sessionId: string; title: string; wakeAt: string; prompt: string; everyMinutes: number | null; firedAt: string | null }[]
       continues: { key: string; tabId: string; title: string; at: number }[]
     }>
     wakeupsCancel: (kind: 'wake' | 'continue', id: string | number) => Promise<boolean>
+    wakeupsRunNow: (kind: 'wake' | 'continue', id: string | number) => Promise<boolean>
+    wakeupsPause: (on: boolean) => Promise<boolean>
+    stopAll: (pause?: boolean) => Promise<{ threads: number; tasks: number }>
+    resumeAll: () => Promise<{ queues: number; wakeups: boolean }>
+    quietGet: () => Promise<{ on: boolean; from: string; to: string }>
+    quietSet: (q: { on: boolean; from: string; to: string }) => Promise<{ on: boolean; from: string; to: string }>
     onWakeupsChanged: (cb: () => void) => () => void
     chatStatusView: (tabId: string, known?: { cwd?: string; sessionId?: string }) => Promise<import('../../main/statusView').ThreadStatusView>
     onAllowStatus: (cb: (s: import('../../shared/allowCore').AllowStatus) => void) => () => void

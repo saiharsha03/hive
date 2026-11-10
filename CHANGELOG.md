@@ -10,6 +10,11 @@ All notable changes to Hive are documented here. The format follows
 
 - **Switch account without a restart.** Quiet threads move to the new login at once, working ones when their work
   ends; the dialog says how many follow.
+- **Several accounts signed in at once.** Every login is saved as a profile (Add account is the browser sign-in once);
+  switching to a saved one takes a moment, with no browser. Only the login's own keys are swapped (MCP logins and the
+  CLI's other state stay), with a backup of the last five switches and a rollback if a write fails.
+- Stop everything (palette and phone), optionally pausing wake-ups and automatic continues until resumed; run a
+  wake-up now; quiet hours shared with the phone (desktop notifications go silent then, except failures).
 - **Idle threads free their Claude process** after Settings > General "Close idle threads after" (default 30
   minutes, 0 = never); the tab stays and the next message resumes the session. A thread with anything still going
   (a turn, background work, a Codex run, a loop or wake-up, a question, a queued or unread message) never closes.

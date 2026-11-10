@@ -8,9 +8,11 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { busyTranscript, configureChat, liveQuery, threadFacts, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
+import { busyTranscript, configureChat, liveQuery, resumeEverything, runningEverywhere, stopEverything, stoppedQueues, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
-import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, tick as wakeupsTick } from './threadWakeups'
+import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, pauseWakeups, runWakeupNow, tick as wakeupsTick, wakeupsPaused } from './threadWakeups'
+import { quietHours, setQuietHours } from './quietHours'
+import type { PhoneAsk, QuietHours } from '../shared/phoneCore'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
 import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
@@ -23,6 +25,7 @@ import { dependabotSummary, initDependabot, setDependabotEnabled } from './depen
 import { allowStatus, forgetAllowed, initAllowlist, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
 import { cancelSwitch, switchAccount } from './account'
+import { listAccounts, otherClaudeProcesses, realAccountPaths, removeAccount, saveCurrent, switchAccount as switchProfile } from './accounts'
 import { askBtw } from './btw'
 import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
 import { editorMtime, editorRead, editorWrite, vsCodeUrl } from './editorFiles'
@@ -42,11 +45,11 @@ import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEM
 import { saveSearchNow, searchSessions, searchStatus, setSearchBusy, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { answerAsk, openAsks } from './asks'
-import { cancelContinue, continueAt, initAutoContinue, listContinues } from './autoContinue'
+import { cancelContinue, continueAt, continueNow, initAutoContinue, listContinues, setContinuesPaused } from './autoContinue'
 import { readTodos } from './teamTodos'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
-import { closeStatus, getStatus, restartStatus, setLiveUsage, weeklyUsage } from './status'
+import { checkLogin, closeStatus, getStatus, restartStatus, setLiveUsage, weeklyUsage } from './status'
 import { loadConfig, readDotEnv } from './devConfig'
 import { loadSettings, saveSettings, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
@@ -59,7 +62,7 @@ import * as dev from './devStack'
 import { killAllTerminals, killTerminal, openTerminal, resizeTerminal, setTerminalSink, writeTerminal } from './terminal'
 import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
-import { dataDir, TEST_MODE } from './testMode'
+import { blocked, dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
 import { isAppPage, rosterOf, teamWindowSearch } from '../shared/teamSidebarCore'
 import { keyAction, phoneFolder, readyGate } from './windowCore'
@@ -157,8 +160,9 @@ initThreadWakeups((sessionId, text) => {
 
 // The phone app (through the relay): its requests map onto the same threads the window shows
 const mobileChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('mobile:status', mobileStatus()) }
+// seen: a message of yours in the transcript is one Claude has taken in (the CLI writes it then)
 const phoneItems = (items: Awaited<ReturnType<typeof loadRecentHistory>>['items']): PhoneItem[] => items.flatMap((it): PhoneItem[] => {
-  if (it.kind === 'user') return [{ k: 'you', t: it.text }]
+  if (it.kind === 'user') return [{ k: 'you', t: it.text, seen: true }]
   if (it.kind === 'assistant') return [{ k: 'claude', t: it.text }]
   if (it.kind === 'thread' || it.kind === 'agent') return [{ k: 'you', t: it.text }]
   if (it.kind === 'tool') { const i = it.input ?? {}; return [{ k: 'tool', t: `${it.name.replace(/^mcp__\w+?__/, '')} ${i.description ?? i.file_path ?? i.pattern ?? i.command ?? i.url ?? ''}`.trim().slice(0, 200) }] }
@@ -200,7 +204,9 @@ const mobileDeps = () => ({
     const { items } = await loadRecentHistory(path)
     // a finished watcher run: say its thread is closed and what a reply costs
     const ended: PhoneItem[] = saved?.watcherRun ? [{ k: 'note', t: 'This watcher run has ended and its thread is closed. Replying reopens it: Claude reads the whole conversation again, which counts against your usage.' }] : []
-    return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [], tasks }
+    // what you wrote that Claude has not read yet (queued, or not echoed back) follows, marked not seen
+    const unread: PhoneItem[] = l ? unreadOf(l.tabId).map((t) => ({ k: 'you', t: t.length > 4000 ? `${t.slice(0, 4000)}…` : t, seen: false })) : []
+    return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...unread, ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [], tasks }
   },
   send: (id: string, text: string) => sendTo(id, text, true),
   start: async (folder: string, text: string) => {
@@ -246,13 +252,56 @@ const mobileDeps = () => ({
     return true
   },
   wakeups: () => phoneWakeups(listWakeups(), listContinues()),
+  // 2.0 app: a thread now without its transcript, all running background work, stop everything, run a wake-up now,
+  // and the quiet hours it shares with Hive
+  peek: (id: string) => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    return l ? { working: l.busy, asks: openAsks(l.tabId) as PhoneAsk[] } : null
+  },
+  running: () => runningEverywhere().map(({ tabId, title, task }) => ({ thread: tabId, threadTitle: title, id: task.id, kind: task.kind, title: task.title, now: task.now ?? '', state: 'working' as const })),
+  stopAll: (pause: boolean) => stopAll(pause),
+  runWakeNow: (kind: string, id: string) => runWakeNow(kind, id),
+  quietHours: (set?: QuietHours) => (set ? setQuietHours(set) : quietHours()),
+  // the saved accounts and the switch between them, as the window has them (never a token)
+  accounts: () => (TEST_MODE ? [] : listAccounts(realAccountPaths()).map((a) => ({
+    id: a.id, name: a.organization ?? a.email, detail: a.email, note: a.plan ?? '', inUse: a.active,
+  }))),
+  switchAccount: async (id: string) => {
+    const r = await switchToProfile(id)
+    if (!r.ok) throw new Error(r.error ?? 'The switch did not finish')
+    return `Switched to ${r.account}${r.waiting ? `; ${r.waiting} thread${r.waiting > 1 ? 's' : ''} move when they finish` : ''}${r.warning ? `. ${r.warning}` : ''}`
+  },
   cancelWakeup: (kind: string, id: string) => (kind === 'wake' ? /^\d+$/.test(id) && cancelWakeup(Number(id)) : kind === 'continue' ? cancelContinue(id) : false),
 })
 initMobile(appConfig.env, mobileDeps())
 // Wake-ups and automatic continues, for the window's list: every pending one, cancel one, and a nudge on any change
 const wakeupsChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('wakeups:changed') }
 onWakeupsChanged(wakeupsChanged)
+// paused wake-ups hold the automatic continues too
+setContinuesPaused(wakeupsPaused)
+// Stop everything (the phone and the window): every working thread and background task; pause: also hold the
+// wake-ups and automatic continues until they are resumed (nothing is dropped; what came due fires once on resume)
+async function stopAll(pause: boolean): Promise<{ threads: number; tasks: number }> {
+  const r = await stopEverything()
+  if (pause) pauseWakeups(true)
+  return r
+}
+// run one wake-up or automatic continue now
+async function runWakeNow(kind: string, id: string): Promise<boolean> {
+  if (kind === 'wake') return /^\d+$/.test(id) && runWakeupNow(Number(id))
+  if (kind === 'continue') return continueNow(id)
+  return false
+}
+handle('hive:stopAll', (_e, pause?: boolean) => stopAll(!!pause))
+// after Stop everything: the held queues go again and paused wake-ups are resumed (what came due fires once)
+handle('hive:resumeAll', () => { const queues = resumeEverything(); const wasPaused = wakeupsPaused(); if (wasPaused) pauseWakeups(false); wakeupsChanged(); return { queues, wakeups: wasPaused } })
+handle('wakeups:runNow', (_e, kind: string, id: string) => runWakeNow(String(kind), String(id)))
+handle('wakeups:pause', (_e, on: boolean) => { pauseWakeups(!!on); return wakeupsPaused() })
+handle('quiet:get', () => quietHours())
+handle('quiet:set', (_e, q: unknown) => setQuietHours(q))
 handle('wakeups:list', () => ({
+  paused: wakeupsPaused(),
+  held: stoppedQueues(), // queues Stop everything holds
   wakeups: listWakeups().map((r) => ({ id: r.id, sessionId: r.session_id, title: r.title, wakeAt: r.wake_at, prompt: r.prompt, everyMinutes: r.every_minutes, firedAt: r.fired_at })),
   continues: listContinues(),
 }))
@@ -486,18 +535,51 @@ handle('update:apply', () => { if (updateState()?.kind === 'ready') quitting = t
 // a newer Claude Code engine (new models arrive with it) and `claude update`
 handle('engine:latest', () => latestEngine())
 handle('engine:update', () => updateEngine())
-// Switch account: the engine's browser sign-in. Nothing restarts: the status process starts again on the new login, every
-// quiet thread closes its process (tab and session stay; the next message resumes it on the new login) and a busy one
-// does the same when its work ends. The window hears account:switched
-handle('account:switch', async (e, email: string) => {
-  const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
-  if (!r.ok) return r
+// Accounts. Nothing restarts when the login changes: the status process starts again on the new login, every quiet
+// thread closes its process (tab and session stay; the next message resumes it on the new login) and a busy one does
+// the same when its work ends. The window hears account:switched and accounts:changed.
+const accountsChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('accounts:changed') }
+async function movedToNewLogin(): Promise<{ account: string | null; closed: number; waiting: number }> {
   restartStatus()
   const { closed, waiting } = recycleThreads()
   const account = await getStatus().then((st) => st.account).catch(() => null)
   for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('account:switched', { account, closed, waiting })
+  accountsChanged()
+  return { account, closed, waiting }
+}
+const keepProfile = () => { if (!TEST_MODE) { try { saveCurrent(realAccountPaths()) } catch (e) { console.warn('accounts: could not save the current login:', (e as Error).message) } } }
+// Add account: the engine's browser sign-in; the login before it and the new one are both kept as profiles
+handle('account:switch', async (e, email: string) => {
+  keepProfile() // the account signed in now keeps its newest tokens
+  const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
+  if (!r.ok) return r
+  keepProfile()
+  await movedToNewLogin()
   return r
 })
+// the saved accounts: id, email, plan, when saved and last used, and which one is signed in (never a token)
+handle('accounts:list', () => (TEST_MODE ? [] : listAccounts(realAccountPaths())))
+// switch to a saved account without the browser; a login that no longer works says so (sign in again with Add account)
+type ProfileSwitch = { ok: boolean; account: string | null; closed: number; waiting: number; warning?: string; needsSignIn?: boolean; error?: string }
+async function switchToProfile(id: string): Promise<ProfileSwitch> {
+  if (TEST_MODE) return { ok: false, account: null, closed: 0, waiting: 0, error: blocked('switching the Claude account') }
+  const others = await otherClaudeProcesses().catch(() => 0)
+  const warning = others ? `${others} other Claude session${others > 1 ? 's are' : ' is'} running (a terminal or an IDE): ${others > 1 ? 'they keep' : 'it keeps'} the old login until restarted, and may write it back. Close ${others > 1 ? 'them' : 'it'} for a clean switch.` : undefined
+  let done
+  try { done = switchProfile(realAccountPaths(), String(id)) } catch (e) {
+    return { ok: false, account: null, closed: 0, waiting: 0, ...(warning ? { warning } : {}), error: (e as Error).message }
+  }
+  if (!done.changed) return { ok: true, account: done.account.email, closed: 0, waiting: 0, ...(warning ? { warning } : {}) }
+  const moved = await movedToNewLogin()
+  const login = await checkLogin()
+  return {
+    ok: login.ok, account: done.account.email, closed: moved.closed, waiting: moved.waiting, ...(warning ? { warning } : {}),
+    ...(login.ok ? {} : { needsSignIn: true, error: `The saved login for ${done.account.email} no longer works (${login.error}). Sign in to it again with Add account.` }),
+  }
+}
+handle('accounts:switch', (_e, id: string) => switchToProfile(String(id ?? '')))
+// forget a saved account (its profile only; the engine's own login is left as it is)
+handle('accounts:remove', (_e, id: string) => { const ok = !TEST_MODE && removeAccount(realAccountPaths(), String(id ?? '')); if (ok) accountsChanged(); return ok })
 handle('account:cancel', () => cancelSwitch())
 // Git panel: plain git on the repos and worktrees Hive lists; the page names a folder from that list, never a command
 handle('git:list', () => gitPanel.gitList())
@@ -705,6 +787,8 @@ app.whenReady().then(() => {
   // split the window from the taskbar shortcut it was started from (a second icon)
   if (app.isPackaged) app.setAppUserModelId('io.github.saiharsha03.hive')
   initDesktopNotify(() => mainWin, (id) => { showWindow(); if (id) mainWeb()?.send('hive:activate', id) })
+  // the account signed in now is kept as a profile (its newest tokens), so it can be switched back to later
+  keepProfile()
   handleScheme()
   createWindow()
   makeTray()
