@@ -284,6 +284,18 @@ const bgEnded = new Map<string, import('../../shared/taskCore').Task['status']>(
 export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue, onPromote, onStop, onBackground, onRunInBackground, onOpen, onDiff, onTerminal, onChanges, onSplit, onLoadEarlier, onRewound, compactHead, banner }: Props) {
   // only the newest items are drawn at first, so a long thread opens at once; Show earlier adds more
   const [limit, setLimit] = useState(WINDOW)
+  // the app hands over new function objects on every render: the conversation below gets stable ones that call the
+  // newest, so it is rebuilt only when the conversation itself changes
+  const latest = useRef({ onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground })
+  latest.current = { onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground }
+  const st = useMemo(() => ({
+    loadEarlier: () => latest.current.onLoadEarlier?.(),
+    promote: (...a: Parameters<Props['onPromote']>) => latest.current.onPromote(...a),
+    dequeue: (...a: Parameters<Props['onDequeue']>) => latest.current.onDequeue(...a),
+    open: (...a: Parameters<Props['onOpen']>) => latest.current.onOpen(...a),
+    diff: (...a: Parameters<Props['onDiff']>) => latest.current.onDiff(...a),
+    background: (...a: Parameters<Props['onBackground']>) => latest.current.onBackground(...a),
+  }), [])
   // after a usage limit: when this thread continues by itself (asked again when the plan changes or the thread restarts)
   const [wakeAt, setWakeAt] = useState<number | null>(null)
   useEffect(() => {
@@ -439,10 +451,10 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
 
   // take a queued message back into the message box to change it (only if it has not gone in yet)
   const editQueued = useCallback(async (it: Extract<Item, { kind: 'user' }>) => {
-    if (!it.queue || !(await onDequeue(it.queue.id))) return
+    if (!it.queue || !(await st.dequeue(it.queue.id))) return
     setDraft((d) => (d.trim() ? `${d}\n${it.text}` : it.text))
     setImages((cur) => [...cur, ...it.images.map(attachmentOf)])
-  }, [onDequeue])
+  }, [st])
 
   // Rewind: a dry run first, so the confirm can list the files that would be put back
   const [rewind, setRewind] = useState<Rewind | null>(null)
@@ -535,19 +547,32 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     const now = new Map(tasks.filter((t) => t.toolUseId && t.backgrounded).map((t) => [t.toolUseId!, t.status]))
     return new Map([...bgEnded, ...now])
   }, [tasks])
-  const transcript = useMemo(() => (
+  // each row keeps its key while the conversation grows: a message by its id, a tool call by its id, the rest by
+  // their place counted from where the loaded history ends (so "Load the earlier conversation" moves nothing)
+  const hasStream = !!session.streaming
+  const transcript = useMemo(() => {
+    const base = session.history?.count ?? 0
+    const used = new Set<string>()
+    const keyOf = (it: Item, i: number): string => {
+      const k = it.kind === 'user' && it.uuid ? `u:${it.uuid}` : it.kind === 'tool' ? `t:${it.id}` : it.kind === 'codex' ? `c:${it.id}` : `${it.kind}:${i - base}`
+      const key = used.has(k) ? `${k}:${i - base}` : k
+      used.add(key)
+      return key
+    }
+    return (
       <>
         {!session.loaded && <div className="hint">Loading conversation…</div>}
-        {session.loaded && !session.items.length && !session.streaming && <div className="chat-empty">New thread in {session.cwd || 'the workspace'}. Type below; drop or paste images.</div>}
+        {session.loaded && !session.items.length && !hasStream && <div className="chat-empty">New thread in {session.cwd || 'the workspace'}. Type below; drop or paste images.</div>}
         {(session.items.length > limit || session.history?.more) && (
-          <button className="dlink earlier" data-testid="chat-earlier" onClick={() => { if (session.items.length > limit) setLimit((n) => n + WINDOW); else onLoadEarlier?.() }}>
+          <button className="dlink earlier" data-testid="chat-earlier" onClick={() => { if (session.items.length > limit) setLimit((n) => n + WINDOW); else st.loadEarlier() }}>
             {session.items.length > limit ? `Show ${Math.min(WINDOW, session.items.length - limit)} earlier` : 'Load the earlier conversation'}
           </button>
         )}
         {session.items.map((it, i) => {
           if (i < session.items.length - limit) return null
+          const key = keyOf(it, i)
           if (it.kind === 'user') return (
-            <div key={i} className={`msg user${it.queue?.pending ? ' queued' : ''}`} data-testid="msg-user">
+            <div key={key} className={`msg user${it.queue?.pending ? ' queued' : ''}`} data-testid="msg-user">
               <div className="who you">You{it.at ? <When at={it.at} /> : null}
                 {it.steer && <span className="steer">steered while Claude worked{it.during ? ` (${it.during})` : ''}</span>}
                 {/* seen: Claude took the message in. A steered one waits for Claude's next step, so until then it says so */}
@@ -555,12 +580,13 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
                   : it.steer && it.uuid && session.busy && !it.queue?.pending && <span className="steer s-wait" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">not read yet</span>}
                 {it.queue?.pending && (
                   <span className="steer">{it.interrupt ? 'interrupting Claude, sends next' : 'queued, sends when Claude finishes'}
-                    <button className="link" onClick={() => onPromote(it.queue!.id)} data-testid="queued-send-now">send now</button>
+                    <button className="link" onClick={() => st.promote(it.queue!.id)} data-testid="queued-send-now">send now</button>
                     <button className="link" onClick={() => void editQueued(it)} data-testid="queued-edit">edit</button>
-                    <button className="link" onClick={() => void onDequeue(it.queue!.id)} data-testid="queued-remove">remove</button>
+                    <button className="link" onClick={() => void st.dequeue(it.queue!.id)} data-testid="queued-remove">remove</button>
                   </span>
                 )}
                 {it.queue && !it.queue.pending && !it.steer && <span className="steer">queued</span>}
+                {it.failed && <span className="steer s-fail" title={it.failed} data-testid="msg-failed">not sent: {it.failed}</span>}
                 {/* not a steered message: it went in mid-turn, so there is no clean point before it */}
                 {it.uuid && session.sessionId && !session.busy && !it.queue?.pending && !it.steer && (
                   <button className="rewindb" onClick={() => startRewind(it, i)} title="Go back to before this message: put back the files Claude changed since, and edit the message" data-testid="msg-rewind"><Icon name="discard" />Rewind</button>
@@ -568,21 +594,21 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
               </div>
               {it.images.length > 0 && (
                 <div className="imgs">{it.images.map((src, j) => (
-                  <button key={j} className="thumb" onClick={() => onOpen(src)} data-testid="chat-image"><img src={src} alt="" /></button>
+                  <button key={j} className="thumb" onClick={() => st.open(src)} data-testid="chat-image"><img src={src} alt="" /></button>
                 ))}</div>
               )}
               {it.text && <div className="body plain">{it.text}</div>}
             </div>
           )
           if (it.kind === 'assistant') return (
-            <div key={i} className="msg" data-testid="msg-assistant">
+            <div key={key} className="msg" data-testid="msg-assistant">
               <div className="who claude"><Icon name="sparkle" className="mk-claude" />Claude{it.at ? <When at={it.at} /> : null}</div>
               <MdBody text={it.text} />
             </div>
           )
           if (it.kind === 'tool') {
             if (it.name === SHOW || it.name === CODEX) return null // the card / Codex box says it all
-            if (it.name === 'AskUserQuestion') return <div key={i} className="msg"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} /></div>
+            if (it.name === 'AskUserQuestion') return <div key={key} className="msg"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} /></div>
             const { verb, what } = toolLine(it.name, it.input)
             const file = FILE_TOOLS.includes(it.name) && it.status !== 'error' && typeof it.input?.file_path === 'string' ? it.input.file_path as string : null
             const hunks = file ? hunksOf(it) : null
@@ -592,28 +618,28 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             const bg = bgOf.get(it.id) // its background task: running until that ends, not "done" when the call returned
             const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
             return (
-              <ToolRow key={i} it={it} status={status}>
+              <ToolRow key={key} it={it} status={status}>
                 <Icon name={icon} className={tm} />
                 <span className={`tv ${tm}`}>{verb}</span>
                 {file && hunks && c
-                  ? <button className="tw tdiff" title={`${file}: open the diff`} onClick={(e) => { e.stopPropagation(); onDiff({ t: 'edit', file, label, tool: it.name, hunks }) }} data-testid="chat-diff-row">
+                  ? <button className="tw tdiff" title={`${file}: open the diff`} onClick={(e) => { e.stopPropagation(); st.diff({ t: 'edit', file, label, tool: it.name, hunks }) }} data-testid="chat-diff-row">
                     {label} <span className="dv-add">+{c.add}</span> <span className="dv-del">−{c.del}</span>
                   </button>
                   : <span className="tw">{what}</span>}
                 <span className="ts">
-                  {it.status === 'running' && !bg && <button className="bg" onClick={() => onBackground(it.id)} title="Move to the background (Ctrl+B for all)" data-testid="tool-background">Background</button>}
+                  {it.status === 'running' && !bg && <button className="bg" onClick={() => st.background(it.id)} title="Move to the background (Ctrl+B for all)" data-testid="tool-background">Background</button>}
                   {bg === 'running' ? <span className="s-work">running in the background</span> : status === 'running' ? <span className="s-work">running</span> : status === 'error' ? <span className="s-fail">FAILED</span> : bg === 'stopped' ? <span className="s-idle">stopped</span> : <span className="s-idle">done</span>}
                 </span>
               </ToolRow>
             )
           }
-          if (it.kind === 'show') return <div key={i} className="msg"><ShowCard path={it.path} onOpen={onOpen} /></div>
-          if (it.kind === 'note') return <div key={i} className="note">{it.text}</div>
-          if (it.kind === 'summary') return <SummaryRow key={i} text={it.text} />
-          if (it.kind === 'warning') return <WarningRow key={i} event={it.event} text={it.text} />
-          if (it.kind === 'codex') return <div key={i} className="msg"><CodexBox it={it} /></div>
+          if (it.kind === 'show') return <div key={key} className="msg"><ShowCard path={it.path} onOpen={st.open} /></div>
+          if (it.kind === 'note') return <div key={key} className="note">{it.text}</div>
+          if (it.kind === 'summary') return <SummaryRow key={key} text={it.text} />
+          if (it.kind === 'warning') return <WarningRow key={key} event={it.event} text={it.text} />
+          if (it.kind === 'codex') return <div key={key} className="msg"><CodexBox it={it} /></div>
           if (it.kind === 'thread') return (
-            <div key={i} className={`msg threadbox${it.queue?.pending ? ' queued' : ''}`}>
+            <div key={key} className={`msg threadbox${it.queue?.pending ? ' queued' : ''}`}>
               <div className="who thread"><Icon name="comment-discussion" />From thread {it.fromTitle} <span className="steer">({it.fromId})</span>
                 {it.steer && <span className="steer">steered while Claude worked</span>}
                 {it.queue?.pending && <span className="steer">queued, sends when Claude finishes</span>}
@@ -622,15 +648,16 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             </div>
           )
           if (it.kind === 'agent') return (
-            <div key={i} className="msg agentbox">
+            <div key={key} className="msg agentbox">
               <div className="who agent"><Icon name="hubot" />{it.from}</div>
               <MdBody text={it.text} />
             </div>
           )
-          return <div key={i} className="msg err" data-testid="msg-error"><Icon name="error" className="s-fail" /> {it.text}</div>
+          return <div key={key} className="msg err" data-testid="msg-error"><Icon name="error" className="s-fail" /> {it.text}</div>
         })}
       </>
-  ), [session.loaded, session.items, session.streaming, session.cwd, session.history?.more, limit, onLoadEarlier, onPromote, onDequeue, onOpen, onDiff, onBackground, editQueued, bgOf, session.sessionId, session.busy, startRewind])
+    )
+  }, [session.id, session.loaded, session.items, hasStream, session.cwd, session.history?.more, session.history?.count, session.asks, limit, st, editQueued, bgOf, session.sessionId, session.busy, startRewind])
 
   // the live session's own mode once it reports one; before that, the mode it will start in
   const shownMode = session.mode ?? (session.background ? 'auto' : mode)

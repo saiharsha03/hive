@@ -10,14 +10,13 @@ import { StatusBar } from './StatusBar'
 import { SessionView, draftEmpty, prefillDraft, insertIntoComposer, type Attachment } from './SessionView'
 import { DeployPanel } from './DeployPanel'
 import { useDeploy } from './useDeploy'
-import { PullPanel } from './PullPanel'
 import { DevPanel } from './DevPanel'
 import { GitPanel } from './GitPanel'
 import { DiffPanel, type DiffSpec } from './DiffPanel'
 import { useDev } from './useDev'
 import { ScriptsPanel } from './ScriptsPanel'
 import { useScripts } from './useScripts'
-import { WatchersView, type OpenThread } from './WatchersView'
+import { WatchersView, pickWatcher, type OpenThread } from './WatchersView'
 import { SettingsPanel } from './SettingsPanel'
 import { TodoPanel } from './TodoPanel'
 import { NotesPanel } from './NotesPanel'
@@ -27,7 +26,8 @@ import { FileEditor, fileOfTab, fileTabId, openInEditor, releaseFile, setFileOpe
 import { useTodos } from './useTodos'
 import { todoBadge } from '../../shared/todoCore'
 import { TOOL_TABS, workingOn, type Session, type ToolTab } from './chat'
-import { useAllStatus } from './statusStore'
+import { forgetStatus, useAllStatus } from './statusStore'
+import { forgetSent } from './RunPanels'
 import { activateSession, findSession, liveRows, markWaiting, onSessionEvent, type LiveRow } from './background'
 import { TabMenu } from './TabMenu'
 import { tabsToClose, type TabCloseAction } from './tabs'
@@ -50,14 +50,14 @@ import { getThemes, getUIs, setTheme, setUI, useAppearance } from './appearance'
 import { activate as activateIn, addPaneFor, emptyPanes, focusPane, focusedTab, moveTab, reconcile, splitWith, type PaneState } from './panes'
 import { ARRANGE, VIEW, placeOf, type Region, type ViewId } from './views'
 import { WatcherRows, WatchersPopover, useWatcherCounts } from './watchers'
-import { Divider, Icon, Modal, Popover, anchorOf, useSize, type Anchor } from './ui'
+import { Divider, Icon, Modal, Popover, anchorOf, useEscape, useSize, type Anchor } from './ui'
 import { getPref, setPref } from './prefs'
 import { pruneDrafts, saveTabs, savedTabs } from './restore'
 import { tabsToRestore, tabsToSave } from '../../shared/restoreCore'
 import { useAppName, useAppTagline } from './appSettings'
 import { HiveMark } from './HiveMark'
 
-type Pop = { kind: 'pull' | 'dev' | 'mcp' | 'hooks' | 'plugins' | 'threads' | 'watchers' | 'appearance' | 'live-waiting' | 'live-working'; anchor: Anchor }
+type Pop = { kind: 'dev' | 'mcp' | 'hooks' | 'plugins' | 'threads' | 'watchers' | 'appearance' | 'live-waiting' | 'live-working'; anchor: Anchor }
 type ModalKind = 'deploy' | 'settings' | null
 const centre = (): Anchor => anchorOf(null)
 
@@ -144,12 +144,7 @@ export function App() {
   // anything shown (a watcher's report, a file Claude shows you) opens as a tab next to the threads; only a pasted image
   // (no file behind it) still opens over the window
   const setPreview = (p: string | null) => { if (p && !p.startsWith('data:')) { openInEditor(p); return } setPreviewPath(p); setPreviewFull(!!p) }
-  useEffect(() => {
-    if (!previewFull) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreviewFull(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [previewFull])
+  useEscape(() => setPreviewFull(false), previewFull)
   const showDiff = (d: DiffSpec | null) => { setDiff(d); if (d) showView('git') }
   const scripts = useScripts((p) => setPreview(p))
 
@@ -159,8 +154,25 @@ export function App() {
   const panes = useMemo(() => reconcile(paneState, visible), [paneState, visible])
   useEffect(() => { if (panes !== paneState) setPaneState(panes) }, [panes])
   const activeId = focusedTab(panes)
+  // Text deltas of a reply come many times a second. They are joined and reach React state once per animation frame;
+  // a thread that is not on screen keeps its text aside until its next real event, or until it is shown.
+  const deltas = useRef(new Map<string, string>())
+  const deltaFrame = useRef(0)
+  const shownTabs = useRef(new Set<string>())
+  const flushDeltas = (which: (tab: string) => boolean) => {
+    const take = new Map([...deltas.current].filter(([tab]) => which(tab)))
+    if (!take.size) return
+    for (const tab of take.keys()) deltas.current.delete(tab)
+    setSessions((all) => all.map((s) => (take.has(s.id)
+      ? onSessionEvent(s, { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: take.get(s.id) } } }, activeIdRef.current, Date.now()) : s)))
+  }
+
   const activeIdRef = useRef(activeId)
   activeIdRef.current = activeId
+  // the tabs on screen (each pane's active one): only their replies are drawn as they stream
+  const shownKey = panes.panes.map((p) => p.active ?? '').join(' ')
+  shownTabs.current = new Set(shownKey.split(' ').filter(Boolean))
+  useEffect(() => { flushDeltas((t) => shownTabs.current.has(t)) }, [shownKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const visibleNow = () => sessionsRef.current.filter((s) => !s.background).map((s) => s.id)
 
   // ---- opening views wherever this UI keeps them ----
@@ -193,9 +205,9 @@ export function App() {
     else if (at === 'right') { setRightView(v); setRightOpen(true) }
     else if (at === 'bottom') { setBottomView(v); setBottomOpen(true) }
     else if (v === 'threads') setPop({ kind: 'threads', anchor: anchorOf(el) })
-    else if (v === 'pull' || v === 'dev') setPop({ kind: v, anchor: el ? anchorOf(el) : centre() })
+    else if (v === 'dev') setPop({ kind: v, anchor: el ? anchorOf(el) : centre() })
   }
-  // tools: Deploy and Settings are focused modals; Pull latest, Dev stack, MCP, hooks and plugins are popovers
+  // tools: Deploy and Settings are focused modals; Dev stack, MCP, hooks and plugins are popovers
   // Pull latest runs in the background from any layout's button: a note when it is done, a popup only when a repo failed
   const [pulling, setPulling] = useState(false)
   const [pullFail, setPullFail] = useState<{ repo: string; result: string }[] | null>(null)
@@ -299,6 +311,12 @@ export function App() {
 
   // every live session's events land here (backgrounded ones too); Claude's "show" opens the preview
   useEffect(() => window.api.onChatEvent((tabId, ev) => {
+    if (ev.type === 'stream_event' && !ev.parent_tool_use_id && ev.event?.type === 'content_block_delta' && ev.event.delta?.type === 'text_delta') {
+      deltas.current.set(tabId, (deltas.current.get(tabId) ?? '') + ev.event.delta.text)
+      if (shownTabs.current.has(tabId) && !deltaFrame.current) deltaFrame.current = requestAnimationFrame(() => { deltaFrame.current = 0; flushDeltas((t) => shownTabs.current.has(t)) })
+      return
+    }
+    flushDeltas((t) => t === tabId) // what was written so far goes in before the event that follows it
     const cur = sessionsRef.current.find((s) => s.id === tabId)
     if (ev.type === 'hive_show' && ev.path && !cur?.background) setPreview(ev.path)
     if (ev.type === 'hive_title' && ev.title) {
@@ -322,7 +340,12 @@ export function App() {
       if (cur?.sessionId) organize(cur.sessionId, ev.action, ev.until)
       return
     }
-    setSessions((all) => all.map((s) => (s.id === tabId ? onSessionEvent(s, ev, activeIdRef.current, Date.now()) : s)))
+    // an event that changes nothing (most stream events, a subagent's traffic) re-renders nothing
+    setSessions((all) => {
+      let changed = false
+      const next = all.map((s) => { if (s.id !== tabId) return s; const n = onSessionEvent(s, ev, activeIdRef.current, Date.now()); if (n !== s) changed = true; return n })
+      return changed ? next : all
+    })
   }), [ui])
   // a thread the app started by itself (a watcher's thread) or another thread started or resumed (from):
   // a background tab that is already working; a tab still open for it gets the message
@@ -471,7 +494,7 @@ export function App() {
     closing = closing.filter((id) => { const f = fileOfTab(id); if (!f || releaseFile(f)) return true; setPaneState((p) => activateIn(p, id)); return false })
     if (!closing.length) return
     setSessions((all) => all.filter((s) => !closing.includes(s.id)))
-    closing.forEach((id) => { if (!fileOfTab(id) && !id.startsWith('tool:')) void window.api.chatClose(id) })
+    closing.forEach((id) => { if (!fileOfTab(id) && !id.startsWith('tool:')) { void window.api.chatClose(id); deltas.current.delete(id); forgetStatus(id); forgetSent(id) } })
   }
   const closeSession = (id: string) => (id.startsWith('script:') ? void window.api.scriptsStop(id.slice(7)) : id === 'deploy' ? (deploy.w.phase !== 'deploying' && deploy.act({ t: 'stop' })) : closeTabs([id]))
   const paneTabsOf = (id: string) => panes.panes.find((p) => p.tabs.includes(id))?.tabs ?? [id]
@@ -486,7 +509,10 @@ export function App() {
   // threads still waiting on their own subagents / workflows / Codex runs count as working
   const statuses = useAllStatus()
   const agentCounts = useMemo(() => new Map([...statuses].map(([tab, st]) => [tab, st.tasks.filter((t) => t.status === 'running' && t.kind !== 'local_bash').length])), [statuses])
-  const live = useMemo(() => liveRows(sessions, [...(deploy.liveRow ? [deploy.liveRow] : []), ...scripts.liveRows], agentCounts), [sessions, deploy.liveRow, scripts.liveRows, agentCounts])
+  const liveNow = useMemo(() => liveRows(sessions, [...(deploy.liveRow ? [deploy.liveRow] : []), ...scripts.liveRows], agentCounts), [sessions, deploy.liveRow, scripts.liveRows, agentCounts])
+  // the same rows keep the same object, so the thread list and the Agents view do not re-render while a reply streams
+  const liveKey = JSON.stringify(liveNow)
+  const live = useMemo(() => liveNow, [liveKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const failedCount = live.waiting.filter((r) => liveLook(r).word === 'FAILED').length
 
   // a to-do's "Talk to Claude about this": a new thread named after it, the opening line filled in for Enter (or more)
@@ -506,6 +532,19 @@ export function App() {
     setModal(null)
   }
 
+  // the message never reached Claude (its process could not start, the folder is gone): the message says so, and the
+  // thread stops showing as working unless a turn was already running
+  const sendFailed = (tabId: string, uuid: string | undefined, wasBusy: boolean) => (e: unknown) => {
+    const why = String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    setSessions((all) => all.map((s): Session => {
+      if (s.id !== tabId) return s
+      const mine = !!uuid && s.items.some((it) => it.kind === 'user' && it.uuid === uuid)
+      const items: Item[] = mine
+        ? s.items.map((it) => { if (it.kind !== 'user' || it.uuid !== uuid) return it; const { queue: _q, ...rest } = it; return { ...rest, failed: why } })
+        : [...s.items, { kind: 'error', text: `The message was not sent: ${why}` }]
+      return { ...s, items, busy: wasBusy ? s.busy : false, streaming: wasBusy ? s.streaming : '' }
+    }))
+  }
   const send = (target: Session, text: string, images: Attachment[], mode?: 'steer' | 'queue' | 'interrupt') => {
     // while Claude works, a message steers the running turn, waits in the queue for the next one, or (interrupt) is
     // queued while the running turn is stopped, so it goes in at once
@@ -521,9 +560,9 @@ export function App() {
     }
     setSessions((all) => all.map((s) => (s.id === target.id ? { ...s, busy: true, items: [...s.items, item] } : s)))
     keepVisible(target.sessionId ?? target.id) // writing to a closed or archived thread brings it back to the list
-    void window.api.chatSend(target.id, target.cwd || folder, target.sessionId, {
+    window.api.chatSend(target.id, target.cwd || folder, target.sessionId, {
       uuid, title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background, ...(interrupt ? { interrupt: true } : {}),
-    })
+    }).catch(sendFailed(target.id, uuid, !!target.busy))
   }
 
   // the Team window asks: show a thread here, or say something in it like typing in its tab
@@ -564,7 +603,7 @@ export function App() {
       { id, title, cwd, worktrees: moved ? from.worktrees : undefined, items: [{ kind: 'user', text, images: [], at: Date.now() }], streaming: '', busy: true, loaded: true, background: false },
     ])
     setPaneState((p) => activateIn(p, id))
-    void window.api.chatSend(id, cwd, undefined, { title, text, images: [] })
+    window.api.chatSend(id, cwd, undefined, { title, text, images: [] }).catch(sendFailed(id, undefined, false))
   }
   // the handoff turn ended (however it ended): the fresh thread starts only if the file was really written
   const finishHandoff = (s: Session, p: { file: string; since: number }) => {
@@ -643,7 +682,7 @@ export function App() {
     setSessions((all) => [...all, {
       id, title, cwd, items: [{ kind: 'user', text, images: [] }], streaming: '', busy: true, loaded: true, background: true, mode: 'auto',
     }])
-    void window.api.chatSend(id, cwd, undefined, { title, text, images: [], background: true })
+    window.api.chatSend(id, cwd, undefined, { title, text, images: [], background: true }).catch(sendFailed(id, undefined, false))
   }
 
   // ---- keyboard ----
@@ -813,7 +852,7 @@ export function App() {
       case 'todos': return <TodoPanel todos={todos.todos} today={todos.today} error={todos.error} reload={todos.reload} onTalk={talkAbout} />
       case 'notes': return <NotesPanel />
       case 'dev': return <DevPanel state={dev.state} setState={dev.setState} />
-      case 'pull': return <PullPanel />
+      case 'pull': return null // Pull latest is an action (runPull), not a view
     }
   }
 
@@ -879,7 +918,7 @@ export function App() {
 
   const watchersTools = (
     <Fold id="watchers" title="Watchers" icon={<Icon name="eye" className="mk-watch" />} count={`${wc.on}/${wc.total} on`} testid="sidebar-watchers">
-      <WatcherRows compact onOpen={() => showView('watchers')} />
+      <WatcherRows compact onOpen={(id) => { pickWatcher(id); showView('watchers') }} />
     </Fold>
   )
 
@@ -996,15 +1035,14 @@ export function App() {
 
       {pop && (
         <Popover anchor={pop.anchor} onClose={() => setPop(null)} align={pop.kind === 'appearance' || pop.kind === 'watchers' || pop.kind === 'mcp' ? 'right' : 'left'}
-          width={pop.kind === 'dev' ? 820 : pop.kind === 'pull' ? 560 : pop.kind === 'threads' ? 360 : pop.kind === 'appearance' ? 460 : pop.kind === 'watchers' ? 400 : 440}
+          width={pop.kind === 'dev' ? 820 : pop.kind === 'threads' ? 360 : pop.kind === 'appearance' ? 460 : pop.kind === 'watchers' ? 400 : 440}
           className={`pop-${pop.kind}`} testid={`popover-${pop.kind}`}>
-          {pop.kind === 'pull' && <PullPanel onClose={() => setPop(null)} />}
           {pop.kind === 'dev' && <DevPanel state={dev.state} setState={dev.setState} onClose={() => setPop(null)} />}
           {pop.kind === 'mcp' && <McpMenu tabId={activeId} />}
           {pop.kind === 'hooks' && <HooksMenu folder={folder} />}
           {pop.kind === 'plugins' && <PluginsMenu />}
           {pop.kind === 'threads' && <div className="pop-threads">{threadsList(undefined, () => { setPop(null); newSession() })}</div>}
-          {pop.kind === 'watchers' && <WatchersPopover onOpen={() => { setPop(null); showView('watchers') }} onOpenAll={() => { setPop(null); showView('watchers') }} />}
+          {pop.kind === 'watchers' && <WatchersPopover onOpen={(id) => { setPop(null); pickWatcher(id); showView('watchers') }} onOpenAll={() => { setPop(null); showView('watchers') }} />}
           {pop.kind === 'appearance' && <div className="pop-appearance"><AppearancePicker /></div>}
           {pop.kind === 'live-waiting' && liveMenu(live.waiting)}
           {pop.kind === 'live-working' && liveMenu(live.working)}
@@ -1037,7 +1075,7 @@ export function App() {
           <pre className="allowout">{allowFail}</pre>
         </Modal>
       )}
-      {modal === 'settings' && <SettingsPanel onClose={() => setModal(null)} onWatchers={() => { setModal(null); showView('watchers') }} />}
+      {modal === 'settings' && <SettingsPanel onClose={() => setModal(null)} onWatchers={(id) => { setModal(null); if (id) pickWatcher(id); showView('watchers') }} />}
       {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} loadThreads={loadThreads} loadFiles={loadFiles} />}
 
       {dropped && <DropPrompt path={dropped} choices={dropChoices} onPick={(c) => startFromFile(c, dropped)} onCancel={() => setDropped(null)} />}

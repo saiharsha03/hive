@@ -2,7 +2,7 @@
 // message (rich HTML + the original markdown), one per table (HTML + TSV) and one per code block (just the code), and Ctrl+C
 // on a selection in the conversation gives light HTML instead of Chromium's copy with the dark theme's colors inline.
 import { INSIGHT, insightCallouts } from '../../shared/insightCore'
-import { useRef, useState, type ComponentProps } from 'react'
+import { memo, useRef, useState, type ComponentProps } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cleanHtml, tableTsv, textOf, wrapSelection, type CNode } from '../../shared/copyCore'
@@ -72,7 +72,8 @@ const COMPONENTS = {
   pre: ({ node: _n, ...p }: ComponentProps<'pre'> & { node?: unknown }) => <CodeBox {...p} />,
 }
 
-export function MdBody({ text, copy = true }: { text: string; copy?: boolean }) {
+// memo: a message's Markdown is parsed again only when its text changes, not whenever the conversation re-renders
+export const MdBody = memo(function MdBody({ text, copy = true }: { text: string; copy?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const copyAll = async () => { if (ref.current) await write(cleanHtml(kids(ref.current)), text) }
   return (
@@ -81,7 +82,7 @@ export function MdBody({ text, copy = true }: { text: string; copy?: boolean }) 
       <div className="body md" ref={ref}><Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>{insightCallouts(text)}</Markdown></div>
     </div>
   )
-}
+})
 
 // Ctrl+C on a selection in the conversation: light HTML of just the selection, plus its plain text
 document.addEventListener('copy', (e) => {
