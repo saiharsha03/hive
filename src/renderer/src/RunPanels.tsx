@@ -60,9 +60,17 @@ function remember(tabId: string, taskId: string, text: string) {
   m.set(taskId, [...(m.get(taskId) ?? []), { text, at: Date.now() }])
   sentTo.set(tabId, m)
 }
-// Claude passed it on: a SendMessage call whose text holds the start of the message
-const passedOn = (items: Item[], text: string) => items.some((it) => it.kind === 'tool' && it.name === 'SendMessage'
-  && JSON.stringify(it.input ?? {}).includes(JSON.stringify(text.slice(0, 40)).slice(1, -1)))
+// the tab was closed: what was sent to its subagents goes with it
+export const forgetSent = (tabId: string) => { sentTo.delete(tabId) }
+// Claude passed it on: a SendMessage call whose text holds the start of the message. The calls are written out once
+// per conversation state, not for every sent message on every render.
+const sends = new WeakMap<Item[], string[]>()
+function sendsOf(items: Item[]): string[] {
+  let v = sends.get(items)
+  if (!v) { v = items.flatMap((it) => (it.kind === 'tool' && it.name === 'SendMessage' ? [JSON.stringify(it.input ?? {})] : [])); sends.set(items, v) }
+  return v
+}
+const passedOn = (items: Item[], text: string) => { const start = JSON.stringify(text.slice(0, 40)).slice(1, -1); return sendsOf(items).some((s) => s.includes(start)) }
 
 function AgentChat({ tabId, t, items, busy, onSend }: { tabId: string; t: Task; items: Item[]; busy: boolean; onSend: Send }) {
   const [text, setText] = useState('')

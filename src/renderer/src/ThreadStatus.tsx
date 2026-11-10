@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { describeCron, nextRun, untilText } from '../../shared/cronCore'
 import { EFFORTS, modelLabel } from '../../shared/statusCore'
-import { inThreadList, kindLabel, shellName, type Task } from '../../shared/taskCore'
+import { kindLabel, type Task } from '../../shared/taskCore'
 import { dismissGoal, setPicked, useThreadStatus } from './statusStore'
 import { Icon, Popover, anchorOf, type Anchor } from './ui'
 
@@ -122,39 +122,21 @@ export function GoalLoop({ tabId, busy, onSend, onInterrupt }: { tabId: string; 
 }
 
 // a thread's shell commands by their short description (the Bash / PowerShell input), for naming its shell tasks
+// built once per conversation state (the items array is replaced when it changes), not on every render or clock tick
+const described = new WeakMap<Item[], (command: string) => string | undefined>()
 export function describer(items: Item[]): (command: string) => string | undefined {
+  const have = described.get(items)
+  if (have) return have
   const m = new Map<string, string>()
   for (const it of items) if (it.kind === 'tool' && typeof it.input?.command === 'string' && typeof it.input?.description === 'string') m.set(it.input.command, it.input.description)
-  return (c) => m.get(c)
+  const f = (c: string) => m.get(c)
+  described.set(items, f)
+  return f
 }
 // the app opens the Agents view (every thread's background work) in its side panel
 let showAgents: () => void = () => {}
 export const setShowAgents = (f: () => void) => { showAgents = f }
 export const openAgentsView = () => showAgents()
-
-// the background-work list above the message box: one folded line, the full list in the side panel's Agents view
-export function TaskList({ tabId, items = [] }: { tabId: string; items?: Item[] }) {
-  const all = useThreadStatus(tabId)
-  const [open, setOpen] = useState(false)
-  const now = useNow(all.tasks.some((t) => t.status === 'running' || inThreadList(t, Date.now())))
-  const name = describer(items)
-  const st = { ...all, tasks: all.tasks.filter((t) => inThreadList(t, now)).map((t) => ({ ...t, title: shellName(t, name) })) }
-  if (!st.tasks.length) return null
-  const running = st.tasks.filter((t) => t.status === 'running').length
-  return (
-    <div className="tasks" data-testid="thread-tasks">
-      <div className="tasks-head">
-        <button className="fold" onClick={() => setOpen((o) => !o)} data-testid="thread-tasks-toggle">
-          <Icon name={open ? 'chevron-down' : 'chevron-right'} />
-          <Icon name="type-hierarchy" className="mk-agents" />
-          {running ? `${running} running` : 'Background work'}{st.tasks.length > running ? `, ${st.tasks.length - running} finished` : ''}
-        </button>
-        <button className="link" onClick={() => showAgents()} data-testid="thread-tasks-side">Side panel</button>
-      </div>
-      {open && <div className="tst-list">{st.tasks.map((t) => <TaskRow key={t.id} t={t} tabId={tabId} />)}</div>}
-    </div>
-  )
-}
 
 function PickList({ anchor, items, value, onPick, onClose, testid, loading }: {
   anchor: Anchor; items: { value: string; label: string; note?: string }[]; value?: string | null; onPick: (v: string) => void; onClose: () => void; testid: string; loading?: boolean
@@ -183,9 +165,11 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   const [err, setErr] = useState('')
   const mref = useRef<HTMLButtonElement>(null)
   const eref = useRef<HTMLButtonElement>(null)
+  // a list that failed to load is asked for again the next time the picker opens
+  const [loadErr, setLoadErr] = useState(false)
   const openModels = () => {
     setOpen(open === 'model' ? null : 'model')
-    if (!models) window.api.chatModels(tabId).then(setModels).catch(() => setModels([]))
+    if (!models) { setLoadErr(false); window.api.chatModels(tabId).then(setModels).catch(() => setLoadErr(true)) }
   }
   const levels: string[] = [...EFFORTS]
   if (st.effort && !levels.includes(st.effort)) levels.push(st.effort)
@@ -200,26 +184,26 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
       </button>
       {(err || st.effortError) && <span className="tst-err" title={err || st.effortError}>switch failed</span>}
       {open === 'model' && (
-        <PickList anchor={anchorOf(mref.current)} value={st.model} loading={!models} testid="model-list" onClose={() => setOpen(null)}
+        <PickList anchor={anchorOf(mref.current)} value={st.model} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
           items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName }))]}
-          onPick={(v) => { setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => setErr(String(x?.message ?? x))) }} />
+          onPick={(v) => { const was = st.model; setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => { setPicked(tabId, { model: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
       )}
       {open === 'effort' && (
         <PickList anchor={anchorOf(eref.current)} value={st.effort} testid="effort-list" onClose={() => setOpen(null)}
           items={levels.map((l) => ({ value: l, label: l }))}
-          onPick={(v) => { setErr(''); setPicked(tabId, { effort: v }); window.api.chatSetEffort(tabId, v).catch((x) => setErr(String(x?.message ?? x))) }} />
+          onPick={(v) => { const was = st.effort; setErr(''); setPicked(tabId, { effort: v }); window.api.chatSetEffort(tabId, v).catch((x) => { setPicked(tabId, { effort: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
       )}
     </>
   )
 }
 
 // the active thread's model and effort, for the status bar
-export function ModelBadge({ tabId, onClick }: { tabId: string | null | undefined; onClick?: () => void }) {
+export function ModelBadge({ tabId }: { tabId: string | null | undefined }) {
   const st = useThreadStatus(tabId)
   if (!tabId || (!st.model && !st.effort)) return null
   return (
-    <button className="sbi" title="Model and effort of the focused thread" onClick={onClick} data-testid="top-model">
+    <span className="sbi" title="Model and effort of the focused thread (change them in the message box)" data-testid="top-model">
       <Icon name="sparkle" className="mk-model" />{modelLabel(st.model)}{st.effort ? `, ${st.effort}${st.ultrathink ? ' (ultrathink)' : ''}` : ''}
-    </button>
+    </span>
   )
 }
