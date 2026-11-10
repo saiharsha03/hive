@@ -106,7 +106,8 @@ export type Launched = { app: ElectronApplication; page: Page }
 const quitting = new WeakSet<ElectronApplication>()
 
 // data: the state folder (default DATA); a launch with another .env needs its own, since settings seed once from the first
-export async function launch(opts: { envFile?: string; data?: string } = {}): Promise<Launched> {
+// env: extra variables for this launch only (the opt-in Quarry spec)
+export async function launch(opts: { envFile?: string; data?: string; env?: Record<string, string> } = {}): Promise<Launched> {
   const data = opts.data ?? DATA
   mkdirSync(data, { recursive: true })
   seedSettings(data)
@@ -121,7 +122,7 @@ export async function launch(opts: { envFile?: string; data?: string } = {}): Pr
     HIVE_ENV_FILE: opts.envFile ?? join(RUN, 'workspace.env'),
     HIVE_SCRIPTS_FILE: join(RUN, 'scripts.json'),
     HIVE_PROJECTS_DIR: PROJECTS,
-  })
+  }, opts.env ?? {})
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const executablePath = require(join(ROOT, 'node_modules', 'electron')) as unknown as string
   const app = await electron.launch({ executablePath, args: [ROOT], cwd: ROOT, env, timeout: 60_000 })

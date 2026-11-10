@@ -4,10 +4,10 @@
 // Quarry sends is logged: its stderr is counted, not printed, and a call's params (SQL, values) never are.
 // No Electron imports: index.ts serves the UI and routes the Quarry page's calls; a test drives a fake serve.
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { checkCapabilities, errorOf, installRecord, lineSplitter, pickExe, QuarryError, restartDelay, type Capabilities } from './quarryCore'
-import { TEST_MODE } from './testMode'
+import { dataDir, TEST_MODE } from './testMode'
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
 
@@ -23,14 +23,15 @@ export class QuarryServe {
   stderrBytes = 0
   starts = 0
 
-  constructor(private command: () => [string, ...string[]], private onState: (up: boolean, why?: string) => void = () => {}) {}
+  // env: added to the process's environment (the e2e run's isolated Quarry, quarryEnv)
+  constructor(private command: () => [string, ...string[]], private onState: (up: boolean, why?: string) => void = () => {}, private env: Record<string, string> = {}) {}
 
   get running(): boolean { return !!this.proc }
 
   private start(): void {
     if (this.proc || !this.wanted) return
     const [cmd, ...args] = this.command()
-    const p = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+    const p = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env, ...this.env } })
     this.proc = p
     this.starts++
     this.upSince = Date.now()
@@ -117,7 +118,20 @@ async function recorded(): Promise<string[]> {
   return out
 }
 
-const capsOf = (exe: string) => new Promise<string>((res, rej) => execFile(exe, ['--capabilities'], { timeout: 15_000, windowsHide: true }, (e, o) => (e ? rej(e) : res(String(o)))))
+const capsOf = (exe: string) => new Promise<string>((res, rej) => execFile(exe, ['--capabilities'], { timeout: 15_000, windowsHide: true, env: { ...process.env, ...quarryEnv() } }, (e, o) => (e ? rej(e) : res(String(o)))))
+
+// Test mode never uses Quarry (it would reach the user's real databases), with one narrow exception: an e2e run that
+// sets HIVE_E2E_QUARRY=1 and names the exe in HIVE_QUARRY_EXE (e2e/08-quarry-live.spec.ts). That run's Quarry is
+// isolated in the run's own data folder with Quarry's own test switches: its data (QUARRY_HOME), no registry entry, an
+// in-memory keyring, and an empty folder in place of the older app it can import from. Nothing else about test mode changes.
+export const e2eQuarry = (): string | null => (TEST_MODE && process.env.HIVE_E2E_QUARRY === '1' && process.env.HIVE_QUARRY_EXE ? process.env.HIVE_QUARRY_EXE : null)
+export function quarryEnv(): Record<string, string> {
+  if (!e2eQuarry()) return {}
+  const home = join(dataDir(), 'quarry-home')
+  const legacy = join(dataDir(), 'quarry-legacy-none')
+  for (const d of [home, legacy]) mkdirSync(d, { recursive: true })
+  return { QUARRY_HOME: home, QUARRY_NO_REGISTRY: '1', QUARRY_TEST_KEYRING: 'memory', QUARRY_LEGACY_DIR: legacy }
+}
 
 export type QuarryStatus = { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }
 let status: QuarryStatus = { available: false, exe: null, version: null, running: false, reason: 'not checked yet' }
@@ -132,14 +146,15 @@ const set = (s: Partial<QuarryStatus>) => { status = { ...status, ...s }; onChan
 // how: tests run a fake serve through node instead of an exe
 type How = { caps?: (exe: string) => Promise<string>; command?: (exe: string) => [string, ...string[]]; exists?: (p: string) => boolean; recorded?: () => Promise<string[]> }
 export async function configureQuarry(setting: string, test = TEST_MODE, how: How = {}): Promise<QuarryStatus> {
-  const exe = test ? null : pickExe(setting, await (how.recorded ?? recorded)(), DEFAULT_LOCATIONS(), how.exists ?? existsSync)
+  const e2e = test ? e2eQuarry() : null
+  const exe = e2e ?? (test ? null : pickExe(setting, await (how.recorded ?? recorded)(), DEFAULT_LOCATIONS(), how.exists ?? existsSync))
   if (exe !== status.exe) { serve?.stop(); serve = null }
   if (!exe) { caps = null; set({ available: false, exe: null, version: null, running: false, reason: setting.trim().toLowerCase() === 'off' ? 'turned off' : 'Quarry is not installed' }); return status }
   let c
   try { c = checkCapabilities(await (how.caps ?? capsOf)(exe)) } catch (e) { c = { ok: false as const, reason: `${exe} did not start: ${(e as Error).message}` } }
   if (!c.ok) { caps = null; set({ available: false, exe, version: null, running: false, reason: c.reason }); return status }
   caps = c.caps
-  if (!serve) serve = new QuarryServe(() => (how.command ? how.command(exe) : [exe, 'serve']), (up, why) => set({ running: up, ...(why ? { reason: why } : {}) }))
+  if (!serve) serve = new QuarryServe(() => (how.command ? how.command(exe) : [exe, 'serve']), (up, why) => set({ running: up, ...(why ? { reason: why } : {}) }), quarryEnv())
   set({ available: true, exe, version: c.caps.version, reason: '' })
   return status
 }

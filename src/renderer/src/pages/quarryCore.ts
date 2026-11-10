@@ -1,10 +1,13 @@
 // The Quarry page's pure part: which of Quarry's themes matches Hive's (Quarry's names: graphite, quiet, classic,
-// midnight, forest, slate, mocha, light, paper, high-contrast). A Hive theme with the same name is passed as is; a light
-// one becomes light, a high-contrast one high-contrast, anything else Quarry's dark graphite.
+// midnight, forest, slate, mocha, light, paper, high-contrast). Hive's own ids differ for two of them: 'dark' is the
+// one shown as Quiet and 'hc' is High contrast. Any other Hive theme with Quarry's name is passed as is; an unknown
+// light one becomes light, a high-contrast one high-contrast, anything else Quarry's dark graphite.
 export const QUARRY_THEMES = ['graphite', 'quiet', 'classic', 'midnight', 'forest', 'slate', 'mocha', 'light', 'paper', 'high-contrast'] as const
 
 export function quarryTheme(hive: string | undefined): (typeof QUARRY_THEMES)[number] {
   const t = (hive ?? '').toLowerCase()
+  if (t === 'dark') return 'quiet'
+  if (t === 'hc') return 'high-contrast'
   const same = QUARRY_THEMES.find((q) => q === t)
   if (same) return same
   if (/contrast/.test(t)) return 'high-contrast'

@@ -8,6 +8,9 @@ test('Hive theme to Quarry theme', () => {
   assert.equal(quarryTheme('Paper'), 'paper')
   assert.equal(quarryTheme('light-warm'), 'light')
   assert.equal(quarryTheme('hc-contrast'), 'high-contrast')
-  assert.equal(quarryTheme('dark'), 'graphite')
+  assert.equal(quarryTheme('dark'), 'quiet') // Hive's id for the theme it shows as Quiet
+  assert.equal(quarryTheme('hc'), 'high-contrast')
+  assert.equal(quarryTheme('graphite'), 'graphite')
+  assert.equal(quarryTheme('somethingelse'), 'graphite')
   assert.equal(quarryTheme(undefined), 'graphite')
 })

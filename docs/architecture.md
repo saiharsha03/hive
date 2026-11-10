@@ -151,6 +151,10 @@ following Quarry's `docs/embedding.md`):
   interface, for every thread but a watcher's. Hive adds no filter: Quarry enforces its rules itself. For a write the
   tool asks the user to confirm that statement in the thread (a question card), and only then sets `allowWrite`, as
   Quarry asks of its host.
+- **Tests.** Unit tests run on a fake serve; `test/main/quarryReal.test.ts` and `e2e/08-quarry-live.spec.ts` run
+  against a real Quarry only when `HIVE_QUARRY_EXE` names one. That e2e launch alone sets `HIVE_E2E_QUARRY=1`, the one
+  case test mode starts Quarry: its data then lives in the run's folder (Quarry's `QUARRY_HOME`, no registry entry, an
+  in-memory keyring, nothing to import), so it starts with no connections and opens none.
 
 ## The worktree model
 
