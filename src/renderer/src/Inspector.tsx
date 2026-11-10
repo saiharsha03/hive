@@ -55,9 +55,9 @@ export const Inspector = memo(function Inspector() {
   return (
     <aside className="insp" data-testid="inspector" aria-label="Inspector">
       <div className="itabs" role="tablist">
-        {(['activity', 'changes', 'status'] as ITab[]).map((t) => (
+        {(['activity', 'changes', 'gate', 'status'] as ITab[]).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`itab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)} data-testid={`insp-${t}`}>
-            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : 'Status'}
+            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : t === 'gate' ? 'PR gate' : 'Status'}
             {t === 'activity' && running > 0 && <span className="n">{running}</span>}
           </button>
         ))}
@@ -65,6 +65,7 @@ export const Inspector = memo(function Inspector() {
       <div className="ibody">
         {tab === 'activity' && <Activity s={s} />}
         {tab === 'changes' && (s ? <Changes id={s.id} /> : <div className="iempty">Open a thread to see its changes.</div>)}
+        {tab === 'gate' && (s ? <GateView s={s} /> : <div className="iempty">Open a thread to see its PR gate.</div>)}
         {tab === 'status' && (s ? <MiniStatus s={s} /> : <div className="iempty">Open a thread to see its status.</div>)}
       </div>
     </aside>
@@ -196,6 +197,43 @@ function Activity({ s }: { s?: SessionMeta }) {
       {showElsewhere
         ? elsewhere.slice(0, 12).map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)
         : elseFailed.map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)}
+    </div>
+  )
+}
+
+// ---- PR gate: the workspace's review checklist for the commit this thread's checkout is on, read again every few
+// seconds, so each item turns as the review writes its line ----
+function GateView({ s }: { s: SessionMeta }) {
+  const dir = s.worktrees?.at(-1)?.path ?? s.cwd ?? ''
+  const [g, setG] = useState<import('../../main/gate').Gate | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    setG(null)
+    const load = () => void window.api.gateRead(dir).then((x) => { if (alive) setG(x) }).catch(() => {})
+    load()
+    const t = setInterval(load, 3000)
+    return () => { alive = false; clearInterval(t) }
+  }, [dir])
+  if (!g) return <div className="iempty" style={{ paddingTop: 16 }}>Reading the gate.</div>
+  if (g.error) return <div className="iempty" style={{ paddingTop: 16 }}>{g.error}</div>
+  if (!g.checklist && !g.marker) return <div className="iempty" style={{ paddingTop: 16 }}>No review checklist (.claude/known-misses.md) above this folder, so nothing gates a PR here.</div>
+  const all = g.items.length
+  const passed = all > 0 && g.done === all
+  return (
+    <div className="gate" data-testid="inspector-gate">
+      <div className="gate-head">
+        <span className={passed ? 'gate-ok' : g.marker ? 'gate-part' : 'gate-none'}>{passed ? 'Reviewed' : g.marker ? `${g.done} of ${all} done` : 'Not reviewed yet'}</span>
+        <span className="gate-sha" title={g.sha ?? ''}>{g.branch ? `${g.branch} ` : ''}{g.sha?.slice(0, 7)}</span>
+      </div>
+      <div className="gate-note">{g.marker ? `The marker for this commit was written ${g.markerAt ? clock(g.markerAt) : ''}. A new commit needs a new review.` : 'No review marker for this commit. Opening or pushing a PR is blocked until /pr-review --self has checked it.'}</div>
+      {g.items.map((i) => (
+        <button key={i.id} className={`gate-row${i.state ? '' : ' todo'}${open === i.id ? ' open' : ''}`} onClick={() => setOpen(open === i.id ? null : i.id)} aria-expanded={open === i.id} data-testid="gate-item">
+          <span className="gate-id">{i.id}</span>
+          <span className="gate-t">{i.title || 'Not in the checklist'}{open === i.id && <span className="gate-ev">{i.evidence || 'Not checked for this commit yet.'}</span>}</span>
+          <span className={`gate-s ${i.state ? `gate-${i.state.toLowerCase()}` : 'gate-wait'}`}>{i.state ? (i.state === 'NA' ? 'n/a' : i.state === 'FIXED' ? 'fixed' : 'pass') : 'to do'}</span>
+        </button>
+      ))}
     </div>
   )
 }

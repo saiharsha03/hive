@@ -42,6 +42,7 @@ import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { checkForUpdates, applyUpdate, startUpdater, updateState } from './updater'
 import { latestEngine, updateEngine } from './engine'
 import { checkVersions, startVersions, versions } from './versions'
+import { readGate } from './gate'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
 import { configureQuarry, e2eQuarry, onQuarryChange, quarryCall, quarryStatus, stopQuarry } from './quarry'
 import { confirmByCard, quarryConnections, quarryExplain, quarryQuery, quarrySchema } from './quarryTools'
@@ -569,6 +570,8 @@ handle('engine:latest', () => latestEngine())
 handle('engine:update', () => updateEngine())
 // the installed Claude Code and the SDK: their versions, what is newest, and (check) a read now that installs what is newer
 handle('versions:get', () => versions())
+// the PR gate for a thread's checkout: the checklist and what the review marker says for the commit at HEAD
+handle('gate:read', (_e, dir: unknown) => readGate(String(dir ?? '')))
 handle('versions:check', () => checkVersions())
 // what a thread started with no model or effort of its own runs on: this app's defaults (Settings > General), else Claude
 // Code's own (~/.claude/settings.json)

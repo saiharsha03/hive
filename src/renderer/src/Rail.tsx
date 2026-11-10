@@ -256,7 +256,8 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
     if (targets !== ids) clearPicked()
     setMenu({ ids: targets, x, y })
   }
-  const openSaved = (s: SessionInfo, beside = false) => { clearSnooze(s.id); openSession(s, { beside }) }
+  // opening a snoozed thread only looks at it: it stays snoozed until its time, or until you send it a message (send)
+  const openSaved = (s: SessionInfo, beside = false) => { openSession(s, { beside }) }
   const onSavedClick = (e: React.MouseEvent, s: SessionInfo) => {
     const ctrl = e.ctrlKey || e.metaKey
     if (!ctrl && !e.shiftKey) { anchor.current = s.id; openSaved(s); return }

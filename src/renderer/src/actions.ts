@@ -5,7 +5,7 @@ import { activateSession, findSession, liveRows, type LiveRow } from './backgrou
 import { PAGE_LABEL, workingOn, type Session, type ToolTab } from './chat'
 import { activate as activateIn, addPaneFor, focusedTab, moveTab, reconcile, splitWith, type PaneState } from './panes'
 import { createStore, getSessions, panes, setSessions } from './store'
-import { keepVisible } from './threads'
+import { clearSnooze, keepVisible } from './threads'
 import { draftEmpty, prefillDraft, type Attachment } from './SessionView'
 import { fileOfTab, fileTabId, openInEditor, releaseFile } from './EditorView'
 import { forgetStatus, getAllStatus } from './statusStore'
@@ -75,7 +75,7 @@ export function showDiffBeside(d: DiffSpec | null) {
 }
 
 // ---- inspector: which tab it shows (Activity, Changes, Files, Status) ----
-export type InspectorTab = 'activity' | 'changes' | 'files' | 'status'
+export type InspectorTab = 'activity' | 'changes' | 'files' | 'status' | 'gate'
 export const inspectorTab = createStore<InspectorTab>('activity')
 export function showInspector(t: InspectorTab) { inspectorTab.set(t); setLayout({ inspector: true, focus: false }) }
 
@@ -297,6 +297,8 @@ export type SendMode = 'steer' | 'queue' | 'interrupt'
 export function send(targetId: string, text: string, images: Attachment[], mode?: SendMode) {
   const target = getSessions().find((s) => s.id === targetId)
   if (!target) return
+  // a message to a snoozed thread brings it back from snooze (opening it alone does not)
+  clearSnooze(target.sessionId ?? target.id); clearSnooze(target.id)
   // while Claude works, a message steers the running turn, waits in the queue for the next one, or (interrupt) is
   // queued while the running turn is stopped, so it goes in at once
   const interrupt = !!target.busy && mode === 'interrupt'

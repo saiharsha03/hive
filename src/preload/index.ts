@@ -253,6 +253,7 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('versions:changed', fn)
   },
   defaultsGet: () => ipcRenderer.invoke('defaults:get'),
+  gateRead: (dir: string) => ipcRenderer.invoke('gate:read', dir),
   onUpdateState: (cb: (s: unknown) => void) => {
     const fn = (_e: unknown, s: unknown) => cb(s)
     ipcRenderer.on('update:state', fn)

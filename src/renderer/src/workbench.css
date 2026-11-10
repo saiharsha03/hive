@@ -200,3 +200,19 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 /* the right-hand panel's Activity: one heading per kind of thing, its count at the right, the same order always */
 .insp .isec.isec-k { padding: 12px 22px 2px; color: var(--label); font: 600 12px var(--sans); }
 .insp .isec.isec-k .n { color: var(--dim); font-weight: 400; font-variant-numeric: tabular-nums; }
+
+/* ---------- PR gate in the right-hand panel ---------- */
+.gate { padding: 14px 0 16px; }
+.gate-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 0 22px 4px; }
+.gate-ok { color: var(--git-added); font-weight: 600; } .gate-part { color: var(--signal); font-weight: 600; } .gate-none { color: var(--fail); font-weight: 600; }
+.gate-sha { font: 12px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.gate-note { padding: 0 22px 10px; font-size: 12px; color: var(--dim); line-height: 1.45; }
+.gate-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; width: 100%; padding: 4px 22px; background: none; border: 0; text-align: left; color: var(--ink); font: 400 13px var(--sans); cursor: pointer; }
+.gate-row:hover { background: var(--raised); }
+.gate-id { font: 12px var(--mono); color: var(--dim); }
+.gate-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gate-row.open .gate-t { white-space: normal; }
+.gate-ev { display: block; margin-top: 4px; font-size: 12px; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.gate-s { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.gate-pass, .gate-fixed { color: var(--git-added); } .gate-na { color: var(--dim); font-weight: 400; } .gate-wait { color: var(--signal); }
+.gate-row.todo .gate-t { color: var(--hi); }
