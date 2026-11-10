@@ -18,7 +18,7 @@ document.addEventListener('keydown', (e) => {
     e.stopImmediatePropagation()
     return
   }
-})
+}, true) // capture: the open layer takes the key before the message box (Esc = stop Claude) or the terminal under it
 export function useEscape(onEscape: EscHandler, on = true) {
   const h = useRef(onEscape)
   h.current = onEscape
