@@ -6,7 +6,7 @@ import { useAppName } from './appSettings'
 import { HiveMark } from './HiveMark'
 import { ModelBadge } from './ThreadStatus'
 import { getThemes, getUIs, useAppearance } from './appearance'
-import { Icon, Popover, anchorOf, type Anchor } from './ui'
+import { Confirm, Icon, Popover, anchorOf, type Anchor } from './ui'
 import { AccountSwitch } from './AccountSwitch'
 import { isNewer, type UpdateState } from '../../shared/versionCore'
 
@@ -21,6 +21,25 @@ const k = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : `${Math.round(
 const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`
 
 const Meter = ({ pct, t }: { pct: number; t: string }) => <span className={`meter m-${t}`}><i style={{ width: `${Math.max(2, Math.min(100, pct))}%` }} /></span>
+
+// the prompt cache's countdown ticks every second: it keeps its own clock, so the rest of the bar does not
+function CacheItem({ stats }: { stats: SessionStats }) {
+  const [now, setNow] = useState(Date.now())
+  const cold = !stats.lastReplyAt || stats.lastReplyAt + stats.cacheTtlMs <= now
+  useEffect(() => {
+    if (cold) return
+    setNow(Date.now())
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [cold, stats.lastReplyAt])
+  if (!stats.lastReplyAt) return null
+  const cacheLeft = stats.lastReplyAt + stats.cacheTtlMs - now
+  return (
+    <Item testid="status-cache" cls={cacheLeft > 0 ? '' : 's-fail'} title={stats.compactions ? `${stats.compactions} compaction(s) in this thread` : 'Prompt cache'}>
+      <Icon name="flame" className={cacheLeft > 0 ? 's-done' : ''} /><span className="opt2">cache </span>{cacheLeft > 0 ? `warm ${mmss(cacheLeft)}` : 'cold'}
+    </Item>
+  )
+}
 
 function Item({ children, title, onClick, testid, cls = '' }: { children: ReactNode; title?: string; onClick?: (el: HTMLElement) => void; testid: string; cls?: string }) {
   return onClick
@@ -45,6 +64,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   const [engineLatest, setEngineLatest] = useState<string | null>(null)
   const [engineBusy, setEngineBusy] = useState(false)
   const [engineMsg, setEngineMsg] = useState<string | null>(null)
+  const [restartAsk, setRestartAsk] = useState(false)
   const name = useAppName()
   const { ui, theme } = useAppearance()
 
@@ -79,19 +99,20 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
   useEffect(() => {
     setStats(null); setCtx(null)
     if (!sessionPath && !tabId) return
+    // an answer for the thread that was focused before never lands on this one
+    let live = true
     const load = () => {
-      if (sessionPath) window.api.sessionStats(sessionPath).then(setStats).catch(() => {})
-      if (tabId) window.api.chatContext(tabId).then(setCtx).catch(() => setCtx(null))
+      if (sessionPath) window.api.sessionStats(sessionPath).then((s) => { if (live) setStats(s) }).catch(() => {})
+      if (tabId) window.api.chatContext(tabId).then((c) => { if (live) setCtx(c) }).catch(() => { if (live) setCtx(null) })
     }
     load()
     const t = setInterval(load, 10_000)
-    return () => clearInterval(t)
+    return () => { live = false; clearInterval(t) }
   }, [sessionPath, tabId])
-  // clock for the cache countdown and reset times
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
+  // clock for the reset times and the "as of" mark (minutes); the cache countdown has its own
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t) }, [])
 
   const c = status?.connectors
-  const cacheLeft = stats?.lastReplyAt ? stats.lastReplyAt + stats.cacheTtlMs - now : null
   const ctxTotal = ctx?.total ?? stats?.contextTokens ?? null
   const ctxMax = ctx?.max ?? null
   // a reading over 10 minutes old is shown greyed with its time, not passed off as current
@@ -113,7 +134,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
       {status?.error && <Item testid="status-error" cls="s-fail" title={status.error}><Icon name="warning" />status error</Item>}
       <span className="sp" />
       {update && (
-        <Item testid="status-update" cls="s-done" title={update.kind === 'ready' ? `Hive ${update.version} is downloaded. Click to restart into it (it also installs when you quit)` : `Hive ${update.version} is on GitHub. Click to open the release`} onClick={() => void window.api.updateApply()}>
+        <Item testid="status-update" cls="s-done" title={update.kind === 'ready' ? `Hive ${update.version} is downloaded. Click to restart into it (it also installs when you quit)` : `Hive ${update.version} is on GitHub. Click to open the release`} onClick={() => { if (update.kind === 'ready' && working > 0) setRestartAsk(true); else void window.api.updateApply() }}>
           <Icon name={update.kind === 'ready' ? 'sync' : 'cloud-download'} />{update.kind === 'ready' ? `Restart to update to v${update.version}` : `v${update.version} available`}
         </Item>
       )}
@@ -134,11 +155,7 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
           <span className="lbl">ctx</span>{ctxMax ? <Meter pct={(ctxTotal / ctxMax) * 100} t={tone((ctxTotal / ctxMax) * 100)} /> : null}{k(ctxTotal)}{ctxMax ? ` / ${k(ctxMax)}` : ''}
         </Item>
       )}
-      {cacheLeft != null && (
-        <Item testid="status-cache" cls={cacheLeft > 0 ? '' : 's-fail'} title={stats?.compactions ? `${stats.compactions} compaction(s) in this thread` : 'Prompt cache'}>
-          <Icon name="flame" className={cacheLeft > 0 ? 's-done' : ''} /><span className="opt2">cache </span>{cacheLeft > 0 ? `warm ${mmss(cacheLeft)}` : 'cold'}
-        </Item>
-      )}
+      {stats && <CacheItem stats={stats} />}
       <ModelBadge tabId={tabId} />
       {c && (
         <Item testid="status-mcp" cls={c.failed ? 's-fail' : c.needsAuth ? 's-wait' : ''} title="MCP servers" onClick={onMcp}>
@@ -160,6 +177,11 @@ export function StatusBar({ sessionPath, tabId, branch, waiting, working, failed
             ))}
           </div>
         </Popover>
+      )}
+      {restartAsk && update && (
+        <Confirm title={`Restart to update to v${update.version}?`} action="Restart now" danger testid="update-restart" onCancel={() => setRestartAsk(false)} onConfirm={() => { setRestartAsk(false); void window.api.updateApply() }}>
+          <div>{working} thread{working > 1 ? 's are' : ' is'} working: the restart stops {working > 1 ? 'their' : 'its'} current turn. The update also installs by itself when you quit.</div>
+        </Confirm>
       )}
       {switching && <AccountSwitch current={status?.account ?? null} working={working} onClose={() => setSwitching(false)} />}
     </footer>
