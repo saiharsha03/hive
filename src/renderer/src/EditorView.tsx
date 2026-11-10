@@ -17,31 +17,11 @@ export const fileOfTab = (id: string) => (id.startsWith(FILE_TAB) ? id.slice(FIL
 const base = (p: string) => p.split(/[\\/]/).pop() ?? p
 const SERVER: Record<string, string> = { python: 'Pyright', typescript: 'TypeScript', vue: 'Vue' }
 
-// Monaco's colours from the window's tokens, so the editor sits in the same zones as everything else
-function hiveTheme(): string {
-  const cs = getComputedStyle(document.documentElement)
-  const v = (n: string, d: string) => { const x = cs.getPropertyValue(n).trim(); return /^#[0-9a-f]{6}$/i.test(x) ? x : d }
-  const fg = (n: string, d: string) => v(n, d).slice(1)
+// Monaco keeps the familiar VS Code look: its own vs-dark / vs / hc-black themes and syntax colours, picked to match
+// the window's theme
+const vsTheme = () => {
   const t = document.documentElement.dataset.theme
-  monaco.editor.defineTheme('hive', {
-    base: t === 'light' ? 'vs' : t === 'hc' ? 'hc-black' : 'vs-dark',
-    inherit: true,
-    rules: [
-      { token: 'keyword', foreground: fg('--sy-kw', '#7FB2FF') }, { token: 'string', foreground: fg('--sy-str', '#9ED69A') },
-      { token: 'comment', foreground: fg('--sy-cm', '#6F7881'), fontStyle: 'italic' }, { token: 'number', foreground: fg('--sy-num', '#E0A87A') },
-      { token: 'type', foreground: fg('--sy-fn', '#E5D38A') }, { token: 'function', foreground: fg('--sy-fn', '#E5D38A') },
-    ],
-    colors: {
-      'editor.background': v('--bg', '#1C1F23'), 'editor.foreground': v('--ink', '#CBD1D7'), 'editorGutter.background': v('--bg', '#1C1F23'),
-      'minimap.background': v('--bg', '#1C1F23'), 'editorLineNumber.foreground': v('--faint', '#5D656D'), 'editorLineNumber.activeForeground': v('--dim', '#8A929B'),
-      'editor.lineHighlightBackground': v('--band', '#22262B'), 'editor.lineHighlightBorder': v('--band', '#22262B'), 'editor.selectionBackground': v('--term-sel', '#2D4A73'),
-      'editorWidget.background': v('--raised', '#23272C'), 'editorWidget.border': v('--rule2', '#3A4047'), 'editorHoverWidget.background': v('--raised', '#23272C'),
-      'editorHoverWidget.border': v('--rule2', '#3A4047'), 'editorSuggestWidget.background': v('--raised', '#23272C'), 'editorSuggestWidget.border': v('--rule2', '#3A4047'),
-      'editorWarning.foreground': v('--wait', '#F2B33D'), 'editorError.foreground': v('--fail', '#F2605A'), 'editorIndentGuide.background1': v('--rule', '#2B3035'),
-      'scrollbarSlider.background': '#8A929B33', 'editorOverviewRuler.border': v('--rule', '#2B3035'),
-    },
-  })
-  return 'hive'
+  return t === 'light' ? 'vs' : t === 'hc' ? 'hc-black' : 'vs-dark'
 }
 
 // the problems in one file, from its model's markers (the language server's diagnostics)
@@ -176,14 +156,14 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
     if (media || !host.current) return
     const light = () => document.documentElement.dataset.theme === 'light'
     const e = monaco.editor.create(host.current, {
-      automaticLayout: true, theme: hiveTheme(), fontSize: 12.5, lineHeight: 21, minimap: { enabled: true }, scrollBeyondLastLine: false,
+      automaticLayout: true, theme: vsTheme(), fontSize: 13, minimap: { enabled: true }, scrollBeyondLastLine: false,
       fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || undefined, model: null, fixedOverflowWidgets: true,
     })
     ed.current = e
     e.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void saveRef.current())
     registerLanguageFeatures((file, line, column) => openInEditor(file, line, column))
     void light
-    const theme = new MutationObserver(() => requestAnimationFrame(() => monaco.editor.setTheme(hiveTheme())))
+    const theme = new MutationObserver(() => monaco.editor.setTheme(vsTheme()))
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     let alive = true
     load(path).then((d) => {
