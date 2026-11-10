@@ -7,7 +7,7 @@ import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterReset, realLimits, usageRows, type UsageRow } from '../shared/usageCore'
-import { writeUsageFile } from './usageFile'
+import { readUsageFile, writeUsageFile } from './usageFile'
 
 export type Limit = { pct: number | null; resetsAt: string | null } | null
 export type Status = {
@@ -61,6 +61,7 @@ export const setLiveUsage = (f: () => Promise<{ u: any; at: number } | null>) =>
 const IDLE_MS = 5 * 60_000
 const FRESH_MS = 10 * 60_000 // a live sample older than this (its reply's time) also asks the endpoint
 let usage: { limits: any; plan: string | null; at: number } | null = null
+let usageFromFile = false // the reading came from the shared usage file, not from this app: read the file again each time
 let lastIdleTry = 0
 let trying: Promise<void> | null = null
 const within = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
@@ -68,6 +69,7 @@ const within = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
 const keep = (u: any, at: number): boolean => {
   if (!realLimits(u?.rate_limits) || (usage && at < usage.at)) return false
   usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at }
+  usageFromFile = false
   writeUsageFile(u.rate_limits) // for a usage-guard hook (usageFile.ts): at most once a minute, never in test mode
   return true
 }
@@ -89,6 +91,12 @@ export async function getStatus(force = false): Promise<Status> {
   const a = account.status === 'fulfilled' ? account.value : null
   const m = mcp.status === 'fulfilled' ? mcp.value : null
   const failed = [account, mcp].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
+  // no reading of this app's own (the usage endpoint answers nothing until a thread here has had a reply): take the
+  // newest one another Claude session wrote to the usage file, at most an hour old
+  if (!usage || usageFromFile) {
+    const shared = readUsageFile(60 * 60_000)
+    if (shared) { usage = { limits: shared.limits, plan: null, at: shared.at }; usageFromFile = true }
+  }
   const l = usage?.limits
   return {
     account: a?.email ?? null,

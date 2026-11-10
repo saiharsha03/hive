@@ -87,6 +87,7 @@ export function AllowBody({ allow, onClose }: { allow: AllowStatus; onClose?: ()
       {!rows.length && <div className="ip-row"><span className="dimt">No address known yet.</span></div>}
       <div className="ip-foot"><span>Runs your allowlist command for the address this computer has now.</span>
         {onClose && <Btn kind="plain" onClick={onClose}>Close</Btn>}
+        {allow.changed && allow.ip && <Btn kind="plain" onClick={() => void window.api.allowMark().then(() => notice(`${allow.ip} kept as already allowed`)).catch((e) => notice(String(e?.message ?? e)))} testid="allow-mark" title="This address is already allowed on the other side: remember it, without running the command">Already allowed</Btn>}
         <Btn kind="primary" onClick={() => void run()} disabled={busy || allow.running} testid="dock-allow">{busy || allow.running ? 'Allowing' : 'Allow now'}</Btn></div>
     </>
   )

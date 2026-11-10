@@ -239,6 +239,7 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('codex:line', fn)
   },
   allowForget: (address: string) => ipcRenderer.invoke('allow:forget', address),
+  allowMark: () => ipcRenderer.invoke('allow:mark'),
   updateState: () => ipcRenderer.invoke('update:state'),
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateApply: () => ipcRenderer.invoke('update:apply'),

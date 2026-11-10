@@ -22,7 +22,7 @@ import { threadStatusView } from './statusView'
 import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
-import { allowStatus, forgetAllowed, initAllowlist, runAllowlist } from './ipAllow'
+import { allowStatus, forgetAllowed, initAllowlist, markAllowed, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
 import { cancelSwitch, switchAccount } from './account'
 import { listAccounts, otherClaudeProcesses, realAccountPaths, removeAccount, saveCurrent, switchAccount as switchProfile } from './accounts'
@@ -557,6 +557,7 @@ handle('codex:run', async (e, task: unknown, folder: unknown, edits: unknown) =>
 handle('codex:stop', () => { codexProc?.kill(); return true })
 // forget an allowed address, so it can be allowed again (its rule expired or was removed on the other side)
 handle('allow:forget', (_e, address: string) => forgetAllowed(String(address ?? '')))
+handle('allow:mark', () => markAllowed())
 // updates from GitHub Releases (packaged builds only)
 handle('update:state', () => updateState())
 handle('update:check', () => checkForUpdates())

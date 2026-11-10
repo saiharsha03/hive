@@ -39,6 +39,15 @@ export function allowStatus(): AllowStatus {
 }
 
 // forget an allowed address (its rule was removed on the other side): the next time Hive is there, it can allow it again
+// The address this computer has now is already allowed on the other side (someone added it by hand): keep it as known,
+// without running the command.
+export function markAllowed(): AllowStatus {
+  if (ip) save(addKnown(saved(), ip, new Date().toISOString()))
+  const st = allowStatus()
+  notify(st)
+  return st
+}
+
 export function forgetAllowed(address: string): AllowStatus {
   const known = saved()
   if (known.some((k) => k.ip === address)) save(forgetKnown(known, address))

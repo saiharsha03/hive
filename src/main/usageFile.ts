@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 // ~/.claude/usage/latest.json: the plan-limit snapshot a usage-guard hook reads. The terminal's usage-file plugin writes
 // it, but Hive turns that plugin off in its own sessions, so with no terminal open the hook would go quiet; Hive writes
 // the same file, in the same shape, from every real usage reading status.ts keeps (never a placeholder, never in test
@@ -38,4 +39,17 @@ export function writeUsageFile(limits: any, now = Date.now(), opts: { test?: boo
   if (!writeFileSafe(usageFilePath(), JSON.stringify(snap))) return false
   lastWrite = now
   return true
+}
+
+// The newest reading in the usage file, whoever wrote it (another Hive, a status line hook), as the limits object the
+// status code keeps. Null when there is none or it is older than maxAgeMs.
+export function readUsageFile(maxAgeMs: number, now = Date.now()): { limits: any; at: number } | null {
+  try {
+    const snap = JSON.parse(readFileSync(usageFilePath(), 'utf8')) as UsageSnapshot
+    const at = Date.parse(snap.writtenAt)
+    if (!Number.isFinite(at) || now - at > maxAgeMs) return null
+    const limits: Record<string, { utilization: number; resets_at: string }> = {}
+    for (const r of snap.rateLimits ?? []) limits[r.kind] = { utilization: r.percentUsed, resets_at: r.resetsAt }
+    return Object.keys(limits).length ? { limits, at } : null
+  } catch { return null }
 }

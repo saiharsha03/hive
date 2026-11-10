@@ -210,6 +210,7 @@ interface Window {
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowForget: (address: string) => Promise<import('../../shared/allowCore').AllowStatus>
+    allowMark: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
     codexRun: (task: string, folder: string, edits: boolean) => Promise<{ ok: boolean; answer: string }>
     codexStop: () => Promise<boolean>
