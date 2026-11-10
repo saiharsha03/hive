@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('search:progress', fn)
   },
   sessionStats: (path: string) => ipcRenderer.invoke('session:stats', path),
-  getStatus: () => ipcRenderer.invoke('status:get'),
+  getStatus: (force?: boolean) => ipcRenderer.invoke('status:get', force === true),
   listDir: (dir: string) => ipcRenderer.invoke('fs:list', dir),
   // every file under a folder (relative, forward slashes), for the "@" mention
   listAllFiles: (dir: string): Promise<string[]> => ipcRenderer.invoke('fs:listAll', dir),

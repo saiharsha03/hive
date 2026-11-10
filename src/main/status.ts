@@ -82,9 +82,10 @@ function readUsage(force = false): Promise<void> {
   return trying
 }
 
-export async function getStatus(): Promise<Status> {
+// force: ask the usage endpoint now (what /usage reads), without waiting out the five minutes between quiet tries
+export async function getStatus(force = false): Promise<Status> {
   const q = current()
-  const [account, mcp] = await Promise.allSettled([q.accountInfo(), q.mcpServerStatus(), readUsage()])
+  const [account, mcp] = await Promise.allSettled([q.accountInfo(), q.mcpServerStatus(), readUsage(force)])
   const a = account.status === 'fulfilled' ? account.value : null
   const m = mcp.status === 'fulfilled' ? mcp.value : null
   const failed = [account, mcp].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined

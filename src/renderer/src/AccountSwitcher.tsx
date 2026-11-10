@@ -18,9 +18,10 @@ const pick = (limits: UsageRow[] | undefined, w: 'five' | 'seven'): number | nul
 }
 const fromAccount = (a: Account): Row => ({ id: a.id, name: a.label, email: a.email, plan: a.plan, five: pick(a.limits, 'five'), seven: pick(a.limits, 'seven'), threads: a.threads ?? null, inUse: a.inUse })
 
-async function load(): Promise<{ rows: Row[]; several: boolean }> {
+// force: the limits are asked for now, the way /usage does, not taken from the last quiet reading
+async function load(force = false): Promise<{ rows: Row[]; several: boolean }> {
   const r = await accountsList()
-  const s = await window.api.getStatus().catch(() => null)
+  const s = await window.api.getStatus(force).catch(() => null)
   if (r.ok && r.data.length) {
     // Only the login in use can be asked for its limits. Its reading is kept per account, so an account that is not
     // in use shows the last one taken while it was (with its time), instead of an empty bar.
@@ -88,7 +89,7 @@ export function AccountSwitcher({ onClose, page = false }: { onClose: () => void
   }, !page)
   useFocusTrap(page ? idle : box)
 
-  const refresh = useCallback(() => void load().then((s) => { setState(s); setSel((i) => (i === 0 ? Math.max(0, s.rows.findIndex((r) => r.inUse)) : i)) }), [])
+  const refresh = useCallback(() => void load(true).then((s) => { setState(s); setSel((i) => (i === 0 ? Math.max(0, s.rows.findIndex((r) => r.inUse)) : i)) }), [])
   useEffect(() => { refresh(); return onAccountsChanged(refresh) }, [refresh])
   useEffect(() => onAccountSwitched(refresh), [refresh])
   useEffect(() => window.api.onAccountOutput((t) => setOut((o) => o + t)), [])
@@ -158,7 +159,7 @@ export function AccountSwitcher({ onClose, page = false }: { onClose: () => void
               <div className="acct-name"><b>{r.name}</b><span>{r.email ?? ''}</span></div>
               <div className="acct-plan">{r.plan ?? ''}</div>
               <div className="acct-use">
-                {r.five == null && r.seven == null ? <span className="acct-nolim" data-testid="account-nolimits">{r.inUse ? 'Limits not read yet' : 'Limits show after this account has been in use'}</span> : <>
+                {r.five == null && r.seven == null ? <span className="acct-nolim" data-testid="account-nolimits">{r.inUse ? 'Limits not read yet' : 'Limits show after this account has been in use'}{r.inUse && <> <Btn kind="link" onClick={(e) => { e.stopPropagation(); refresh() }} testid="account-read-limits">Read now</Btn></>}</span> : <>
                   <span>5h</span><span className="acct-bar"><Bar pct={r.five ?? 0} tone={(r.five ?? 0) >= 90 ? 'fail' : (r.five ?? 0) >= 75 ? 'wait' : 'accent'} /><em className="acct-pct">{r.five == null ? '' : `${r.five}%`}</em></span>
                   <span>7d</span><span className="acct-bar"><Bar pct={r.seven ?? 0} tone={(r.seven ?? 0) >= 90 ? 'fail' : (r.seven ?? 0) >= 75 ? 'wait' : 'accent'} /><em className="acct-pct">{r.seven == null ? '' : `${r.seven}%`}</em></span>
                   {r.asOf && <span className="acct-asof">as of {new Date(r.asOf).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}

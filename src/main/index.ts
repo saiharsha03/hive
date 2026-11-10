@@ -422,7 +422,7 @@ handle('sessions:list', async () => { const l = await listSessions(); syncSearch
 handle('search:query', (_e, text: string) => searchSessions(String(text)))
 handle('search:status', () => searchStatus())
 handle('session:stats', (_e, path: string) => sessionStats(path))
-handle('status:get', () => getStatus())
+handle('status:get', (_e, force: unknown) => getStatus(force === true))
 handle('fs:list', (_e, dir: string) => listDir(dir))
 handle('fs:listAll', (_e, dir: string) => listFiles(String(dir)))
 // Find in conversation: the window's own find, so it searches the whole window (message box and side panels too).
