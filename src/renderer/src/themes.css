@@ -1,149 +1,127 @@
-/* Colour themes. Every colour in the app is one of these tokens; a theme only sets tokens (plus a few rules
-   at the end where a theme keeps meaning without colour). All are based on VS Code's built-in themes.
-   data-theme on <html>: default (calm grey, colour only where it means something), mono, colour, light, hc. */
+/* Design tokens. Three themes set the same names: dark (the default), light and high contrast (data-theme on <html>).
+   The first block of each theme is the design's own set; the second maps the names older components use onto it,
+   so nothing in the app names a colour of its own. Flat zones, full-width rules, one accent, state as a coloured word. */
 
-:root, [data-theme='default'] {
+@font-face { font-family: 'Space Grotesk'; font-weight: 400; font-display: block; src: url('./assets/fonts/space-grotesk-latin-400.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-weight: 500; font-display: block; src: url('./assets/fonts/space-grotesk-latin-500.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-weight: 600; font-display: block; src: url('./assets/fonts/space-grotesk-latin-600.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-weight: 700; font-display: block; src: url('./assets/fonts/space-grotesk-latin-700.woff2') format('woff2'); }
+@font-face { font-family: 'Space Mono'; font-weight: 400; font-display: block; src: url('./assets/fonts/space-mono-latin-400.woff2') format('woff2'); }
+@font-face { font-family: 'Space Mono'; font-weight: 700; font-display: block; src: url('./assets/fonts/space-mono-latin-700.woff2') format('woff2'); }
+
+:root, [data-theme='dark'] {
   color-scheme: dark;
-  /* surfaces (VS Code Dark Modern) */
-  --bg: #1f1f1f; --side: #181818; --panel: #181818; --panel2: #202020; --raised: #252526; --input: #313131;
-  --line: #2b2b2b; --line2: #3c3c3c; --hover: #2a2d2e; --sel: #04395e; --selin: #37373d; --sel-ink: #ffffff;
-  --ink: #cccccc; --hi: #e7e7e7; --dim: #9d9d9d; --faint: #6e7681; --ghost: #5a5a5a;
-  --accent: #0078d4; --accent-hover: #026ec1; --on-accent: #ffffff; --focus: #0078d4; --link: #4daafc;
-  --badge-bg: #0078d4; --badge-ink: #ffffff; --head: var(--dim);
-  /* state: working / waiting for you / failed / done */
-  --work: #3794ff; --wait: #cca700; --fail: #f14c4c; --done: #89d185;
-  /* git decorations (gitDecoration.*) */
-  --git-modified: #e2c08d; --git-added: #81b88b; --git-untracked: #73c991; --git-deleted: #c74e39;
-  --git-renamed: #75beff; --git-conflict: #e4676b; --git-ignored: #8c8c8c; --git-dot: #e2c08d;
-  /* diff */
-  --diff-add-bg: rgba(155, 185, 85, .16); --diff-del-bg: rgba(255, 0, 0, .13);
-  --diff-add-num: rgba(155, 185, 85, .24); --diff-del-num: rgba(255, 0, 0, .2);
-  --diff-add-ink: #89d185; --diff-del-ink: #f14c4c; --diff-empty: rgba(255, 255, 255, .025); --diff-gap: rgba(77, 170, 252, .06);
-  /* chat roles: quiet in this theme, the conversation reads by weight */
-  --you-bg: #262626; --you-edge: #4a4a4a; --you-ink: var(--hi); --you-name: var(--dim);
-  --claude: var(--hi); --agent: var(--ink); --agent-edge: #4a4a4a; --thread: var(--ink); --thread-edge: #4a4a4a;
-  --tool-verb: var(--dim);
-  /* small tool marks in the conversation and the tool lists */
-  --tm-read: #4fc1ff; --tm-edit: #e2c08d; --tm-bash: #89d185; --tm-search: #dcdcaa; --tm-agent: #4ec9b0; --tm-web: #75beff; --tm-other: #9d9d9d;
-  --mk-deploy: #e5933c; --mk-pull: #73c991; --mk-dev: #4fc1ff; --mk-scripts: #89d185; --mk-todos: #cca700; --mk-watch: #4ec9b0;
-  --mk-git: #f05033; --mk-files: #dcb67a; --mk-agents: #4ec9b0; --mk-preview: #75beff; --mk-changes: #e2c08d; --mk-terminal: #cccccc;
-  --brand: #cca700;
-  /* file-type icons (Seti) */
-  --ic-blue: #519aba; --ic-cyan: #4fc1e9; --ic-yellow: #cbcb41; --ic-orange: #e37933; --ic-green: #8dc149;
-  --ic-red: #cc3e44; --ic-pink: #f55385; --ic-teal: #4ec9b0; --ic-grey: #6d8086; --ic-folder: #dcb67a;
-  /* ultrathink */
-  --ultra: #e5933c; --ultra-bg: rgba(229, 147, 60, .3);
-  /* code and misc */
-  --code-bg: #2b2b2b; --code-ink: var(--ink); --pre-bg: #181818; --th-bg: #232323;
-  --check-a: #232323; --check-b: #1b1b1b; --white: #ffffff;
-  --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .45); --overlay: rgba(0, 0, 0, .7);
-  --drop: rgba(0, 120, 212, .18); --switch-off: #3c3c3c; --knob: #9d9d9d;
-  --fail-bg: rgba(241, 76, 76, .07); --wait-bg: rgba(204, 167, 0, .12); --work-bg: rgba(55, 148, 255, .08);
-  --sb-bg: #181818; --sb-ink: #cccccc; --sb-brand-bg: #0078d4; --sb-brand-ink: #ffffff;
-  --scroll: rgba(121, 121, 121, .4);
-  /* terminal (VS Code Dark Modern) */
-  --term-bg: #181818; --term-fg: #cccccc; --term-cursor: #cccccc; --term-sel: #264f78;
-  --ansi-black: #000000; --ansi-red: #cd3131; --ansi-green: #0dbc79; --ansi-yellow: #e5e510; --ansi-blue: #2472c8;
-  --ansi-magenta: #bc3fbc; --ansi-cyan: #11a8cd; --ansi-white: #e5e5e5; --ansi-bright-black: #666666; --ansi-bright-red: #f14c4c;
-  --ansi-bright-green: #23d18b; --ansi-bright-yellow: #f5f543; --ansi-bright-blue: #3b8eea; --ansi-bright-magenta: #d670d6;
-  --ansi-bright-cyan: #29b8db; --ansi-bright-white: #e5e5e5;
-  --titlebar: #181818; --titlebar-symbol: #cccccc;
+  /* surfaces: flat zones separated by full-width rules, no shadows except overlays */
+  --bg: #1C1F23;        /* panes */
+  --side: #171A1D;      /* rail, inspector, title bar, status line */
+  --raised: #23272C;    /* question card, popovers, confirm bars */
+  --band: #22262B;      /* your own messages */
+  --sel: #1F2B3D;       /* selected row fill */
+  --rule: #2B3035;      /* zone and row rules */
+  --rule2: #3A4047;     /* table heads, inputs at rest, secondary buttons */
+  /* ink */
+  --hi: #F1F3F5; --ink: #CBD1D7; --dim: #8A929B; --faint: #5D656D;
+  /* one accent: the active item and the primary action only */
+  --accent: #3D8BFF; --on-accent: #FFFFFF; --link: #6AA6FF;
+  /* state words */
+  --work: #4FC1E0; --wait: #F2B33D; --fail: #F2605A; --done: #6CCB8E; --hold: #C9A86A;
+  /* git and diff */
+  --git-modified: #E5BE6A; --git-added: #6CCB8E; --git-untracked: #6CCB8E; --git-deleted: #F2605A; --git-ignored: #5D656D;
+  --diff-add-bg: rgba(108, 203, 142, .13); --diff-del-bg: rgba(242, 96, 90, .13);
+  /* syntax */
+  --sy-kw: #7FB2FF; --sy-fn: #E5D38A; --sy-str: #9ED69A; --sy-cm: #6F7881; --sy-num: #E0A87A;
+  --overlay-shadow: 0 10px 32px rgba(0, 0, 0, .45);
+  --scroll: rgba(138, 146, 155, .28);
+  --titlebar: #171A1D; --titlebar-symbol: #CBD1D7;
+  /* terminal */
+  --term-bg: #171A1D; --term-fg: #CBD1D7; --term-cursor: #CBD1D7; --term-sel: #2D4A73;
+  --ansi-black: #1C1F23; --ansi-red: #F2605A; --ansi-green: #6CCB8E; --ansi-yellow: #E5BE6A; --ansi-blue: #6AA6FF;
+  --ansi-magenta: #D59BD0; --ansi-cyan: #4FC1E0; --ansi-white: #CBD1D7; --ansi-bright-black: #5D656D; --ansi-bright-red: #FF7A73;
+  --ansi-bright-green: #8BDDA7; --ansi-bright-yellow: #F2CF85; --ansi-bright-blue: #8DBBFF; --ansi-bright-magenta: #E4B6E0;
+  --ansi-bright-cyan: #7AD3EA; --ansi-bright-white: #F1F3F5;
+  --hover: #22262B; --selin: #262B31; --fail-bg: rgba(242, 96, 90, .07); --wait-bg: rgba(242, 179, 61, .10); --work-bg: rgba(79, 193, 224, .07);
+  --scrim: rgba(0, 0, 0, .5); --overlay: rgba(0, 0, 0, .72); --drop: rgba(61, 139, 255, .16);
+  --code-bg: #262A30; --pre-bg: #171A1D;
 }
 
-/* Monochrome: grey only; meaning is carried by weight, underline, blinking and the letter badges */
-[data-theme='mono'] {
-  --accent: #d4d4d4; --accent-hover: #ffffff; --on-accent: #1f1f1f; --focus: #8a8a8a; --link: #e7e7e7;
-  --sel: #37373d; --selin: #2d2d30; --badge-bg: #d4d4d4; --badge-ink: #1f1f1f; --brand: #e7e7e7;
-  --work: #e7e7e7; --wait: #e7e7e7; --fail: #ffffff; --done: #9d9d9d;
-  --git-modified: #e7e7e7; --git-added: #e7e7e7; --git-untracked: #e7e7e7; --git-deleted: #8c8c8c;
-  --git-renamed: #e7e7e7; --git-conflict: #ffffff; --git-ignored: #5a5a5a; --git-dot: #cccccc;
-  --diff-add-bg: rgba(255, 255, 255, .09); --diff-del-bg: rgba(0, 0, 0, .35); --diff-add-num: rgba(255, 255, 255, .14);
-  --diff-del-num: rgba(0, 0, 0, .45); --diff-add-ink: #e7e7e7; --diff-del-ink: #8c8c8c; --diff-gap: rgba(255, 255, 255, .04);
-  --tm-read: #9d9d9d; --tm-edit: #9d9d9d; --tm-bash: #9d9d9d; --tm-search: #9d9d9d; --tm-agent: #9d9d9d; --tm-web: #9d9d9d;
-  --mk-deploy: #9d9d9d; --mk-pull: #9d9d9d; --mk-dev: #9d9d9d; --mk-scripts: #9d9d9d; --mk-todos: #9d9d9d; --mk-watch: #9d9d9d;
-  --mk-git: #9d9d9d; --mk-files: #9d9d9d; --mk-agents: #9d9d9d; --mk-preview: #9d9d9d; --mk-changes: #9d9d9d;
-  --ic-blue: #8c8c8c; --ic-cyan: #8c8c8c; --ic-yellow: #8c8c8c; --ic-orange: #8c8c8c; --ic-green: #8c8c8c;
-  --ic-red: #8c8c8c; --ic-pink: #8c8c8c; --ic-teal: #8c8c8c; --ic-grey: #6d6d6d; --ic-folder: #8c8c8c;
-  --ultra: #ffffff; --ultra-bg: rgba(255, 255, 255, .18);
-  --fail-bg: rgba(255, 255, 255, .05); --wait-bg: rgba(255, 255, 255, .06); --work-bg: rgba(255, 255, 255, .03);
-  --drop: rgba(255, 255, 255, .1); --sb-brand-bg: #37373d;
-  --term-sel: #3a3d41;
-}
-
-/* Colourful: the full colour pass (you in blue, Claude in orange, tool verbs in teal, coloured section heads) */
-[data-theme='colour'] {
-  --you-bg: rgba(0, 120, 212, .09); --you-edge: #0078d4; --you-name: #9cc9ff;
-  --claude: #e0a370; --agent: #3fb950; --agent-edge: #3fb950; --thread: #4fc1ff; --thread-edge: #4fc1ff;
-  --tool-verb: #4ec9b0; --head: #4daafc;
-  --diff-add-bg: rgba(155, 185, 85, .2); --diff-del-bg: rgba(255, 0, 0, .16);
-}
-
-/* Light: VS Code Light Modern */
 [data-theme='light'] {
   color-scheme: light;
-  --bg: #ffffff; --side: #f8f8f8; --panel: #f8f8f8; --panel2: #f3f3f3; --raised: #ffffff; --input: #ffffff;
-  --line: #e5e5e5; --line2: #cecece; --hover: #f2f2f2; --sel: #e4effb; --selin: #e8e8e8; --sel-ink: #1f1f1f;
-  --ink: #3b3b3b; --hi: #1f1f1f; --dim: #616161; --faint: #8b949e; --ghost: #b0b0b0;
-  --accent: #005fb8; --accent-hover: #0258a8; --on-accent: #ffffff; --focus: #005fb8; --link: #005fb8;
-  --badge-bg: #005fb8; --badge-ink: #ffffff; --head: var(--dim);
-  --work: #005fb8; --wait: #bf8803; --fail: #e51400; --done: #388a34;
-  --git-modified: #895503; --git-added: #587c0c; --git-untracked: #007100; --git-deleted: #ad0707;
-  --git-renamed: #007acc; --git-conflict: #ad0707; --git-ignored: #8e8e90; --git-dot: #895503;
-  --diff-add-bg: rgba(46, 160, 67, .14); --diff-del-bg: rgba(248, 81, 73, .13); --diff-add-num: rgba(46, 160, 67, .22);
-  --diff-del-num: rgba(248, 81, 73, .2); --diff-add-ink: #388a34; --diff-del-ink: #e51400; --diff-empty: rgba(0, 0, 0, .025); --diff-gap: rgba(0, 95, 184, .06);
-  --you-bg: #f3f3f3; --you-edge: #cecece; --you-name: var(--dim); --agent-edge: #cecece; --thread-edge: #cecece;
-  --tm-read: #0070c1; --tm-edit: #895503; --tm-bash: #388a34; --tm-search: #795e26; --tm-agent: #16825d; --tm-web: #007acc; --tm-other: #616161;
-  --mk-deploy: #c75b00; --mk-pull: #007100; --mk-dev: #0070c1; --mk-scripts: #388a34; --mk-todos: #bf8803; --mk-watch: #16825d;
-  --mk-git: #e04e2a; --mk-files: #b08419; --mk-agents: #16825d; --mk-preview: #007acc; --mk-changes: #895503; --mk-terminal: #3b3b3b;
-  --brand: #bf8803;
-  --ic-blue: #3a7ea3; --ic-cyan: #1a8fb8; --ic-yellow: #a3a300; --ic-orange: #c75b00; --ic-green: #5c8a1f;
-  --ic-red: #b8282e; --ic-pink: #c7336b; --ic-teal: #16825d; --ic-grey: #6d8086; --ic-folder: #b08419;
-  --ultra: #c75b00; --ultra-bg: rgba(199, 91, 0, .18);
-  --code-bg: #f0f0f0; --pre-bg: #f8f8f8; --th-bg: #f3f3f3; --check-a: #eeeeee; --check-b: #f8f8f8;
-  --shadow: rgba(0, 0, 0, .16); --scrim: rgba(0, 0, 0, .25); --overlay: rgba(0, 0, 0, .55);
-  --drop: rgba(0, 95, 184, .12); --switch-off: #cecece; --knob: #ffffff;
-  --fail-bg: rgba(229, 20, 0, .06); --wait-bg: rgba(191, 136, 3, .1); --work-bg: rgba(0, 95, 184, .06);
-  --sb-bg: #f8f8f8; --sb-ink: #3b3b3b; --sb-brand-bg: #005fb8; --sb-brand-ink: #ffffff;
-  --scroll: rgba(100, 100, 100, .35);
-  --term-bg: #f8f8f8; --term-fg: #3b3b3b; --term-cursor: #3b3b3b; --term-sel: #add6ff;
-  --ansi-black: #000000; --ansi-red: #cd3131; --ansi-green: #107c10; --ansi-yellow: #949800; --ansi-blue: #0451a5;
-  --ansi-magenta: #bc05bc; --ansi-cyan: #0598bc; --ansi-white: #555555; --ansi-bright-black: #666666; --ansi-bright-red: #cd3131;
-  --ansi-bright-green: #14ce14; --ansi-bright-yellow: #b5ba00; --ansi-bright-blue: #0451a5; --ansi-bright-magenta: #bc05bc;
-  --ansi-bright-cyan: #0598bc; --ansi-bright-white: #a5a5a5;
-  --titlebar: #f8f8f8; --titlebar-symbol: #3b3b3b;
+  --bg: #F3F4F6; --side: #ECEEF1; --raised: #FFFFFF; --band: #FFFFFF; --sel: #E4ECFA; --rule: #DCE0E5; --rule2: #C5CBD3;
+  --hi: #0F1318; --ink: #2A3038; --dim: #5D6672; --faint: #8E97A2;
+  --accent: #0A5BD3; --on-accent: #FFFFFF; --link: #0A5BD3;
+  --work: #0B7AA0; --wait: #A15F00; --fail: #C42B2B; --done: #1D7A43; --hold: #86704A;
+  --git-modified: #9A6700; --git-added: #1D7A43; --git-untracked: #1D7A43; --git-deleted: #C42B2B; --git-ignored: #8E97A2;
+  --diff-add-bg: rgba(29, 122, 67, .10); --diff-del-bg: rgba(196, 43, 43, .08);
+  --sy-kw: #1F56B5; --sy-fn: #7A4E00; --sy-str: #1D7A43; --sy-cm: #8E97A2; --sy-num: #B04A00;
+  --overlay-shadow: 0 10px 28px rgba(15, 19, 24, .16);
+  --scroll: rgba(93, 102, 114, .3);
+  --titlebar: #ECEEF1; --titlebar-symbol: #2A3038;
+  --term-bg: #ECEEF1; --term-fg: #2A3038; --term-cursor: #2A3038; --term-sel: #BFD3F5;
+  --ansi-black: #0F1318; --ansi-red: #C42B2B; --ansi-green: #1D7A43; --ansi-yellow: #9A6700; --ansi-blue: #0A5BD3;
+  --ansi-magenta: #9B3E93; --ansi-cyan: #0B7AA0; --ansi-white: #5D6672; --ansi-bright-black: #8E97A2; --ansi-bright-red: #D84040;
+  --ansi-bright-green: #22914F; --ansi-bright-yellow: #B07A00; --ansi-bright-blue: #2E73DD; --ansi-bright-magenta: #B04FA8;
+  --ansi-bright-cyan: #138DB5; --ansi-bright-white: #2A3038;
+  --hover: #E6E9ED; --selin: #E0E4EA; --fail-bg: rgba(196, 43, 43, .06); --wait-bg: rgba(161, 95, 0, .08); --work-bg: rgba(11, 122, 160, .06);
+  --scrim: rgba(15, 19, 24, .28); --overlay: rgba(15, 19, 24, .6); --drop: rgba(10, 91, 211, .12);
+  --code-bg: #E6E9ED; --pre-bg: #ECEEF1;
 }
 
-/* High Contrast: VS Code Dark High Contrast; borders instead of fills, orange focus outline */
+/* high contrast: black zones, light rules, brighter state words; the same names */
 [data-theme='hc'] {
-  --bg: #000000; --side: #000000; --panel: #000000; --panel2: #000000; --raised: #000000; --input: #000000;
-  --line: #6fc3df; --line2: #6fc3df; --hover: #0a0a0a; --sel: #000000; --selin: #000000; --sel-ink: #ffffff;
-  --ink: #ffffff; --hi: #ffffff; --dim: #e0e0e0; --faint: #bdbdbd; --ghost: #a7a8a9;
-  --accent: #f38518; --accent-hover: #ff9d3c; --on-accent: #000000; --focus: #f38518; --link: #21a6ff;
-  --badge-bg: #000000; --badge-ink: #ffffff; --brand: #ffd700;
-  --work: #75beff; --wait: #ffd700; --fail: #f48771; --done: #89d185;
-  --git-modified: #e2c08d; --git-added: #a1e3ad; --git-untracked: #a1e3ad; --git-deleted: #c74e39; --git-ignored: #a7a8a9;
-  --diff-add-bg: rgba(155, 185, 85, .25); --diff-del-bg: rgba(255, 0, 0, .3); --diff-empty: #000000;
-  --you-bg: #000000; --you-edge: #6fc3df; --you-name: #ffffff; --agent-edge: #6fc3df; --thread-edge: #6fc3df;
-  --code-bg: #000000; --pre-bg: #000000; --th-bg: #000000; --check-a: #111111; --check-b: #000000;
-  --shadow: rgba(0, 0, 0, 0); --scrim: rgba(0, 0, 0, .6);
-  --sb-bg: #000000; --sb-ink: #ffffff; --sb-brand-bg: #000000; --sb-brand-ink: #ffffff;
-  --term-bg: #000000; --term-fg: #ffffff; --term-cursor: #ffffff; --term-sel: #ffffff55;
-  --titlebar: #000000; --titlebar-symbol: #ffffff;
+  color-scheme: dark;
+  --bg: #000000; --side: #000000; --raised: #0B0D10; --band: #101317; --sel: #0E2A52; --rule: #6B737C; --rule2: #A3ABB4;
+  --hi: #FFFFFF; --ink: #FFFFFF; --dim: #D4D9DE; --faint: #A3ABB4;
+  --accent: #4DA3FF; --on-accent: #000000; --link: #7DBBFF;
+  --work: #5FD8F5; --wait: #FFC94D; --fail: #FF7A73; --done: #7EE2A1; --hold: #E3C68A;
+  --git-modified: #F5CF73; --git-added: #7EE2A1; --git-untracked: #7EE2A1; --git-deleted: #FF7A73; --git-ignored: #A3ABB4;
+  --diff-add-bg: rgba(126, 226, 161, .22); --diff-del-bg: rgba(255, 122, 115, .24);
+  --sy-kw: #9CC4FF; --sy-fn: #F5E39A; --sy-str: #B4E8B0; --sy-cm: #A3ABB4; --sy-num: #F5BE90;
+  --overlay-shadow: none;
+  --scroll: rgba(212, 217, 222, .45);
+  --titlebar: #000000; --titlebar-symbol: #FFFFFF;
+  --term-bg: #000000; --term-fg: #FFFFFF; --term-cursor: #FFFFFF; --term-sel: #FFFFFF55;
+  --hover: #12161B; --selin: #12161B; --fail-bg: transparent; --wait-bg: transparent; --work-bg: transparent;
+  --scrim: rgba(0, 0, 0, .7); --overlay: rgba(0, 0, 0, .85); --drop: rgba(77, 163, 255, .2);
+  --code-bg: #101317; --pre-bg: #000000;
 }
 
-/* ---- meaning without colour ---- */
-[data-theme='mono'] .s-fail, [data-theme='mono'] .tsk-status.failed { text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
-[data-theme='mono'] .s-wait { font-weight: 700; }
-[data-theme='mono'] .s-done { opacity: .75; }
-[data-theme='mono'] .frow.g-deleted .fname, [data-theme='mono'] .fr.g-deleted .fname { text-decoration: line-through; }
-[data-theme='mono'] .frow.g-untracked .fname, [data-theme='mono'] .fr.g-untracked .fname, [data-theme='mono'] .frow.g-added .fname { text-decoration: underline; text-underline-offset: 3px; }
-[data-theme='mono'] .dv-t.del { color: var(--dim); text-decoration: line-through; text-decoration-color: var(--ghost); }
-[data-theme='mono'] .dv-t.add { font-weight: 600; }
-[data-theme='mono'] .gletter, [data-theme='mono'] .gl { border: 1px solid var(--line2); padding: 0 3px; }
+/* type, spacing and rules: the same in every theme */
+:root {
+  --sans: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --mono: 'Space Mono', Consolas, monospace;
+  --t-state: 700 10.5px/1 var(--sans);
+  --t-label: 400 11.5px/1.4 var(--sans);
+  --t-ui: 400 13px/1.45 var(--sans);
+  --t-conv: 400 15px/1.62 var(--sans);
+  --t-title: 600 16px/1.3 var(--sans);
+  --t-page: 600 22px/1.2 var(--sans);
+  --t-code: 400 12.5px/1.68 var(--mono);
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 14px; --s5: 18px; --s6: 22px; --s7: 26px;
+  --pane-pad: 22px; --row-pad: 6px 14px; --radius: 2px;
+  --rule-w: 1px; --active-bar: 3px; --tab-top: 2px; --q-top: 2px;
+}
+
+/* the names older components use, mapped onto the design's set (one place, every theme) */
+:root, [data-theme] {
+  --line: var(--rule); --line2: var(--rule2); --panel: var(--side); --panel2: var(--raised); --input: transparent;
+  --sel-ink: var(--hi); --ghost: var(--faint); --accent-hover: var(--accent); --focus: var(--accent);
+  --badge-bg: transparent; --badge-ink: var(--dim); --head: var(--dim); --brand: var(--hi);
+  --git-renamed: var(--git-modified); --git-conflict: var(--fail); --git-dot: var(--git-modified);
+  --diff-add-num: var(--diff-add-bg); --diff-del-num: var(--diff-del-bg); --diff-add-ink: var(--done); --diff-del-ink: var(--fail);
+  --diff-empty: transparent; --diff-gap: var(--hover);
+  --you-bg: var(--band); --you-edge: var(--rule2); --you-ink: var(--hi); --you-name: var(--dim);
+  --claude: var(--hi); --agent: var(--ink); --agent-edge: var(--rule2); --thread: var(--ink); --thread-edge: var(--rule2); --tool-verb: var(--dim);
+  --tm-read: var(--link); --tm-edit: var(--git-modified); --tm-bash: var(--work); --tm-search: var(--dim); --tm-agent: var(--link); --tm-web: var(--dim); --tm-other: var(--dim);
+  --mk-deploy: var(--dim); --mk-pull: var(--dim); --mk-dev: var(--dim); --mk-scripts: var(--dim); --mk-todos: var(--dim); --mk-watch: var(--dim);
+  --mk-git: var(--dim); --mk-files: var(--dim); --mk-agents: var(--dim); --mk-preview: var(--dim); --mk-changes: var(--dim); --mk-terminal: var(--dim);
+  --ic-blue: var(--dim); --ic-cyan: var(--dim); --ic-yellow: var(--dim); --ic-orange: var(--dim); --ic-green: var(--dim);
+  --ic-red: var(--dim); --ic-pink: var(--dim); --ic-teal: var(--dim); --ic-grey: var(--faint); --ic-folder: var(--dim);
+  --ultra: var(--wait); --ultra-bg: var(--wait-bg);
+  --code-ink: var(--hi); --th-bg: transparent; --check-a: var(--raised); --check-b: var(--bg); --white: #FFFFFF;
+  --shadow: rgba(0, 0, 0, .35); --switch-off: var(--rule2); --knob: var(--dim);
+  --sb-bg: var(--side); --sb-ink: var(--dim); --sb-brand-bg: var(--side); --sb-brand-ink: var(--hi);
+}
 
 /* high contrast: outline what other themes fill */
-[data-theme='hc'] .th.on, [data-theme='hc'] .srow.active, [data-theme='hc'] .ptab.on, [data-theme='hc'] .btab.on,
-[data-theme='hc'] .rtab.on, [data-theme='hc'] .act.on, [data-theme='hc'] .frow.sel, [data-theme='hc'] .stab.on,
-[data-theme='hc'] .pal-row.on, [data-theme='hc'] .sm-row.on, [data-theme='hc'] .pop-row.on { outline: 1px dashed var(--focus); outline-offset: -1px; }
-[data-theme='hc'] button:focus-visible, [data-theme='hc'] textarea:focus, [data-theme='hc'] input:focus { outline: 1px solid var(--focus); }
-[data-theme='hc'] .badge { border: 1px solid var(--line); }
+[data-theme='hc'] .rail-row.on, [data-theme='hc'] .tab.on, [data-theme='hc'] .pal-row.on, [data-theme='hc'] .sm-row.on, [data-theme='hc'] .pop-row.on,
+[data-theme='hc'] .frow.sel, [data-theme='hc'] .itab.on { outline: 1px solid var(--accent); outline-offset: -1px; }
