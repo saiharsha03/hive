@@ -116,7 +116,9 @@ const mainWeb = () => (mainWin && !mainWin.isDestroyed() && !mainWin.webContents
 // the main window's page has loaded and has reset (chat:reset, its first effect): only then can it be handed threads
 const page = readyGate()
 // Hive's own background threads (Dependabot reviewers) open as background tabs in the app window
-const appWindow = () => { const w = mainWeb(); return w && !w.isLoading() && page.ready() ? mainWin! : undefined }
+// (not webContents.isLoading(): that is true whenever anything inside the page loads, such as the Quarry view that
+// stays mounted, and it kept every watcher and Dependabot run from starting)
+const appWindow = () => { const w = mainWeb(); return w && page.ready() ? mainWin! : undefined }
 function spawnThread(t: BackgroundThread) {
   const w = appWindow()
   if (!w) throw new Error(`The ${appName()} window is not ready`)
@@ -879,7 +881,8 @@ function createWindow(): void {
     else { quitting = true; app.quit() } // Quit (the × only hides to the tray)
   })
   // a page that loads again (a dev reload, a crash) is not ready for threads until it has reset
-  web.on('did-start-loading', () => page.loading())
+  // only the page itself loading again counts: a frame or an embedded view loading inside it leaves the page as it is
+  web.on('did-start-navigation', (e: any, _url: string, inPlace: boolean, mainFrame: boolean) => { if ((e?.isMainFrame ?? mainFrame) && !(e?.isSameDocument ?? inPlace)) page.loading() })
 
   // closing the window hides it to the tray (like Slack or Teams): threads, watchers and the phone link keep running.
   // Quit is in the tray menu. Test mode closes for real, so the tests can end the app.
