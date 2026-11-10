@@ -26,8 +26,23 @@ export function NotesPanel({ onClose }: { onClose?: () => void }) {
   selRef.current = sel
   const newId = useRef<string | null>(null)
   const chain = useRef(Promise.resolve())
+  // saves under way, a count that goes up with every save, and the text this panel last read or wrote for the open
+  // note: together they tell a change made elsewhere (Claude, another program) from the echo of our own save
+  const saving = useRef(0)
+  const saveGen = useRef(0)
+  const mine = useRef('')
 
-  const load = () => window.api.listNotes().then(setNotes, (e) => setError(String(e?.message ?? e)))
+  const load = () => {
+    const gen = saveGen.current
+    return window.api.listNotes().then((list) => {
+      setNotes(list)
+      // the open note changed on disk and nothing typed here is waiting: show the new text, so the next keystroke
+      // does not save the old one over it
+      const id = selRef.current
+      const n = id ? list.find((x) => x.id === id) : undefined
+      if (n && !pending.current && !saving.current && gen === saveGen.current && n.text !== mine.current) { mine.current = n.text; setText(n.text) }
+    }, (e) => setError(String(e?.message ?? e)))
+  }
   useEffect(() => { void load(); return window.api.onNotesChanged(() => { void load() }) }, [])
 
   // write what was typed, one save at a time, so a new note is created once and later saves update it
@@ -37,13 +52,16 @@ export function NotesPanel({ onClose }: { onClose?: () => void }) {
     if (!p) return
     pending.current = null
     const isNew = p.id === NEW
-    const id = await window.api.saveNote(isNew ? newId.current : p.id, p.text)
+    saving.current++
+    let id: string
+    try { id = await window.api.saveNote(isNew ? newId.current : p.id, p.text) } finally { saving.current--; saveGen.current++ }
+    if ((isNew ? selRef.current === null : selRef.current === p.id)) mine.current = p.text
     if (isNew && !newId.current) { newId.current = id; if (selRef.current === null) setSel(id) }
   }).catch((e) => setError(String((e as Error)?.message ?? e))))
   useEffect(() => () => { void flush() }, [])
 
-  const open = (n: NoteInfo) => { void flush(); setSel(n.id); setText(n.text); setPreview(false) }
-  const create = () => { void flush().then(() => { newId.current = null }); setSel(null); setText(''); setPreview(false); setQuery('') }
+  const open = (n: NoteInfo) => { void flush(); mine.current = n.text; setSel(n.id); setText(n.text); setPreview(false) }
+  const create = () => { void flush().then(() => { newId.current = null }); mine.current = ''; setSel(null); setText(''); setPreview(false); setQuery('') }
   const edit = (v: string) => {
     setText(v)
     pending.current = { id: selRef.current ?? NEW, text: v }
@@ -51,11 +69,16 @@ export function NotesPanel({ onClose }: { onClose?: () => void }) {
     timer.current = setTimeout(() => void flush(), SAVE_MS)
   }
   const remove = async () => {
-    if (!sel) { setText(''); return }
+    // what was typed and not saved yet goes too: without this the pending save would bring the note back
     pending.current = null
     clearTimeout(timer.current)
-    await window.api.deleteNote(sel).catch((e) => setError(String(e?.message ?? e)))
+    // a new note may be on its way to disk (its first save is running): wait for its id, then delete that file
+    await chain.current
+    const id = sel ?? newId.current
+    newId.current = null
+    mine.current = ''
     setSel(null); setText('')
+    if (id) await window.api.deleteNote(id).catch((e) => setError(String(e?.message ?? e)))
   }
 
   const shown = useMemo(() => filterNotes(notes, query), [notes, query])
