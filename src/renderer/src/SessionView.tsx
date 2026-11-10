@@ -550,6 +550,9 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
             <div key={i} className={`msg user${it.queue?.pending ? ' queued' : ''}`} data-testid="msg-user">
               <div className="who you">You{it.at ? <When at={it.at} /> : null}
                 {it.steer && <span className="steer">steered while Claude worked{it.during ? ` (${it.during})` : ''}</span>}
+                {/* seen: Claude took the message in. A steered one waits for Claude's next step, so until then it says so */}
+                {it.seen ? <span className="steer seen" title="Claude has read this message" data-testid="msg-seen"><Icon name="check" />seen</span>
+                  : it.steer && it.uuid && session.busy && !it.queue?.pending && <span className="steer s-wait" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">not read yet</span>}
                 {it.queue?.pending && (
                   <span className="steer">{it.interrupt ? 'interrupting Claude, sends next' : 'queued, sends when Claude finishes'}
                     <button className="link" onClick={() => onPromote(it.queue!.id)} data-testid="queued-send-now">send now</button>

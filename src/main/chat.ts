@@ -962,7 +962,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       allowDangerouslySkipPermissions: true,
       // Settings > General: model, effort and Claude in Chrome for threads started from now on ('' = Claude Code's
       // default). A watcher never gets Chrome: it is read-only, and the browser tools act in the user's real Chrome
-      ...(({ extraArgs, ...d }) => (watcher ? d : { ...d, ...(extraArgs ? { extraArgs } : {}) }))(threadDefaults()),
+      // replay-user-messages: the CLI echoes each message back when Claude takes it in, which is the only sign that a
+      // message steered into a running turn was read (hive_seen below)
+      ...(({ extraArgs, ...d }) => ({ ...d, extraArgs: { 'replay-user-messages': null, ...(watcher ? {} : extraArgs) } }))(threadDefaults()),
       // Claude's multiple-choice questions (AskUserQuestion) as a card in the thread and on the phone; giving the SDK a
       // permission handler is what makes the tool available. Any other tool reaching it is denied, as with no handler
       canUseTool: async (name, input, { signal, toolUseID }) => {
@@ -1018,6 +1020,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           s.mode = (m as any).permissionMode ?? modeFor(background, PERMISSION_MODE)
           syncMode(s, send)
         }
+        // the echo of a message Claude has just taken in: the window marks it seen; it is not a new message
+        if (m.type === 'user' && (m as any).isReplay) { if ((m as any).uuid) send({ type: 'hive_seen', uuid: (m as any).uuid }); continue }
         send(m)
         // a command only the interactive CLI runs (/design-login, /login, /mcp, ...): run it there, in this
         // thread's terminal, instead of leaving "isn't available in this environment" (not for watchers)

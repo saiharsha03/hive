@@ -210,6 +210,7 @@ kbd { font: 11px var(--mono); color: var(--faint); }
 .who .codicon { font-size: 14px; }
 .who.claude { color: var(--claude); }
 .who .steer { font-weight: 400; color: var(--faint); }
+.who .steer.seen .codicon { font-size: 12px; vertical-align: -1px; margin-right: 2px; }
 .who .when { font-weight: 400; font-size: 11px; color: var(--faint); }
 .who .link { margin-left: 8px; font-size: 11px; font-weight: 400; color: var(--dim); text-decoration: underline; }
 .who .link:hover { color: var(--ink); }

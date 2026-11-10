@@ -35,3 +35,10 @@ test('a changed answering model adds one note; the first answer adds none', () =
   assert.equal(notes.length, 1)
   assert.equal(notes[0].text, 'Model changed: Opus 5.5 → Fable 5.2')
 })
+
+test('hive_seen marks only the message Claude took in', () => {
+  let s: Session = { id: 't', title: 'T', items: [{ kind: 'user', text: 'a', images: [], uuid: 'u1' }, { kind: 'user', text: 'b', images: [], uuid: 'u2', steer: true }], streaming: '', busy: true, loaded: true, background: false }
+  s = applyEvent(s, { type: 'hive_seen', uuid: 'u2' })
+  assert.deepEqual(s.items.map((i: any) => !!i.seen), [false, true])
+  assert.equal(applyEvent(s, { type: 'hive_seen', uuid: 'nope' }), s)
+})

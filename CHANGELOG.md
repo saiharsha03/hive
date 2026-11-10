@@ -6,6 +6,11 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Seen by Claude.** A message shows "seen" once Claude has taken it in; one steered into a running turn says
+  "not read yet" until Claude reaches it (its next step, when the running tool call ends).
+
 ### Fixed
 
 - Run from source, Hive no longer shows a second taskbar icon beside its pinned shortcut.
