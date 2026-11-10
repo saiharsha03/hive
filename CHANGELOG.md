@@ -14,6 +14,11 @@ All notable changes to Hive are documented here. The format follows
   Settings > General value, and the same models), switched live for that thread; the message box line says
   "advisor <model>" while the thread has one and nothing otherwise, and the Status page shows it.
 
+### Fixed
+
+- The confirmation for a Quarry write now shows as a question card in the thread (in 2.1.0 the write waited on a card
+  that was never drawn).
+
 ## [2.1.0] - 2026-11-10
 
 ### Added
