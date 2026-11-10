@@ -51,7 +51,7 @@ import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue,
 import { sessionStats } from './sessionStats'
 import { checkLogin, closeStatus, getStatus, restartStatus, setLiveUsage, weeklyUsage } from './status'
 import { loadConfig, readDotEnv } from './devConfig'
-import { loadSettings, saveSettings, SETTINGS_FILE } from './settings'
+import { loadSettings, saveSettings, sessionFlags, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
 import { parseDropChoices } from '../shared/dropCore'
 import { pullAll } from './pull'
@@ -258,7 +258,8 @@ const mobileDeps = () => ({
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
     return l ? { working: l.busy, asks: openAsks(l.tabId) as PhoneAsk[] } : null
   },
-  running: () => runningEverywhere().map(({ tabId, title, task }) => ({ thread: tabId, threadTitle: title, id: task.id, kind: task.kind, title: task.title, now: task.now ?? '', state: 'working' as const })),
+  // the phone's own words: kind "Workflow", "Subagent", ... and a workflow's script name in its title (phoneTasks)
+  running: () => runningEverywhere().map(({ tabId, title, task }) => ({ thread: tabId, threadTitle: title, ...phoneTasks([task])[0], state: 'working' as const })),
   stopAll: (pause: boolean) => stopAll(pause),
   runWakeNow: (kind: string, id: string) => runWakeNow(kind, id),
   quietHours: (set?: QuietHours) => (set ? setQuietHours(set) : quietHours()),
@@ -493,7 +494,7 @@ handle('settings:save', (_e, d: unknown) => saveFromPanel(d))
 registerStatusIpc(handle, { liveQuery, stopCodex })
 // /status and /usage for one thread, live (statusView.ts): the tab's folder and session for a thread with no process yet
 handle('chat:statusView', (_e, tabId: string, known?: { cwd?: string; sessionId?: string }) =>
-  threadStatusView({ liveQuery, facts: threadFacts, transcript: transcriptPath }, String(tabId ?? ''), {
+  threadStatusView({ liveQuery, facts: threadFacts, transcript: transcriptPath, defaultAdvisor: () => sessionFlags().advisorModel ?? null }, String(tabId ?? ''), {
     ...(known?.cwd ? { cwd: String(known.cwd) } : {}), ...(known?.sessionId ? { sessionId: String(known.sessionId) } : {}),
   }))
 // Deploy: reads, plus the wizard's explicit Yes (never a Claude tool)

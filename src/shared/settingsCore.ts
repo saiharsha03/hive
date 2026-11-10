@@ -20,9 +20,12 @@ export type Effort = (typeof EFFORTS)[number]
 // ('' = the same as model / effort, so nothing changes until they are set)
 // idleCloseMinutes: an idle thread's Claude process closes after this long (the next message resumes it); 0 = never
 // teamMemoryKb: how much of each role memory file (the newest entries) goes into a teammate's brief
+// advisorModel: the model of Claude Code's server-side advisor tool for new threads (an alias or a full id; '' = off)
+// workflows: Claude Code's Workflows feature for new threads: 'on', 'off', or '' = Claude Code's own default (by plan)
 export type General = {
   shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean; desktopNotify: boolean
   bgModel: string; bgEffort: Effort | ''; teamModel: string; teamEffort: Effort | ''; idleCloseMinutes: number; teamMemoryKb: number
+  advisorModel: string; workflows: '' | 'on' | 'off'
 }
 export const DEFAULT_IDLE_CLOSE_MINUTES = 30
 export const DEFAULT_TEAM_MEMORY_KB = 6
@@ -37,6 +40,7 @@ export type Settings = {
 export const emptyGeneral = (): General => ({
   shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true, desktopNotify: true,
   bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: DEFAULT_IDLE_CLOSE_MINUTES, teamMemoryKb: DEFAULT_TEAM_MEMORY_KB,
+  advisorModel: '', workflows: '',
 })
 
 // what the panel edits and gets back
@@ -95,6 +99,8 @@ export function normalizeSettings(v: unknown): Settings | null {
       bgModel: str(g.bgModel), bgEffort: level(g.bgEffort), teamModel: str(g.teamModel), teamEffort: level(g.teamEffort),
       idleCloseMinutes: count(g.idleCloseMinutes, DEFAULT_IDLE_CLOSE_MINUTES, 7 * 24 * 60),
       teamMemoryKb: count(g.teamMemoryKb, DEFAULT_TEAM_MEMORY_KB, 1024),
+      advisorModel: str(g.advisorModel),
+      workflows: g.workflows === 'on' || g.workflows === 'off' ? g.workflows : '',
     },
   }
 }

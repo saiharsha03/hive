@@ -182,3 +182,11 @@ export const inThreadList = (t: Task, now: number): boolean =>
 export function shellName(t: Task, describe: (command: string) => string | undefined): string {
   return t.kind === 'local_bash' ? describe(t.title) ?? t.title : t.title
 }
+
+// A task's heading in Activity, Running and on the phone. A workflow is named as one, with its script's name
+// ("Workflow spec: Review the auth change"); anything else is its own title.
+export function taskHeading(t: Pick<Task, 'kind' | 'title' | 'name'>): string {
+  if (!/workflow/.test(t.kind)) return t.title
+  const head = `Workflow${t.name ? ` ${t.name}` : ''}`
+  return t.title && t.title !== t.name && t.title !== t.kind ? `${head}: ${t.title}` : head
+}

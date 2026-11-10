@@ -9,7 +9,7 @@ import { panes as panesStore, sessions, shallowEq, useSessionMetas, useStore, ty
 import type { Session } from './chat'
 import { focusedTab } from './panes'
 import { Btn, Bar, KV, dur, clock, relative, tokens as fmtTokens } from './kit'
-import { shellName, type Task } from '../../shared/taskCore'
+import { shellName, taskHeading, type Task } from '../../shared/taskCore'
 import { describer, useNow } from './ThreadStatus'
 import { nextRun, describeCron } from '../../shared/cronCore'
 import { modelLabel } from '../../shared/statusCore'
@@ -88,7 +88,7 @@ function TaskItem({ t, tabId, thread, busy, elsewhere }: { t: Task; tabId: strin
     <div className={`item${open ? ' open' : ''}${t.status === 'failed' ? ' failed' : ''}`} tabIndex={0} data-testid="activity-item">
       <div className="tm">{t.status === 'running' ? dur(now - t.startedAt) : clock(t.endedAt ?? t.startedAt)}</div>
       <div>
-        <div className="nm" title={t.title}>{elsewhere ? `${t.title}${t.status === 'failed' ? ' failed' : ''} in ${thread}` : t.title}</div>
+        <div className="nm" title={taskHeading(t)}>{elsewhere ? `${taskHeading(t)}${t.status === 'failed' ? ' failed' : ''} in ${thread}` : taskHeading(t)}</div>
         {last && <div className="ds" title={last}>{last}</div>}
         {open && (t.agents.length > 0 || t.error) && <div className="ds">{[t.error, ...t.agents.map((a) => `${a.label}: ${a.state}${a.result ? `, ${a.result}` : ''}`)].filter(Boolean).join('\n')}</div>}
         {msg !== null && (

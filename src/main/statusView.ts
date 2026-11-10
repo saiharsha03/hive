@@ -18,6 +18,7 @@ export type ThreadStatusView = {
   cwd: string | null
   transcript: string | null
   memoryDir: string | null // the shared auto-memory folder the thread was given, if any
+  advisor: string | null // the advisor model the thread runs with (its own pick, else Settings > General); null = none
   context: { total: number; max: number } | null // the live process's own count; else the last request's from the transcript
   cache: { lastReplyAt: number | null; ttlMs: number } | null
   compactions: number
@@ -28,12 +29,13 @@ export type ThreadStatusView = {
   error?: string
 }
 
-export type Facts = { sessionId: string | null; cwd: string; mode: string | null; model: string | null; effort: string | null; memoryDir: string | null }
+export type Facts = { sessionId: string | null; cwd: string; mode: string | null; model: string | null; effort: string | null; memoryDir: string | null; advisor?: string | null }
 type Deps = {
   liveQuery: (tabId: string) => Query | undefined
   facts: (tabId: string) => Facts | null
   transcript: (cwd: string, sessionId: string) => string
   status?: typeof getStatus // tests: stand-ins for status.ts
+  defaultAdvisor?: () => string | null // a thread with no process yet: what it would start with
   idle?: () => Pick<Query, 'accountInfo' | 'mcpServerStatus'>
 }
 
@@ -68,6 +70,7 @@ export async function threadStatusView(deps: Deps, tabId: string, known: { cwd?:
     permissionMode: f?.mode ?? null,
     sessionId, cwd, transcript,
     memoryDir: f?.memoryDir ?? null,
+    advisor: f ? f.advisor ?? null : deps.defaultAdvisor?.() ?? null,
     context: ctx ? { total: ctx.totalTokens, max: ctx.maxTokens } : stats?.contextTokens != null ? { total: stats.contextTokens, max: 0 } : null,
     cache: stats ? { lastReplyAt: stats.lastReplyAt, ttlMs: stats.cacheTtlMs } : null,
     compactions: stats?.compactions ?? 0,

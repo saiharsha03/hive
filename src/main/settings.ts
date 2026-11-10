@@ -46,6 +46,17 @@ export function threadDefaults(kind: ThreadKind = 'main', test = TEST_MODE): { m
   return { ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(g?.chrome ? { extraArgs: { chrome: null } } : {}) }
 }
 
+// Settings > General as Claude Code settings for a new thread (the flag-settings layer, liveStatus.sessionOptions):
+// the advisor model ('' = none) and the Workflows switch ('' = Claude Code's own default). Test mode adds no advisor
+// (it costs usage) and leaves Workflows to the default
+export function sessionFlags(test = TEST_MODE): { advisorModel?: string; enableWorkflows?: boolean } {
+  const g = current?.general
+  return {
+    ...(!test && g?.advisorModel ? { advisorModel: g.advisorModel } : {}),
+    ...(!test && g?.workflows ? { enableWorkflows: g.workflows === 'on' } : {}),
+  }
+}
+
 // an idle thread's process closes after this long (Settings > General, minutes); 0 = never
 export const idleCloseMs = (): number => (current?.general.idleCloseMinutes ?? DEFAULT_IDLE_CLOSE_MINUTES) * 60_000
 // how much of each role memory file goes into a teammate's brief (the newest entries)

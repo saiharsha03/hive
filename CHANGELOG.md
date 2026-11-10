@@ -22,7 +22,11 @@ All notable changes to Hive are documented here. The format follows
 - **Phone 2.0.** A "Needs me" inbox, answering a question from its notification, Stop everything, a Scheduled
   list with Run now, a usage guard and quiet hours. A relay already running must be updated for the notification
   buttons (`POST /v1/send`).
-
+- **Advisor model** (Settings > General, empty = off): Claude Code's server-side advisor for new threads; a thread can
+  pick its own, live; `/status` shows which one a thread runs with.
+- **Workflows** switch (Settings > General: on, off, or Claude Code's default for your plan).
+- A workflow run shows as Workflow with its script's name in Activity, on the Running page and on the phone, with Stop.
+  A Workflow call in auto mode is never refused by Hive's permission handler.
 - **Switch account without a restart.** Quiet threads move to the new login at once, working ones when their work
   ends; the dialog says how many follow.
 - **Several accounts signed in at once.** Every login is saved as a profile (Add account is the browser sign-in once);

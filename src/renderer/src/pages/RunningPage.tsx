@@ -5,7 +5,7 @@ import { onWakeupsChanged, wakeupsList } from '../api/next'
 import { useAllStatus } from '../statusStore'
 import { useSessionMetas } from '../store'
 import { activate, resumeEverything, send, stopEverything, stopEverythingCount } from '../actions'
-import { kindLabel, lastOutput, nowNote, nowRows, trail, type RunRow } from './runningCore'
+import { kindLabel, lastOutput, nowNote, nowRows, trail, whatOf, type RunRow } from './runningCore'
 import { age } from '../kit'
 import type { Task } from '../../../shared/taskCore'
 import './running.css'
@@ -80,7 +80,7 @@ export function RunningPage() {
                     <tr className={t.status === 'failed' ? 'fail' : ''} data-testid="run-row">
                       <td><State word={st.word} tone={st.tone} /></td>
                       <td>{kindLabel(t.kind)}</td>
-                      <td className="run-what">{t.title}</td>
+                      <td className="run-what">{whatOf(t)}</td>
                       <td className="run-thread">{r.thread}</td>
                       <td className="num run-for">{running ? dur(now - t.startedAt) : now - (t.endedAt ?? t.startedAt) < 60_000 ? 'just ended' : `ended ${age(t.endedAt ?? t.startedAt, now)} ago`}</td>
                       <td className="out" title={lastOutput(t)}>{lastOutput(t)}</td>

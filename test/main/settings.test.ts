@@ -32,7 +32,7 @@ test('seed from .env and scripts.json: every non-secret key, the scripts array a
   assert.deepEqual(s.scripts, SCRIPTS) // the bad entry is kept, so nothing is lost
   assert.deepEqual(s.general, {
     shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true, desktopNotify: true,
-    bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: 30, teamMemoryKb: 6,
+    bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: 30, teamMemoryKb: 6, advisorModel: '', workflows: '',
   })
   assert.equal(seedSettings(DOT, null).scripts, null)
   assert.equal(seedSettings(DOT, 'not json').scripts, null)

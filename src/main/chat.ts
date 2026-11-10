@@ -25,9 +25,9 @@ import { agentStack, ensureWorktree, logs as devLogs, releaseThread, setThreadTi
 import { linkThread, moveThreadLinks } from './threadWorktrees'
 import { appName } from '../shared/appName'
 import { modeFor, modeSwitch } from '../shared/modeCore'
-import { idleCloseMs, threadDefaults } from './settings'
-import { boostForMessage, forgetTab, observe, sessionOptions, userMemoryDir } from './liveStatus'
-import { busyWith, idleToClose, messageParts, retireStep, sharedMemoryDir, threadClass, type Activity } from './threadCore'
+import { idleCloseMs, sessionFlags, threadDefaults } from './settings'
+import { advisorNow, boostForMessage, forgetTab, observe, sessionOptions, userMemoryDir } from './liveStatus'
+import { busyWith, idleToClose, messageParts, permitWithoutPrompt, retireStep, sharedMemoryDir, threadClass, type Activity } from './threadCore'
 import { readOnlyOptions } from './readOnly'
 import { isWatcherTab, isWatcherTranscript } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
@@ -998,6 +998,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       // Claude's multiple-choice questions (AskUserQuestion) as a card in the thread and on the phone; giving the SDK a
       // permission handler is what makes the tool available. Any other tool reaching it is denied, as with no handler
       canUseTool: async (name, input, { signal, toolUseID }) => {
+        // a workflow (the Workflow tool) is the agent's own way of running work: Hive never stands in its way, in auto
+        // mode either (the classifier may hand the call here); a watcher's stays under its read-only rules below
+        if (permitWithoutPrompt(name, watcher)) return { behavior: 'allow', updatedInput: input }
         if (name !== 'AskUserQuestion') return { behavior: 'deny', message: `${appName()} has no permission prompt for ${name}` }
         if (watcher) return { behavior: 'deny', message: 'This is an unattended watcher run: nobody is there to answer. Decide yourself and note the open question in your findings.' }
         const questions = parseQuestions(input)
@@ -1020,6 +1023,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ...withReadOnly(watcher, tabId, sessionOptions(tabId, send, {
         unattended: background || cls !== 'main',
         memoryDir,
+        flags: sessionFlags(),
       })),
     },
   })
@@ -1288,9 +1292,9 @@ export const busyTranscript = (path: string): boolean =>
   [...live.values()].some((s) => !!s.sessionId && s.turns.isBusy() && transcriptPath(s.cwd, s.sessionId) === path)
 
 // what /status shows about a live thread (statusView.ts); null when it has no process
-export function threadFacts(tabId: string): { sessionId: string | null; cwd: string; mode: PermissionMode | null; model: string | null; effort: string | null; memoryDir: string | null; background: boolean; watcher: boolean; busy: boolean } | null {
+export function threadFacts(tabId: string): { sessionId: string | null; cwd: string; mode: PermissionMode | null; model: string | null; effort: string | null; memoryDir: string | null; advisor: string | null; background: boolean; watcher: boolean; busy: boolean } | null {
   const s = live.get(tabId)
-  return s ? { sessionId: s.sessionId, cwd: s.cwd, mode: s.mode, model: s.status.model ?? null, effort: s.status.effort ?? null, memoryDir: s.memoryDir, background: s.background, watcher: s.watcher, busy: s.turns.isBusy() } : null
+  return s ? { sessionId: s.sessionId, cwd: s.cwd, mode: s.mode, model: s.status.model ?? null, effort: s.status.effort ?? null, memoryDir: s.memoryDir, advisor: advisorNow(tabId), background: s.background, watcher: s.watcher, busy: s.turns.isBusy() } : null
 }
 
 // the tab's running process, for the status IPC (model, effort, commands, MCP servers, stopping tasks)

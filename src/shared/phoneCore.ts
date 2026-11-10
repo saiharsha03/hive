@@ -1,7 +1,7 @@
 // What the phone app's Teams, background-work and Wake-ups screens show, shaped from the desktop's own state. Pure, so
 // it can be tested without Electron; the relay ops in mobile.ts send these as they are.
 import type { LogEntry, MemberStatus, Team } from './teamCore'
-import { kindLabel, type Task } from './taskCore'
+import { kindLabel, taskHeading, type Task } from './taskCore'
 import type { AskQuestion } from './askCore'
 import type { PhoneThread } from './threadsCore'
 
@@ -24,7 +24,7 @@ export function phoneTeams(teams: Team[], view: (t: Team) => { states: Record<st
 
 // a thread's running background work with its live line
 export const phoneTasks = (tasks: Task[]): { id: string; kind: string; title: string; now: string }[] =>
-  tasks.filter((t) => t.status === 'running').map((t) => ({ id: t.id, kind: kindLabel(t.kind), title: t.name ? `${t.name}: ${t.title}` : t.title, now: t.now ?? '' }))
+  tasks.filter((t) => t.status === 'running').map((t) => ({ id: t.id, kind: kindLabel(t.kind), title: /workflow/.test(t.kind) ? taskHeading(t) : t.name ? `${t.name}: ${t.title}` : t.title, now: t.now ?? '' }))
 
 export type PhoneWakeup = { kind: 'wake' | 'continue'; id: string; open: string; title: string; at: number; prompt: string; every: number | null }
 type WakeRow = { id: number; session_id: string; title: string; wake_at: string; prompt: string; every_minutes: number | null; status: string }
