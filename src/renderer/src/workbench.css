@@ -108,3 +108,8 @@ body.side-drag { cursor: col-resize; user-select: none; }
 .full-col .dnote { font-size: 13px; }
 .full-notes .nt-text { font: 14px/1.55 var(--mono); }
 .full-notes .nt-preview { font-size: 14px; }
+
+/* New thread: the side bar's one main button, in the accent like a code editor's "Open Folder" */
+.side .rail-new { background: var(--accent); color: var(--on-accent); justify-content: center; gap: 10px; height: 28px; font: 400 13px var(--sans); margin: 6px 16px 12px; }
+.side .rail-new:hover { background: var(--accent); filter: brightness(1.12); }
+.side .rail-new .keys { color: var(--on-accent); opacity: .75; }
