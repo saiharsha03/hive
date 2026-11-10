@@ -173,6 +173,7 @@ type Live = {
   lastActiveAt: number // the last event from this process
   retiring?: 'idle' | 'account' // Hive closes the process on purpose and keeps the tab: the next message resumes the session
   recycle?: boolean // signed in to another account: close the process once nothing of it runs (account switch)
+  memoryDir: string | null // the shared auto-memory folder it was given (null: Claude Code's own for its folder)
 }
 // a message the window gets back: source you = typed in the window or on the phone; hive = a thread, a wake-up, a run
 export type Unsent = { uuid?: string; queueId?: string; text: string; images: { mediaType: string; data: string }[]; source: 'you' | 'hive' }
@@ -253,6 +254,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   if (fork && !fork.at) resume = undefined
   const watcher = isWatcherThread(tabId, cwd, resume)
   const cls = threadClass(tabId, watcher)
+  const memoryDir = userMemoryDir() ? null : sharedMemoryDir(cwd, memoryRoots.root, memoryRoots.extra, join(homedir(), '.claude'))
   // events only while this process is still the tab's live one; a closed process stays silent
   let s: Live
   const send = (event: unknown) => {
@@ -1017,7 +1019,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       // A thread in a repo or worktree under the workspace root shares the root's auto-memory folder
       ...withReadOnly(watcher, tabId, sessionOptions(tabId, send, {
         unattended: background || cls !== 'main',
-        memoryDir: userMemoryDir() ? null : sharedMemoryDir(cwd, memoryRoots.root, memoryRoots.extra, join(homedir(), '.claude')),
+        memoryDir,
       })),
     },
   })
@@ -1037,7 +1039,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   s = {
     q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(),
     cwd, lastReply: null, lastOk: null, onIdle: new Set(), emit: send, status: emptyStatus(),
-    watcher, outbox: new Map(), queuedFrom: new Map(), stopTasks: 0, lastActiveAt: Date.now(),
+    watcher, outbox: new Map(), queuedFrom: new Map(), stopTasks: 0, lastActiveAt: Date.now(), memoryDir,
   }
   let lastText = '' // the turn's latest assistant text, in case its result carries none
   // this turn hit the plan's usage limit: set by a rejected rate-limit event (with its reset) or a rate_limit error
@@ -1226,6 +1228,12 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
 // a transcript whose thread is working now: search leaves it until the turn ends
 export const busyTranscript = (path: string): boolean =>
   [...live.values()].some((s) => !!s.sessionId && s.turns.isBusy() && transcriptPath(s.cwd, s.sessionId) === path)
+
+// what /status shows about a live thread (statusView.ts); null when it has no process
+export function threadFacts(tabId: string): { sessionId: string | null; cwd: string; mode: PermissionMode | null; model: string | null; effort: string | null; memoryDir: string | null; background: boolean; watcher: boolean; busy: boolean } | null {
+  const s = live.get(tabId)
+  return s ? { sessionId: s.sessionId, cwd: s.cwd, mode: s.mode, model: s.status.model ?? null, effort: s.status.effort ?? null, memoryDir: s.memoryDir, background: s.background, watcher: s.watcher, busy: s.turns.isBusy() } : null
+}
 
 // the tab's running process, for the status IPC (model, effort, commands, MCP servers, stopping tasks)
 export const liveQuery = (tabId: string): Query | undefined => live.get(tabId)?.q

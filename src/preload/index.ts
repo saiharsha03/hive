@@ -297,5 +297,8 @@ contextBridge.exposeInMainWorld('api', {
   chatCommands: (tabId?: string) => ipcRenderer.invoke('chat:commands', tabId),
   chatModels: (tabId?: string) => ipcRenderer.invoke('chat:models', tabId),
   chatMcp: (tabId?: string) => ipcRenderer.invoke('chat:mcp', tabId),
+  // everything /status and /usage show for one thread, live (main/statusView.ts ThreadStatusView); known: the tab's
+  // folder and session, for a thread with no process yet
+  chatStatusView: (tabId: string, known?: { cwd?: string; sessionId?: string }) => ipcRenderer.invoke('chat:statusView', tabId, known),
   chatStopTask: (tabId: string, taskId: string) => ipcRenderer.invoke('chat:stopTask', tabId, taskId),
 })

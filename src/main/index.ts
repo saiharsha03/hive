@@ -8,7 +8,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { busyTranscript, configureChat, liveQuery, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
+import { busyTranscript, configureChat, liveQuery, threadFacts, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, tick as wakeupsTick } from './threadWakeups'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
@@ -16,6 +16,7 @@ import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
+import { threadStatusView } from './statusView'
 import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
@@ -440,6 +441,11 @@ handle('settings:validate', (_e, d: unknown) => validateSettings(draftOf(d), exi
 handle('settings:save', (_e, d: unknown) => saveFromPanel(d))
 // per-thread status: model, effort, commands, models, MCP servers, stopping background tasks
 registerStatusIpc(handle, { liveQuery, stopCodex })
+// /status and /usage for one thread, live (statusView.ts): the tab's folder and session for a thread with no process yet
+handle('chat:statusView', (_e, tabId: string, known?: { cwd?: string; sessionId?: string }) =>
+  threadStatusView({ liveQuery, facts: threadFacts, transcript: transcriptPath }, String(tabId ?? ''), {
+    ...(known?.cwd ? { cwd: String(known.cwd) } : {}), ...(known?.sessionId ? { sessionId: String(known.sessionId) } : {}),
+  }))
 // Deploy: reads, plus the wizard's explicit Yes (never a Claude tool)
 handle('deploy:config', () => deployConfig())
 handle('deploy:diffs', (_e, suite: string, fetch?: boolean) => suiteDiffs(String(suite), fetch !== false))

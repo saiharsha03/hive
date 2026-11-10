@@ -85,3 +85,20 @@ export function messageParts(content: unknown): { text: string; images: { mediaT
     images: blocks.filter((b) => b?.type === 'image' && b.source?.type === 'base64').map((b) => ({ mediaType: String(b.source.media_type), data: String(b.source.data) })),
   }
 }
+
+// The / menu: every command the engine reports, as it reports them, plus the interactive CLI's own commands it leaves
+// out (picking one sends it; the engine answers "isn't available in this environment" and Hive runs it in the
+// thread's terminal, chat.ts cliOnlyCommand). /status and /usage are marked view: the window shows them itself, live
+// (chat:statusView), instead of a terminal.
+export type MenuCommand = { name: string; description: string; argumentHint?: string; aliases?: string[]; builtin?: boolean; terminal?: boolean; view?: 'status' | 'usage' }
+const CLI_ONLY: [string, string][] = [
+  ['login', 'Sign in to your Anthropic account'], ['logout', 'Sign out'], ['mcp', 'Manage MCP servers'], ['config', 'Open the settings'],
+  ['doctor', 'Check the Claude Code installation'], ['permissions', 'Manage tool permission rules'], ['hooks', 'Manage hooks'],
+  ['agents', 'Manage subagents'], ['memory', 'Edit memory files'], ['ide', 'Connect to an IDE'], ['terminal-setup', 'Set up terminal key bindings'],
+  ['status', 'Account, model, session and connection status'], ['usage', 'Plan usage limits and this session\'s tokens'],
+]
+export function menuCommands(engine: MenuCommand[]): MenuCommand[] {
+  const names = new Set(engine.flatMap((c) => [c.name, ...(c.aliases ?? [])]))
+  const extra = CLI_ONLY.filter(([n]) => !names.has(n)).map(([name, description]): MenuCommand => ({ name, description, builtin: true, terminal: true }))
+  return [...engine, ...extra].map((c) => (c.name === 'status' || c.name === 'usage' ? { ...c, view: c.name } : c))
+}

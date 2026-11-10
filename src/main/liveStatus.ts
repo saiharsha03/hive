@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { goalMarks } from '../shared/goalCore'
 import { hasUltrathink } from '../shared/composerCore'
 import { idle } from './status'
+import { menuCommands } from './threadCore'
 
 type Send = (event: unknown) => void
 
@@ -237,7 +238,8 @@ const ask = (deps: Deps, tabId: unknown) => deps.liveQuery(String(tabId ?? '')) 
 export function registerStatusIpc(handle: Handle, deps: Deps): void {
   handle('chat:setModel', (_e, tabId: string, model: string) => setModel(String(tabId), deps.liveQuery(String(tabId)), String(model)))
   handle('chat:setEffort', (_e, tabId: string, level: string) => setEffort(String(tabId), deps.liveQuery(String(tabId)), String(level)))
-  handle('chat:commands', (_e, tabId?: string) => ask(deps, tabId).supportedCommands())
+  // every command the engine reports, plus the interactive CLI's own ones it leaves out (threadCore.menuCommands)
+  handle('chat:commands', async (_e, tabId?: string) => menuCommands(await ask(deps, tabId).supportedCommands()))
   handle('chat:models', (_e, tabId?: string) => ask(deps, tabId).supportedModels())
   handle('chat:mcp', async (_e, tabId?: string) => {
     const live = deps.liveQuery(String(tabId ?? ''))
