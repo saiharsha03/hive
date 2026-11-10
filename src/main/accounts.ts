@@ -147,16 +147,16 @@ export function switchAccount(p: AccountPaths, id: string, now = Date.now()): Sw
   const credsText = readFileSync(p.credentials, 'utf8')
   const creds = JSON.parse(credsText) as Record<string, unknown>
   writeAtomic(p.credentials, withKey(p.credentials, { ...creds, claudeAiOauth: target.claudeAiOauth }))
-  let cjBefore: Record<string, unknown> = {}
+  let cjBefore: Record<string, unknown>
   try {
     try { cjBefore = readJson(p.claudeJson) } catch { cjBefore = {} }
     writeAtomic(p.claudeJson, withKey(p.claudeJson, { ...cjBefore, oauthAccount: target.oauthAccount }))
   } catch (e) {
     writeAtomic(p.credentials, credsText) // the tokens go back: the two files never disagree about who is signed in
-    throw new Error(`Could not switch the account (writing ${p.claudeJson} failed: ${(e as Error).message}); nothing changed.`)
+    throw new Error(`Could not switch the account (writing ${p.claudeJson} failed: ${(e as Error).message}); nothing changed.`, { cause: e })
   }
   // the keys Hive did not mean to touch are as they were
-  let ok = false
+  let ok: boolean
   try {
     const credsAfter = readJson(p.credentials)
     const cjAfter = readJson(p.claudeJson)
