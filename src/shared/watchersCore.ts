@@ -251,7 +251,7 @@ export function defaultPrompt(name: string, goal: string): string {
   ].join('\n')
 }
 
-// ---- the legacy single Watch (HIVE_WATCH_* settings + ~/.claude/hive/watch.json) as watcher "watch" ----
+// ---- the legacy single Watch (HIVE_WATCH_* settings + ~/.hive/hive/watch.json) as watcher "watch" ----
 
 // watcher.json for the old Watch, from its settings; prompt relative when it sat inside the folder
 export function legacyWatcher(env: Record<string, string>, dir: string, enabled: boolean, now: Date): WatcherFile {

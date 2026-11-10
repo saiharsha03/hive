@@ -1,4 +1,4 @@
-// To-dos: the personal list in ~/.claude/hive-todos.json as a panel. Quick-add at the top (a trailing "fri", "tomorrow"
+// To-dos: the personal list in ~/.hive/hive-todos.json as a panel. Quick-add at the top (a trailing "fri", "tomorrow"
 // or "11/05" becomes the due date), date groups, then Talk about, Holding and a folded Done. No dialogs: a delete
 // can be undone for five seconds.
 import { Icon } from './ui'

@@ -322,7 +322,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       tool(
         'add_note',
-        `Write to the user's Notes in ${appName()} (Notes in the top bar; markdown files in ~/.claude/hive/notes). Use when the user asks you to note, jot down or save something. `
+        `Write to the user's Notes in ${appName()} (Notes in the top bar; markdown files in ~/.hive/hive/notes). Use when the user asks you to note, jot down or save something. `
           + 'A note whose title matches (any case) gets the text appended at its end; otherwise a new note with that title is made.',
         {
           title: z.string().min(1).describe('The note\'s title: an existing note to add to, or the new note\'s name'),
@@ -598,7 +598,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       tool(
         'create_watcher',
-        'Create a watcher: a scheduled background agent that keeps working on a goal. It gets a folder under ~/.claude/hive/watchers/<id>/ '
+        'Create a watcher: a scheduled background agent that keeps working on a goal. It gets a folder under ~/.hive/hive/watchers/<id>/ '
           + '(watcher.json, prompt.md, memory/ with its own SQLite db, reports/, findings.jsonl). Every scheduled run is a fresh background thread, closed when the run ends; '
           + 'what carries over is what the run saved in that folder and its final reply, which the next run is shown. '
           + 'Without prompt, prompt.md is written from the goal. It is enabled and its first run starts at once. Shown in the Watchers view.',
@@ -646,7 +646,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         { id: z.string(), kind: z.enum(['sweep', 'daily', 'weekly']).optional().describe('Default sweep') },
         async ({ id, kind }) => { const m = runWatcherNow(id, kind ?? 'sweep'); return m ? fail(m) : ok(`Watcher "${id}" is running.`) },
       ),
-      tool('delete_watcher', 'Delete a watcher (soft): a run still open is closed and its folder moves to ~/.claude/hive/watchers/_deleted/.', { id: z.string() },
+      tool('delete_watcher', 'Delete a watcher (soft): a run still open is closed and its folder moves to ~/.hive/hive/watchers/_deleted/.', { id: z.string() },
         async ({ id }) => { try { return ok(`Watcher "${id}" deleted; its folder is now ${deleteWatcher(id)}`) } catch (e: any) { return fail(`delete_watcher failed: ${e?.message ?? e}`) } }),
       tool(
         'agent_status',

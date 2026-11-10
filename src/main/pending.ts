@@ -1,4 +1,4 @@
-// Messages sent while Claude was working (steered or queued) are kept in ~/.claude/hive-pending.json until they reach
+// Messages sent while Claude was working (steered or queued) are kept in ~/.hive/hive-pending.json until they reach
 // Claude, so closing Hive by mistake loses none of them: on the next start they are sent again to the same thread.
 // A message has reached Claude when the CLI echoes it back (its uuid, chat.ts hive_seen); the end of the turn it rode
 // is the fallback for an engine that sends no echo. A queued message handed over to the engine rides the next turn.

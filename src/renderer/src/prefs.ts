@@ -1,4 +1,4 @@
-// Small UI preferences in ~/.claude/hive-prefs.json (through the main process), shared by dev and built Hive.
+// Small UI preferences in ~/.hive/hive-prefs.json (through the main process), shared by dev and built Hive.
 let prefs: Record<string, unknown> = (() => { try { return window.api.uiLoad('prefs') } catch { return {} } })()
 
 export function getPref<T>(key: string, fallback: T): T {

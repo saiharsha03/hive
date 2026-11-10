@@ -1,4 +1,4 @@
-// The one settings store, ~/.claude/hive-settings.json (HIVE_SETTINGS_FILE overrides, for tests). Atomic writes like
+// The one settings store, ~/.hive/hive-settings.json (HIVE_SETTINGS_FILE overrides, for tests). Atomic writes like
 // uiStore. Seeded on first run from the .env and scripts.json; afterwards it wins and they are only fallbacks.
 import { existsSync, readFileSync } from 'node:fs'
 import { dataDir, TEST_MODE, TEST_MODEL } from './testMode'

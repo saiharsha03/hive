@@ -1,4 +1,4 @@
-// Team threads, files: every team is a folder under ~/.claude/hive/teams/<id>/ with team.json (who is in it),
+// Team threads, files: every team is a folder under ~/.hive/hive/teams/<id>/ with team.json (who is in it),
 // plan.md (the lead's plan, rows kept current by their owners), knowledge.md (what the team learned) and log.jsonl
 // (every team_post). Plain code; the threads themselves are started by chat.ts.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'

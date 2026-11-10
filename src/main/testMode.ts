@@ -9,7 +9,7 @@ export const TEST_MODE = process.env.HIVE_TEST_MODE === '1'
 
 // the folder for hive-threads.json, hive-prefs.json, hive-todos.json, hive/watch.json, ...
 export const dataDir = (): string =>
-  process.env.HIVE_DATA_DIR || (TEST_MODE ? join(tmpdir(), 'hive-test-data') : join(homedir(), '.claude', STATE_FOLDER))
+  process.env.HIVE_DATA_DIR || (TEST_MODE ? join(tmpdir(), 'hive-test-data') : join(homedir(), STATE_FOLDER))
 
 // the Claude Code projects folder Hive lists sessions from: HIVE_PROJECTS_DIR (the e2e harness seeds fake transcripts
 // there); in test mode without it a folder under the test data, never the real ~/.claude/projects

@@ -2,7 +2,7 @@
 // sealing key), one outgoing connection to the relay, the phone's requests (list threads, read one, send, start a new
 // one, stop) and notifications (Claude's notify_phone, a thread waiting for you, a background thread finished).
 // Settings: HIVE_MOBILE_RELAY (https://...) and HIVE_MOBILE_ADMIN_TOKEN (the relay's admin token). The pairing lives
-// in ~/.claude/hive-mobile.json; the key never leaves this computer except inside the QR code shown to you.
+// in ~/.hive/hive-mobile.json; the key never leaves this computer except inside the QR code shown to you.
 import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

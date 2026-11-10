@@ -1,4 +1,4 @@
-// Notes: one markdown file per note in ~/.claude/hive/notes (HIVE_DATA_DIR in tests), so Claude and any editor can read
+// Notes: one markdown file per note in ~/.hive/hive/notes (HIVE_DATA_DIR in tests), so Claude and any editor can read
 // them too. The first line is the title. Deleting moves the file to notes/_deleted, never erases it.
 import { mkdirSync, watch } from 'node:fs'
 import { readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'

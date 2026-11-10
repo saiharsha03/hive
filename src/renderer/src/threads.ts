@@ -96,7 +96,7 @@ export function buildSections<T extends Item>(sessions: T[], states: ThreadMap, 
   return out
 }
 
-// ---- storage: ~/.claude/hive-threads.json through the main process, so dev and built Hive share it ----
+// ---- storage: ~/.hive/hive-threads.json through the main process, so dev and built Hive share it ----
 
 const KEY = 'hive.threads' // the old browser-storage key, read once to carry earlier state over
 let cache: ThreadMap = read()

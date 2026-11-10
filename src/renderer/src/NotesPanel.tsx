@@ -1,4 +1,4 @@
-// Notes: markdown files in ~/.claude/hive/notes as a panel. A searchable list on the left, the note on the right; typing
+// Notes: markdown files in ~/.hive/hive/notes as a panel. A searchable list on the left, the note on the right; typing
 // saves on its own after a short pause, and the first line is the title. Preview renders the markdown. Delete moves the
 // file to notes/_deleted.
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -88,7 +88,7 @@ export function NotesPanel() {
     <section data-testid="notes-panel" className="tool notes">
       <div className="dhead">
         <span className="dtitle">Notes</span>
-        <span className="dnote">{notes.length} note{notes.length === 1 ? '' : 's'}, saved as markdown in ~/.claude/hive/notes</span>
+        <span className="dnote">{notes.length} note{notes.length === 1 ? '' : 's'}, saved as markdown in ~/.hive/hive/notes</span>
         <span className="dspace" />
         <button className="dlink" onClick={create} data-testid="notes-new">New note</button>
       </div>

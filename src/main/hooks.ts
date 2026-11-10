@@ -1,6 +1,6 @@
 // Hooks from the user settings and the working folder's project/local settings, with on/off.
 // Claude Code has no per-hook "disabled" flag, so turning a hook off moves it out of its settings
-// file into ~/.claude/hive-disabled-hooks.json, and turning it on puts it back.
+// file into ~/.hive/hive-disabled-hooks.json, and turning it on puts it back.
 // Every settings write first copies the file to <file>.hive-bak.
 import { copyFile, readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'

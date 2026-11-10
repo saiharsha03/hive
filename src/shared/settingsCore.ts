@@ -1,5 +1,5 @@
 import { PRODUCT } from './edition'
-// Hive settings: pure logic for the one settings store (~/.claude/hive-settings.json). It keeps the same KEY=VALUE
+// Hive settings: pure logic for the one settings store (~/.hive/hive-settings.json). It keeps the same KEY=VALUE
 // names as the .env (so every feature keeps parsing its own keys) plus the scripts list and a few thread defaults.
 // First run seeds it from the .env and scripts.json; afterwards it wins and those files are only fallbacks.
 // Keys that look like credentials never enter it: they stay in the .env and the panel only says whether they are set.

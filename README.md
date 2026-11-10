@@ -125,7 +125,7 @@ root share the root's Claude Code auto-memory folder, so they all see the same m
 
 ### Watchers
 
-A watcher is a scheduled agent with a durable home under `~/.claude/hive/watchers/<id>/`:
+A watcher is a scheduled agent with a durable home under `~/.hive/hive/watchers/<id>/`:
 
 - `watcher.json`: name, goal, schedule, working folder
 - a prompt file, written as goals rather than steps
@@ -159,13 +159,13 @@ created by asking any agent.
 Ask any thread for a team and it becomes the team's **Lead**, or its **Owner** with a separate Lead thread that
 reports back. The Lead breaks the job into items on a shared to-do board, picks how many of each role it needs
 (roles may repeat: two Builders and a Reviewer), and each teammate runs as its own thread, usually in its own
-worktree. A team lives in `~/.claude/hive/teams/<id>/`: `team.json` (who is in it), `plan.md`, `knowledge.md` (what
+worktree. A team lives in `~/.hive/hive/teams/<id>/`: `team.json` (who is in it), `plan.md`, `knowledge.md` (what
 the team learned) and `log.jsonl` (every post).
 
 - **Team view** in the bottom panel, or popped out into its own window: an animated office (Side or Plan view) with
   each member's state and latest post, the log, the plan, the boards and what was learned. Message any member or a
   whole role from there.
-- **Role library** in `~/.claude/hive/roles/`: each role has editable instructions and a memory of what everyone in
+- **Role library** in `~/.hive/hive/roles/`: each role has editable instructions and a memory of what everyone in
   that role learned, kept across teams, plus one shared memory for all roles.
 - **Pause and resume** a whole team; a running team picks up again after Hive restarts.
 - Running teams sit folded in the sidebar, each member with its role word (LEAD, BUILDER, REVIEWER).
@@ -203,7 +203,7 @@ Push, merge and deploy decisions go back to you; the Lead does not make them.
 
 ### Also
 
-- **To-dos** and **Notes** (markdown files in `~/.claude/hive/notes`, searchable, saved as you type). Ask any thread
+- **To-dos** and **Notes** (markdown files in `~/.hive/hive/notes`, searchable, saved as you type). Ask any thread
   to note something and it writes to Notes (`add_note`: adds to the note with that title, or makes one).
 - **Auto-update**: the installed app checks GitHub Releases at start and every 6 hours, downloads a new version in
   the background and offers *Restart to update* in the status bar (it also installs when you quit). The portable
@@ -300,7 +300,7 @@ a plain `http://` relay.
  │  one long-lived SDK query per thread (streaming input)         │
  │  hive MCP server (in-process tools) · watchers scheduler       │
  │  git / pull / deploy / scripts / terminal (plain processes)    │
- │  state: ~/.claude/hive-*.json, ~/.claude/hive/watchers/        │
+ │  state: ~/.hive/hive-*.json, ~/.hive/hive/watchers/        │
  └───────────────▲────────────────────────────────┬────────────────┘
                  │ IPC (preload bridge)             │ events
  ┌───────────────┴──────────── renderer (React) ────▼────────────────┐
@@ -347,7 +347,7 @@ publishes both to GitHub Releases when a version tag is pushed.
 
 ## Configuration
 
-Everything is editable in **Settings**, which saves to `~/.claude/hive-settings.json`. On first run Hive seeds that
+Everything is editable in **Settings**, which saves to `~/.hive/hive-settings.json`. On first run Hive seeds that
 file from two optional local files, both git-ignored:
 
 - `.env`: workspace values such as the repos root, stacks, deploy targets and file-drop skills. Copy

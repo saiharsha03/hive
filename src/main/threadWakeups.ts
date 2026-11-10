@@ -1,5 +1,5 @@
 // Scheduled wake-ups for any thread (the schedule_wakeup tool). Claude Code's own /loop wake-ups and crons live inside
-// the session and die when Hive closes; these are rows in one SQLite table under ~/.claude/hive, so they outlive the
+// the session and die when Hive closes; these are rows in one SQLite table under ~/.hive/hive, so they outlive the
 // turn, Hive closing and the laptop sleeping. Hive checks them every 30 s, after it starts and when the laptop wakes;
 // a row that came due while Hive was closed (or asleep) fires once when it is back and says how late it is.
 // A repeating row then moves to its next slot after now: missed slots are not replayed one by one.
