@@ -4,6 +4,36 @@ All notable changes to Hive are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-10
+
+### Changed
+
+- **A new frame, laid out like a code editor**: an icon bar down the left with one icon per section. Files, Threads and
+  Git open a side bar beside the tabs; Codex, Environments, Allow IP, Deploy, Notes, To do, Watchers, Running,
+  Scheduled, Pull, Scripts, Dependabot, Usage, Quarry and Accounts are whole pages. The frame adapts to the window.
+- **The conversation reads as a chat**: your messages in a bubble at the right, Claude's at the left, in the order
+  Claude saw them. Thread groups (Pinned, Today, Yesterday, ...) fold from their heading.
+- The default look takes the code editor's colours and type (Segoe UI, Consolas); Ctrl+= and Ctrl+- change the size.
+- A snoozed thread stays snoozed when opened; a message brings it back.
+
+### Added
+
+- **Terminals of your own** in the bottom panel (new, kill, a list), beside each thread's terminal and environment logs.
+- **Codex** as a section: a task box that runs `codex exec` once, with what it did and its answer.
+- **Permission modes per thread** from the message box (bypass, auto, accept edits, ask, plan), with a card to allow or
+  deny a tool in the modes that ask. Queue, Interrupt and Stop are always shown there; the advisor has its own picker.
+- **Advisor calls** show as rows in the conversation. A question card takes number keys and Enter.
+- **Activity** lists Subagents, Shells, Monitors, Wake-ups, Loops and Rewind points; a **PR gate** tab shows a
+  workspace's review checklist for the commit at HEAD.
+- The message box names the default model and effort and sets them; a small call names a thread after five messages.
+- The status line shows every plan limit with when it resets (a per-model week too), and the Claude Code and SDK
+  versions; newer ones are installed by themselves.
+- Allow IP shows the command's output and can keep an address as already allowed.
+
+### Fixed
+
+- Watcher and Dependabot runs no longer wait on "the window is not ready" while something loads inside the page.
+
 ## [1.0.0] - 2026-11-10
 
 ### Added
