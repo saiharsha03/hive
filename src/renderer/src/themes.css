@@ -63,4 +63,4 @@
 }
 
 /* high contrast (and any theme whose --edge is set): outline what other themes only lift */
-.rail-row.on, .tab.on, .pal-row.on, .sm-row.on, .pop-row.on, .frow.sel, .itab.on, .msg.you, .cbox, .needs, .askcard, .item.on { outline: 1px solid var(--edge); outline-offset: -1px; }
+.rail-row.on, .pal-row.on, .sm-row.on, .pop-row.on, .frow.sel, .msg.you, .tb-field input, .cbox, .needs, .askcard, .item.on { outline: 1px solid var(--edge); outline-offset: -1px; }

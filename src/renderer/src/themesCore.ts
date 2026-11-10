@@ -60,7 +60,7 @@ function derive(s: Seeds): Record<string, string> {
   const hi = ensure(s.hi, surfaces, 7, L)
   const ink = ensure(s.ink ?? mix(s.hi, s.dim, 0.64), surfaces, 4.5, L)
   const dim = ensure(s.dim, surfaces, 4.5, L)
-  const faint = s.faint ?? mix(s.dim, s.bg, 0.6)
+  const faint = s.faint ?? mix(s.dim, s.bg, L ? 0.78 : 0.6)
   const signal = s.signal ? ensure(s.signal, surfaces, 4.5, L) : hi
   const red = ensure(s.red, [s.bg, s.side], 4.5, L) // failed text sits on panes and the rail
   const lift2 = s.lift2 ?? mix(s.hi, s.lift, L ? 0.05 : 0.04)

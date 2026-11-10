@@ -36,7 +36,7 @@
 .stp-tbl .stp-thread { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* account switcher */
-.acct-row { display: grid; grid-template-columns: 220px 150px 1fr 80px 92px; gap: 14px; align-items: center; padding: 10px 14px; outline: none; }
+.acct-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 150px 76px 120px; gap: 14px; align-items: center; padding: 10px 14px; outline: none; }
 .acct-row:hover, .acct-row:focus-visible { background: var(--raised); }
 .acct-row.on { background: var(--raised); }
 .acct-name b { display: block; color: var(--hi); font-size: 14px; font-weight: 600; }
@@ -56,3 +56,6 @@
 .acct-log { width: 100%; max-height: 140px; margin: 0; }
 .acct-foot { display: flex; gap: 18px; padding: 10px 14px; font-size: 12px; color: var(--faint); align-items: baseline; }
 .acct-foot span { flex: 1; }
+.acct-act { display: flex; gap: 14px; justify-content: flex-end; white-space: nowrap; }
+.acct-threads { color: var(--dim); white-space: nowrap; }
+.acct-plan { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
