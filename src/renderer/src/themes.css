@@ -1,0 +1,68 @@
+/* Design tokens: the quiet desk. Zones are told apart by surface, rules and space. Each theme has one accent (the selected tab, links,
+   the primary button, what is running), one signal colour that means "needs you", and red for failed. */
+
+/* Inter comes from @fontsource-variable/inter (main.tsx); the other choices ship here; Cascadia Mono and Consolas
+   are Windows fonts. Settings > Appearance picks the UI font (--sans) and the code font (--mono). */
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 400; font-display: swap; src: url('./assets/fonts/ibm-plex-sans-latin-400.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 500; font-display: swap; src: url('./assets/fonts/ibm-plex-sans-latin-500.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 600; font-display: swap; src: url('./assets/fonts/ibm-plex-sans-latin-600.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 700; font-display: swap; src: url('./assets/fonts/ibm-plex-sans-latin-700.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-weight: 400; font-display: swap; src: url('./assets/fonts/ibm-plex-mono-latin-400.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-weight: 600; font-display: swap; src: url('./assets/fonts/ibm-plex-mono-latin-600.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Variable'; font-weight: 100 900; font-display: swap; src: url('./assets/fonts/geist-latin-wght.woff2') format('woff2-variations'); }
+
+/* The colour tokens of the ten themes are written by themesCore.ts (one block per [data-theme], the same names in
+   each: surfaces bg / side / raised / lift2, rules, text hi / ink / dim / faint, the one signal, fail, git, diff, terminal,
+   radii). This file holds what is the same in every theme: type, spacing, and the older names mapped onto the set. */
+
+/* type, spacing and rules: the same in every theme */
+:root {
+  --t-state: 500 12px/1 var(--sans);
+  --t-label: 400 11.5px/1.4 var(--sans);
+  --t-ui: 400 13px/1.45 var(--sans);
+  --t-conv: 400 14.5px/1.62 var(--sans);
+  --t-title: 650 19px/1.25 var(--sans);
+  --t-page: 600 22px/1.2 var(--sans);
+  --t-code: 400 12.5px/1.68 var(--mono);
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 14px; --s5: 18px; --s6: 22px; --s7: 26px;
+  --pane-pad: 28px; --row-pad: 6px 14px; --radius: var(--r-row);
+  --rule-w: 1px; --active-bar: 3px; --tab-top: 2px; --q-top: 2px;
+}
+
+/* the names older components use, mapped onto the set (one place, every theme). State words other than waiting and
+   failed carry no colour; --mark is the neutral "this one" (the main text), never the signal. */
+:root, [data-theme] {
+  --work: var(--accent); --done: var(--git-added); --hold: var(--dim); --link: var(--accent); --mark: var(--accent);
+  --line: var(--rule); --line2: var(--rule2); --panel: var(--side); --panel2: var(--raised); --input: transparent;
+  --sel-ink: var(--hi); --ghost: var(--faint); --accent-hover: var(--accent);
+  --badge-bg: transparent; --badge-ink: var(--dim); --head: var(--dim); --brand: var(--hi);
+  --git-renamed: var(--git-modified); --git-conflict: var(--fail); --git-dot: var(--git-modified);
+  --diff-add-num: var(--diff-add-bg); --diff-del-num: var(--diff-del-bg); --diff-add-ink: var(--git-added); --diff-del-ink: var(--git-deleted);
+  --diff-empty: transparent; --diff-gap: var(--hover);
+  --you-bg: var(--raised); --you-edge: var(--accent); --you-ink: var(--hi); --you-name: var(--dim);
+  --claude: var(--hi); --agent: var(--ink); --agent-edge: var(--rule2); --thread: var(--ink); --thread-edge: var(--rule2); --tool-verb: var(--accent);
+  /* what a step did, in the terminal's own colours */
+  --tm-read: var(--ansi-blue); --tm-edit: var(--ansi-yellow); --tm-bash: var(--ansi-green); --tm-search: var(--ansi-cyan); --tm-agent: var(--ansi-magenta); --tm-web: var(--ansi-cyan); --tm-other: var(--dim);
+  --mk-deploy: var(--ansi-green); --mk-pull: var(--ansi-blue); --mk-dev: var(--ansi-cyan); --mk-scripts: var(--ansi-yellow); --mk-todos: var(--ansi-yellow); --mk-watch: var(--ansi-cyan);
+  --mk-git: var(--git-modified); --mk-files: var(--ansi-blue); --mk-agents: var(--ansi-magenta); --mk-preview: var(--ansi-cyan); --mk-changes: var(--git-modified); --mk-terminal: var(--ansi-green);
+  /* file marks in the tree */
+  --ic-blue: var(--ansi-blue); --ic-cyan: var(--ansi-cyan); --ic-yellow: var(--ansi-yellow); --ic-orange: var(--sy-num); --ic-green: var(--ansi-green);
+  --ic-red: var(--ansi-red); --ic-pink: var(--ansi-magenta); --ic-teal: var(--ansi-cyan); --ic-grey: var(--dim); --ic-folder: var(--accent);
+  --ultra: var(--signal); --ultra-bg: var(--signal-wash);
+  --code-ink: var(--hi); --th-bg: transparent; --check-a: var(--raised); --check-b: var(--bg); --white: var(--on-accent);
+  --shadow: var(--scrim); --switch-off: var(--rule2); --knob: var(--dim);
+  --sb-bg: var(--side); --sb-ink: var(--dim); --sb-brand-bg: var(--side); --sb-brand-ink: var(--hi);
+  /* the QR code must stay black on white whatever the theme */
+  --qr-bg: #FFFFFF;
+}
+
+/* the team office is an illustration with its own fixed palette (the same in every theme) */
+:root {
+  --ofc-floor: #141414; --ofc-board: #E3E1DB; --ofc-board-ink: #202020; --ofc-frame: #8F9294; --ofc-shadow: #1A1A1A; --ofc-head: #3A3A3A;
+  --ofc-ink: #1D1D1D; --ofc-ink2: #5D5D5D; --ofc-ink3: #6A6A6A; --ofc-ink4: #8A8A8A; --ofc-work: #1E64A8; --ofc-wait: #946C00; --ofc-done: #2B7A34;
+  --ofc-fail: #C0352B; --ofc-pen-blue: #2D6FB3; --ofc-pen-red: #B8352B; --ofc-sheet: #D8D3C4; --ofc-sheet-ink: #2A2A2A; --ofc-sheet-shadow: #151515;
+  --ofc-screen: #1F1F1F; --ofc-screen-idle: #4A4A4A; --ofc-label: #9A9A9A; --ofc-bubble: #EBE9E3;
+}
+
+/* high contrast (and any theme whose --edge is set): outline what other themes only lift */
+.rail-row.on, .pal-row.on, .sm-row.on, .pop-row.on, .frow.sel, .msg.you, .tb-field input, .cbox, .needs, .askcard, .item.on { outline: 1px solid var(--edge); outline-offset: -1px; }

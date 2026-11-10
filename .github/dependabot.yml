@@ -1,0 +1,18 @@
+# Update proposals for the app's npm packages, the pinned GitHub Actions and the phone app's Gradle build
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gradle
+    directory: /mobile
+    schedule:
+      interval: weekly

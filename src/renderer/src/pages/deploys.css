@@ -1,0 +1,43 @@
+/* Deploys page. Only dep- classes; tokens only. Stages are lifted blocks, no rules. */
+.dep-right { display: inline-flex; gap: 18px; align-items: baseline; }
+.dep-right .dep-on { color: var(--hi); }
+.page-tabs button:disabled { cursor: default; opacity: 1; }
+.page-tabs button:disabled:not(.on) { color: var(--faint); }
+.dep-cfg { max-width: 640px; padding: 14px 0; color: var(--ink); }
+.dep-cfg p { margin: 0 0 12px; color: var(--dim); line-height: 1.5; }
+.dep-bar { padding: 8px 0; }
+.dep-err { color: var(--fail); padding: 6px 0; font-size: 12.5px; overflow-wrap: anywhere; }
+.dep-failt { color: var(--fail); }
+.dep-dim { color: var(--dim); }
+.dep-dimline { color: var(--faint); font-size: 12px; padding: 4px 0; }
+.dep-row { padding: 6px 0; font-size: 12.5px; overflow-wrap: anywhere; }
+.dep-q { color: var(--hi); font-weight: 600; padding: 6px 0; }
+.dep-sha { color: var(--faint); font-size: 12px; }
+.dep-landed { color: var(--dim); font-variant-numeric: tabular-nums; }
+.dep-notes { color: var(--faint); font-size: 12px; padding: 8px 0; }
+
+.dep-stages { display: grid; grid-template-columns: 1fr 110px 1fr 140px 1fr; align-items: stretch; margin-bottom: 22px; }
+.dep-stg { padding: 14px 16px; background: var(--raised); min-width: 0; }
+.dep-stg.on { background: var(--lift2); }
+.dep-r-fail .dep-sn { color: var(--fail); }
+.dep-sn { font-size: 16px; font-weight: 650; color: var(--hi); letter-spacing: -.01em; }
+.dep-ss { margin: 5px 0; }
+.dep-sd { color: var(--faint); font-size: 12px; overflow-wrap: anywhere; }
+.dep-arrow { display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--faint); text-align: center; padding: 0 8px; }
+.dep-arrow.on { color: var(--hi); }
+
+.dep-cols { align-items: start; }
+.dep-commit { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; padding: 5px 0; font-size: 12.5px; align-items: baseline; }
+.dep-csha { color: var(--faint); font-size: 12px; }
+.dep-ctitle { color: var(--hi); min-width: 0; overflow-wrap: anywhere; }
+.dep-cau { color: var(--faint); white-space: nowrap; }
+.dep-log { max-height: 320px; margin-top: 8px; }
+.dep-diffs { max-height: 280px; }
+.dep-diffs a { color: var(--hi); text-decoration: underline; text-decoration-color: var(--rule2); }
+.dep-steps { margin-bottom: 8px; }
+.dep-matrix th, .dep-matrix td { white-space: nowrap; }
+
+@media (max-width: 1100px) {
+  .dep-stages { grid-template-columns: 1fr; row-gap: 4px; }
+  .dep-arrow { padding: 6px 0; }
+}

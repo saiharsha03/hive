@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Weekly report",
+    "cwd": "C:\path\to\weekly-report",
+    "options": [
+      { "label": "Full run", "cmd": "python main.py" },
+      { "label": "Quick run", "cmd": "python main.py --quick" }
+    ],
+    "open": "reports/*/*.html"
+  },
+  {
+    "name": "Monthly export",
+    "cwd": "C:\path\to\monthly-export",
+    "options": [{ "label": "Last month", "cmd": "python export.py 1" }],
+    "open": "**/*.pdf"
+  }
+]

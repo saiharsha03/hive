@@ -1,0 +1,47 @@
+import { afterAll, test } from 'vitest'
+import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const dir = mkdtempSync(join(tmpdir(), 'hive-teams-'))
+process.env.HIVE_TEAMS_DIR = dir
+afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+test('team folder: create, members, log, knowledge, end; read back from disk', async () => {
+  const t = await import('../../src/main/teams')
+  const changes: string[] = []
+  t.onTeamChange((id) => changes.push(id))
+  const team = t.createTeam('billing migration', 'Move the pipeline to gold', { lead: { id: 'new-1', title: 'Gold plan' } }, Date.UTC(2026, 10, 5))
+  assert.equal(team.id, '2026-11-05-billing-migration')
+  assert.equal(t.createTeam('billing migration', 'again', { lead: { id: 'new-2', title: 'x' }, owner: { id: 'new-1', title: 'Gold plan' } }, Date.UTC(2026, 10, 5)).id, '2026-11-05-billing-migration-2')
+  t.addMember(team, { id: 'team-qa-1', name: 'QA', role: 'qa', cwd: dir, joinedAt: 1 })
+  t.appendLog(team, { at: 2, from: 'team-qa-1', fromName: 'QA', to: ['Lead'], text: 'done' })
+  t.addKnowledge(team, 'QA', 'staging db is app_ci_local\nnot prod')
+  assert.match(readFileSync(join(team.dir, 'knowledge.md'), 'utf8'), /- staging db is app_ci_local not prod \(QA, /)
+  assert.match(t.readTeamFile(team, 'plan.md'), /\| Part \| Owner \| State \| Notes \|/)
+  assert.equal(t.teamOf('team-qa-1')?.id, team.id)
+  assert.equal(t.teamOf('new-1')?.id, team.id)
+  assert.deepEqual(t.ownedTeams('new-1').map((x) => x.id), ['2026-11-05-billing-migration-2'])
+  t.resetTeamsCache()
+  const back = t.getTeam(team.id)!
+  assert.deepEqual([back.members[0].name, t.readLog(back)[0].text], ['QA', 'done'])
+  t.endTeam(back)
+  assert.equal(t.teamOf('team-qa-1'), undefined)
+  assert.ok(changes.includes(team.id))
+})
+
+test('pause flag and saved sessions survive a reload, for resuming after a restart', async () => {
+  const t = await import('../../src/main/teams')
+  const team = t.createTeam('Pause test', 'g', { lead: { id: 'lead-9', title: 'L', cwd: dir } })
+  t.addMember(team, { id: 'mate-9', name: 'Mate', role: 'builder', cwd: dir, joinedAt: 1 })
+  t.noteSession('mate-9', 'sess-1')
+  t.noteSession('lead-9', 'sess-0')
+  t.setPaused(team, 123)
+  t.resetTeamsCache()
+  const back = t.getTeam(team.id)!
+  assert.deepEqual([back.pausedAt, back.lead.sessionId, back.members[0].sessionId], [123, 'sess-0', 'sess-1'])
+  t.setPaused(back, undefined)
+  t.resetTeamsCache()
+  assert.equal(t.getTeam(team.id)!.pausedAt, undefined)
+})
