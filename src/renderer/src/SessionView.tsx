@@ -206,12 +206,15 @@ function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<It
 function FindBar({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('')
   const [res, setRes] = useState({ active: 0, total: 0 })
-  useEffect(() => { const off = window.api.onFindResult(setRes); return () => { off(); void window.api.findStop() } }, [])
-  const go = (forward: boolean, next: boolean) => { void window.api.findRun(text, forward, next) }
+  // the window's find moves the focus to the match: it comes back here so typing goes on
+  const field = useRef<HTMLInputElement>(null)
+  const keep = () => requestAnimationFrame(() => field.current?.focus())
+  useEffect(() => { const off = window.api.onFindResult((r) => { setRes(r); keep() }); return () => { off(); void window.api.findStop() } }, [])
+  const go = (forward: boolean, next: boolean) => { void window.api.findRun(text, forward, next).then(keep) }
   return (
     <div className="findbar" data-testid="findbar">
-      <input className="uline" autoFocus placeholder="Find in this conversation" value={text} data-testid="findbar-input"
-        onChange={(e) => { setText(e.target.value); setRes({ active: 0, total: 0 }); void window.api.findRun(e.target.value, true, false) }}
+      <input ref={field} className="uline" autoFocus placeholder="Find in this conversation" value={text} data-testid="findbar-input"
+        onChange={(e) => { setText(e.target.value); setRes({ active: 0, total: 0 }); void window.api.findRun(e.target.value, true, false).then(keep) }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') { e.preventDefault(); go(!e.shiftKey, true) }
           else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() }
