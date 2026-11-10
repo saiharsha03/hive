@@ -6,6 +6,8 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-10
+
 ### Added
 
 - **Advisor per thread**: the model menu in the message box ends with an Advisor group (Off, Default with the
