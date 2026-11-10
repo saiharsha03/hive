@@ -6,6 +6,41 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Switch account without a restart.** Quiet threads move to the new login at once, busy ones when their work ends.
+- **Idle threads free their Claude process** after Settings > General "close idle threads after" (default 30
+  minutes, 0 = never); the next message resumes the session. A thread with anything still running never closes.
+- **Defaults per kind of thread:** a background model and effort for watcher runs, Dependabot reviews and `/btw`, and
+  a team model and effort for teammates (empty = the main default).
+- Threads in a repo or worktree under the workspace root share the root's Claude Code auto-memory.
+- The window can list and cancel every scheduled wake-up and automatic continue; live `/status` and `/usage` data
+  for a thread; the `/` menu also lists the CLI-only commands (they run in the thread's terminal).
+- The Dependabot reviewer runs at most `HIVE_DEPENDABOT_MAX_REVIEWS` reviews at once (default 3).
+- A teammate's brief carries the newest role memory within a size budget (default 6 KB per file) and names the file.
+
+### Changed
+
+- Background, team and watcher threads switch off the learning and explanatory output styles.
+- `/btw` runs on the background model.
+- Watcher tools describe what runs are: a fresh thread each run.
+- CI: actions pinned to commit SHAs, checks on Ubuntu and the build on Windows; a manual release builds the tag given.
+
+### Fixed
+
+- Ctrl+R and F5 no longer reload the built app (a reload stopped every thread and terminal).
+- A thread started while the page was still starting is no longer stopped by the page's reset.
+- A steered message Claude already read is no longer sent again after Hive was closed mid-turn.
+- Messages queued in a thread whose process ended go back to the message box instead of being resent at next start.
+- The user's own messages go through a paused team's hold.
+- Phone messages, watcher runs and automatic continues queue behind a running turn like a typed message.
+- A message sent after an `ultrathink` one no longer overtakes it.
+- An ended team's thread with work still running after 10 minutes stays open, marked waiting, instead of closing.
+- The phone can start a thread only in a folder Hive offered it.
+- The Git panel treats file names with `[` `]` `*` `?` as plain names.
+- Much less disk reading: the session list, search index and status bar read only what changed; whole transcripts
+  are streamed; idle language servers stop after 10 minutes.
+
 ## [1.1.1] - 2026-11-09
 
 ### Added
