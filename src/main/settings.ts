@@ -1,10 +1,10 @@
 // The one settings store, ~/.claude/hive-settings.json (HIVE_SETTINGS_FILE overrides, for tests). Atomic writes like
 // uiStore. Seeded on first run from the .env and scripts.json; afterwards it wins and they are only fallbacks.
 import { existsSync, readFileSync } from 'node:fs'
-import { dataDir } from './testMode'
+import { dataDir, TEST_MODE, TEST_MODEL } from './testMode'
 import { writeFileSafe } from './safeWrite'
 import { join } from 'node:path'
-import { normalizeSettings, seedSettings, type Effort, type Settings } from '../shared/settingsCore'
+import { DEFAULT_IDLE_CLOSE_MINUTES, DEFAULT_TEAM_MEMORY_KB, normalizeSettings, seedSettings, type Effort, type Settings } from '../shared/settingsCore'
 
 export const SETTINGS_FILE = process.env.HIVE_SETTINGS_FILE || join(dataDir(), 'hive-settings.json')
 
@@ -34,8 +34,19 @@ export function saveSettings(s: Settings): void {
 // for the consumers that read on use (terminal shell, new threads)
 export const currentSettings = (): Settings | null => current
 
-// Settings > General, as query options for a new thread
-export function threadDefaults(): { model?: string; effort?: Effort; extraArgs?: Record<string, string | null> } {
+// Settings > General, as query options for a new thread of this class: the background model and effort for watcher
+// runs, Dependabot reviews and /btw, the team ones for teammates; an empty one falls back to the main default
+export type ThreadKind = 'main' | 'team' | 'background'
+// Test mode (the e2e harness): every thread on TEST_MODEL at low effort and without Chrome, whatever the settings say
+export function threadDefaults(kind: ThreadKind = 'main', test = TEST_MODE): { model?: string; effort?: Effort; extraArgs?: Record<string, string | null> } {
+  if (test) return { model: TEST_MODEL, effort: 'low' }
   const g = current?.general
-  return { ...(g?.model ? { model: g.model } : {}), ...(g?.effort ? { effort: g.effort } : {}), ...(g?.chrome ? { extraArgs: { chrome: null } } : {}) }
+  const model = (kind === 'background' && g?.bgModel) || (kind === 'team' && g?.teamModel) || g?.model
+  const effort = (kind === 'background' && g?.bgEffort) || (kind === 'team' && g?.teamEffort) || g?.effort
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(g?.chrome ? { extraArgs: { chrome: null } } : {}) }
 }
+
+// an idle thread's process closes after this long (Settings > General, minutes); 0 = never
+export const idleCloseMs = (): number => (current?.general.idleCloseMinutes ?? DEFAULT_IDLE_CLOSE_MINUTES) * 60_000
+// how much of each role memory file goes into a teammate's brief (the newest entries)
+export const teamMemoryBytes = (): number => (current?.general.teamMemoryKb ?? DEFAULT_TEAM_MEMORY_KB) * 1024

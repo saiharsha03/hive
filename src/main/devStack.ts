@@ -13,7 +13,7 @@ import {
   type DevConfig, type DevService, type DevState, type Owner, type Source, type SourceOption, type SvcDef,
 } from '../shared/devCore'
 import type { Loaded } from './devConfig'
-import { WIP_MESSAGE, decideCleanup, envCopies, hasWork, planWorktree, validRepoName, type WorktreeLink } from '../shared/worktreeCore'
+import { WIP_MESSAGE, decideCleanup, envCopies, hasWork, isDotenvName, planWorktree, validRepoName, type WorktreeLink } from '../shared/worktreeCore'
 import { appName } from '../shared/appName'
 import { sameDir, withRealRoots } from './paths'
 
@@ -192,7 +192,7 @@ const refNames = async (dir: string, ns: string) =>
 // .env files and node_modules are not in git: carry them into a fresh worktree so the dev command works there
 function prepareWorktree(main: string, wt: string) {
   for (const f of readdirSync(main)) {
-    if (/^\.env/.test(f) && !existsSync(join(wt, f))) { try { copyFileSync(join(main, f), join(wt, f)) } catch { /* not a file */ } }
+    if (isDotenvName(f) && !existsSync(join(wt, f))) { try { copyFileSync(join(main, f), join(wt, f)) } catch { /* not a file */ } }
   }
   const nm = join(main, 'node_modules')
   if (existsSync(nm) && !existsSync(join(wt, 'node_modules'))) { try { symlinkSync(nm, join(wt, 'node_modules'), 'junction') } catch { /* optional */ } }

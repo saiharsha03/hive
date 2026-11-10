@@ -53,16 +53,23 @@ function withDb<T>(f: (db: DatabaseSync) => T): T {
   try { return f(db) } finally { db.close() }
 }
 
+// told after any change to the pending list (added, cancelled, fired, failed): the window's wake-ups list
+let changed: () => void = () => {}
+export const onWakeupsChanged = (f: () => void) => { changed = f }
+const tell = () => { try { changed() } catch { /* the window is gone */ } }
+
 export function addWakeup(w: { sessionId: string; title: string; at: Date; prompt: string; everyMinutes?: number }): ThreadWakeup {
   if (!w.sessionId) throw new Error('this thread has no session yet')
   if (!Number.isFinite(w.at.getTime())) throw new Error('invalid wake time')
   if (!w.prompt.trim()) throw new Error('prompt is empty')
   if (w.everyMinutes !== undefined && w.everyMinutes < MIN_EVERY_MINUTES) throw new Error(`every_minutes must be at least ${MIN_EVERY_MINUTES}`)
-  return withDb((db) => {
+  const row = withDb((db) => {
     const r = db.prepare('INSERT INTO thread_wakeups (session_id, title, wake_at, prompt, every_minutes) VALUES (?, ?, ?, ?, ?)')
       .run(w.sessionId, w.title, localIso(w.at), w.prompt, w.everyMinutes ?? null)
     return db.prepare('SELECT * FROM thread_wakeups WHERE id = ?').get(Number(r.lastInsertRowid)) as ThreadWakeup
   })
+  tell()
+  return row
 }
 
 // pending rows, soonest first; one session's when given
@@ -70,10 +77,14 @@ export const listWakeups = (sessionId?: string): ThreadWakeup[] => withDb((db) =
   (db.prepare(`SELECT * FROM thread_wakeups WHERE status = 'pending' ${sessionId ? 'AND session_id = ?' : ''}`)
     .all(...(sessionId ? [sessionId] : [])) as ThreadWakeup[]).sort((a, b) => Date.parse(a.wake_at) - Date.parse(b.wake_at)))
 
-// only the session that made it (or anyone when sessionId is omitted: the user)
-export const cancelWakeup = (id: number, sessionId?: string): boolean => withDb((db) =>
-  Number(db.prepare(`UPDATE thread_wakeups SET status = 'cancelled' WHERE id = ? AND status = 'pending' ${sessionId ? 'AND session_id = ?' : ''}`)
-    .run(...(sessionId ? [id, sessionId] : [id])).changes) > 0)
+// only the session that made it (or anyone when sessionId is omitted: the user, from the window or the phone)
+export function cancelWakeup(id: number, sessionId?: string): boolean {
+  const done = withDb((db) =>
+    Number(db.prepare(`UPDATE thread_wakeups SET status = 'cancelled' WHERE id = ? AND status = 'pending' ${sessionId ? 'AND session_id = ?' : ''}`)
+      .run(...(sessionId ? [id, sessionId] : [id])).changes) > 0)
+  if (done) tell()
+  return done
+}
 
 export const dueWakeups = (now: number): ThreadWakeup[] => listWakeups().filter((r) => Date.parse(r.wake_at) <= now)
 
@@ -115,9 +126,10 @@ export async function tick(now = Date.now()): Promise<number> {
         await deliver(r.session_id, wakeMessage(r, now))
         markFired(r, now)
         fired++
+        tell()
       } catch (e) {
         const m = (e as Error).message ?? String(e)
-        if (/No thread or session/.test(m)) markFailed(r, m)
+        if (/No thread or session/.test(m)) { markFailed(r, m); tell() }
       }
     }
   } catch { /* the table is busy: next check */ } finally {

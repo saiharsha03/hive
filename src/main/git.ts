@@ -23,7 +23,7 @@ type Run = { code: number; out: string; err: string }
 // git's own output either way; okCodes lists the exit codes that are not failures
 function run(cwd: string, args: string[], timeout = 120_000, okCodes = [0]): Promise<Run> {
   return new Promise((resolve, reject) => {
-    execFile('git', ['-c', 'core.quotepath=false', ...args], { cwd, timeout, maxBuffer: 256 * 1024 * 1024, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } },
+    execFile('git', ['-c', 'core.quotepath=false', '--literal-pathspecs', ...args], { cwd, timeout, maxBuffer: 256 * 1024 * 1024, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } },
       (err, stdout, stderr) => {
         const code = err ? (typeof (err as any).code === 'number' ? (err as any).code : -1) : 0
         const r = { code, out: stdout.toString(), err: stderr.toString() }

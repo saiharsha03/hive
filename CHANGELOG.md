@@ -6,6 +6,76 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Switch account without a restart.** Quiet threads move to the new login at once, working ones when their work
+  ends; the dialog says how many follow.
+- **Idle threads free their Claude process** after Settings > General "Close idle threads after" (default 30
+  minutes, 0 = never); the tab stays and the next message resumes the session. A thread with anything still going
+  (a turn, background work, a Codex run, a loop or wake-up, a question, a queued or unread message) never closes.
+- **Defaults per kind of thread:** a background model and effort for watcher runs, Dependabot reviews and `/btw`, and a
+  team model and effort for teammates (empty = the main default).
+- **`/status` and `/usage`** show a live card for the thread: account, plan, model, effort, permission mode, session,
+  context, MCP servers, plan limits with their reset times, and the thread's own token totals. The `/` menu also
+  lists the CLI-only commands; picking one runs it in the thread's terminal.
+- **Wake-ups and automatic continues** are listed in the command palette; picking one cancels it.
+- **Allow my IP remembers every address it allowed**, so going between home and office no longer asks again; an
+  address can be forgotten from the command palette, and Settings can make allowed addresses expire.
+- Hive writes `~/.claude/usage/latest.json` from its plan-limit readings, so a usage-guard hook that reads it keeps
+  working while only Hive is open.
+- Threads in a repo or worktree under the workspace root share the root's Claude Code auto-memory.
+- The Dependabot reviewer runs at most `HIVE_DEPENDABOT_MAX_REVIEWS` reviews at once (default 3).
+- A teammate's brief carries the newest role memory within a size budget (default 6 KB per file) and names the file.
+- Closing or archiving a thread that would delete worktrees asks first and lists them.
+- A watcher's name in the sidebar, the title-bar list or Settings opens that watcher.
+- Phone: drafts are kept per thread; every action says when it failed; the thread you start opens at once.
+
+### Changed
+
+- Background, team and watcher threads switch off the learning and explanatory output styles.
+- `/btw` runs on the background model.
+- Every watcher run header starts with a fixed mark, so a watcher's session stays read-only whatever it is called
+  (old transcripts are still recognised). Watcher names cannot hold `[ ]` or line breaks; intervals have a 5-minute floor.
+- More credential-looking keys stay out of the settings store (access keys, `*_PASS`, `*_KEY`, DSNs, webhook and
+  database URLs); one effort list everywhere, with `xhigh`.
+- Phone: the pairing key is kept in the phone's keystore behind its screen lock (the app needs one); pairing needs an
+  `https://` relay; nothing of the app goes into a backup; a release build must be signed with your own keystore
+  (`HIVE_KEYSTORE`, `HIVE_KEYSTORE_PASSWORD`, `HIVE_KEY_ALIAS`), never the debug key; the desk token goes in the
+  Authorization header.
+- e2e: every thread runs on Haiku at low effort without Chrome, nothing is checked against GitHub, sessions are listed
+  from a seeded folder (`HIVE_PROJECTS_DIR`), and a teardown deletes the run's folder and transcripts. It still uses
+  your real Claude login.
+- CI: actions pinned to commit SHAs, checks on Ubuntu and the build on Windows; a manual release builds the tag given;
+  Dependabot watches npm, Actions and the phone's Gradle build.
+
+### Fixed
+
+- Ctrl+R and F5 no longer reload the built app (a reload stopped every thread and terminal).
+- A thread started while the page was still starting is no longer stopped by the page's reset.
+- A steered message Claude already read is no longer sent again after Hive was closed mid-turn.
+- Messages queued in a thread whose process ended go back to its message box instead of being resent at the next start;
+  a send that fails always says so on the message.
+- Your own messages go through a paused team's hold; phone messages, watcher runs and automatic continues queue
+  behind a running turn like a typed message; a message sent after an `ultrathink` one no longer overtakes it.
+- An ended team's thread with work still running after 10 minutes stays open, marked waiting, instead of closing.
+- The phone can start a thread only in a folder Hive offered it.
+- File names with `[` `]` `*` `?` are plain names in the Git panel and in worktree cleanup; only real `.env` files are
+  copied into a worktree (not `.envrc`), and they never land in the WIP commit.
+- A cleared Worktrees folder setting is the default again (worktrees landed inside the main checkout); a quoted
+  `.env` value with a comment after it loses its quotes.
+- Deploy: a late diffs.sh failure no longer fails a running deploy; a failed re-watch goes back to stuck; a landed
+  check fails at once on an image without a commit tag.
+- Adaptive watchers no longer fall to the slowest tier after a restart; a watcher run that ends is not marked waiting;
+  the read-only check catches more write commands (`gh` verbs behind flags, `git push` behind options, curl data flags,
+  PowerShell `-Method:Post`).
+- A wake-up or background task no longer stays "running" when its end event is missed.
+- Editor: a save never overwrites a file changed on disk, and a failed save keeps the tab and its edits.
+- Notes: a deleted note does not come back; a note changed elsewhere shows its new text.
+- Keyboard and dialogs: one Escape closes only the top layer; dialogs keep the focus; menus, chat tabs, Git rows and
+  to-dos work without the mouse.
+- Much less disk reading and CPU: the session list, search index and status bar read only what changed; whole
+  transcripts are streamed; the chat re-renders only threads on screen; idle language servers stop after 10 minutes.
+
 ## [1.1.1] - 2026-11-09
 
 ### Added

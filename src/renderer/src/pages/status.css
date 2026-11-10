@@ -10,8 +10,8 @@
 .stp-ctxbar { position: relative; display: flex; height: 8px; background: var(--rule); }
 .stp-seg { display: block; height: 100%; }
 .stp-seg-system { background: var(--dim); }
-.stp-seg-memory { background: var(--faint); }
-.stp-seg-messages, .stp-seg-used { background: var(--ink); }
+.stp-seg-memory { background: var(--git-modified); }
+.stp-seg-messages, .stp-seg-used { background: var(--work); }
 .stp-seg-free { background: transparent; }
 .stp-tick { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--hi); }
 .stp-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 11.5px; color: var(--dim); padding-top: 6px; }

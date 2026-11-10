@@ -139,6 +139,14 @@ export function startEngine() {
     }
     if (ev.type === 'result') refreshThreadList()
     if (ev.type === 'hive_open_terminal') { activate(tabId); openTerminal(tabId); return }
+    // the thread's process ended before Claude read these: what you wrote goes back in its message box
+    if (ev.type === 'hive_unsent') {
+      const mine = (ev.messages ?? []).filter((m: { source: string; text: string }) => m.source === 'you' && m.text.trim())
+      for (const m of mine) insertIntoComposer(tabId, m.text)
+      const pics = (ev.messages ?? []).reduce((n: number, m: { source: string; images?: unknown[] }) => n + (m.source === 'you' ? m.images?.length ?? 0 : 0), 0)
+      if (mine.length || pics) notice(`The thread stopped before Claude read ${mine.length || 'your'} message${mine.length === 1 ? '' : 's'}: back in its message box${pics ? ` (attach the ${pics} picture${pics > 1 ? 's' : ''} again)` : ''}.`)
+      return
+    }
     if (ev.type === 'hive_organize') {
       if (ev.action === 'waiting') {
         setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(s, ev.reason, Date.now(), activeId() === s.id && !s.background) : s)))
@@ -163,7 +171,9 @@ export function startEngine() {
   window.api.onThread((t) => {
     const known = getSessions().find((s) => s.id === t.tabId)?.sessionId
     for (const id of new Set([t.sessionId, known, t.tabId])) if (id) keepVisible(id)
-    const first: Item = t.from ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.prompt } : { kind: 'user', text: t.prompt, images: [] }
+    // queueId: it waits behind the running turn, like a queued message typed here
+    const queue = t.queueId ? { queue: { id: t.queueId, pending: true } } : {}
+    const first: Item = t.from ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.prompt, ...queue } : { kind: 'user', text: t.prompt, images: [], ...queue }
     setSessions((all) => (all.some((s) => s.id === t.tabId) ? all.map((s) => (s.id === t.tabId ? { ...s, busy: true, items: [...s.items, first] } : s)) : [...all, {
       id: t.tabId, title: t.title, cwd: t.cwd, sessionId: t.sessionId, path: t.path, items: [first], streaming: '', busy: true, loaded: !t.path, background: !t.foreground,
     }]))

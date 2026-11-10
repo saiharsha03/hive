@@ -30,7 +30,10 @@ test('seed from .env and scripts.json: every non-secret key, the scripts array a
   const { HIVE_TRACKER_TOKEN: _token, SOME_API_KEY: _key, ...rest } = DOT
   assert.deepEqual(s.env, rest)
   assert.deepEqual(s.scripts, SCRIPTS) // the bad entry is kept, so nothing is lost
-  assert.deepEqual(s.general, { shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true, desktopNotify: true })
+  assert.deepEqual(s.general, {
+    shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true, desktopNotify: true,
+    bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: 30, teamMemoryKb: 6,
+  })
   assert.equal(seedSettings(DOT, null).scripts, null)
   assert.equal(seedSettings(DOT, 'not json').scripts, null)
   assert.equal(seedSettings(DOT, '{"a":1}').scripts, null)
@@ -54,6 +57,17 @@ test('saving: dropped .env keys become empty, secrets and bad names never saved'
   const n = normalizeSettings({ env: { A: 'a', B: 3, HIVE_TRACKER_TOKEN: 'x' }, scripts: 'no', general: { effort: 'huge', model: ' m ' } })!
   assert.deepEqual(n, { version: 1, env: { A: 'a' }, scripts: null, general: { ...emptyGeneral(), model: 'm' } })
   assert.equal(normalizeSettings([]), null)
+  // the idle close and the memory budget: whole numbers from 0, anything else the default
+  const g = (general: object) => normalizeSettings({ general })!.general
+  assert.equal(g({ idleCloseMinutes: 0 }).idleCloseMinutes, 0)
+  assert.equal(g({ idleCloseMinutes: 45 }).idleCloseMinutes, 45)
+  assert.equal(g({ idleCloseMinutes: -1 }).idleCloseMinutes, 30)
+  assert.equal(g({ idleCloseMinutes: '10' }).idleCloseMinutes, 30)
+  assert.equal(g({ teamMemoryKb: 12 }).teamMemoryKb, 12)
+  assert.equal(g({ bgEffort: 'huge', teamEffort: 'low' }).bgEffort, '')
+  assert.equal(g({ bgEffort: 'huge', teamEffort: 'low' }).teamEffort, 'low')
+  assert.ok(validateSettings(draft({ HIVE_DEPENDABOT_MAX_REVIEWS: '0' }), ok).some((x) => x.key === 'HIVE_DEPENDABOT_MAX_REVIEWS'))
+  assert.ok(!validateSettings(draft({ HIVE_DEPENDABOT_MAX_REVIEWS: '3' }), ok).some((x) => x.key === 'HIVE_DEPENDABOT_MAX_REVIEWS'))
 })
 
 test('sections', () => {
@@ -100,6 +114,16 @@ test('store file: first run seeds and saves; afterwards the store wins; a broken
   assert.equal(l.env.HIVE_WATCH_TIERS, '80:2h,100:1d')
   assert.equal(l.env.HIVE_X_TOKEN, 'shh')
   assert.deepEqual(threadDefaults(), { model: 'opus', effort: 'high', extraArgs: { chrome: null } }) // Claude in Chrome is on by default
+  // background and team defaults: empty = the main default, so nothing changes until they are set
+  assert.deepEqual(threadDefaults('background'), threadDefaults())
+  assert.deepEqual(threadDefaults('team'), threadDefaults())
+  saveSettings({ ...again, general: { ...again.general, bgModel: 'haiku', bgEffort: 'low', teamEffort: 'medium' } })
+  assert.deepEqual(threadDefaults('background'), { model: 'haiku', effort: 'low', extraArgs: { chrome: null } })
+  assert.deepEqual(threadDefaults('team'), { model: 'opus', effort: 'medium', extraArgs: { chrome: null } })
+  assert.deepEqual(threadDefaults('main'), { model: 'opus', effort: 'high', extraArgs: { chrome: null } })
+  // test mode: Haiku at low effort and no Chrome, whatever the settings say
+  for (const k of ['main', 'team', 'background'] as const) assert.deepEqual(threadDefaults(k, true), { model: 'haiku', effort: 'low' })
+  saveSettings(again)
   // no .env at all: the store alone still configures Hive
   const envFile = process.env.HIVE_ENV_FILE
   process.env.HIVE_ENV_FILE = join(FIX, 'missing.env')

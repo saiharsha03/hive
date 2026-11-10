@@ -97,9 +97,6 @@ export const quietHoursSet = (q: QuietHours) => call<boolean>('quietHoursSet', q
 // ---- stop everything: every turn interrupted, every task stopped, every queue held; wake-ups stay ----
 export const stopEverythingMain = () => call<{ threads: number; tasks: number }>('stopEverything')
 
-// ---- Allow my IP: the addresses it has allowed before (expected: allow:known) ----
-export type KnownIp = { ip: string; at: number | null; label?: string }
-export const allowKnown = () => call<KnownIp[]>('allowKnown')
 
 // ---- the engine's slash commands for the composer and the palette (exists: chat:commands) ----
 export type EngineCommand = { name: string; description: string; argumentHint?: string }

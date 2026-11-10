@@ -3,32 +3,57 @@ name: Release
 # Pushing a v* tag (e.g. v1.0.4) builds and publishes that release. CI is the only publisher, so the installer,
 # its blockmap and latest.yml (the auto-update feed) always come from the same build. Release:
 #   npm version 1.0.5 --no-git-tag-version, commit, git tag v1.0.5, push main + the tag
+# Run by hand (Actions > Release > Run workflow) with a tag that already exists to build and publish that tag again.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and publish, e.g. v1.1.1 (it must already exist)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+# Every action is pinned to a full commit SHA (the version it is in the comment); Dependabot proposes updates.
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      # the tag this run builds: the pushed one, or the one asked for by hand (never the branch a manual run starts on)
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - name: The tag is a version tag
+        shell: bash
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "not a version tag: $TAG"; exit 1; }
 
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
 
+      # the Electron binary and electron-builder's downloads (NSIS and friends), kept between runs
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-release-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-release-${{ runner.os }}-
+
       # the tag and package.json must agree, or latest.yml would advertise a different version than the tag
       - name: Tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
           v=$(node -p "require('./package.json').version")
-          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != package.json v$v"; exit 1; }
+          [ "v$v" = "$TAG" ] || { echo "tag $TAG != package.json v$v"; exit 1; }
 
       - name: Install
         run: npm ci
@@ -41,9 +66,10 @@ jobs:
         run: npm run dist
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          name: Hive ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          name: Hive ${{ env.TAG }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |

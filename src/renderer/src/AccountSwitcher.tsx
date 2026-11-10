@@ -1,6 +1,6 @@
 // The account popover under the title bar: every signed-in account with its plan, 5-hour and 7-day use and thread
 // count, and a switch that takes effect at once. Until main can hold several accounts (accountsList), it shows the
-// one account getStatus() knows and offers the old browser sign-in, which restarts Hive.
+// one account getStatus() knows and offers the browser sign-in: nothing restarts, threads move to the new login.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bar, Btn, State, Unavailable } from './kit'
 import { accountAdd, accountsList, accountUse, onAccountsChanged, threadAccount, type Account, type UsageRow } from './api/next'
@@ -52,6 +52,9 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
   const [state, setState] = useState<{ rows: Row[]; several: boolean } | null>(null)
   const [sel, setSel] = useState(0)
   const [flow, setFlow] = useState<'off' | 'ask' | 'signing' | 'done' | 'failed'>('off')
+  // after a switch: the new login, and how many threads move when their work ends
+  const [moved, setMoved] = useState<{ account: string | null; closed: number; waiting: number } | null>(null)
+  useEffect(() => window.api.onAccountSwitched(setMoved), [])
   const [email, setEmail] = useState('')
   const [out, setOut] = useState('')
   useEscape(() => {
@@ -137,7 +140,7 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
 
         {state && !several && (
           <div className="acct-old">
-            <div className="acct-dim">Several signed-in accounts need the main-process update. Until then, switching signs in again in the browser and restarts Hive.</div>
+            <div className="acct-dim">Several signed-in accounts need the main-process update. Until then, switching signs in again in the browser; nothing restarts, and every thread moves to the new login (a working one when its work ends).</div>
             {flow === 'off' && <Btn kind="plain" onClick={() => setFlow('ask')} testid="account-switch-old">Switch account</Btn>}
             {flow === 'ask' && (
               <div className="acct-flow">
@@ -150,7 +153,7 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
                 <pre className="log acct-log" data-testid="account-log">{out || (flow === 'signing' ? 'Finish signing in in the browser.' : '')}</pre>
                 <div className="acct-flow">
                   {flow === 'signing' && <Btn kind="plain" onClick={cancel} testid="account-cancel">Cancel</Btn>}
-                  {flow === 'done' && <span className="acct-dim">Signed in. Restarting.</span>}
+                  {flow === 'done' && <span className="acct-dim" data-testid="account-done">{moved ? `Switched to ${moved.account ?? 'the new account'}${moved.waiting ? `; ${moved.waiting} thread${moved.waiting > 1 ? 's' : ''} move when ${moved.waiting > 1 ? 'they finish' : 'it finishes'}` : ''}.` : 'Signed in. Moving the threads to the new login.'}</span>}
                   {flow === 'failed' && <span className="acct-dim">The sign-in did not finish; nothing changed.</span>}
                 </div>
               </>

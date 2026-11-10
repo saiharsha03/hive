@@ -44,8 +44,8 @@ It started as a personal replacement for an editor plus a terminal, and is share
   keeps it on disk and wakes the thread even after the app was closed or the laptop slept.
 - **A worktree per thread.** Any thread can ask for its own git worktree, so parallel agents never edit the same
   checkout. Closing or archiving the thread cleans the worktree up.
-- **Watchers.** Persistent background agents, each with its own thread, prompt, SQLite memory, reports and
-  findings. Schedules can be fixed, adaptive (sweep less often as your weekly usage climbs) or self-scheduled: the
+- **Watchers.** Scheduled background agents, each with its own prompt, SQLite memory, reports and findings; every
+  run is a fresh thread that picks up from what the last run saved. Schedules can be fixed, adaptive (sweep less often as your weekly usage climbs) or self-scheduled: the
   agent plans its own wake-ups in a table. Watcher threads are read-only by default.
 - **Your tools, built in.** Files, Git (with the open thread's changes on top), To-dos, Notes, Scripts and Deploy
   each one click away in the top bar; Agents and the terminal in the bottom panel; Pull latest, Dev stack and a
@@ -103,14 +103,25 @@ The `hive` MCP server is attached to every session Hive starts and gives the age
 | `search_sessions` | Search past sessions |
 | `show_to_user` | Open a file, image, page or PDF in a full-window preview |
 | `add_todo` | Add to the to-do list |
+| `add_note` | Write to Notes (adds to the note with that title, or makes one) |
+| `notify_phone` | Send a notification to the paired phone |
 | `dev_stack`, `dev_stack_logs` | Start, stop and read logs from the local dev stack |
 | `start_team`, `team_post`, `team_note`, `team_status`, `add_teammate`, `pause_team`, `resume_team`, `end_team` | Run a team of threads (see Teams) |
-| `list_roles`, `define_role` | The team role library |
+| `todo_add`, `todo_update`, `todo_list` | A team's shared board and each teammate's own list |
+| `list_roles`, `define_role`, `remember` | The team role library, and lessons kept for a role or for every role |
 | `schedule_wakeup`, `list_wakeups`, `cancel_wakeup` | Wake this thread later, even after Hive was closed |
 | `agent_status` | What the thread's subagents, shells, workflows and Codex runs are doing right now |
 
-Your own threads and background threads run in plain auto mode: Hive adds no allow-lists or guards on top of what
-Claude Code itself does. Watcher threads are the exception (see below).
+Threads on screen run in bypass mode (no approval prompts, the message box says so); background threads (hidden
+tabs, and threads Hive or another thread started) run in Claude Code's auto mode, where its classifier approves each
+tool call. A thread switches live when its tab moves between the two. Hive adds no allow-lists or guards on top of
+what Claude Code itself does; watcher threads are the exception (see below).
+
+A thread whose Claude process sits idle (Settings > General, 30 minutes by default, 0 = never) closes that process,
+and the MCP servers it started, to free memory; the tab and its session stay, and the next message resumes it. A
+thread with anything still going (a turn, background work, a Codex run, a loop or scheduled wake-up, an open
+question, a queued message, a rewind) is never closed. Threads that work in a repo or worktree under the workspace
+root share the root's Claude Code auto-memory folder, so they all see the same memory.
 
 ### Watchers
 
@@ -121,8 +132,9 @@ A watcher is a scheduled agent with a durable home under `~/.claude/hive/watcher
 - `memory/*.db`: SQLite memory the agent reads and writes between runs
 - `reports/` and `findings.jsonl`: what it produced, listed in the Watchers view
 
-Each watcher keeps one persistent thread, so every run continues the same conversation, and its thread sits in its
-own Watchers section of the sidebar. Schedules are:
+Every run is a fresh thread, closed when the run ends (one waiting for you stays open until you answer or the next
+run). What carries over is what the run saved (memory folder, database, findings, reports) and its final reply, which
+the next run's header quotes. Runs show in their own Watchers section of the sidebar. Schedules are:
 
 - `every` intervals, with daily and weekly report times;
 - **adaptive** tiers keyed to your 7-day usage. The default, `50:1h,60:3h,70:6h,100:1d`, means hourly below 50%,
@@ -197,8 +209,9 @@ Push, merge and deploy decisions go back to you; the Lead does not make them.
   the background and offers *Restart to update* in the status bar (it also installs when you quit). The portable
   build shows *vX available* and opens the release page. *Check for updates* is in the command palette.
 - **Account and usage** in the status bar: the plan's 5-hour and 7-day limits (only the windows your plan has), read
-  from the running threads within seconds of each reply, and **Switch account** (Claude Code's own
-  browser sign-in, then the app restarts on the new login). A thread that hits a usage limit continues by itself
+  from the running threads within seconds of each reply, and **Switch account** (Claude Code's own browser
+  sign-in). Nothing restarts: quiet threads move to the new login at once (their next message resumes the session
+  on it) and busy ones when their work ends. A thread that hits a usage limit continues by itself
   after the reset, or as soon as any turn goes through again.
 - **Desktop notifications**: a Windows toast and a taskbar flash when a thread waits for you, asks a question,
   finishes, fails or hits the usage limit while Hive is not focused. Clicking it opens the thread; Settings has the
@@ -267,6 +280,17 @@ the phone's token and the key. Scan it from the app (or paste it); it is shown o
 (or point `HIVE_FIREBASE_DIR` at it). Then run `cd mobile && ./gradlew assembleDebug` (JDK 17+, Android SDK 35), and
 install `app/build/outputs/apk/debug/app-debug.apk` with `adb install` or by copying it to the phone.
 
+For the copy you keep on your phone, build a release (`./gradlew assembleRelease`) signed with **your own** keystore,
+never the debug key (its password is public, so anyone could sign an update that replaces the app). Name it in
+`~/.gradle/gradle.properties` or the environment, never in the repo: `HIVE_KEYSTORE` (the `.jks` file),
+`HIVE_KEYSTORE_PASSWORD`, `HIVE_KEY_ALIAS` (and `HIVE_KEY_PASSWORD` if the key's own password differs). Without them
+the release build stops and says why. Make one with
+`keytool -genkeypair -v -keystore hive-release.jks -alias hive -keyalg RSA -keysize 4096 -validity 10000`.
+
+The phone needs a **screen lock** (PIN, pattern or password): the pairing key is kept in the phone's keystore behind
+it, and the app does not open without one. Pairing needs an **`https://` relay address**; the app refuses a code with
+a plain `http://` relay.
+
 ## How it works
 
 ```
@@ -330,10 +354,27 @@ file from two optional local files, both git-ignored:
 
 The app name and tagline are settings too (Settings > General), so Hive can be renamed without touching code.
 
+Settings > General also holds what new threads start with:
+
+- **Model and effort** for your own threads; **background model and effort** for watcher runs, Dependabot reviews
+  and `/btw`; **team model and effort** for teammates. An empty one means the same as the main default.
+- **Close idle threads after** (minutes, default 30, 0 = never).
+- **Team memory in briefs** (KB per memory file, default 6): a teammate's brief carries the newest role and shared
+  memory entries up to that size and names the full file; nothing is cut on disk.
+
+The Dependabot reviewer starts at most `HIVE_DEPENDABOT_MAX_REVIEWS` review threads at once (default 3); the rest
+start as earlier ones finish. **Allow my IP** remembers every address its command succeeded for, so moving between
+known places asks nothing; `HIVE_ALLOWLIST_TRUST_HOURS` makes an allowed address expire (empty = never), and the
+command palette forgets one.
+
+Hive writes each plan-limit reading to `~/.claude/usage/latest.json` (at most once a minute, the same shape as the
+terminal's usage-file plugin), so a hook that guards usage by reading that file keeps working inside Hive.
+
 ## Read this before using it
 
-- **Sessions run without approval prompts.** Claude can run commands and edit files without asking, like
-  `claude --dangerously-skip-permissions`. The message box says so.
+- **Sessions run without approval prompts.** On screen, Claude can run commands and edit files without asking, like
+  `claude --dangerously-skip-permissions`; the message box says so. In the background, Claude Code's auto mode
+  decides each tool call.
 - **The hooks and plugins switches change your real Claude Code settings.** Every write saves a `.hive-bak` copy
   first.
 - Don't continue the same session in Hive and in a terminal at the same time: both write to one transcript.
@@ -350,11 +391,12 @@ npm run e2e        # build, then Playwright end-to-end tests against the real ap
 ```
 
 The end-to-end suite drives the built Electron app through threads, slash commands, pickers, panels, watchers,
-deploy and Pull latest. It runs in **test mode** (`HIVE_TEST_MODE`) against an isolated data folder, so tests never
-send email, post alerts, push, deploy or touch your real Hive state. Anything with outside effects answers with a
-"test mode: … is off" message instead of running, and the tests check for that message.
+deploy and Pull latest. **It runs real Claude sessions on your real Claude login**, so it uses your plan's usage. It
+runs in **test mode** (`HIVE_TEST_MODE`) against an isolated data folder: Hive's own state files are kept apart, and
+whatever Hive itself would do with outside effects (watcher runs, Dependabot reviews, commits, pushes, deploys,
+switching the account) answers with a "test mode: … is off" message instead, which the tests check for.
 
-CI runs typecheck, lint, unit tests and a build on Windows and Ubuntu for every push and pull request.
+CI runs typecheck, lint and the unit tests on Ubuntu and the build on Windows for every push and pull request.
 
 ## Tech stack
 

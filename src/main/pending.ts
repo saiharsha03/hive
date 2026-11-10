@@ -1,13 +1,15 @@
 // Messages sent while Claude was working (steered or queued) are kept in ~/.claude/hive-pending.json until they reach
 // Claude, so closing Hive by mistake loses none of them: on the next start they are sent again to the same thread.
-// A queued message reaches Claude when the queue hands it over; a steered one when that turn ends.
+// A message has reached Claude when the CLI echoes it back (its uuid, chat.ts hive_seen); the end of the turn it rode
+// is the fallback for an engine that sends no echo. A queued message handed over to the engine rides the next turn.
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileSafe } from './safeWrite'
 import { dataDir } from './testMode'
 
-export type Pending = { key: string; tabId: string; cwd: string; sessionId: string | null; title: string; text: string; images?: string[]; mode: 'steer' | 'queue'; background?: boolean; at: number }
+// uuid: the message's own id, which the CLI's echo carries when Claude takes it in
+export type Pending = { key: string; uuid?: string; tabId: string; cwd: string; sessionId: string | null; title: string; text: string; images?: string[]; mode: 'steer' | 'queue'; background?: boolean; at: number }
 export type Picture = { mediaType: string; data: string }
 
 const file = () => join(dataDir(), 'hive-pending.json')
@@ -36,14 +38,21 @@ const drop = (keep: (p: Pending) => boolean) => {
 }
 // what goes again after a restart: per thread, all its messages as one prompt (one turn), so that turn's result clears
 // exactly the messages it delivered. Order kept; each with its pictures as files.
-export function resendGroups(all: Pending[]): (Pending & { prompt: string })[] {
+export function resendGroups(all: Pending[]): (Pending & { prompt: string; keys: string[] })[] {
   const by = new Map<string, Pending[]>()
   for (const p of all) by.set(p.tabId, [...(by.get(p.tabId) ?? []), p])
-  return [...by.values()].map((ps) => ({ ...ps[0], prompt: ps.map(resendText).join('\n\n---\n\n') }))
+  return [...by.values()].map((ps) => ({ ...ps[0], prompt: ps.map(resendText).join('\n\n---\n\n'), keys: ps.map((p) => p.key) }))
+}
+// the messages of one resent prompt are seen when that prompt is: it goes in under this uuid
+export function pendingResent(keys: string[], uuid: string): void {
+  const all = read()
+  if (all.some((p) => keys.includes(p.key))) write(all.map((p) => (keys.includes(p.key) ? { ...p, uuid } : p)))
 }
 // the text sent again after a restart: the pictures as files Claude can open
 export const resendText = (p: Pending) => (p.images?.length ? `${p.text}${p.text ? '\n\n' : ''}(Attached images, saved when Hive closed: ${p.images.join(', ')})` : p.text)
 export const pendingDelivered = (key: string) => drop((p) => p.key !== key)
+// Claude took this message in (the CLI's echo of it): quitting now must not send it again
+export const pendingSeen = (uuid: string) => drop((p) => p.uuid !== uuid)
 // "Send now" on a queued message: it now rides the running turn, so it goes when that turn ends (like any steer)
 export function pendingIsSteer(key: string): void {
   const all = read()
@@ -51,6 +60,8 @@ export function pendingIsSteer(key: string): void {
 }
 export const steersDelivered = (tabId: string) => drop((p) => !(p.tabId === tabId && p.mode === 'steer'))
 export const threadClosed = (tabId: string) => drop((p) => p.tabId !== tabId) // closed on purpose: its unsent messages go too
+// the thread's process ended by itself with these still unsent: they went back to the window's message box instead
+export const pendingReturned = (tabId: string) => threadClosed(tabId)
 // a new thread learns its Claude session id after its first message: its pending messages can then resume it
 export function pendingSession(tabId: string, sessionId: string): void {
   const all = read()

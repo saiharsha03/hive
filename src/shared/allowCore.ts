@@ -1,5 +1,7 @@
 // IP allowlist button: the status the main process sends and the result of one run (see src/main/ipAllow.ts).
-export type AllowStatus = { configured: boolean; ip: string | null; lastIp: string | null; at: string | null; changed: boolean; running: boolean; error: string }
+// lastIp / at: the address the command last succeeded for; known: every address it succeeded for (newest first);
+// unreadable: the public IP could not be read (then changed is false: that is not a change)
+export type AllowStatus = { configured: boolean; ip: string | null; lastIp: string | null; at: string | null; changed: boolean; running: boolean; error: string; known?: { ip: string; at: string; trusted: boolean }[]; unreadable?: boolean }
 export type AllowRun = { ok: boolean; ip: string | null; output: string }
 
 const DENIED = /UnauthorizedOperation|not authorized to perform/i

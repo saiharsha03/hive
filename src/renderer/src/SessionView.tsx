@@ -277,6 +277,7 @@ export type ThreadCallbacks = {
   onSplit?: () => void
   onLoadEarlier: () => void
   onRewound: (index: number) => void
+  onStatusView: () => void // /status and /usage typed in the box open the Status and usage page
 }
 type Props = ThreadCallbacks & { session: Session; mode: string; focused: boolean; banner?: ReactNode }
 
@@ -566,6 +567,8 @@ export function SessionView(p: Props) {
     if (!draft.trim() && !images.length) return
     const btw = draft.trim().match(/^\/btw\s+([\s\S]+)/)
     if (btw) { askBtw(btw[1]); setDraft(''); return }
+    // /status, /usage, /cost and /stats print a screen in the terminal: here they open the Status and usage page
+    if (/^\/(status|usage|cost|stats)$/.test(draft.trim()) && !images.length) { p.onStatusView(); setDraft(''); return }
     p.onSend(draft.trim(), images, m)
     setDraft('')
     setImages([])

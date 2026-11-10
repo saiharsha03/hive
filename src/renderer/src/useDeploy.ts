@@ -19,22 +19,24 @@ export function useDeploy() {
     if (r.effect) run(r.effect)
   }
   const run = (e: Effect) => {
-    const fail = (err: unknown) => act({ t: 'error', error: (err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') })
+    const msg = (err: unknown) => (err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    const fail = (err: unknown, from?: 'refresh' | 'watch') => act({ t: 'error', error: msg(err), ...(from ? { from } : {}) })
     if (e.kind === 'diffs' && e.forProd) {
       // entering prod: the plan comes from a fresh diffs.sh run
-      window.api.deployDiffs(e.suite).then((d) => act({ t: 'diffs', diffs: d.diffs, changelog: d.changelog, output: d.output, root: d.root, at: Date.now() })).catch(fail)
+      window.api.deployDiffs(e.suite).then((d) => act({ t: 'diffs', diffs: d.diffs, changelog: d.changelog, output: d.output, root: d.root, at: Date.now() })).catch((err) => fail(err))
     } else if (e.kind === 'diffs') {
       // show the local refs right away, then replace them with diffs.sh's answer once it is back
       window.api.deployDiffs(e.suite, false).then((d) => {
         act({ t: 'diffs', diffs: d.diffs, changelog: d.changelog, output: d.output, root: d.root, at: Date.now(), local: true })
-        return window.api.deployDiffs(e.suite).then((f) => act({ t: 'refresh', diffs: f.diffs, changelog: f.changelog, output: f.output, root: f.root }))
-      }).catch(fail)
+        // the diffs.sh refresh behind the local view fails on its own: the local plan stays usable
+        window.api.deployDiffs(e.suite).then((f) => act({ t: 'refresh', diffs: f.diffs, changelog: f.changelog, output: f.output, root: f.root })).catch((err) => fail(err, 'refresh'))
+      }).catch((err) => fail(err))
     } else if (e.kind === 'deploy') {
       setOut('')
       runPrefix.current = `${e.repo}-${e.target}-`
       window.api.deployRun(e.repo, e.target).catch((err) => act({ t: 'deployEnd', ok: false, message: (err as Error).message, sha: '', watchId: '', at: Date.now() }))
     } else if (e.kind === 'watch') {
-      window.api.deployRewatch(e.repo, e.target, e.sha).then((id) => act({ t: 'watchId', id })).catch(fail)
+      window.api.deployRewatch(e.repo, e.target, e.sha).then((id) => act({ t: 'watchId', id })).catch((err) => fail(err, 'watch'))
     } else {
       void window.api.deployDismiss(e.id)
     }

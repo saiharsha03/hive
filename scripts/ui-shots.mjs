@@ -173,7 +173,8 @@ const fixtures = {
     { id: 't-b2', name: 'Builder 2', role: 'builder' }, { id: 't-rev', name: 'Reviewer', role: 'reviewer' }] }],
   'teams:list': [{ id: 'team1', name: 'Report exports team', goal: 'Move report exports onto the job queue', createdAt: NOW - 2 * H, members: 4 }],
   'mobile:status': { configured: true, paired: true, connected: true, error: '' },
-  'allow:status': { configured: true, ip: '203.0.113.24', lastIp: '198.51.100.7', at: iso(NOW - 26 * H), changed: true, running: false, error: '' },
+  'allow:status': { configured: true, ip: '203.0.113.24', lastIp: '198.51.100.7', at: iso(NOW - 26 * H), changed: true, running: false, error: '',
+    known: [{ ip: '198.51.100.7', at: iso(NOW - 26 * H), trusted: true }, { ip: '192.0.2.40', at: iso(NOW - 9 * 24 * H), trusted: false }] },
   'update:state': null,
   'dev:state': { configured: true, message: '', docker: { phase: 'ready', message: '' }, stacks: [{ id: 'ledger', label: 'Ledger stack', services: ['api', 'web', 'worker'] }], services: [
     { name: 'api', label: 'ledger-api', repo: 'ledger-api', kind: 'process', port: 8081, open: true, state: 'running', external: false, note: '', owner: 'you' },
@@ -228,7 +229,6 @@ const seed = {
     { id: 'bot', label: 'Build bot', email: 'API key, build-ci', plan: 'Console, pay as you go', kind: 'console', inUse: false, threads: 0, spend: '$14.20 this month' },
   ],
   quietHoursGet: { on: true, from: '22:00', to: '07:30', ringFailures: true, ringDeploys: true },
-  allowKnown: [{ ip: '203.0.113.24', at: null, label: 'now, not allowed yet' }, { ip: '198.51.100.7', at: NOW - 26 * H, label: 'home' }, { ip: '192.0.2.40', at: NOW - 9 * 24 * H, label: 'office' }],
   chatStatusView: { fallback: {
     live: true, account: { email: 'orin@work.example', organization: 'Work', plan: 'Max 20x', tokenSource: 'subscription', apiProvider: 'firstParty' },
     engine: { installed: true, version: '2.4.12' }, model: 'claude-fable-5-2', effort: 'high', permissionMode: 'auto', sessionId: 's-invoice', cwd: API, transcript: null,

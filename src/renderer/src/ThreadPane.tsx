@@ -2,7 +2,7 @@
 // thread only.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { SessionView, type ThreadCallbacks } from './SessionView'
-import { loadEarlier, moveToBackground, newBeside, openTerminal, send, setPreview, showDiff, showInspector, drawer } from './actions'
+import { loadEarlier, moveToBackground, newBeside, openPage, openTerminal, send, setPreview, showDiff, showInspector, drawer } from './actions'
 import { handoffs, handOff, notNow } from './engine'
 import { setSessions, useSession, useStore, panes } from './store'
 import { isWatcherTab } from '../../shared/readOnlyCore'
@@ -30,6 +30,7 @@ export function ThreadPane({ id, focused }: { id: string; focused: boolean }) {
     onTerminal: () => { const d = drawer.get(); if (getAppearance().layout.drawer && d.tab === 'terminal' && d.termTab === id) setLayout({ drawer: false }); else openTerminal(id) },
     onChanges: () => showInspector('changes'),
     onLoadEarlier: () => loadEarlier(id),
+    onStatusView: () => openPage('status'),
     onRewound: (index) => setSessions((all) => all.map((x) => (x.id === id ? { ...x, items: x.items.slice(0, index), history: undefined } : x))),
   }), [id])
   if (!session) return null

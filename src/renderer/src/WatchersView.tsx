@@ -2,8 +2,8 @@
 // clicking one shows its findings, reports, runs and its thread. Self-contained (data from useWatchers), so the same
 // component can sit in a panel today or a sidebar view later. WatchersToggleList is the compact form for a popover.
 import { useEffect, useState } from 'react'
-import { DAYS, DEFAULT_TIERS, parseEvery, parseTiers, parseWeekly, pickTier, type RunKind } from '../../shared/watchCore'
-import { checkDraft, draftOf, tierRows, type ScheduleDraft, type ScheduleMode, type TierRow, type WatcherDetail } from '../../shared/watchersCore'
+import { DAYS, DEFAULT_TIERS, parseEvery, parseTiers, parseWeekly, pickTier, tooShort, type RunKind } from '../../shared/watchCore'
+import { checkDraft, draftOf, nameProblem, tierRows, type ScheduleDraft, type ScheduleMode, type TierRow, type WatcherDetail } from '../../shared/watchersCore'
 import { reloadWatchers, useWatchers, type WatcherRow } from './useWatchers'
 import { Confirm } from './ui'
 import { State, type Tone } from './kit'
@@ -60,9 +60,11 @@ function NewWatcher({ onDone }: { onDone: (id: string, msg: string) => void }) {
   const [weekly, setWeekly] = useState('')
   const [err, setErr] = useState('')
   const [saving, setSaving] = useState(false)
-  const bad = mode === 'fixed' && parseEvery(fixed) === undefined ? 'Interval like 30m, 1h, 1d or off'
+  // the name goes into every run's header, so main refuses [ ] and line breaks; a typed name is checked as it is typed
+  const bad = (name.trim() && nameProblem(name)) || (mode === 'fixed' && parseEvery(fixed) === undefined ? 'Interval like 30m, 1h, 1d or off'
+    : mode === 'fixed' && tooShort(parseEvery(fixed)) ? 'Runs at most every 5 minutes: use 5m or more'
     : daily && !/^\d{1,2}:\d{2}$/.test(daily) ? 'Daily time is HH:MM'
-      : weekly && !parseWeekly(weekly) ? `Weekly like "Mon 08:00" (${DAYS.join(', ')})` : ''
+      : weekly && !parseWeekly(weekly) ? `Weekly like "Mon 08:00" (${DAYS.join(', ')})` : '')
   const create = () => {
     setSaving(true)
     window.api.watcherCreate({ name, goal, schedule: { every: mode === 'adaptive' ? 'adaptive' : fixed, ...(mode === 'adaptive' ? { tiers: DEFAULT_TIERS } : {}), daily: daily || undefined, weekly: weekly || undefined } })

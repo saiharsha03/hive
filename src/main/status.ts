@@ -7,6 +7,7 @@ import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterReset, realLimits, usageRows, type UsageRow } from '../shared/usageCore'
+import { writeUsageFile } from './usageFile'
 
 export type Limit = { pct: number | null; resetsAt: string | null } | null
 export type Status = {
@@ -67,6 +68,7 @@ const within = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
 const keep = (u: any, at: number): boolean => {
   if (!realLimits(u?.rate_limits) || (usage && at < usage.at)) return false
   usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at }
+  writeUsageFile(u.rate_limits) // for a usage-guard hook (usageFile.ts): at most once a minute, never in test mode
   return true
 }
 function readUsage(force = false): Promise<void> {
@@ -118,4 +120,12 @@ export async function weeklyUsage(maxAgeMs = IDLE_MS): Promise<Weekly> {
 export function closeStatus(): void {
   q?.close()
   q = null
+}
+
+// signed in to another account: the next question starts a fresh idle process on the new login, and the old login's
+// usage reading is dropped (the credentials-file check does the same when the login changes outside Hive)
+export function restartStatus(): void {
+  closeStatus()
+  usage = null
+  lastIdleTry = 0
 }

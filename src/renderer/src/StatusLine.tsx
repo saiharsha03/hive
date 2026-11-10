@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react'
 import { panes as panesStore, useSessionMetas, useStore } from './store'
 import { focusedTab } from './panes'
 import { notice, openPage, runUndo, undo as undoStore } from './actions'
-import { quietHoursGet, allowKnown, type QuietHours, type KnownIp } from './api/next'
+import { quietHoursGet, type QuietHours } from './api/next'
+
+type KnownIp = { ip: string; at: number | null; label?: string }
 import type { AllowStatus } from '../../shared/allowCore'
 import type { UpdateState } from '../../shared/versionCore'
 import { tokens as fmtTokens, clock, Btn, when } from './kit'
@@ -35,14 +37,12 @@ function AllowPop({ allow, onClose }: { allow: AllowStatus; onClose: () => void 
   const box = useRef<HTMLDivElement>(null)
   useEscape(onClose)
   useFocusTrap(box)
-  const [known, setKnown] = useState<KnownIp[] | null>(null)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { void allowKnown().then((r) => setKnown(r.ok ? r.data : null)) }, [])
   // every address the command succeeded for (main keeps them, newest first), else what the status says
-  const fromStatus = (allow as AllowStatus & { known?: { ip: string; at: string; trusted: boolean }[] }).known
-  const rows: KnownIp[] = known ?? (fromStatus?.length ? [
+  const fromStatus = allow.known
+  const rows: KnownIp[] = (fromStatus?.length ? [
     ...(allow.ip && !fromStatus.some((k) => k.ip === allow.ip) ? [{ ip: allow.ip, at: null, label: 'now, not allowed yet' }] : []),
-    ...fromStatus.map((k) => ({ ip: k.ip, at: Date.parse(k.at), label: k.ip === allow.ip ? 'now, allowed' : 'allowed before' })),
+    ...fromStatus.map((k) => ({ ip: k.ip, at: Date.parse(k.at), label: `${k.ip === allow.ip ? 'now, allowed' : 'allowed before'}${k.trusted ? '' : ', expired'}` })),
   ] : null) ?? [
     ...(allow.ip ? [{ ip: allow.ip, at: null, label: allow.changed ? 'now, not allowed yet' : 'now, allowed' }] : []),
     ...(allow.lastIp && allow.lastIp !== allow.ip ? [{ ip: allow.lastIp, at: allow.at ? Date.parse(allow.at) : null, label: 'last allowed' }] : []),
@@ -59,11 +59,12 @@ function AllowPop({ allow, onClose }: { allow: AllowStatus; onClose: () => void 
     <>
       <div className="ovl-scrim" style={{ background: 'transparent' }} onMouseDown={onClose} />
       <div className="ip-pop ovl" ref={box} tabIndex={-1} role="dialog" aria-label="Allow my IP" data-testid="allow-pop">
-        <div className="poph">Allow my IP<span>{allow.changed ? 'Your address changed' : allow.ip ? 'Your address is allowed' : allow.error || 'Address not read yet'}</span></div>
+        <div className="poph">Allow my IP<span>{allow.changed ? 'Your address is not allowed yet' : allow.ip ? 'Your address is allowed' : allow.unreadable ? 'Could not read your public address' : allow.error || 'Address not read yet'}</span></div>
         {rows.map((r) => (
           <div key={r.ip} className={`ip-row${r.ip === allow.ip && allow.changed ? ' new' : ''}`}>
             <span className="hi">{r.ip === allow.ip ? 'This computer' : 'Before'}</span><span className="a">{r.ip}</span>
-            <span className="w">{r.label ?? ''}{r.at ? `${r.label ? ', ' : ''}${when(r.at)}` : ''}</span>
+            <span className="w">{r.label ?? ''}{r.at ? `${r.label ? ', ' : ''}${when(r.at)}` : ''}
+              {r.at && fromStatus?.some((k) => k.ip === r.ip) && <> <Btn kind="link" onClick={() => void window.api.allowForget(r.ip).then(() => notice(`Forgot ${r.ip}: Allow my IP offers it again`)).catch((e) => notice(`Could not forget ${r.ip}: ${e?.message ?? e}`))} testid={`allow-forget-${r.ip}`} title="Its rule is gone on the other side: forget it, so Allow my IP offers it again">Forget</Btn></>}</span>
           </div>
         ))}
         {!rows.length && <div className="ip-row"><span className="dimt">No address known yet.</span></div>}

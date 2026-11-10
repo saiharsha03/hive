@@ -192,7 +192,7 @@ interface Window {
     gitLocate: (file: string) => Promise<{ dir: string; name: string; path: string } | null>
     deployConfig: () => Promise<{ config: import('../../shared/deployCore').DeployConfig | null; message: string }>
     deployDiffs: (suite: string, fetch?: boolean) => Promise<DeployDiffs>
-    onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean; from?: { id: string; title: string }; sessionId?: string; path?: string }) => void) => () => void
+    onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean; from?: { id: string; title: string }; sessionId?: string; path?: string; queueId?: string }) => void) => () => void
     deployStatus: () => Promise<DeployEnvStatus[]>
     deployRun: (repo: string, target: 'staging' | 'prod') => Promise<{ runId: string }>
     deployRewatch: (repo: string, target: 'staging' | 'prod', sha: string) => Promise<string>
@@ -207,11 +207,9 @@ interface Window {
     handoffAt: () => Promise<number>
     handoffFile: (tabId: string) => Promise<string>
     handoffReady: (file: string, since: number) => Promise<boolean>
-    pullConfig: () => Promise<{ ok: boolean; message: string }>
-    pullList: () => Promise<string[]>
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>
-    onPullRow: (cb: (row: { repo: string; result: string }) => void) => () => void
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
+    allowForget: (address: string) => Promise<import('../../shared/allowCore').AllowStatus>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
     updateState: () => Promise<import('../../shared/versionCore').UpdateState | null>
     updateCheck: () => Promise<void>
@@ -222,6 +220,14 @@ interface Window {
     accountSwitch: (email: string) => Promise<{ ok: boolean; output: string }>
     accountCancel: () => Promise<void>
     onAccountOutput: (cb: (t: string) => void) => () => void
+    onAccountSwitched: (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => () => void
+    wakeupsList: () => Promise<{
+      wakeups: { id: number; sessionId: string; title: string; wakeAt: string; prompt: string; everyMinutes: number | null; firedAt: string | null }[]
+      continues: { key: string; tabId: string; title: string; at: number }[]
+    }>
+    wakeupsCancel: (kind: 'wake' | 'continue', id: string | number) => Promise<boolean>
+    onWakeupsChanged: (cb: () => void) => () => void
+    chatStatusView: (tabId: string, known?: { cwd?: string; sessionId?: string }) => Promise<import('../../main/statusView').ThreadStatusView>
     onAllowStatus: (cb: (s: import('../../shared/allowCore').AllowStatus) => void) => () => void
     scriptsConfig: () => Promise<{ scripts: import('../../shared/scriptsCore').ScriptView[]; message: string; path: string }>
     scriptsState: () => Promise<import('../../shared/scriptsCore').ScriptRun[]>
@@ -238,13 +244,11 @@ interface Window {
     devStack: (id: string, sources: Record<string, import('../../shared/devCore').Source>, only?: string[]) => Promise<string[]>
     devStart: (name: string, source: import('../../shared/devCore').Source) => Promise<string>
     devStop: (name: string) => Promise<string>
-    devStopAll: () => Promise<string[]>
     devLogs: (name: string) => Promise<string>
     onDevUpdate: (cb: (s: import('../../shared/devCore').DevState) => void) => () => void
     terminalOpen: (id: string, cwd: string, cols: number, rows: number) => Promise<{ scrollback: string; fresh: boolean; shell: string; cwd: string }>
     terminalWrite: (id: string, data: string) => Promise<void>
     terminalResize: (id: string, cols: number, rows: number) => Promise<void>
-    terminalKill: (id: string) => Promise<void>
     onTerminalData: (cb: (id: string, chunk: string) => void) => () => void
     onTerminalExit: (cb: (id: string, code: number, closed: boolean) => void) => () => void
     // per-thread status: model / effort switches, the lists the session offers, stopping background work

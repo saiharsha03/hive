@@ -62,6 +62,35 @@ test('resend: one prompt per thread with all its messages, in order', () => {
   assert.deepEqual(g.map((x) => [x.tabId, x.prompt]), [['x', 'first\n\n---\n\nsecond'], ['y', 'other']])
 })
 
+test('a message Claude has read (the CLI echoed its uuid) is not sent again; the others stay', () => {
+  clear()
+  const base = { cwd: 'C:/repo', title: 'T', sessionId: null, tabId: 'u', mode: 'steer' as const }
+  p.addPending({ ...base, uuid: 'u1', text: 'read already' })
+  p.addPending({ ...base, uuid: 'u2', text: 'not read yet' })
+  p.pendingSeen('u1')
+  assert.deepEqual(p.takePending().map((x) => x.text), ['not read yet'])
+})
+
+test('a resent prompt carries one uuid for all its messages, so its echo clears them', () => {
+  clear()
+  const base = { cwd: 'C:/repo', title: 'T', sessionId: null, tabId: 'z', mode: 'queue' as const }
+  p.addPending({ ...base, key: 'z1', text: 'one' })
+  p.addPending({ ...base, key: 'z2', text: 'two' })
+  const [g] = p.resendGroups(p.takePending())
+  assert.deepEqual(g.keys, ['z1', 'z2'])
+  p.pendingResent(g.keys, 'resent-uuid')
+  p.pendingSeen('resent-uuid')
+  assert.deepEqual(p.takePending(), [])
+})
+
+test('a process that ended with messages unsent: they go back to the window, not to the next start', () => {
+  clear()
+  p.addPending({ cwd: 'C:/repo', title: 'T', sessionId: 's', key: 'e1', tabId: 'e', text: 'queued', mode: 'queue' })
+  p.addPending({ cwd: 'C:/repo', title: 'T', sessionId: 's', key: 'o1', tabId: 'other', text: 'kept', mode: 'queue' })
+  p.pendingReturned('e')
+  assert.deepEqual(p.takePending().map((x) => x.key), ['o1'])
+})
+
 test('"Send now" keeps the message until the turn it rides ends', () => {
   clear()
   p.addPending({ cwd: 'C:/repo', title: 'T', sessionId: null, key: 's1', tabId: 's', text: 'now please', mode: 'queue' })

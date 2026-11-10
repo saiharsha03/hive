@@ -10,6 +10,8 @@ import { join } from 'node:path'
 import { goalMarks } from '../shared/goalCore'
 import { hasUltrathink } from '../shared/composerCore'
 import { idle } from './status'
+import { menuCommands } from './threadCore'
+import { EFFORTS } from '../shared/settingsCore'
 
 type Send = (event: unknown) => void
 
@@ -21,7 +23,17 @@ export const HIVE_OFF_PLUGINS = [
   'clawd-spinner', 'fortune-clawd', 'pomodawd', 'streaks', 'verb-toasts', 'usage-pills', 'claude-resume', 'usage-file',
 ]
 
+// Output styles that tell the agent to leave the code to a human ("write this part yourself", explain instead of do):
+// right for the user's own threads, wrong for a thread nobody watches. Background, team and watcher threads also turn
+// them off; foreground threads keep them.
+export const UNATTENDED_OFF_PLUGINS = ['learning-output-style', 'explanatory-output-style']
+
 const readJson = (file: string): any => { try { return JSON.parse(readFileSync(file, 'utf8')) } catch { return null } }
+// the user's own auto-memory folder setting, which Hive never overrides
+export const userMemoryDir = (): string | null => {
+  const v = readJson(join(homedir(), '.claude', 'settings.json'))?.autoMemoryDirectory
+  return typeof v === 'string' && v.trim() ? v : null
+}
 
 // "name@marketplace": false for every installed or enabled id whose name is on the list
 export function hiveOffPlugins(names = HIVE_OFF_PLUGINS): Record<string, false> {
@@ -55,15 +67,19 @@ const tab = (id: string): Tab => {
   return t
 }
 
-// what every Hive session adds to its query options
-export function sessionOptions(tabId: string, send: Send): Partial<Options> {
+// what every Hive session adds to its query options. unattended: a background, team or watcher thread (the output
+// styles above go off too); memoryDir: the auto-memory folder it shares (chat.ts), both in the flag-settings layer
+export function sessionOptions(tabId: string, send: Send, o: { unattended?: boolean; memoryDir?: string | null } = {}): Partial<Options> {
   const t = tab(tabId)
   t.send = send
   t.boost = undefined
   return {
     // plugin hook output (security warnings on edits) reaches the stream only with this on
     includeHookEvents: true,
-    settings: { enabledPlugins: hiveOffPlugins() },
+    settings: {
+      enabledPlugins: hiveOffPlugins(o.unattended ? [...HIVE_OFF_PLUGINS, ...UNATTENDED_OFF_PLUGINS] : HIVE_OFF_PLUGINS),
+      ...(o.memoryDir ? { autoMemoryDirectory: o.memoryDir } : {}),
+    },
     ...(t.model ? { model: t.model } : {}),
     ...(t.effort ? { effort: t.effort as Options['effort'] } : {}),
     hooks: {
@@ -196,7 +212,9 @@ export async function setModel(tabId: string, q: Query | undefined, model: strin
   t.send({ type: 'hive_model', model })
 }
 
+// any level the pickers offer (low, medium, high, xhigh, max); anything else is refused before it reaches the engine
 export async function setEffort(tabId: string, q: Query | undefined, level: string): Promise<void> {
+  if (!(EFFORTS as readonly string[]).includes(level)) throw new Error(`${level} is not an effort level`)
   const t = tab(tabId)
   t.boost = undefined // a level picked by hand wins over an ultrathink turn
   if (q) await q.applyFlagSettings({ effortLevel: level as any })
@@ -223,7 +241,8 @@ const ask = (deps: Deps, tabId: unknown) => deps.liveQuery(String(tabId ?? '')) 
 export function registerStatusIpc(handle: Handle, deps: Deps): void {
   handle('chat:setModel', (_e, tabId: string, model: string) => setModel(String(tabId), deps.liveQuery(String(tabId)), String(model)))
   handle('chat:setEffort', (_e, tabId: string, level: string) => setEffort(String(tabId), deps.liveQuery(String(tabId)), String(level)))
-  handle('chat:commands', (_e, tabId?: string) => ask(deps, tabId).supportedCommands())
+  // every command the engine reports, plus the interactive CLI's own ones it leaves out (threadCore.menuCommands)
+  handle('chat:commands', async (_e, tabId?: string) => menuCommands(await ask(deps, tabId).supportedCommands()))
   handle('chat:models', (_e, tabId?: string) => ask(deps, tabId).supportedModels())
   handle('chat:mcp', async (_e, tabId?: string) => {
     const live = deps.liveQuery(String(tabId ?? ''))

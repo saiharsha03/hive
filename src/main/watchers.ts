@@ -1,7 +1,7 @@
-// Watchers, main process: plain code. Every watcher is a folder under ~/.claude/hive/watchers/<id>/ and owns ONE
-// long-lived background thread: scheduled runs go into that thread as new turns, so it keeps its conversation (the SDK
-// compacts a long one by itself). Disabling ends the thread's session; enabling starts a fresh one at the next run.
-// A run never starts while the watcher's thread is still working (its own run, or the user talking to it).
+// Watchers, main process: plain code. Every watcher is a folder under ~/.claude/hive/watchers/<id>/. Every scheduled
+// run is a fresh background thread, closed when the run ends: what carries over is what the run saved (memory folder,
+// SQLite db, findings, reports) and its final reply, which the next run's header quotes. Disabling closes a run that is
+// still open. A run never starts while the previous run's thread is still working (its own run, or the user talking to it).
 // Adaptive watchers take their sweep interval from the 7-day usage limit, each with its own tiers. Hive adds no guards:
 // the thread runs in auto mode like any other background thread. With HIVE_TEST_MODE=1 nothing runs on its own.
 // No Electron imports: the thread starter and the thread state are passed in.
@@ -12,7 +12,7 @@ import { dueKind, localIso, markStarted, nextRuns, parseFindings, pickTier, type
 import { appName } from '../shared/appName'
 import {
   defaultPrompt, earliest, emptyState, foldersOf, reportsRootOf, legacyState, legacyWatcher, MAX_RUNS, normalizeSchedule, normalizeState,
-  normalizeWatcher, statusOf, textHash, wakeMessage, watcherConfig, watcherHeader, watcherId,
+  nameProblem, normalizeWatcher, statusOf, wakeMessage, watcherConfig, watcherHeader, watcherId,
   type Folders, type WatcherDetail, type WatcherFile, type WatcherInput, type WatcherState, type WatcherSummary, type WatchersList,
 } from '../shared/watchersCore'
 import { blocked, dataDir, TEST_MODE, testWeeklyPct } from './testMode'
@@ -21,7 +21,7 @@ import { FALLBACK_MS, markWoken, readWakeups, scheduleFile, type Wakeup } from '
 import { saveReminder } from '../shared/watcherSaveCore'
 
 
-// starts the watcher's thread (resume = continue that Claude session) or, when its tab is live, adds a turn to it
+// starts a run's thread (resume is never passed by the scheduler; the type is shared with the other thread starters)
 export type RunThread = (t: { tabId: string; cwd: string; title: string; prompt: string; resume?: string }) => boolean // false: no window yet
 export type ThreadState = (tabId: string) => { working: boolean; sessionId: string | null; waitingReason?: string; lastOk?: boolean | null; lastReply?: string | null } | null
 export type Usage = () => Promise<{ pct: number | null; readAt: number; error: string }> // the 7-day limit, 0-100
@@ -234,7 +234,7 @@ function selfNext(dir: string, s: WatcherState): number | null {
 // the run kind's bookkeeping (since + last per kind), without the Watch-only enabled flag
 const started = (s: WatcherState, kind: RunKind, at: number) => { const m = markStarted({ ...s, enabled: true }, kind, at); return { since: m.since, last: m.last } }
 
-// one run: a new turn in the watcher's thread, or a new (or resumed) thread when none is live. '' = started
+// one run: a fresh thread. '' = started
 // wake: a self-scheduled wake-up; its due rows go into the fresh thread after the run header
 // the run each watcher tab is doing, for the Stop hook's save check
 const runOf = new Map<string, { since: number; f: Folders; dir: string; self: boolean }>()
@@ -265,26 +265,19 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
     if (s.tabId) closeRun(s.tabId)
     s = { ...s, tabId: null, sessionId: null, promptSent: null }
   }
-  const live = s.tabId ? deps.threadState(s.tabId) : null
-  const fresh = !s.sessionId // no Claude session yet: a new thread
-  const tabId = s.tabId && (live || s.sessionId) ? s.tabId : `watcher-${id}-${now.getTime()}`
-  const hash = textHash(text)
-  const changed = fresh || hash !== s.promptSent ? text : null
-  const wakeText = (p: string | null) => wake ? wakeMessage({ name: w.name, now, due: wake.due, table: scheduleFile(c.dir), fallbackHours: FALLBACK_MS / 3_600_000, promptFile: c.prompt, prompt: p, startup: wake.startup }) : ''
-  // a fresh thread (first run, or rotated) needs the full header; a wake still says which scheduled tasks are due,
-  // since they are marked woken below and would otherwise never reach the new thread
-  const prompt = wake && !fresh
-    ? wakeText(changed)
-    : watcherHeader({ name: w.name, kind, now, lastRun: prev, s, f, promptFile: c.prompt, prompt: changed, fresh }) + (wake ? `\n\n${wakeText(null)}` : '')
-  const resume = !live && s.sessionId ? s.sessionId : undefined
-  if (!deps.runThread({ tabId, cwd: cwdOf(w), title: tabTitle(w), prompt, resume })) return `The ${appName()} window is not ready`
+  const tabId = `watcher-${id}-${now.getTime()}`
+  // the full header and instructions every time; a wake also says which scheduled tasks are due, since they are marked
+  // woken below and would otherwise never reach the new thread
+  const wakeText = wake ? wakeMessage({ name: w.name, now, due: wake.due, table: scheduleFile(c.dir), fallbackHours: FALLBACK_MS / 3_600_000, promptFile: c.prompt, prompt: null, startup: wake.startup }) : ''
+  const prompt = watcherHeader({ name: w.name, kind, now, lastRun: prev, s, f, promptFile: c.prompt, prompt: text, fresh: true }) + (wake ? `\n\n${wakeText}` : '')
+  if (!deps.runThread({ tabId, cwd: cwdOf(w), title: tabTitle(w), prompt })) return `The ${appName()} window is not ready`
   runOf.set(tabId, { since: now.getTime(), f, dir: c.dir, self: w.schedule.every === 'self' })
   woke.add(id)
   if (wake) { try { markWoken(c.dir, wake.due.map((r) => r.id), localIso(now)) } catch { /* the watcher sees them still pending */ } }
   const next: WatcherState = {
     ...s, ...started(s, kind, now.getTime()),
-    tabId, sessionId: fresh ? null : s.sessionId, promptSent: hash,
-    runs: [...s.runs, { id: runId, tabId, kind, startedAt: now.getTime(), ...(s.sessionId ? { sessionId: s.sessionId } : {}) }],
+    tabId, sessionId: null, promptSent: null,
+    runs: [...s.runs, { id: runId, tabId, kind, startedAt: now.getTime() }],
   }
   saveState(id, next)
   return ''
@@ -326,7 +319,8 @@ export function setWatcherEnabled(id: string, on: boolean): string {
 
 export function createWatcher(input: WatcherInput, by: string): { id: string; message: string } {
   const name = (input.name ?? '').trim()
-  if (!name) throw new Error('A watcher needs a name')
+  const bad = nameProblem(name) // no [ ] or line breaks: the name goes into every run's header
+  if (bad) throw new Error(bad)
   const goal = (input.goal ?? '').trim()
   if (!goal && !input.prompt?.trim()) throw new Error('A watcher needs a goal (or a prompt)')
   const sch = normalizeSchedule(input.schedule ?? undefined)
@@ -356,7 +350,11 @@ export function updateWatcher(id: string, input: WatcherInput): string {
   const w = readWatcher(id)
   if (!w) throw new Error(`No watcher "${id}"`)
   const next = { ...w }
-  if (input.name !== undefined && input.name.trim()) next.name = input.name.trim()
+  if (input.name !== undefined && input.name.trim()) {
+    const bad = nameProblem(input.name)
+    if (bad) throw new Error(bad)
+    next.name = input.name.trim()
+  }
   if (input.goal !== undefined) next.goal = input.goal.trim()
   if (input.cwd !== undefined) next.cwd = input.cwd.trim()
   if (input.schedule !== undefined) {

@@ -1,7 +1,8 @@
 // Language servers for the editor: Pyright (Python, Django), typescript-language-server (TS/JS) and Volar (Vue), the
 // servers VS Code itself runs. One server per language per repo (the folder with .git), started on the first file
 // opened there and run with the app's own Node. The editor sends its open files and requests through here; the
-// servers' diagnostics go back to it. No Electron imports, so a script can drive it too.
+// servers' diagnostics go back to it. A server with no open file for IDLE_MS stops; the next file opened starts it again.
+// No Electron imports, so a script can drive it too.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
@@ -10,7 +11,7 @@ import { pathToFileURL } from 'node:url'
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter, type MessageConnection } from 'vscode-jsonrpc/node'
 import { langOf, languageIdOf, type Lang } from '../shared/editorCore'
 
-type Server = { conn: MessageConnection; proc: ChildProcess; ready: Promise<void>; root: string; lang: Lang; open: Set<string> }
+type Server = { conn: MessageConnection; proc: ChildProcess; ready: Promise<void>; root: string; lang: Lang; open: Set<string>; idle: IdleStop }
 export type Diagnostics = { uri: string; diagnostics: unknown[] }
 
 const servers = new Map<string, Server>()
@@ -18,6 +19,18 @@ let onDiagnostics: (d: Diagnostics) => void = () => {}
 export const setDiagnosticsSink = (f: (d: Diagnostics) => void) => { onDiagnostics = f }
 
 export const uriOf = (file: string) => pathToFileURL(file).href
+
+// A server with no open file stops after `ms`; a file opened meanwhile keeps it. arm: nothing open now; disarm: a file is
+let IDLE_MS = 10 * 60_000
+export const setLspIdleMs = (ms: number) => { IDLE_MS = ms } // tests
+export type IdleStop = { arm: () => void; disarm: () => void }
+export function idleStop(ms: () => number, stop: () => void): IdleStop {
+  let t: ReturnType<typeof setTimeout> | undefined
+  return {
+    arm: () => { clearTimeout(t); t = setTimeout(stop, ms()); t.unref?.() },
+    disarm: () => { clearTimeout(t); t = undefined },
+  }
+}
 const req = createRequire(import.meta.url)
 const pkg = (p: string) => dirname(req.resolve(`${p}/package.json`))
 
@@ -92,12 +105,14 @@ function start(lang: Lang, root: string): Server {
   conn.onError(() => {})
   conn.listen()
   const key = `${lang}:${root}`
-  proc.on('exit', () => { servers.delete(key); conn.dispose() })
+  const idle = idleStop(() => IDLE_MS, () => { if (servers.get(key)?.proc === proc) servers.delete(key); try { conn.dispose(); proc.kill() } catch { /* gone */ } })
+  proc.on('exit', () => { idle.disarm(); if (servers.get(key)?.proc === proc) servers.delete(key); conn.dispose() })
   const ready = conn.sendRequest('initialize', {
     processId: process.pid, rootUri: uriOf(root), rootPath: root, workspaceFolders: [{ uri: uriOf(root), name: root }],
     capabilities: CAPABILITIES, initializationOptions: initOptions(lang, root),
   }).then(() => { conn.sendNotification('initialized', {}) })
-  return { conn, proc, ready, root, lang, open: new Set() }
+  idle.arm() // started for a request with no file open yet: it stops too if none is opened
+  return { conn, proc, ready, root, lang, open: new Set(), idle }
 }
 
 function serverFor(file: string): Server | null {
@@ -116,6 +131,7 @@ export async function lspOpen(file: string, text: string): Promise<boolean> {
   await s.ready
   if (s.open.has(file)) return true
   s.open.add(file)
+  s.idle.disarm()
   await s.conn.sendNotification('textDocument/didOpen', { textDocument: { uri: uriOf(file), languageId: languageIdOf(file), version: 1, text } })
   return true
 }
@@ -133,8 +149,9 @@ export async function lspSaved(file: string): Promise<void> {
 }
 
 export async function lspClose(file: string): Promise<void> {
-  const s = serverFor(file)
+  const s = servers.get(`${langOf(file)}:${rootOf(file)}`) // closing a file never starts a server
   if (!s?.open.delete(file)) return
+  if (!s.open.size) s.idle.arm()
   await s.conn.sendNotification('textDocument/didClose', { textDocument: { uri: uriOf(file) } })
 }
 
@@ -149,6 +166,6 @@ export async function lspRequest(file: string, method: string, params: unknown):
 }
 
 export function stopLanguageServers(): void {
-  for (const s of servers.values()) { try { s.conn.dispose(); s.proc.kill() } catch { /* gone */ } }
+  for (const s of servers.values()) { s.idle.disarm(); try { s.conn.dispose(); s.proc.kill() } catch { /* gone */ } }
   servers.clear()
 }

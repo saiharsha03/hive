@@ -1,5 +1,6 @@
 // Switch the Claude account: the engine's own browser sign-in (`claude auth login`), the same login the terminal uses.
-// The app restarts after a successful sign-in, so every thread and the status process run on the new account.
+// Nothing restarts after a successful sign-in: index.ts starts the status process again and moves every thread to the
+// new login as its process goes quiet (chat.ts recycleThreads).
 import { spawn, type ChildProcess } from 'node:child_process'
 import { claudeExecutable } from './engine'
 import { blocked, TEST_MODE } from './testMode'

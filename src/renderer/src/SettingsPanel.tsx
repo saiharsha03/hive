@@ -17,7 +17,6 @@ import { place } from './actions'
 import { ENVS } from '../../shared/deployCore'
 import { appName } from '../../shared/appName'
 import { setClipboardOn, useClipboardOn } from './clipboardOffer'
-import { getPref, setPref } from './prefs'
 import { applyGeneral } from './appSettings'
 import { Confirm } from './ui'
 
@@ -86,7 +85,6 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
   // values kept outside the settings file: two page preferences
   const clipOn = useClipboardOn()
   const [clip, setClip] = useState(clipOn)
-  const [sendMode, setSendMode] = useState(['queue', 'interrupt'].includes(getPref<string>('sendMode', 'steer')) ? getPref<string>('sendMode', 'steer') : 'steer')
   // what is being typed into each "new id" box, the script being edited, the new key under Other, and the list
   // rows just added that hold nothing yet: each its own state, so one never wipes another
   const [adds, setAdds] = useState<Record<string, string>>({})
@@ -120,10 +118,10 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
     return () => clearTimeout(t)
   }, [draft])
 
-  const dirty = !!draft && (JSON.stringify(draft) !== saved || clip !== clipOn || sendMode !== getPref<string>('sendMode', 'steer') || (!!quiet && JSON.stringify(quiet) !== quietSaved))
+  const dirty = !!draft && (JSON.stringify(draft) !== saved || clip !== clipOn || (!!quiet && JSON.stringify(quiet) !== quietSaved))
   // Cancel: put every field back as last saved
   const discard = () => {
-    setAsking(false); setClip(clipOn); setSendMode(getPref<string>('sendMode', 'steer')); setNotes([])
+    setAsking(false); setClip(clipOn); setNotes([])
     void load(); void loadQuiet()
     onClose?.()
   }
@@ -150,7 +148,6 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
         if (q.ok) setQuietSaved(JSON.stringify(quiet)); else extra.push(`Quiet hours not saved: ${q.reason}`)
       }
       if (clip !== clipOn) setClipboardOn(clip)
-      if (sendMode !== getPref<string>('sendMode', 'steer')) { setPref('sendMode', sendMode); extra.push('Steer, queue or interrupt: used by threads you open or switch to from now on.') }
       applyGeneral(draft.general)
       setNotes(['Saved. Dependabot, Deploy, Dev stack, Pull latest, Scripts, the app name, tagline and appearance use it now.', ...r.notes, ...extra])
       await load()
@@ -310,6 +307,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
       <>
         <Row label="Repos" hint="owner/name, one per row. Open Dependabot PRs get one background review thread each." problems={of('HIVE_DEPENDABOT_REPOS')}>{listRows('HIVE_DEPENDABOT_REPOS', 'owner/')}</Row>
         {field('HIVE_DEPENDABOT_TIME', 'Time', 'Once a day at HH:MM local (at the next start if the app was closed then).', '12:00')}
+        {field('HIVE_DEPENDABOT_MAX_REVIEWS', 'Reviews at once', 'At most this many review threads work at the same time; the other PRs start as those finish. Empty = 3.', '3')}
       </>
     ),
     scripts: scriptsSec,
@@ -353,18 +351,34 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
       <>
         <Row label="App name" hint="Top bar and window title." problems={of('general.appName')}><input data-testid="settings-app-name" className="sin" value={g.appName} onChange={(e) => setGeneral({ appName: e.target.value })} /></Row>
         <Row label="Tagline" hint="Shown beside the name in the top bar. Empty = none." problems={of('general.appTagline')}><input className="sin wide" value={g.appTagline} onChange={(e) => setGeneral({ appTagline: e.target.value })} /></Row>
-        {field('HIVE_ALLOWLIST_CMD', 'IP allowlist command', 'Runs from the "Allow my IP" button, which turns on when your public IP changes. It should add the current IP wherever it must be allowed. Empty = no button.', '')}
+        {field('HIVE_ALLOWLIST_CMD', 'IP allowlist command', 'Runs from "Allow my IP" on the status line, which turns amber when your public IP is one it has not allowed yet (home and office both stay allowed). It should add the current IP wherever it must be allowed. Empty = no button.', '')}
+        {field('HIVE_ALLOWLIST_TRUST_HOURS', 'Allowed IPs expire after', 'Hours an allowed address counts as allowed, for rules that expire on the other side. Empty = never. Forget one from Allow my IP on the status line.', '')}
         <Row label="Claude in Chrome" hint="Threads started after saving can use your Chrome through the Claude extension (claude --chrome). Needs the extension installed and signed in."><label className="scheck"><input type="checkbox" data-testid="settings-chrome" checked={g.chrome} onChange={(e) => setGeneral({ chrome: e.target.checked })} /> Let threads use Chrome</label></Row>
         <Row label="Clipboard suggestions"><label className="scheck"><input type="checkbox" checked={clip} onChange={(e) => setClip(e.target.checked)} /> Offer copied text and images to the active thread</label></Row>
-        <Row label="While Claude works" hint="What Enter does; Alt+Enter does the other.">
-          <select className="sin" value={sendMode} onChange={(e) => setSendMode(e.target.value)}><option value="steer">Steer the running turn</option><option value="queue">Queue for the next turn</option><option value="interrupt">Interrupt Claude and send now</option></select>
-        </Row>
         <Row label="Terminal shell" hint="Empty = the system default. Used by terminals opened after saving." problems={of('general.shell')}><input className="sin wide" value={g.shell} spellCheck={false} onChange={(e) => setGeneral({ shell: e.target.value })} /></Row>
         <Row label="Default model" hint="Empty = Claude Code's default. Used by threads started after saving." problems={of('general.model')}><input className="sin" value={g.model} spellCheck={false} placeholder="(default)" onChange={(e) => setGeneral({ model: e.target.value })} /></Row>
         <Row label="Default effort" problems={of('general.effort')}>
           <select className="sin" value={g.effort} onChange={(e) => setGeneral({ effort: e.target.value as General['effort'] })}>
             <option value="">(default)</option>{EFFORTS.map((x) => <option key={x} value={x}>{x}</option>)}
           </select>
+        </Row>
+        <Row label="Background model and effort" hint="Watcher runs, Dependabot reviews and /btw. Empty = the defaults above." problems={[...of('general.bgModel'), ...of('general.bgEffort')]}>
+          <input className="sin" data-testid="settings-bg-model" value={g.bgModel} spellCheck={false} placeholder="(same)" onChange={(e) => setGeneral({ bgModel: e.target.value })} />
+          <select className="sin" value={g.bgEffort} onChange={(e) => setGeneral({ bgEffort: e.target.value as General['bgEffort'] })}>
+            <option value="">(same)</option>{EFFORTS.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </Row>
+        <Row label="Team model and effort" hint="Teammates and a team's own Lead. Empty = the defaults above." problems={[...of('general.teamModel'), ...of('general.teamEffort')]}>
+          <input className="sin" data-testid="settings-team-model" value={g.teamModel} spellCheck={false} placeholder="(same)" onChange={(e) => setGeneral({ teamModel: e.target.value })} />
+          <select className="sin" value={g.teamEffort} onChange={(e) => setGeneral({ teamEffort: e.target.value as General['teamEffort'] })}>
+            <option value="">(same)</option>{EFFORTS.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </Row>
+        <Row label="Close idle threads after" hint="Minutes. An idle thread's Claude process (and its MCP servers) closes; the tab stays and the next message resumes it. Never while anything still runs. 0 = never." problems={of('general.idleCloseMinutes')}>
+          <input className="sin num" data-testid="settings-idle-close" type="number" min={0} value={g.idleCloseMinutes} onChange={(e) => setGeneral({ idleCloseMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
+        </Row>
+        <Row label="Team memory in briefs" hint="KB of each role memory file (the newest entries) a teammate's brief carries; the file keeps everything." problems={of('general.teamMemoryKb')}>
+          <input className="sin num" type="number" min={0} value={g.teamMemoryKb} onChange={(e) => setGeneral({ teamMemoryKb: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
         </Row>
       </>
     ),

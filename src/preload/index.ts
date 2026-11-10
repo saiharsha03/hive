@@ -92,6 +92,15 @@ contextBridge.exposeInMainWorld('api', {
   chatInterrupt: (tabId: string) => ipcRenderer.invoke('chat:interrupt', tabId),
   chatContinueAt: (id: string): Promise<number | null> => ipcRenderer.invoke('chat:continueAt', id),
   chatCancelContinue: (id: string): Promise<boolean> => ipcRenderer.invoke('chat:cancelContinue', id),
+  // every pending scheduled wake-up (schedule_wakeup) and automatic continue (usage limit), and cancelling one:
+  // kind 'wake' with the wake-up's id, or 'continue' with the continue's key
+  wakeupsList: () => ipcRenderer.invoke('wakeups:list'),
+  wakeupsCancel: (kind: 'wake' | 'continue', id: string | number): Promise<boolean> => ipcRenderer.invoke('wakeups:cancel', kind, String(id)),
+  onWakeupsChanged: (cb: () => void) => {
+    const fn = () => cb()
+    ipcRenderer.on('wakeups:changed', fn)
+    return () => ipcRenderer.removeListener('wakeups:changed', fn)
+  },
   chatAnswer: (tabId: string, id: string, answers: Record<string, string>): Promise<boolean> => ipcRenderer.invoke('chat:answer', tabId, id, answers),
   chatBackground: (tabId: string, toolUseId?: string) => ipcRenderer.invoke('chat:background', tabId, toolUseId),
   chatClose: (tabId: string) => ipcRenderer.invoke('chat:close', tabId),
@@ -209,16 +218,10 @@ contextBridge.exposeInMainWorld('api', {
   handoffAt: () => ipcRenderer.invoke('handoff:at'),
   handoffFile: (tabId: string) => ipcRenderer.invoke('handoff:file', tabId),
   handoffReady: (file: string, since: number) => ipcRenderer.invoke('handoff:ready', file, since),
-  pullConfig: () => ipcRenderer.invoke('pull:config'),
-  pullList: () => ipcRenderer.invoke('pull:list'),
   pullRun: (dry: boolean) => ipcRenderer.invoke('pull:run', dry),
-  onPullRow: (cb: (row: { repo: string; result: string }) => void) => {
-    const fn = (_e: unknown, row: { repo: string; result: string }) => cb(row)
-    ipcRenderer.on('pull:row', fn)
-    return () => ipcRenderer.removeListener('pull:row', fn)
-  },
   allowStatus: () => ipcRenderer.invoke('allow:status'),
   allowRun: () => ipcRenderer.invoke('allow:run'),
+  allowForget: (address: string) => ipcRenderer.invoke('allow:forget', address),
   updateState: () => ipcRenderer.invoke('update:state'),
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateApply: () => ipcRenderer.invoke('update:apply'),
@@ -231,6 +234,12 @@ contextBridge.exposeInMainWorld('api', {
   },
   accountSwitch: (email: string) => ipcRenderer.invoke('account:switch', email),
   accountCancel: () => ipcRenderer.invoke('account:cancel'),
+  // after a successful switch: the new login, how many threads moved at once and how many follow when their work ends
+  onAccountSwitched: (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => {
+    const fn = (_e: unknown, s: { account: string | null; closed: number; waiting: number }) => cb(s)
+    ipcRenderer.on('account:switched', fn)
+    return () => ipcRenderer.removeListener('account:switched', fn)
+  },
   onAccountOutput: (cb: (t: string) => void) => {
     const fn = (_e: unknown, t: string) => cb(t)
     ipcRenderer.on('account:output', fn)
@@ -264,7 +273,6 @@ contextBridge.exposeInMainWorld('api', {
   devStack: (id: string, sources: Record<string, unknown>, only?: string[]) => ipcRenderer.invoke('dev:stack', id, sources, only),
   devStart: (name: string, source: unknown) => ipcRenderer.invoke('dev:start', name, source),
   devStop: (name: string) => ipcRenderer.invoke('dev:stop', name),
-  devStopAll: () => ipcRenderer.invoke('dev:stopAll'),
   devLogs: (name: string) => ipcRenderer.invoke('dev:logs', name),
   onDevUpdate: (cb: (s: unknown) => void) => {
     const fn = (_e: unknown, s: unknown) => cb(s)
@@ -275,7 +283,6 @@ contextBridge.exposeInMainWorld('api', {
   terminalOpen: (id: string, cwd: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:open', id, cwd, cols, rows),
   terminalWrite: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
   terminalResize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
-  terminalKill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
   onTerminalData: (cb: (id: string, chunk: string) => void) => {
     const fn = (_e: unknown, id: string, chunk: string) => cb(id, chunk)
     ipcRenderer.on('terminal:data', fn)
@@ -292,5 +299,8 @@ contextBridge.exposeInMainWorld('api', {
   chatCommands: (tabId?: string) => ipcRenderer.invoke('chat:commands', tabId),
   chatModels: (tabId?: string) => ipcRenderer.invoke('chat:models', tabId),
   chatMcp: (tabId?: string) => ipcRenderer.invoke('chat:mcp', tabId),
+  // everything /status and /usage show for one thread, live (main/statusView.ts ThreadStatusView); known: the tab's
+  // folder and session, for a thread with no process yet
+  chatStatusView: (tabId: string, known?: { cwd?: string; sessionId?: string }) => ipcRenderer.invoke('chat:statusView', tabId, known),
   chatStopTask: (tabId: string, taskId: string) => ipcRenderer.invoke('chat:stopTask', tabId, taskId),
 })
