@@ -19,7 +19,9 @@ export function AskCard({ tabId, id, input, open }: { tabId: string; id: string;
     if (!ok) { setErr('That question is no longer open'); setSending(false) }
   }
   return (
-    <div className={`askcard${open ? '' : ' done'}`} data-testid="ask-card">
+    <div className={`askcard${open ? '' : ' done'}`} data-testid="ask-card"
+      // Enter anywhere in the card (an option, or the box for your own answer) sends the answer, once every question has one
+      onKeyDown={(e) => { if (open && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); if (answers && !sending) void submit() } }}>
       {qs.map((q, i) => (
         <div key={i} className="askq">
           <div className="asktext">{q.question}</div>
