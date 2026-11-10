@@ -52,7 +52,7 @@ export function RunningPage() {
         testid="stop-everything-bar"
         actions={<>
           {held && <Btn kind="plain" onClick={resume} testid="resume-all">Resume</Btn>}
-          <Btn kind="danger" onClick={stop} testid="stop-everything">Stop everything</Btn>
+          <Btn kind="plain" onClick={stop} testid="stop-everything">Stop everything</Btn>
           <Keys k="Ctrl Alt Esc" />
         </>}
       >
