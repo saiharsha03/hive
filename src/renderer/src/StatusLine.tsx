@@ -176,15 +176,22 @@ export function StatusLine() {
     return () => { alive = false; clearInterval(t) }
   }, [f?.id, f?.busy])
   const branch = f ? (f.worktrees?.at(-1)?.branch ?? (f.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? '') : ''
-  const seven = status?.seven
-  const five = status?.five
   const ipWord = !allow ? '' : allow.running ? 'Allowing this address' : allow.changed ? 'New address, not allowed' : allow.ip ? 'Address allowed' : allow.unreadable ? 'Address not read' : 'Allow my IP'
   return (
     <footer className="sline" data-testid="status-bar">
       {branch && <b className="branch" data-testid="status-branch">{branch}</b>}
       {ctx && <span data-testid="status-context">Context {fmtTokens(ctx.total)}{ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}{ctx.max ? <Meter pct={(ctx.total / ctx.max) * 100} /> : null}</span>}
-      {five?.pct != null && <button className={five.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title="Status and usage" data-testid="status-five">5-hour {Math.round(five.pct)}%<Meter pct={five.pct} /></button>}
-      {seven?.pct != null && <button className={seven.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title="Status and usage" data-testid="status-seven">7-day {Math.round(seven.pct)}%<Meter pct={seven.pct} /></button>}
+      {(status?.usage ?? []).map((u) => {
+        const name = u.key === 'five_hour' ? '5-hour' : u.key === 'seven_day' ? '7-day' : `7-day ${u.key.replace(/^seven_day_/, '').replace(/_/g, ' ')}`
+        const at = u.resetsAt ? new Date(u.resetsAt) : null
+        const soon = at && at.getTime() - Date.now() < 24 * 3_600_000
+        const when = at ? (soon ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : at.toLocaleDateString([], { weekday: 'short' }) + ' ' + at.toLocaleTimeString([], { hour: 'numeric' })) : ''
+        return (
+          <button key={u.key} className={u.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title={`${u.label}${at ? `: resets ${at.toLocaleString()}` : ''}. Click for status and usage`} data-testid={`status-${u.key}`}>
+            {name} {Math.round(u.pct)}%<Meter pct={u.pct} />{when && <span className="lim-reset">resets {when}</span>}
+          </button>
+        )
+      })}
       <span className="r" />
       <VersionsLine />
       {allow?.configured && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `This computer's address: ${allow.ip}. Click for Allow my IP` : allow.error || 'Allow my IP'} data-testid="status-allow">{ipWord}</button>}

@@ -18,7 +18,9 @@ export type UsageRow = { key: string; label: string; pct: number; resetsAt: stri
 const WINDOWS: [string, string][] = [['five_hour', 'Current session (5 hours)'], ['seven_day', 'Current week (all models)'], ['seven_day_sonnet', 'Current week (Sonnet)'], ['seven_day_opus', 'Current week (Opus)']]
 export function usageRows(l: any, now = Date.now()): UsageRow[] {
   if (!realLimits(l)) return []
-  return WINDOWS.flatMap(([key, label]) => {
+  const named = (k: string) => k.replace(/^seven_day_/, '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
+  const extra: [string, string][] = Object.keys(l).filter((k) => /^seven_day_\w+$/.test(k) && !WINDOWS.some(([w]) => w === k)).map((k) => [k, `Current week (${named(k)})`])
+  return [...WINDOWS, ...extra].flatMap(([key, label]) => {
     const w = l[key]
     return typeof w?.utilization === 'number' ? [afterReset({ key, label, pct: w.utilization, resetsAt: typeof w.resets_at === 'string' ? w.resets_at : null }, now)] : []
   })
