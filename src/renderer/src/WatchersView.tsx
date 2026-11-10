@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { DAYS, DEFAULT_TIERS, parseEvery, parseTiers, parseWeekly, pickTier, type RunKind } from '../../shared/watchCore'
 import { checkDraft, draftOf, tierRows, type ScheduleDraft, type ScheduleMode, type TierRow, type WatcherDetail } from '../../shared/watchersCore'
 import { reloadWatchers, useWatchers, type WatcherRow } from './useWatchers'
+import { Confirm } from './ui'
 
 export type OpenThread = { tabId: string | null; sessionId: string | null; path: string | null; cwd: string; title: string; at: number }
 type Props = { onOpen: (path: string) => void; onOpenThread: (t: OpenThread) => void; onClose?: () => void }
@@ -180,6 +181,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
   const [tab, setTab] = useState<'findings' | 'reports' | 'runs'>('findings')
   const [kind, setKind] = useState<RunKind>('sweep')
   const [err, setErr] = useState('')
+  const [asking, setAsking] = useState(false)
   const { runNow, busy } = useWatchers()
   const load = () => window.api.watcherDetail(id).then((x) => { setD(x); setErr('') }).catch((e) => setErr(clean(e)))
   // follow the row: a new run, a finished turn or a new finding refreshes the detail
@@ -190,7 +192,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
   const latest = d.runs.find((r) => r.sessionId) ?? null
   const openThread = () => onOpenThread({ tabId: d.tabId, sessionId: d.sessionId ?? latest?.sessionId ?? null, path: latest?.path ?? null, cwd: latest?.cwd ?? '', title: `Watcher: ${d.name}`, at: latest?.startedAt ?? Date.now() })
   const del = () => {
-    if (!confirm(`Delete watcher "${d.name}"? Its folder moves to _deleted.`)) return
+    setAsking(false)
     window.api.watcherDelete(id).then(() => { onGone(); void reloadWatchers() }).catch((e) => setErr(clean(e)))
   }
   return (
@@ -205,7 +207,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
         <button className="dlink" disabled={!d.tabId && !latest} onClick={openThread}>Open thread</button>
         <button className="dlink" title={d.dir} onClick={() => void window.api.openExternal(d.dir)}>Folder</button>
         <button className="dlink" title={d.prompt} onClick={() => onOpen(d.prompt)}>Prompt</button>
-        <button className="dlink" onClick={del}>Delete</button>
+        <button className="dlink" onClick={() => setAsking(true)} data-testid="watcher-delete">Delete</button>
       </div>
       {d.waitingReason && <div className="derr">Waiting: {d.waitingReason}</div>}
       {d.message && <div data-testid="watcher-message" className="derr">{d.message}</div>}
@@ -247,6 +249,11 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
           {(r.path || r.tabId) && <button className="dlink" onClick={() => onOpenThread({ tabId: r.tabId, sessionId: r.sessionId ?? null, path: r.path, cwd: r.cwd, title: `Watcher: ${d.name}`, at: r.startedAt })}>Open thread</button>}
         </div>
       )) : <div className="dnote">No runs yet.</div>)}
+      {asking && (
+        <Confirm title={`Delete watcher "${d.name}"?`} action="Delete" danger testid="watcher-delete-confirm" onCancel={() => setAsking(false)} onConfirm={del}>
+          <div>It stops running and its folder moves to _deleted.</div>
+        </Confirm>
+      )}
     </div>
   )
 }
@@ -273,7 +280,8 @@ export function WatchersView({ onOpen, onOpenThread, onClose }: Props) {
       <div className="wsplit">
         <div className="wlist">
           {watchers.map((w) => (
-            <div data-testid="watcher-row" data-id={w.id} key={w.id} className={`wrow${w.id === sel ? ' on' : ''}`} onClick={() => { setSel(w.id); setCreating(false) }} title={w.message || w.goal}>
+            <div data-testid="watcher-row" data-id={w.id} key={w.id} className={`wrow${w.id === sel ? ' on' : ''}`} role="button" tabIndex={0} aria-pressed={w.id === sel} onClick={() => { setSel(w.id); setCreating(false) }}
+              onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSel(w.id); setCreating(false) } }} title={w.message || w.goal}>
               <input data-testid="watcher-toggle" type="checkbox" checked={w.enabled} disabled={!!busy[w.id]} onClick={(e) => e.stopPropagation()} onChange={(e) => void setEnabled(w.id, e.target.checked)} aria-label={`${w.name} on/off`} />
               <div className="wmain">
                 <div className="wname"><span className={dotOf(w.state)} /> {w.name}{w.builtin ? <span className="dnote"> built in</span> : null}<span className="dspace" /><span className="dnote">{w.state}</span></div>
