@@ -1,17 +1,21 @@
 // Lists every Claude Code session from ~/.claude/projects.
-// Session files are large (1.9 GB total), so only the first and last 32 KB of each are read,
-// and results are cached by file size + mtime.
+// Session files are large (1.9 GB total), so only the first and last 32 KB of each are read, and results are cached by
+// file size + mtime. The list is kept in memory: a call re-reads only the project folders whose time changed (a session
+// was added or removed there) and the transcripts a live thread reported a turn end for (sessionTouched); every
+// FULL_MS, or with full, every file is checked again (sessions written by the terminal). The cache file is written only
+// when something changed, at most every SAVE_MS.
 import { app } from 'electron'
 import { open, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { isWatcherTranscript } from '../shared/readOnlyCore'
 import { REVIEW_HEAD } from '../shared/dependabotCore'
 
 export type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string; entrypoint: string; watcherRun?: boolean; dependabot?: boolean } // watcherRun: a watcher run's thread (its header is the first message); dependabot: a Dependabot review thread
 type CacheEntry = SessionInfo & { size: number; mtime?: number; v?: number } // v: parser version; bump to re-read every file
 
-const ROOT = join(homedir(), '.claude', 'projects')
+// HIVE_PROJECTS_DIR: another projects folder (tests)
+const root = () => process.env.HIVE_PROJECTS_DIR || join(homedir(), '.claude', 'projects')
 const CHUNK = 32 * 1024
 const cacheFile = () => join(app.getPath('userData'), 'sessions-cache.json')
 
@@ -72,37 +76,102 @@ export function parse(path: string, text: string, updated: number): SessionInfo 
   return { id: basename(path, '.jsonl'), title: custom || ai || first.slice(0, 80), project: cwd ? basename(cwd) : '', cwd, updated: (!tailCut && last) || updated, started: started || updated, path, entrypoint, ...(isWatcherTranscript(text) === true ? { watcherRun: true } : {}), ...(first.startsWith(REVIEW_HEAD) ? { dependabot: true } : {}) }
 }
 
-export async function listSessions(): Promise<SessionInfo[]> {
-  let cache: Record<string, CacheEntry> = {}
-  try { cache = JSON.parse(await readFile(cacheFile(), 'utf8')) } catch { /* first run */ }
+// In memory: every transcript seen (null = an empty session, not listed), each project folder's time when last read,
+// and the transcripts a live thread wrote to since (a turn ended)
+const known = new Map<string, CacheEntry | { size: number; mtime: number; empty: true }>()
+const folderTimes = new Map<string, number>()
+const touched = new Set<string>()
+let loaded = false
+let lastFull = 0
+let dirty = false
+let lastSave = 0
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+const FULL_MS = 5 * 60_000
+const SAVE_MS = 30_000
+let scanning: Promise<SessionInfo[]> | null = null
 
-  const files: string[] = []
-  for (const dir of await readdir(ROOT, { withFileTypes: true })) {
+// a live thread's turn ended: its transcript is read again on the next listing
+export const sessionTouched = (path: string) => { touched.add(path) }
+// a transcript's size and time as the list last saw them (search uses these instead of its own stat)
+export function sessionStamp(path: string): { size: number; mtime: number } | null {
+  const k = known.get(path)
+  return k && k.mtime !== undefined ? { size: k.size, mtime: k.mtime } : null
+}
+
+function scheduleSave(): void {
+  if (!dirty || saveTimer) return
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    const all: Record<string, CacheEntry> = {}
+    for (const [p, k] of known) if (!('empty' in k)) all[p] = k
+    dirty = false
+    lastSave = Date.now()
+    writeFile(cacheFile(), JSON.stringify(all)).catch(() => { dirty = true })
+  }, Math.max(0, SAVE_MS - (Date.now() - lastSave)))
+  saveTimer.unref?.()
+}
+
+// one transcript: kept when its size and time are unchanged, read again otherwise
+async function check(path: string): Promise<void> {
+  let s
+  try { s = await stat(path) } catch { if (known.delete(path)) dirty = true; return }
+  const hit = known.get(path)
+  if (hit && ('empty' in hit || (hit as CacheEntry).v === 5) && hit.size === s.size && hit.mtime === s.mtimeMs) return
+  const info = parse(path, await readEnds(path, s.size), s.mtimeMs)
+  known.set(path, info ? { ...info, size: s.size, mtime: s.mtimeMs, v: 5 } : { size: s.size, mtime: s.mtimeMs, empty: true })
+  dirty = true
+}
+
+async function scan(full: boolean): Promise<SessionInfo[]> {
+  if (!loaded) {
+    loaded = true
+    try { for (const [p, e] of Object.entries(JSON.parse(await readFile(cacheFile(), 'utf8')) as Record<string, CacheEntry>)) known.set(p, e) } catch { /* first run */ }
+    full = true
+  }
+  if (Date.now() - lastFull > FULL_MS) full = true
+  const todo = new Set<string>()
+  const folders = new Set<string>()
+  for (const dir of await readdir(root(), { withFileTypes: true })) {
     if (!dir.isDirectory()) continue
-    for (const f of await readdir(join(ROOT, dir.name))) if (f.endsWith('.jsonl')) files.push(join(ROOT, dir.name, f))
+    const folder = join(root(), dir.name)
+    folders.add(folder)
+    let mtime = 0
+    try { mtime = (await stat(folder)).mtimeMs } catch { continue }
+    if (!full && folderTimes.get(folder) === mtime) continue
+    folderTimes.set(folder, mtime)
+    // a session added, removed or renamed here (or a full check): every file in it, and what is gone drops out
+    const names = new Set<string>()
+    try { for (const f of await readdir(folder)) if (f.endsWith('.jsonl')) { names.add(join(folder, f)); todo.add(join(folder, f)) } } catch { continue }
+    for (const p of [...known.keys()]) if (dirname(p) === folder && !names.has(p)) { known.delete(p); dirty = true }
   }
+  for (const p of [...known.keys()]) if (!folders.has(dirname(p))) { known.delete(p); dirty = true } // the folder went
+  for (const f of [...folderTimes.keys()]) if (!folders.has(f)) folderTimes.delete(f)
+  for (const p of touched) todo.add(p)
+  touched.clear()
+  const list = [...todo]
+  for (let i = 0; i < list.length; i += 32) await Promise.all(list.slice(i, i + 32).map(check))
+  if (full) lastFull = Date.now()
+  scheduleSave()
 
-  const next: Record<string, CacheEntry> = {}
   const out: SessionInfo[] = []
-  for (let i = 0; i < files.length; i += 32) {
-    await Promise.all(files.slice(i, i + 32).map(async (path) => {
-      const s = await stat(path)
-      const hit = cache[path]
-      if (hit && hit.v === 5 && hit.size === s.size && hit.mtime === s.mtimeMs) {
-        next[path] = hit
-      } else {
-        const info = parse(path, await readEnds(path, s.size), s.mtimeMs)
-        if (info) next[path] = { ...info, size: s.size, mtime: s.mtimeMs, v: 5 }
-      }
-      const info = next[path]
-      // sessions started inside temp/scratchpad folders are helpers, not real work
-      // hidden: helper runs in temp/scratchpad folders, and sessions other programs start through the
-      // Python Agent SDK (the security plugin's background reviews, bots); the terminal is "cli",
-      // Hive's own sessions are "sdk-cli"
-      if (info && !/\\AppData\\Local\\Temp\\/i.test(info.cwd) && info.entrypoint !== 'sdk-py') out.push(info)
-    }))
+  for (const k of known.values()) {
+    if ('empty' in k) continue
+    // hidden: helper runs in temp/scratchpad folders, and sessions other programs start through the
+    // Python Agent SDK (the security plugin's background reviews, bots); the terminal is "cli",
+    // Hive's own sessions are "sdk-cli"
+    if (/\\AppData\\Local\\Temp\\/i.test(k.cwd) || k.entrypoint === 'sdk-py') continue
+    const { size: _s, mtime: _m, v: _v, ...info } = k
+    out.push(info)
   }
-
-  await writeFile(cacheFile(), JSON.stringify(next))
   return out.sort((a, b) => b.updated - a.updated)
+}
+
+// full: check every file again (the periodic refresh); otherwise only what changed (see the top of the file).
+// Calls that come while a listing runs share it
+export function listSessions(opts: { full?: boolean } = {}): Promise<SessionInfo[]> {
+  if (scanning && !opts.full) return scanning
+  const run = (scanning ?? Promise.resolve([] as SessionInfo[])).catch(() => []).then(() => scan(!!opts.full))
+  const p = run.finally(() => { if (scanning === p) scanning = null })
+  scanning = p
+  return p
 }

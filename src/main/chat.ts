@@ -19,7 +19,7 @@ import { formatChunks, formatSessions } from './searchCore'
 import { inOrder, promptNeverChecked, turnQueue } from './queueCore'
 import { addTodo } from './todos'
 import { addToNote } from './notes'
-import { listSessions } from './sessions'
+import { listSessions, sessionTouched } from './sessions'
 import { formatThreads, formatWait, labelFromThread, listThreads, resolveThread, statusOf, waitIdle, type From } from '../shared/threadTalkCore'
 import { agentStack, ensureWorktree, logs as devLogs, releaseThread, setThreadTitle } from './devStack'
 import { linkThread, moveThreadLinks } from './threadWorktrees'
@@ -1094,6 +1094,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           s.lastOk = r.subtype === 'success' && !r.is_error
           s.lastReply = r.subtype === 'success' ? (r.result || lastText) : `The turn ended with an error (${r.subtype}). ${(r.errors ?? []).join('; ')}`.trim()
           s.lastReplyAt = Date.now()
+          // the sidebar's list and the search index read this transcript again (it is not re-checked otherwise)
+          if (s.sessionId) sessionTouched(transcriptPath(cwd, s.sessionId))
           // a usage limit: the thread continues by itself a minute after the reset (not a watcher: its schedule does)
           if (limited && !s.lastOk && !watcher && s.sessionId) {
             const reset = limitReset ?? resetFromText(`${lastText}
@@ -1220,6 +1222,10 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   sends.run(tabId, go, boost && !interrupt ? boost : null)
   if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
 }
+
+// a transcript whose thread is working now: search leaves it until the turn ends
+export const busyTranscript = (path: string): boolean =>
+  [...live.values()].some((s) => !!s.sessionId && s.turns.isBusy() && transcriptPath(s.cwd, s.sessionId) === path)
 
 // the tab's running process, for the status IPC (model, effort, commands, MCP servers, stopping tasks)
 export const liveQuery = (tabId: string): Query | undefined => live.get(tabId)?.q

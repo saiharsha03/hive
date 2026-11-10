@@ -8,7 +8,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { configureChat, liveQuery, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
+import { busyTranscript, configureChat, liveQuery, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, tick as wakeupsTick } from './threadWakeups'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
@@ -38,7 +38,7 @@ import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { checkForUpdates, applyUpdate, startUpdater, updateState } from './updater'
 import { latestEngine, updateEngine } from './engine'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
-import { searchSessions, searchStatus, startSearch, syncSearch } from './search'
+import { saveSearchNow, searchSessions, searchStatus, setSearchBusy, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { answerAsk, openAsks } from './asks'
 import { cancelContinue, continueAt, initAutoContinue, listContinues } from './autoContinue'
@@ -111,6 +111,8 @@ initAllowlist(appConfig.env, allowChanged)
 setWatcherPosts(appConfig.env)
 configureChat(appConfig.env, chatRoots())
 setWatcherStop(watcherStopReason)
+// search leaves a working thread's transcript until its turn ends
+setSearchBusy(busyTranscript)
 // usage limits: the idle status process has none, so a live thread's answer stands in
 setLiveUsage(liveUsage)
 // Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.claude/hive/watchers);
@@ -682,7 +684,7 @@ function makeTray(): void {
   ]))
   tray.on('click', showWindow)
 }
-app.on('before-quit', () => { quitting = true })
+app.on('before-quit', () => { quitting = true; saveSearchNow() })
 
 // one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one
 if (!TEST_MODE && !app.requestSingleInstanceLock()) app.quit()
@@ -703,6 +705,7 @@ app.whenReady().then(() => {
   startUpdater((st) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('update:state', st) })
 })
 app.on('window-all-closed', () => {
+  saveSearchNow()
   closeStatus()
   stopLanguageServers()
   closeAll()

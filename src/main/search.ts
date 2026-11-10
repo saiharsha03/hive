@@ -1,20 +1,25 @@
 // Keyword (BM25, MiniSearch) search over the sessions the sidebar lists. Only user and assistant words are indexed,
 // one chunk per message (long ones split). The index lives in userData/search (manifest.json, chunks.jsonl) keyed by
-// session path + size + mtime.
+// session path + size + mtime, with the byte offset indexed so far: a transcript that grew is indexed from there on,
+// not again from the start. A transcript whose thread is working is left until its turn ends. The work runs on the main
+// process but yields between sessions and between chunks of a long one; the index is saved at most every SAVE_EVERY
+// and when Hive quits (saveSearchNow).
 import { app, BrowserWindow } from 'electron'
 import MiniSearch from 'minisearch'
-import { createReadStream } from 'node:fs'
+import { createReadStream, mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { chunkText, messageTexts, trimSnippet, type SearchResult, type SessionHit, type SessionMeta } from './searchCore'
-import { listSessions, type SessionInfo } from './sessions'
+import { listSessions, sessionStamp, type SessionInfo } from './sessions'
+import { readLines } from './lines'
 
-const VERSION = 2 // 1 also stored embeddings
-const SAVE_EVERY = 60_000
+const VERSION = 3 // 1 also stored embeddings; 2 had no byte offset (re-read in full once)
+const SAVE_EVERY = 5 * 60_000
 
-type Entry = { path: string; id: string; size: number; mtime: number; texts: string[]; ids: number[] }
-type Manifest = { version: number; sessions: { path: string; id: string; size: number; mtime: number }[] }
+// offset: the bytes indexed so far (up to the last whole line)
+type Entry = { path: string; id: string; size: number; mtime: number; offset: number; texts: string[]; ids: number[] }
+type Manifest = { version: number; sessions: { path: string; id: string; size: number; mtime: number; offset: number }[] }
 export type SearchStatus = { indexed: number; total: number; done: boolean }
 
 const entries = new Map<string, Entry>()
@@ -32,6 +37,13 @@ let lastSave = Date.now()
 const progress = { indexed: 0, total: 0, done: false }
 
 const dir = () => join(app.getPath('userData'), 'search')
+// a transcript whose thread is working right now (chat.ts): indexed after its turn ends instead
+let busyPath: (path: string) => boolean = () => false
+export const setSearchBusy = (f: (path: string) => boolean) => { busyPath = f }
+// the assistant blocks already indexed near the end of each transcript, so a streamed message that continues past the
+// indexed offset is not indexed twice (kept in memory only)
+const seenTail = new Map<string, Set<string>>()
+const yieldNow = () => new Promise<void>((r) => setImmediate(r))
 
 export const searchStatus = (): SearchStatus => ({ ...progress })
 function broadcast(): void {
@@ -45,6 +57,12 @@ function register(e: Entry): { id: number; text: string }[] {
   entries.set(e.path, e)
   return e.texts.map((text, i) => ({ id: e.ids[i], text }))
 }
+// more chunks for a session already in the index
+function extend(e: Entry, texts: string[]): { id: number; text: string }[] {
+  const docs = texts.map((text, k) => ({ id: nextId++, text, i: e.texts.length + k }))
+  for (const d of docs) { e.ids.push(d.id); e.texts.push(d.text); refs.set(d.id, { path: e.path, i: d.i }) }
+  return docs.map(({ id, text }) => ({ id, text }))
+}
 
 function remove(path: string): void {
   const e = entries.get(path)
@@ -53,17 +71,18 @@ function remove(path: string): void {
   entries.delete(path)
 }
 
-async function extract(path: string): Promise<string[]> {
+// the words of a transcript from byte `from` on, and where the last whole line ended
+async function extract(path: string, from: number, seen: Set<string>): Promise<{ texts: string[]; offset: number }> {
   const texts: string[] = []
-  const seen = new Set<string>()
-  const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity })
-  for await (const line of rl) {
-    if (!line.startsWith('{') || !(line.includes('"type":"user"') || line.includes('"type":"assistant"'))) continue
+  const offset = await readLines(path, from, (line) => {
+    if (!line.startsWith('{') || !(line.includes('"type":"user"') || line.includes('"type":"assistant"'))) return
     let e: any
-    try { e = JSON.parse(line) } catch { continue }
+    try { e = JSON.parse(line) } catch { return }
     for (const t of messageTexts(e, seen)) texts.push(...chunkText(t))
-  }
-  return texts
+  })
+  // only the newest keys matter (a streamed message's lines are next to each other)
+  if (seen.size > 400) { const keep = [...seen].slice(-200); seen.clear(); for (const k of keep) seen.add(k) }
+  return { texts, offset }
 }
 
 let loading: Promise<void> | null = null
@@ -73,13 +92,15 @@ const load = (): Promise<void> => (loading ??= (async () => {
   await rm(join(app.getPath('userData'), 'models'), { recursive: true, force: true }).catch(() => {})
   try {
     const m: Manifest = JSON.parse(await readFile(join(dir(), 'manifest.json'), 'utf8'))
-    if (m.version !== VERSION) return
+    // version 2 indexed each transcript whole: as far as its size then
+    if (m.version === 2) for (const x of m.sessions) x.offset = x.size
+    else if (m.version !== VERSION) return
     const docs: { id: number; text: string }[] = []
     let n = 0
     for await (const line of createInterface({ input: createReadStream(join(dir(), 'chunks.jsonl'), { encoding: 'utf8' }), crlfDelay: Infinity })) {
       const s = m.sessions[n++]
       if (!s) break
-      docs.push(...register({ path: s.path, id: s.id, size: s.size, mtime: s.mtime, texts: JSON.parse(line), ids: [] }))
+      docs.push(...register({ path: s.path, id: s.id, size: s.size, mtime: s.mtime, offset: s.offset, texts: JSON.parse(line), ids: [] }))
     }
     await bm25.addAllAsync(docs, { chunkSize: 1000 })
   } catch {
@@ -97,7 +118,7 @@ function save(): Promise<void> {
       const jsonl = await open(join(dir(), 'chunks.jsonl.tmp'), 'w')
       for (const { texts } of snap) await jsonl.write(JSON.stringify(texts) + '\n')
       await jsonl.close()
-      const manifest: Manifest = { version: VERSION, sessions: snap.map(({ e }) => ({ path: e.path, id: e.id, size: e.size, mtime: e.mtime })) }
+      const manifest: Manifest = { version: VERSION, sessions: snap.map(({ e }) => ({ path: e.path, id: e.id, size: e.size, mtime: e.mtime, offset: e.offset })) }
       const mf = await open(join(dir(), 'manifest.json.tmp'), 'w')
       await mf.writeFile(JSON.stringify(manifest))
       await mf.close()
@@ -113,10 +134,40 @@ function save(): Promise<void> {
   })())
 }
 
-async function indexOne(s: SessionInfo, size: number, mtime: number): Promise<void> {
-  const texts = await extract(s.path)
+// Hive is quitting: the index as it is now, written at once (a few MB to a few tens of MB)
+export function saveSearchNow(): void {
+  if (!dirty || !entries.size) return
+  try {
+    mkdirSync(dir(), { recursive: true })
+    const all = [...entries.values()]
+    writeFileSync(join(dir(), 'chunks.jsonl.tmp'), all.map((e) => JSON.stringify(e.texts)).join('\n') + '\n')
+    const manifest: Manifest = { version: VERSION, sessions: all.map((e) => ({ path: e.path, id: e.id, size: e.size, mtime: e.mtime, offset: e.offset })) }
+    writeFileSync(join(dir(), 'manifest.json.tmp'), JSON.stringify(manifest))
+    renameSync(join(dir(), 'chunks.jsonl.tmp'), join(dir(), 'chunks.jsonl'))
+    renameSync(join(dir(), 'manifest.json.tmp'), join(dir(), 'manifest.json'))
+    dirty = false
+  } catch (e) { console.error('search: could not save the index at quit:', e) }
+}
+
+// A transcript that only grew (same session, larger) is indexed from where the last pass stopped; anything else
+// (new, rewritten, shorter) from the start
+export async function indexOne(s: Pick<SessionInfo, 'path' | 'id'>, size: number, mtime: number): Promise<void> {
+  const e = entries.get(s.path)
+  if (e && e.id === s.id && size >= e.offset && e.offset > 0 && size >= e.size) {
+    const seen = seenTail.get(s.path) ?? new Set<string>()
+    const { texts, offset } = await extract(s.path, e.offset, seen)
+    seenTail.set(s.path, seen)
+    if (entries.get(s.path) !== e) return // dropped meanwhile
+    if (texts.length) bm25.addAll(extend(e, texts))
+    Object.assign(e, { size, mtime, offset })
+    dirty = true
+    return
+  }
+  const seen = new Set<string>()
+  const { texts, offset } = await extract(s.path, 0, seen)
+  seenTail.set(s.path, seen)
   remove(s.path)
-  bm25.addAll(register({ path: s.path, id: s.id, size, mtime, texts, ids: [] }))
+  bm25.addAll(register({ path: s.path, id: s.id, size, mtime, offset, texts, ids: [] }))
   dirty = true
 }
 
@@ -125,15 +176,19 @@ async function reconcile(): Promise<void> {
   const keep = new Set(list.map((s) => s.path))
   for (const p of [...entries.keys()]) if (!keep.has(p)) { remove(p); dirty = true }
 
+  // the session list already knows each transcript's size and time; only one it has none for is looked at here
   const stats = new Map<string, { size: number; mtime: number }>()
   for (let i = 0; i < list.length; i += 32) {
     await Promise.all(list.slice(i, i + 32).map(async (s) => {
+      const known = sessionStamp(s.path)
+      if (known) { stats.set(s.path, known); return }
       try { const st = await stat(s.path); stats.set(s.path, { size: st.size, mtime: st.mtimeMs }) } catch { /* deleted meanwhile */ }
     }))
   }
+  // a working thread's transcript waits for its turn to end (it changes with every line meanwhile)
   const todo = list.filter((s) => {
     const st = stats.get(s.path)
-    if (!st) return false
+    if (!st || busyPath(s.path)) return false
     const e = entries.get(s.path)
     return !e || e.size !== st.size || e.mtime !== st.mtime
   })
@@ -149,8 +204,18 @@ async function reconcile(): Promise<void> {
     progress.done = progress.indexed >= progress.total
     broadcast()
     if (dirty && Date.now() - lastSave > SAVE_EVERY) await save()
+    await yieldNow() // the window's requests go first
   }
-  if (dirty) await save()
+  if (dirty && Date.now() - lastSave > SAVE_EVERY) await save()
+  else if (dirty) scheduleSave()
+}
+
+// a pass that changed little leaves the save for later (at most every SAVE_EVERY; Hive quitting saves at once)
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleSave(): void {
+  if (saveTimer) return
+  saveTimer = setTimeout(() => { saveTimer = null; if (dirty) void save() }, Math.max(1000, SAVE_EVERY - (Date.now() - lastSave)))
+  saveTimer.unref?.()
 }
 
 async function kick(): Promise<void> {
@@ -180,7 +245,8 @@ export function startSearch(): void {
       if (!list.length) list = await listSessions()
       void kick()
     })().catch((e) => console.error('search: start failed:', e))
-    setInterval(() => { void listSessions().then(syncSearch).catch(() => {}) }, 5 * 60_000).unref()
+    // every few minutes every transcript is checked again (sessions the terminal wrote, a thread that kept working)
+    setInterval(() => { void listSessions({ full: true }).then(syncSearch).catch(() => {}) }, 5 * 60_000).unref()
   }, 5000)
 }
 
