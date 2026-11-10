@@ -30,7 +30,8 @@ export const nextRunLabel = (w: { enabled?: boolean; nextRun?: number | null }, 
 
 export type PhoneSection = 'watchers' | 'pinned' | 'waiting' | 'working' | 'dependabot' | 'recent'
 export const PHONE_SECTIONS: readonly PhoneSection[] = ['watchers', 'pinned', 'waiting', 'working', 'dependabot', 'recent']
-export type PhoneThread = { id: string; title: string; folder: string; state: 'working' | 'waiting' | 'idle'; note: string; updated: number; section: PhoneSection }
+// sessionId: the thread's Claude session (wake-ups and continues name it), null for a thread that has none yet
+export type PhoneThread = { id: string; title: string; folder: string; state: 'working' | 'waiting' | 'idle'; note: string; updated: number; section: PhoneSection; sessionId?: string | null }
 export type PhoneLive = { tabId: string; sessionId: string | null; title: string; folder: string; busy: boolean; waitingReason?: string }
 export type PhoneSaved = { id: string; title: string; project: string; updated: number; watcherRun?: boolean; dependabot?: boolean }
 export type PhoneWatcher = { name: string; tabId: string | null; sessionId: string | null; sessionIds?: string[]; enabled?: boolean; nextRun?: number | null }
@@ -56,7 +57,7 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
     const t = live.find((l) => (w.tabId && l.tabId === w.tabId) || (id && l.sessionId === id))
     const s = id ? savedById.get(id) : undefined
     if (!t && !s) continue
-    out.push({ id: t?.tabId ?? id!, title: w.name, folder: t?.folder ?? s!.project, state: t ? stateOf(t) : 'idle', note: t?.waitingReason || nextRunLabel(w, now), updated: s?.updated ?? now, section: 'watchers' })
+    out.push({ id: t?.tabId ?? id!, title: w.name, folder: t?.folder ?? s!.project, state: t ? stateOf(t) : 'idle', note: t?.waitingReason || nextRunLabel(w, now), updated: s?.updated ?? now, section: 'watchers', sessionId: t ? t.sessionId : id ?? null }) // a run open without a session yet has none
   }
 
   // a watcher tab with no session yet is a run that just started; it is shown under its watcher above
@@ -69,7 +70,7 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
     if (st === 'idle' && runs.has(t.sessionId ?? '')) continue // an older watcher run open but idle: out of the list, as in the sidebar
     const kept = st === 'idle' ? keep(t.sessionId ?? t.tabId) : st
     const section = kept && kept !== 'pinned' && bot(t.tabId, t.sessionId) ? 'dependabot' : kept
-    if (section) (st === 'idle' ? rest : out).push({ id: t.tabId, title: t.title, folder: t.folder, state: st, note: t.waitingReason ?? '', updated: now, section })
+    if (section) (st === 'idle' ? rest : out).push({ id: t.tabId, title: t.title, folder: t.folder, state: st, note: t.waitingReason ?? '', updated: now, section, sessionId: t.sessionId })
   }
   let recent = 0, bots = 0 // Recent and Dependabot each hold up to recentMax
   for (const s of saved) {
@@ -77,7 +78,7 @@ export function phoneThreads(live: PhoneLive[], saved: PhoneSaved[], watchers: P
     const kept = keep(s.id)
     const section = kept === 'recent' && s.dependabot ? 'dependabot' : kept
     if (!section || (section === 'recent' && ++recent > recentMax) || (section === 'dependabot' && ++bots > recentMax)) continue
-    rest.push({ id: s.id, title: s.title, folder: s.project, state: 'idle', note: '', updated: s.updated, section })
+    rest.push({ id: s.id, title: s.title, folder: s.project, state: 'idle', note: '', updated: s.updated, section, sessionId: s.id })
   }
   const pinAt = (t: PhoneThread) => states[t.id]?.pinned ?? states[live.find((l) => l.tabId === t.id)?.sessionId ?? '']?.pinned ?? 0
   const order = (t: PhoneThread) => PHONE_SECTIONS.indexOf(t.section)

@@ -96,10 +96,20 @@ export function initMobile(env: Record<string, string>, d: Deps): void {
 
 // The usage guard on the phone: when a plan window passes 85% (and again at 95%) the phone is told which window, how
 // full, when it fills, how many threads pause then and when they carry on. Looked at every five minutes from the
-// reading Hive already keeps; said once per step, window and reset (kept in memory: a restart may say it again).
+// reading Hive already keeps; said once per step, window and reset, kept in hive-usage-guard.json so a restart does not
+// say it again (only the newest few steps are kept: an old window's steps never come back).
 const GUARD_EVERY_MS = 5 * 60_000
 let guardTimer: ReturnType<typeof setInterval> | undefined
-const guardSaid = new Set<string>()
+const guardFile = () => join(dataDir(), 'hive-usage-guard.json')
+export function guardMemory(text: string | null): string[] {
+  try { const v = JSON.parse(text ?? ''); return Array.isArray(v?.said) ? v.said.filter((x: unknown) => typeof x === 'string').slice(-GUARD_KEEP) : [] } catch { return [] }
+}
+const GUARD_KEEP = 20
+const guardSaid = new Set<string>(guardMemory((() => { try { return readFileSync(guardFile(), 'utf8') } catch { return null } })()))
+const rememberGuard = (step: string) => {
+  guardSaid.add(step)
+  writeFileSafe(guardFile(), JSON.stringify({ said: [...guardSaid].slice(-GUARD_KEEP) }))
+}
 const clockOf = (ms: number): string => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 async function guardCheck(): Promise<void> {
   const d = deps
@@ -107,7 +117,7 @@ async function guardCheck(): Promise<void> {
   try {
     const g = usageGuard((await d.usage()).rows, Date.now())
     if (!g || guardSaid.has(guardStep(g))) return
-    guardSaid.add(guardStep(g))
+    rememberGuard(guardStep(g))
     const working = (await d.threads()).filter((t) => t.state === 'working').length
     const n = guardNote(g, working, clockOf)
     sendToPhone(fitNotification(n.title, n.body, '', { kind: 'guard', open: 'usage' }), true, true)

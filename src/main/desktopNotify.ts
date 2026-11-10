@@ -3,6 +3,8 @@
 import { BrowserWindow, Notification } from 'electron'
 import { currentSettings } from './settings'
 import { TEST_MODE } from './testMode'
+import { inQuiet, quietHours } from './quietHours'
+import { noteKind } from '../shared/phoneCore'
 
 type Open = (threadId: string) => void
 let getWin: () => BrowserWindow | null = () => null
@@ -18,7 +20,8 @@ export function notifyDesktop(title: string, body: string, thread?: string): voi
   const win = getWin()
   if (!win || win.isDestroyed() || win.isFocused()) return // the user is looking at Hive already
   if (Notification.isSupported()) {
-    const n = new Notification({ title, body, silent: false })
+    // quiet hours: no sound, except for a failure
+    const n = new Notification({ title, body, silent: inQuiet(quietHours(), new Date()) && noteKind(title) !== 'fail' })
     n.on('click', () => open(thread ?? ''))
     n.show()
   }

@@ -125,7 +125,8 @@ export function withWakes(threads: PhoneThread[], wakeups: PhoneWakeup[]): Phone
   const titles = new Map<string, number>()
   for (const t of threads) titles.set(t.title, (titles.get(t.title) ?? 0) + 1)
   return threads.map((t) => {
-    const mine = wakeups.filter((w) => w.open === t.id || (w.title === t.title && titles.get(t.title) === 1))
+    // by id first (the thread's tab or its Claude session); a title only when no id is known and exactly one thread has it
+    const mine = wakeups.filter((w) => w.open === t.id || (!!t.sessionId && w.open === t.sessionId) || (t.sessionId === undefined && w.title === t.title && titles.get(t.title) === 1))
     const wake = mine.find((w) => w.kind === 'wake')
     const cont = mine.find((w) => w.kind === 'continue')
     return { ...t, ...(wake ? { wakes: wake.at } : {}), ...(cont ? { continues: cont.at } : {}) }

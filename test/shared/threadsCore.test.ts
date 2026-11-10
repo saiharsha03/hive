@@ -19,7 +19,7 @@ describe('phoneThreads', () => {
   it("shows a watcher's current run with its live state and drops older runs and stray watcher runs", () => {
     const w: PhoneWatcher[] = [{ name: 'Watch', tabId: 'watcher-x-2', sessionId: null, sessionIds: ['run1'] }]
     const out = phoneThreads([liveT('watcher-x-2', null, { busy: true })], [saved('run1', 5, { watcherRun: true }), saved('other-run', 4, { watcherRun: true })], w, {}, now)
-    expect(out).toEqual([{ id: 'watcher-x-2', title: 'Watch', folder: 'f', state: 'working', note: '', updated: 5, section: 'watchers' }])
+    expect(out).toEqual([{ id: 'watcher-x-2', title: 'Watch', folder: 'f', state: 'working', note: '', updated: 5, section: 'watchers', sessionId: null }])
   })
 
   it('lists an older watcher run resumed later as a live thread, but not while it sits idle', () => {

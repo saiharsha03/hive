@@ -8,9 +8,11 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { busyTranscript, configureChat, liveQuery, threadFacts, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
+import { busyTranscript, configureChat, liveQuery, runningEverywhere, stopEverything, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
-import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, tick as wakeupsTick } from './threadWakeups'
+import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, pauseWakeups, runWakeupNow, tick as wakeupsTick, wakeupsPaused } from './threadWakeups'
+import { quietHours, setQuietHours } from './quietHours'
+import type { PhoneAsk, QuietHours } from '../shared/phoneCore'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
 import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
@@ -42,7 +44,7 @@ import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEM
 import { saveSearchNow, searchSessions, searchStatus, setSearchBusy, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { answerAsk, openAsks } from './asks'
-import { cancelContinue, continueAt, initAutoContinue, listContinues } from './autoContinue'
+import { cancelContinue, continueAt, continueNow, initAutoContinue, listContinues, setContinuesPaused } from './autoContinue'
 import { readTodos } from './teamTodos'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
@@ -157,8 +159,9 @@ initThreadWakeups((sessionId, text) => {
 
 // The phone app (through the relay): its requests map onto the same threads the window shows
 const mobileChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('mobile:status', mobileStatus()) }
+// seen: a message of yours in the transcript is one Claude has taken in (the CLI writes it then)
 const phoneItems = (items: Awaited<ReturnType<typeof loadRecentHistory>>['items']): PhoneItem[] => items.flatMap((it): PhoneItem[] => {
-  if (it.kind === 'user') return [{ k: 'you', t: it.text }]
+  if (it.kind === 'user') return [{ k: 'you', t: it.text, seen: true }]
   if (it.kind === 'assistant') return [{ k: 'claude', t: it.text }]
   if (it.kind === 'thread' || it.kind === 'agent') return [{ k: 'you', t: it.text }]
   if (it.kind === 'tool') { const i = it.input ?? {}; return [{ k: 'tool', t: `${it.name.replace(/^mcp__\w+?__/, '')} ${i.description ?? i.file_path ?? i.pattern ?? i.command ?? i.url ?? ''}`.trim().slice(0, 200) }] }
@@ -200,7 +203,9 @@ const mobileDeps = () => ({
     const { items } = await loadRecentHistory(path)
     // a finished watcher run: say its thread is closed and what a reply costs
     const ended: PhoneItem[] = saved?.watcherRun ? [{ k: 'note', t: 'This watcher run has ended and its thread is closed. Replying reopens it: Claude reads the whole conversation again, which counts against your usage.' }] : []
-    return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [], tasks }
+    // what you wrote that Claude has not read yet (queued, or not echoed back) follows, marked not seen
+    const unread: PhoneItem[] = l ? unreadOf(l.tabId).map((t) => ({ k: 'you', t: t.length > 4000 ? `${t.slice(0, 4000)}…` : t, seen: false })) : []
+    return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...unread, ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [], tasks }
   },
   send: (id: string, text: string) => sendTo(id, text, true),
   start: async (folder: string, text: string) => {
@@ -246,13 +251,44 @@ const mobileDeps = () => ({
     return true
   },
   wakeups: () => phoneWakeups(listWakeups(), listContinues()),
+  // 2.0 app: a thread now without its transcript, all running background work, stop everything, run a wake-up now,
+  // and the quiet hours it shares with Hive
+  peek: (id: string) => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    return l ? { working: l.busy, asks: openAsks(l.tabId) as PhoneAsk[] } : null
+  },
+  running: () => runningEverywhere().map(({ tabId, title, task }) => ({ thread: tabId, threadTitle: title, id: task.id, kind: task.kind, title: task.title, now: task.now ?? '', state: 'working' as const })),
+  stopAll: (pause: boolean) => stopAll(pause),
+  runWakeNow: (kind: string, id: string) => runWakeNow(kind, id),
+  quietHours: (set?: QuietHours) => (set ? setQuietHours(set) : quietHours()),
   cancelWakeup: (kind: string, id: string) => (kind === 'wake' ? /^\d+$/.test(id) && cancelWakeup(Number(id)) : kind === 'continue' ? cancelContinue(id) : false),
 })
 initMobile(appConfig.env, mobileDeps())
 // Wake-ups and automatic continues, for the window's list: every pending one, cancel one, and a nudge on any change
 const wakeupsChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('wakeups:changed') }
 onWakeupsChanged(wakeupsChanged)
+// paused wake-ups hold the automatic continues too
+setContinuesPaused(wakeupsPaused)
+// Stop everything (the phone and the window): every working thread and background task; pause: also hold the
+// wake-ups and automatic continues until they are resumed (nothing is dropped; what came due fires once on resume)
+async function stopAll(pause: boolean): Promise<{ threads: number; tasks: number }> {
+  const r = await stopEverything()
+  if (pause) pauseWakeups(true)
+  return r
+}
+// run one wake-up or automatic continue now
+async function runWakeNow(kind: string, id: string): Promise<boolean> {
+  if (kind === 'wake') return /^\d+$/.test(id) && runWakeupNow(Number(id))
+  if (kind === 'continue') return continueNow(id)
+  return false
+}
+handle('hive:stopAll', (_e, pause?: boolean) => stopAll(!!pause))
+handle('wakeups:runNow', (_e, kind: string, id: string) => runWakeNow(String(kind), String(id)))
+handle('wakeups:pause', (_e, on: boolean) => { pauseWakeups(!!on); return wakeupsPaused() })
+handle('quiet:get', () => quietHours())
+handle('quiet:set', (_e, q: unknown) => setQuietHours(q))
 handle('wakeups:list', () => ({
+  paused: wakeupsPaused(),
   wakeups: listWakeups().map((r) => ({ id: r.id, sessionId: r.session_id, title: r.title, wakeAt: r.wake_at, prompt: r.prompt, everyMinutes: r.every_minutes, firedAt: r.fired_at })),
   continues: listContinues(),
 }))

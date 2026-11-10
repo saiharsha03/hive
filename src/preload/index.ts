@@ -94,6 +94,14 @@ contextBridge.exposeInMainWorld('api', {
   // kind 'wake' with the wake-up's id, or 'continue' with the continue's key
   wakeupsList: () => ipcRenderer.invoke('wakeups:list'),
   wakeupsCancel: (kind: 'wake' | 'continue', id: string | number): Promise<boolean> => ipcRenderer.invoke('wakeups:cancel', kind, String(id)),
+  // fire one now (even while paused); pause or resume them all (resume fires what came due meanwhile, once)
+  wakeupsRunNow: (kind: 'wake' | 'continue', id: string | number): Promise<boolean> => ipcRenderer.invoke('wakeups:runNow', kind, String(id)),
+  wakeupsPause: (on: boolean): Promise<boolean> => ipcRenderer.invoke('wakeups:pause', on),
+  // stop every working thread and background task; pause: also hold wake-ups and automatic continues
+  stopAll: (pause?: boolean): Promise<{ threads: number; tasks: number }> => ipcRenderer.invoke('hive:stopAll', !!pause),
+  // the quiet hours Hive shares with the phone app
+  quietGet: (): Promise<{ on: boolean; from: string; to: string }> => ipcRenderer.invoke('quiet:get'),
+  quietSet: (q: { on: boolean; from: string; to: string }): Promise<{ on: boolean; from: string; to: string }> => ipcRenderer.invoke('quiet:set', q),
   onWakeupsChanged: (cb: () => void) => {
     const fn = () => cb()
     ipcRenderer.on('wakeups:changed', fn)
