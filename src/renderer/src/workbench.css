@@ -235,3 +235,10 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .full-col .dstack .dsel { width: 100%; max-width: 420px; }
 .full-col .dstack .dtable td.dact { text-align: left; }
 .full-col .dmsg { max-width: 1180px; }
+
+/* ---------- the conversation as a chat: what you said at the right in a bubble, what Claude says at the left ---------- */
+.conv .msg.you { width: fit-content; max-width: min(74%, 780px); margin-left: auto; margin-right: var(--pane-pad); padding: 9px 14px; background: color-mix(in srgb, var(--accent) 26%, var(--raised)); color: var(--hi); border-radius: 12px 12px 2px 12px !important; content-visibility: visible; }
+.conv .msg.you .seen { text-align: right; color: color-mix(in srgb, var(--hi) 55%, transparent); }
+.conv .msg.you .imgs { justify-content: flex-end; }
+.conv .msg.cl { max-width: min(88%, 1000px); margin-right: auto; }
+.conv .msg.cl.from { max-width: min(88%, 1000px); }
