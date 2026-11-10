@@ -234,7 +234,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
       </Row>
       {view?.weekly && <Row label="Weekly use" hint="Adaptive watchers pick their tier from it.">{view.weekly.pct === null ? `unreadable (${view.weekly.error})` : `${Math.round(view.weekly.pct)}%`}</Row>}
       {field('HIVE_WATCHERS_REPORTS_DIR', 'Reports folder', 'Each watcher saves its reports in a folder named after it here. Empty = "Watch reports" in the repos root; a relative path is under the repos root; "-" keeps them inside each watcher folder.', 'Watch reports')}
-      {field('HIVE_WATCHER_POST_SHA256', 'Alert channels', 'Watchers are read-only; they may still POST to these: comma-separated SHA-256 fingerprints of host + path (e.g. of hooks.slack.com/services/... for an alert channel\'s webhook), so the webhook itself is not stored here.', '')}
+      {field('HIVE_WATCHER_POST_SHA256', 'Alert channels', 'Watchers are read-only; they may still POST to these: comma-separated SHA-256 fingerprints of host + path (e.g. of hooks.example.com/alerts/... for a chat webhook), so the webhook itself is not stored here.', '')}
     </>
   )
 
