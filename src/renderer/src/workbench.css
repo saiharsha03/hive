@@ -67,3 +67,28 @@ body.side-drag { cursor: col-resize; user-select: none; }
 .cx-asked { padding: 10px 12px; background: var(--side); border: 1px solid var(--rule); white-space: pre-wrap; }
 .cx-lines { padding: 10px 12px; font: var(--t-code); color: var(--dim); background: var(--side); border: 1px solid var(--rule); white-space: pre-wrap; max-height: 40vh; overflow: auto; margin: 0; }
 .cx-answer { font: var(--t-conv); }
+
+/* ---------- whole-page sections ---------- */
+.full-sec { background: var(--bg); }
+.full-page { padding: 26px 36px 40px; }
+.full-col { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.full-col.wide { max-width: 1280px; }
+.full-col > .page-head { margin-bottom: 8px; }
+.full-col .dtitle { display: none; }
+.full-col .codex-side { padding: 0; }
+.full-col .cx-task { min-height: 120px; }
+.full-col .cx-out { margin-top: 10px; }
+.allow-page .poph { padding: 0 0 10px; display: flex; flex-direction: column; gap: 4px; font-weight: 600; color: var(--hi); }
+.allow-page .poph span { font-weight: 400; color: var(--dim); font-size: 12px; }
+.allow-page .ip-row { padding: 7px 0; grid-template-columns: 130px 160px 1fr; }
+.allow-page .ip-foot { padding: 14px 0; }
+.allow-page .allow-run { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
+.allow-page pre.ar-out { margin: 0; padding: 12px 14px; font: var(--t-code); color: var(--ink); background: var(--side); border: 1px solid var(--rule); white-space: pre-wrap; overflow: auto; max-height: 55vh; user-select: text; }
+
+/* ---------- Files: the explorer's own type (the UI face at 13px, 22px rows), not a code face ---------- */
+.side .side.files { position: static; border: 0; background: none; flex: 1; min-height: 0; width: auto; }
+.side .side.files .frow { font: 400 13px/22px var(--sans); height: 22px; border-radius: 0 !important; color: var(--ink); }
+.side .side.files .frow .chev { width: 16px; text-align: center; font-size: 15px; line-height: 22px; }
+.side .side.files .frow.file .fname { margin-left: 16px; }
+.side .side.files .frow .gletter { font: 400 12px var(--sans); padding-right: 12px; }
+.side .side.files .sidehead { font: 400 11px var(--sans); }

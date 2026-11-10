@@ -1,9 +1,9 @@
 // The window: title bar, rail, tab row and panes, inspector, drawer, status line, and the overlays. Each region
 // reads its own slice of the stores (store.ts), so this component re-renders only when the layout, the open pages
 // or the deploy / scripts rows change, never for a streaming reply.
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { TitleBar, type Command, type PaletteSources } from './TitleBar'
-import { ActivityBar, SideBar, Welcome } from './Workbench'
+import { ActivityBar, FullSections, SideBar, Welcome, isFull, showSide, sideView } from './Workbench'
 import { Panes, TabRow } from './PaneArea'
 import { Inspector } from './Inspector'
 import { StatusLine, runPull } from './StatusLine'
@@ -201,6 +201,16 @@ export function Shell() {
   }
   const empty = <Welcome onPalette={() => setPaletteN((n) => n + 1)} />
   const currentPage = focused?.tool ?? null
+  // a whole-page section (Codex, Environments, Allow IP, Deploy, Notes, To do, Quarry) takes the window: no side bar,
+  // tabs or inspector beside it. A tab that opens or takes the focus meanwhile (a thread from a notification, a diff,
+  // a file) brings the tab area back, under Threads.
+  const section = useStore(sideView, (v) => v)
+  const full = isFull(section) && !layout.focus
+  const lastFocus = useRef(focus)
+  useEffect(() => {
+    if (focus && focus !== lastFocus.current && isFull(sideView.get())) showSide('threads')
+    lastFocus.current = focus
+  }, [focus])
   const showRail = layout.rail && !layout.focus
   // pages take the whole centre; threads, files and a diff keep the inspector. It follows what is on screen, not which
   // pane has the focus, so clicking from one pane into another never moves the layout under the pointer
@@ -210,13 +220,14 @@ export function Shell() {
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
       <TitleBar src={src} paletteN={paletteN} accountsOpen={accountsOpen} setAccountsOpen={setAccountsOpen} />
       <div className={`body${layout.railRight ? ' rail-right' : ''}`}>
-        {!layout.focus && <ActivityBar onAccounts={() => setAccountsOpen(true)} currentPage={currentPage} />}
-        {showRail && <SideBar currentPage={currentPage} deploy={deploy} />}
-        <div className="centre">
+        {!layout.focus && <ActivityBar onAccounts={() => setAccountsOpen(true)} />}
+        {showRail && !full && <SideBar currentPage={currentPage} />}
+        <FullSections deploy={deploy} />
+        <div className="centre" style={full ? { display: 'none' } : undefined}>
           <TabRow />
           <Panes render={render} empty={empty} />
         </div>
-        {showInsp && <Inspector />}
+        {showInsp && !full && <Inspector />}
       </div>
       {layout.drawer && <Drawer />}
       <StatusLine />
