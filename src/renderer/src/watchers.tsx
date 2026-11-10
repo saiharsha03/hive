@@ -1,7 +1,7 @@
 // Where the watchers show outside the Watchers view: the compact title-bar control ("Watchers 3/4", blinking amber when
 // one waits for you), its popover (WatchersToggleList plus "Open Watchers") and the sidebar section rows. All read the
 // same useWatchers store, so a switch flipped in one place shows everywhere.
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useWatchers, type WatcherRow } from './useWatchers'
 import { WatchersToggleList } from './WatchersView'
 import { Icon } from './ui'
@@ -70,9 +70,8 @@ export function WatchersButton({ onClick }: { onClick: (el: HTMLElement) => void
 
 export function WatchersPopover({ onOpen, onOpenAll }: { onOpen: (id: string) => void; onOpenAll: () => void }) {
   const { watchers } = useWatchers()
-  const [, force] = useState(0)
   return (
-    <div className="popbody" data-testid="watchers-popover" onClick={() => force((n) => n + 1)}>
+    <div className="popbody" data-testid="watchers-popover">
       <div className="pop-head"><span>Watchers</span><span className="pop-count">{watchers.filter((w) => w.enabled).length} of {watchers.length} on</span></div>
       <div className="pop-watchers"><WatchersToggleList onPick={onOpen} /></div>
       <div className="pop-foot"><button className="link" onClick={onOpenAll} data-testid="watchers-open-all">Open Watchers</button></div>

@@ -16,6 +16,12 @@ const mins = (ms: number) => (ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Mat
 const every = (ms: number | null) => (ms === null ? 'off' : ms % 86_400_000 === 0 ? `${ms / 86_400_000}d` : ms % 3_600_000 === 0 ? `${ms / 3_600_000}h` : `${Math.round(ms / 60_000)}m`)
 const dotOf = (s: WatcherRow['state']) => (s === 'running' ? 'ldot work' : s === 'failed' ? 'dot bad' : s === 'waiting' ? 'dot warn' : s === 'idle' ? 'dot ok' : 'dot')
 
+// which watcher to show: set from a watcher's name in the sidebar, the title-bar list or Settings, before or while
+// the view is up
+let wantedWatcher: string | null = null
+const watcherPickers = new Set<(id: string) => void>()
+export const pickWatcher = (id: string) => { wantedWatcher = id; watcherPickers.forEach((f) => f(id)) }
+
 export function plan(w: WatcherRow): string {
   const s = w.schedule
   const sweep = s.every === 'adaptive'
@@ -261,8 +267,14 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
 // the list plus the selected watcher's detail, or the New watcher form
 export function WatchersView({ onOpen, onOpenThread, onClose }: Props) {
   const { list, watchers, error, busy, setEnabled, reload } = useWatchers()
-  const [sel, setSel] = useState<string | null>(null)
+  const [sel, setSel] = useState<string | null>(wantedWatcher)
   const [creating, setCreating] = useState(false)
+  useEffect(() => {
+    wantedWatcher = null
+    const pick = (id: string) => { wantedWatcher = null; setCreating(false); setSel(id) }
+    watcherPickers.add(pick)
+    return () => { watcherPickers.delete(pick) }
+  }, [])
   const [note, setNote] = useState('')
   const row = watchers.find((w) => w.id === sel) ?? null
   useEffect(() => { if (!sel && watchers.length && !creating) setSel(watchers[0].id) }, [watchers.length])

@@ -50,7 +50,8 @@ function Row({ label, hint, children, problems = [] }: { label: string; hint?: s
   )
 }
 
-export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; onWatchers?: () => void }) {
+// onWatchers: open the Watchers view, on that watcher when one was clicked
+export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; onWatchers?: (id?: string) => void }) {
   const [view, setView] = useState<SettingsView | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saved, setSaved] = useState('') // JSON of the draft as last loaded / saved, for "unsaved changes"
@@ -192,7 +193,7 @@ export function SettingsPanel({ onClose, onWatchers }: { onClose: () => void; on
         <WatchersToggleList onPick={onWatchers} />
       </Row>
       <Row label="" hint={view?.weekly ? `Weekly usage now: ${view.weekly.pct === null ? `unreadable (${view.weekly.error})` : `${Math.round(view.weekly.pct)}%`}; adaptive watchers pick their tier from it.` : undefined}>
-        {onWatchers && <button className="dbtn" onClick={onWatchers}>Open Watchers</button>}
+        {onWatchers && <button className="dbtn" onClick={() => onWatchers()}>Open Watchers</button>}
       </Row>
     </>
   )
