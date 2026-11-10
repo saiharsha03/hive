@@ -11,12 +11,8 @@ files:
   - out/**
   - package.json
   # native binaries for other platforms and architectures (the build is x64 only)
-  - '!**/node_modules/onnxruntime-node/bin/napi-v*/{darwin,linux}/**'
-  - '!**/node_modules/onnxruntime-node/bin/napi-v*/win32/arm64/**'
   - '!**/node_modules/node-pty/prebuilds/{darwin,linux}-*/**'
   - '!**/node_modules/node-pty/prebuilds/win32-arm64/**'
-  # the node build of transformers bundles the parts of onnxruntime-web it uses
-  - '!**/node_modules/onnxruntime-web/**'
   # Hive runs the user's installed Claude Code (needed for /login anyway), not the SDK's bundled copy
   - '!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**'
   - '!**/*.{pdb,map}'
@@ -24,11 +20,8 @@ files:
 # native modules load from real files, not from inside the asar archive
 asarUnpack:
   - '**/node_modules/node-pty/**'
-  - '**/node_modules/onnxruntime-node/**'
-  - '**/node_modules/sharp/**'
-  - '**/node_modules/@img/**'
 
-# node-pty and onnxruntime-node ship N-API prebuilds that work in Electron as-is
+# node-pty ships N-API prebuilds that work in Electron as-is
 npmRebuild: false
 
 # update feed: GitHub Releases. The build writes latest.yml next to the installer (attach both to the release);
