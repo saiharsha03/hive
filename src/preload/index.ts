@@ -4,6 +4,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 type DeployWatcher = { id: string; state: 'working' | 'waiting'; note: string; stuck: boolean; landed: boolean }
 
 contextBridge.exposeInMainWorld('api', {
+  // HIVE_TEST_MODE=1 (the e2e harness and the screenshot script): the window may take seeded answers (api/next.ts)
+  testMode: process.env.HIVE_TEST_MODE === '1',
   uiLoad: (name: string) => ipcRenderer.sendSync('ui:load', name),
   setTitleBar: (color: string, symbol: string) => ipcRenderer.send('app:titlebar', color, symbol),
   uiSave: (name: string, value: unknown) => ipcRenderer.send('ui:save', name, value),

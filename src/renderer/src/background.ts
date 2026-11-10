@@ -1,6 +1,7 @@
 // Background sessions: pure logic for what a live session is doing (working / waiting for the user) and the sidebar rows built from it.
 import { applyEvent, toolLine, type Session } from './chat'
 import { isWatcherTab } from '../../shared/readOnlyCore'
+import { nowLine } from './conversationCore'
 
 export type LiveState = 'working' | 'waiting' | null
 // kind 'deploy' / 'dev' / 'script' are the Deploy wizard's, Dev stack's and Scripts' items (not Claude sessions)
@@ -42,7 +43,8 @@ export function onSessionEvent(s: Session, ev: any, activeId: string | null, now
 export function activity(s: Session): string {
   const t = [...s.items].reverse().find((i) => i.kind === 'tool' && i.status === 'running')
   if (t?.kind !== 'tool') return 'Working'
-  return Object.values(toolLine(t.name, t.input)).filter(Boolean).join(' ')
+  const { verb, what } = toolLine(t.name, t.input)
+  return nowLine(verb, what, t.input)
 }
 
 // agents: per tab, how many of its subagents / workflows / Codex runs are still running. A thread whose turn ended

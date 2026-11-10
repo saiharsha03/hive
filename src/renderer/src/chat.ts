@@ -3,9 +3,17 @@ import { hookWarning, isContinuation } from '../../shared/summaryCore'
 import { isWatcherTab } from '../../shared/readOnlyCore'
 import { modelLabel } from '../../shared/statusCore'
 import { resultText } from '../../shared/toolOutputCore'
-// tools that open as tabs in the main window, like threads and files
-export type ToolTab = 'git' | 'todos' | 'notes' | 'watchers' | 'scripts' | 'deploy'
-export const TOOL_TABS: ToolTab[] = ['git', 'todos', 'notes', 'scripts', 'deploy', 'watchers']
+import { nowLine } from './conversationCore'
+// pages: each opens as a tab (id "tool:<page>") so it can sit beside a thread; diff is the full diff of a change
+export type ToolTab = 'running' | 'scheduled' | 'deploys' | 'status' | 'watchers' | 'workspace' | 'settings' | 'diff'
+export const TOOL_TABS: ToolTab[] = ['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings', 'diff']
+export const PAGE_LABEL: Record<ToolTab, string> = {
+  running: 'Running', scheduled: 'Scheduled', deploys: 'Deploys', status: 'Status and usage', watchers: 'Watchers and teams',
+  workspace: 'Workspace', settings: 'Settings', diff: 'Diff',
+}
+export const PAGE_KEYS: Partial<Record<ToolTab, string>> = {
+  running: 'Ctrl Shift R', scheduled: 'Ctrl Shift S', deploys: 'Ctrl Shift D', status: 'Ctrl Shift U', settings: 'Ctrl ,',
+}
 
 export type Session = {
   id: string // tab id
@@ -84,7 +92,7 @@ export function workingOn(items: Item[]): string | undefined {
   const t = items.filter((i) => i.kind === 'tool' && i.status === 'running' && i.name !== SHOW && i.name !== CODEX).at(-1)
   if (t?.kind !== 'tool') return undefined
   const { verb, what } = toolLine(t.name, t.input)
-  return `${verb} ${what}`.trim()
+  return nowLine(verb, what, t.input)
 }
 
 const settle = (items: Item[], status: 'done' | 'error'): Item[] =>

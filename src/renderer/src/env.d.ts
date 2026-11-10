@@ -74,6 +74,7 @@ declare const __APP_VERSION__: string
 
 interface Window {
   api: {
+    testMode?: boolean
     uiLoad: (name: 'threads' | 'prefs' | 'restore') => Record<string, unknown>
     uiSave: (name: 'threads' | 'prefs' | 'restore', value: Record<string, unknown>) => void
     setTitleBar: (color: string, symbol: string) => void
