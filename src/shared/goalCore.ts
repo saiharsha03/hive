@@ -15,7 +15,7 @@ export type GoalReply =
   | { kind: 'set'; condition: string }
   | { kind: 'cleared'; condition: string }
   | { kind: 'none' }
-  | { kind: 'active'; condition: string; note?: string }
+  | { kind: 'active'; condition: string; note?: string; full?: string } // full: the text with its last "(...)", which may be the condition's own
 
 // "Goal set: X" / "Goal cleared: X" / "No goal set…" / "Goal active: X (not yet evaluated)"
 export function parseGoalReply(text: string): GoalReply | null {
@@ -26,7 +26,7 @@ export function parseGoalReply(text: string): GoalReply | null {
   if (m) return { kind: 'cleared', condition: m[1].trim() }
   if (/^No goal set\b/.test(t)) return { kind: 'none' }
   m = t.match(/^Goal active:\s*([\s\S]+?)(?:\s+\(([^()]*)\))?$/)
-  if (m) return { kind: 'active', condition: m[1].trim(), note: m[2] }
+  if (m) return { kind: 'active', condition: m[1].trim(), note: m[2], ...(m[2] === undefined ? {} : { full: t.replace(/^Goal active:\s*/, '') }) }
   return null
 }
 
@@ -60,8 +60,10 @@ export function goalReduce(prev: Goal | null, ev: GoalEvent): Goal | null {
     const r = ev.reply
     if (r.kind === 'none' || r.kind === 'cleared') return null
     if (r.kind === 'set') return { condition: r.condition, status: 'active', setAt: ev.now }
-    // "Goal active": still running; keep our own start time when it is the same goal
-    return prev && prev.condition === r.condition ? { ...prev, status: 'active' } : { condition: r.condition, status: 'active', setAt: ev.now }
+    // "Goal active": still running; keep our own start time when it is the same goal. A condition that itself ends
+    // in "(...)" ("tests pass (all of them)") is the same goal too: the reply's last parenthesis is then not a note
+    if (prev && (prev.condition === r.condition || prev.condition === r.full)) return { ...prev, status: 'active' }
+    return { condition: r.condition, status: 'active', setAt: ev.now }
   }
   if (ev.t === 'active_goal') {
     const v = ev.value

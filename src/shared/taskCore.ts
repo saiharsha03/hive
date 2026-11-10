@@ -33,6 +33,7 @@ export type Task = {
   agents: TaskAgent[]
   toolUseId?: string // the tool call that started it
   backgrounded?: boolean // in the background (that tool call returned at once), so its row follows this task's state
+  listed?: boolean // seen in the engine's in-flight list (background_tasks_changed): leaving that list ends it
 }
 
 const STATUS: Record<string, Task['status']> = {
@@ -139,10 +140,16 @@ export function applyTask(tasks: Task[], ev: any, now: number): Task[] {
           durationMs: u.duration_ms ?? t.durationMs,
         }
       })
-    case 'background_tasks_changed':
-      // the in-flight list: add any we missed; finished ones are marked by their own notification
+    case 'background_tasks_changed': {
+      // the in-flight list: add any we missed. A task that was on the list and is no longer on it has ended, even if
+      // its own notification never came (it used to stay "running" until the tab closed, which blocked a rewind);
+      // a notification that does come later still sets the real outcome
+      const inFlight = new Set<string>((ev.tasks ?? []).map((b: any) => b.task_id))
+      const kept = tasks.map((t) => (inFlight.has(t.id) ? (t.listed ? t : { ...t, listed: true })
+        : t.listed && t.status === 'running' ? { ...t, status: 'completed' as const, endedAt: t.endedAt ?? now } : t))
       return (ev.tasks ?? []).reduce((all: Task[], b: any) => (all.some((t) => t.id === b.task_id) ? all
-        : [...all, blank(b.task_id, now, { kind: b.task_type ?? 'task', title: String(b.description ?? b.task_id) })]), tasks)
+        : [...all, blank(b.task_id, now, { kind: b.task_type ?? 'task', title: String(b.description ?? b.task_id), listed: true })]), kept)
+    }
   }
   return tasks
 }
@@ -155,9 +162,6 @@ export function kindLabel(kind: string): string {
   if (/bash|shell/.test(kind)) return 'Shell'
   return kind.replace(/^local_/, '').replace(/_/g, ' ')
 }
-
-// Codex runs stop through Hive; every other task through the SDK's stopTask
-export const canStop = (t: Task) => t.status === 'running'
 
 // The engine reports every shell command as a task, foreground ones too. Worth listing as background work: subagents,
 // workflows and Codex runs always; a shell only while it has been running a while (a quick command is already a row in

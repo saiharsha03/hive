@@ -1,6 +1,7 @@
-// Real Claude turns, kept few and cheap: Haiku, one-word replies. Every session runs in the throwaway workspace.
+// Real Claude turns, kept few and cheap: Haiku at low effort (the run's settings, so background threads too), one-word
+// replies. Every session runs in the throwaway workspace; global-teardown.ts deletes their transcripts afterwards.
 import { expect, test } from '@playwright/test'
-import { close, launch, shot, TAG, type Launched } from './harness'
+import { close, launch, shot, TAG, TEST_GENERAL, type Launched } from './harness'
 import { Hive } from './hive'
 
 test.describe.serial('session', () => {
@@ -12,6 +13,9 @@ test.describe.serial('session', () => {
   test('the app launches', async () => {
     await expect(h.id('top-new')).toBeVisible()
     expect(await l.app.evaluate(({ app }) => app.getPath('userData'))).toContain('hive-e2e')
+    // the run's settings were in place before the app started: every thread defaults to Haiku at low effort
+    const general = await l.page.evaluate(async () => (await (window as any).api.settingsGet()).general)
+    expect(general).toMatchObject({ model: TEST_GENERAL.model, effort: TEST_GENERAL.effort, chrome: false })
     await shot(l.page, 'session-launch')
   })
 
@@ -83,7 +87,7 @@ test.describe.serial('session', () => {
     const last = h.replies().last()
     await last.hover()
     await last.getByTestId('copy-msgcopy').click()
-    const got = await l.page.waitForFunction(() => (window as unknown as { __copied?: Record<string, string> }).__copied).then((x) => x.jsonValue())
+    const got = await l.page.waitForFunction(() => (window as unknown as { __copied?: Record<string, string> }).__copied).then((x) => x.jsonValue()) ?? {}
     expect(got['text/html']).toMatch(/<\w+/)
     expect(got['text/plain'].length).toBeGreaterThan(0)
   })

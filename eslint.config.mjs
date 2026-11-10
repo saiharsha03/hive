@@ -5,11 +5,14 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['out/', 'dist/', 'build/', 'node_modules/', 'test-results/', 'playwright-report/', 'e2e-report/', 'e2e-results/'] },
+  // .claude/ holds agent worktrees (whole stale copies of the repo, each with its own tsconfig); mobile/ and relay/
+  // builds are not this project's TypeScript
+  { ignores: ['out/', 'dist/', 'build/', 'node_modules/', 'test-results/', 'playwright-report/', 'e2e-report/', 'e2e-results/', '.claude/', '**/.claude/', 'mobile/**/build/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.node } },
+    // tsconfigRootDir: this folder is the one TypeScript project, whatever other copies sit below or beside it
+    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.node }, parserOptions: { tsconfigRootDir: import.meta.dirname } },
     rules: {
       // unused args/vars are allowed when prefixed with _ ; caught errors are often deliberately ignored
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],

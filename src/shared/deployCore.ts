@@ -189,7 +189,14 @@ export const HOLD_POLLS = 4 // api: running == desired must hold this many polls
 export const POLL_MS = 30_000
 export const TIMEOUT_MS = 20 * 60_000
 
-export const imageSha = (image: string) => image.split(':').pop() ?? ''
+// the tag of "registry:5000/repo:<tag>"; '' for an image with no tag or one pinned by digest ("repo@sha256:..."),
+// whose digest is not a commit and must never be compared with one
+export const imageSha = (image: string) => {
+  if (image.includes('@')) return ''
+  const name = image.slice(image.lastIndexOf('/') + 1)
+  const at = name.lastIndexOf(':')
+  return at < 0 ? '' : name.slice(at + 1)
+}
 export const sameSha = (a?: string | null, b?: string | null) => !!a && !!b && a.length >= 7 && b.length >= 7 && (a.startsWith(b) || b.startsWith(a))
 
 export type ApiService = { name: string; image: string; rollout: string; deployments: number; desired: number; running: number; tasks: string }
@@ -206,6 +213,9 @@ export function stepApi(sha: string, obs: ApiObs, hold: Hold): { verdict: Verdic
   const failed = sv.find((s) => s.rollout === 'FAILED')
   if (failed) return { verdict: { state: 'failed', note: `ECS rollout FAILED for ${failed.name}` }, hold: { ok: 0, tasks: '' } }
   if (sv.length === 0) return { verdict: { state: 'waiting', note: 'no service data yet' }, hold: { ok: 0, tasks: '' } }
+  // an image with no commit tag can never be matched: say so now instead of waiting out the timeout
+  const untagged = sv.find((s) => s.image && !imageSha(s.image))
+  if (untagged) return { verdict: { state: 'failed', note: `${untagged.name} runs ${untagged.image}, which has no commit tag: cannot tell what is serving` }, hold: { ok: 0, tasks: '' } }
   const healthy = sv.every((s) => sameSha(imageSha(s.image), sha) && s.rollout === 'COMPLETED' && s.deployments === 1 && s.running === s.desired && s.desired > 0)
   if (!healthy) {
     const old = sv.filter((s) => !sameSha(imageSha(s.image), sha)).length
@@ -237,7 +247,6 @@ export function decide(v: Verdict, elapsedMs: number, timeoutMs = TIMEOUT_MS): O
 
 // ---------- check status ----------
 
-export type Served = { sha?: string; note?: string }
 export type StatusCell = { served?: string; head: string; behind: number | null; verdict: 'current' | 'behind' | 'unknown'; note?: string }
 
 export function cell(served: string | undefined, head: string, behind: number | null, note?: string): StatusCell {

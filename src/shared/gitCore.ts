@@ -107,9 +107,10 @@ export function pushArgs(s: Pick<Status, 'branch' | 'upstream'>): string[] {
   return s.upstream ? ['push'] : ['push', '-u', 'origin', s.branch]
 }
 
-// a path from the page: relative, inside the repo, never read as an option
+// a path from the page: relative, inside the repo, never read as an option or as pathspec magic (":/", ":(top)x",
+// ":!x" would reach outside the one file; main also runs git with --literal-pathspecs)
 export const safePath = (p: string) =>
-  !!p && !p.startsWith('-') && !/^([a-zA-Z]:|[\\/])/.test(p) && !p.split(/[\\/]/).includes('..') && !p.includes('\0')
+  !!p && !p.startsWith('-') && !p.startsWith(':') && !/^([a-zA-Z]:|[\\/])/.test(p) && !p.split(/[\\/]/).includes('..') && !p.includes('\0')
 export const safeSha = (s: string) => /^[0-9a-f]{7,40}$/i.test(s)
 
 // unified diff text (`git diff`, `git show`, `git diff --no-index`) -> one entry per file

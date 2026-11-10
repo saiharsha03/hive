@@ -14,9 +14,6 @@ export const rosterOf = (t: Team): Roster => ({
   ],
 })
 
-// the running teams only: an ended team's threads go back to the normal lists
-export const runningRosters = (teams: Team[]): Roster[] => teams.filter((t) => !t.endedAt).map(rosterOf)
-
 // an ended team's people by tab id and session id: their threads sit in the normal lists, still marked with the
 // role icon and word so a team thread is not mistaken for an ordinary one
 export function pastTeamPeople(rosters: Roster[]): Map<string, RosterPerson> {
