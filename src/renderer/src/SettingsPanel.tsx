@@ -67,6 +67,7 @@ function Row({ label, hint, children, problems = [] }: { label: string; hint?: s
 }
 
 // onWatchers: open the Watchers page; onAccounts: open the account switcher; onClose: called after Cancel discards
+const QUIET_TIME = /^([01]?\d|2[0-3]):[0-5]\d$/
 export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: () => void; onWatchers?: (id?: string) => void; onAccounts?: () => void }) {
   const [view, setView] = useState<SettingsView | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -144,8 +145,11 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
       if (!r.ok) { setNotes([]); return }
       const extra: string[] = []
       if (quiet && JSON.stringify(quiet) !== quietSaved) {
-        const q = await quietHoursSet(quiet)
-        if (q.ok) setQuietSaved(JSON.stringify(quiet)); else extra.push(`Quiet hours not saved: ${q.reason}`)
+        if (quiet.on && !(QUIET_TIME.test(quiet.from) && QUIET_TIME.test(quiet.to))) extra.push('Quiet hours not saved: use 24-hour times such as 22:00 and 07:00.')
+        else {
+          const q = await quietHoursSet(quiet)
+          if (q.ok) setQuietSaved(JSON.stringify(quiet)); else extra.push(`Quiet hours not saved: ${q.reason}`)
+        }
       }
       if (clip !== clipOn) setClipboardOn(clip)
       applyGeneral(draft.general)
@@ -449,7 +453,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
     notify: g && (
       <>
         <Row label="Desktop notifications" hint="A Windows notification and a flashing taskbar icon when a thread is waiting for you, asks a question, finishes or fails while Hive is not the focused window."><label className="scheck"><input type="checkbox" data-testid="settings-desktop-notify" checked={g.desktopNotify} onChange={(e) => setGeneral({ desktopNotify: e.target.checked })} /> Notify me on the desktop</label></Row>
-        <Row label="Quiet hours" hint="No desktop or phone ring between the two times, except failures and deploys when kept on below.">
+        <Row label="Quiet hours" hint="No desktop or phone ring between the two times. A failure still rings. Shared with the phone app.">
           {quiet ? (
             <div className="slist">
               <label className="scheck"><input type="checkbox" data-testid="quiet-on" checked={quiet.on} onChange={(e) => setQuiet({ ...quiet, on: e.target.checked })} /> Keep quiet</label>
@@ -457,8 +461,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
                 <span className="dnote">from</span><input className="sin num" data-testid="quiet-from" value={quiet.from} placeholder="22:00" disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, from: e.target.value })} />
                 <span className="dnote">to</span><input className="sin num" data-testid="quiet-to" value={quiet.to} placeholder="07:00" disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, to: e.target.value })} />
               </div>
-              <label className="scheck"><input type="checkbox" checked={quiet.ringFailures} disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, ringFailures: e.target.checked })} /> Still ring for failures</label>
-              <label className="scheck"><input type="checkbox" checked={quiet.ringDeploys} disabled={!quiet.on} onChange={(e) => setQuiet({ ...quiet, ringDeploys: e.target.checked })} /> Still ring for deploys</label>
+              {quiet.on && !(QUIET_TIME.test(quiet.from) && QUIET_TIME.test(quiet.to)) && <div className="derr" data-testid="quiet-bad">Use 24-hour times such as 22:00 and 07:00.</div>}
             </div>
           ) : quietNa ? <Unavailable reason={quietNa} /> : <div className="dnote">Reading</div>}
         </Row>

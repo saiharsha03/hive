@@ -228,7 +228,7 @@ const seed = {
     { id: 'personal', label: 'Personal', email: 'orin@home.example', plan: 'Pro', kind: 'subscription', inUse: false, threads: 1, limits: [{ key: 'five_hour', label: '5-hour', pct: 8, resetsAt: null }, { key: 'seven_day', label: '7-day', pct: 19, resetsAt: null }] },
     { id: 'bot', label: 'Build bot', email: 'API key, build-ci', plan: 'Console, pay as you go', kind: 'console', inUse: false, threads: 0, spend: '$14.20 this month' },
   ],
-  quietHoursGet: { on: true, from: '22:00', to: '07:30', ringFailures: true, ringDeploys: true },
+  quietHoursGet: { on: true, from: '22:00', to: '07:30' },
   chatStatusView: { fallback: {
     live: true, account: { email: 'orin@work.example', organization: 'Work', plan: 'Max 20x', tokenSource: 'subscription', apiProvider: 'firstParty' },
     engine: { installed: true, version: '2.4.12' }, model: 'claude-fable-5-2', effort: 'high', permissionMode: 'auto', sessionId: 's-invoice', cwd: API, transcript: null,

@@ -1,9 +1,10 @@
 // Running: every subagent, shell, monitor and Codex run in every thread, what just happened, and Stop everything.
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Btn, ConfirmBar, Empty, Keys, PageHead, Section, State, dur, clock, taskState } from '../kit'
+import { onWakeupsChanged, wakeupsList } from '../api/next'
 import { useAllStatus } from '../statusStore'
 import { useSessionMetas } from '../store'
-import { activate, send, stopEverything, stopEverythingCount } from '../actions'
+import { activate, resumeEverything, send, stopEverything, stopEverythingCount } from '../actions'
 import { kindLabel, lastOutput, nowNote, nowRows, trail, type RunRow } from './runningCore'
 import { age } from '../kit'
 import type { Task } from '../../../shared/taskCore'
@@ -22,6 +23,12 @@ export function RunningPage() {
   const [asking, setAsking] = useState<string | null>(null) // row key whose message box is open
   const [text, setText] = useState('')
   const [open, setOpen] = useState<string | null>(null) // row key whose log is open
+  const [pause, setPause] = useState(false) // Stop everything also pauses wake-ups and continues
+  const [held, setHeld] = useState(false) // queues held or wake-ups paused by an earlier Stop everything
+  const readHeld = useCallback(() => { void wakeupsList().then((r) => setHeld(r.ok && !!r.data && (!!r.data.paused || (r.data.held ?? 0) > 0))) }, [])
+  useEffect(() => { readHeld(); return onWakeupsChanged(readHeld) }, [readHeld])
+  const stop = () => { void stopEverything(pause).then(readHeld) }
+  const resume = () => { void resumeEverything().then(readHeld) }
 
   const rows = useMemo<RunRow<Task>[]>(() => {
     const title = new Map(metas.map((m) => [m.id, m.title]))
@@ -114,9 +121,18 @@ export function RunningPage() {
 
       <ConfirmBar
         testid="stop-everything-bar"
-        actions={<><Btn kind="danger" onClick={() => void stopEverything()}>Stop everything</Btn><Keys k="Ctrl Alt Esc" /></>}
+        actions={<>
+          {held && <Btn kind="plain" onClick={resume} testid="resume-all">Resume</Btn>}
+          <Btn kind="danger" onClick={stop} testid="stop-everything">Stop everything</Btn>
+          <Keys k="Ctrl Alt Esc" />
+        </>}
       >
-        Stop everything: interrupts {counts.threads} thread{counts.threads === 1 ? '' : 's'}, stops {counts.tasks} task{counts.tasks === 1 ? '' : 's'}, holds every queue. Wake-ups stay scheduled.
+        <span>
+          Stop everything interrupts {counts.threads} thread{counts.threads === 1 ? '' : 's'}, stops {counts.tasks} task{counts.tasks === 1 ? '' : 's'} and holds every queue.{held ? ' Queues are held now; Resume lets them go again.' : ''}
+        </span>
+        <label className="scheck">
+          <input type="checkbox" checked={pause} onChange={(e) => setPause(e.target.checked)} data-testid="stop-pause-wakeups" /> Also pause wake-ups and continues
+        </label>
       </ConfirmBar>
     </div>
   )

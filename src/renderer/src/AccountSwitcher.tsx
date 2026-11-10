@@ -1,10 +1,10 @@
-// The account popover under the title bar: every signed-in account with its plan, 5-hour and 7-day use and thread
-// count, and a switch that takes effect at once. Until main can hold several accounts (accountsList), it shows the
-// one account getStatus() knows and offers the browser sign-in: nothing restarts, threads move to the new login.
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bar, Btn, State, Unavailable } from './kit'
-import { accountAdd, accountsList, accountUse, onAccountsChanged, threadAccount, type Account, type UsageRow } from './api/next'
-import { activeId, notice } from './actions'
+// The account popover under the title bar: the saved accounts with plan and use, a switch that takes effect at once
+// (main: accounts:switch, no browser), Add account (the browser sign-in, saved too) and Remove (forgets a saved login).
+// Nothing restarts: quiet threads move to the new login at once, working ones when their work ends.
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Bar, Btn, ConfirmBar, State, Unavailable } from './kit'
+import { accountsList, accountsRemove, accountsSwitch, onAccountSwitched, onAccountsChanged, type Account, type UsageRow } from './api/next'
+import { notice } from './actions'
 import { useEscape, useFocusTrap } from './ui'
 import { windowOf } from './pages/statusCore'
 import './pages/status.css'
@@ -19,14 +19,14 @@ const fromAccount = (a: Account): Row => ({ id: a.id, name: a.label, email: a.em
 
 async function load(): Promise<{ rows: Row[]; several: boolean }> {
   const r = await accountsList()
-  if (r.ok) return { rows: r.data.map(fromAccount), several: true }
+  if (r.ok && r.data.length) return { rows: r.data.map(fromAccount), several: true }
   const s = await window.api.getStatus().catch(() => null)
   if (!s?.account) return { rows: [], several: false }
   const five = s.five?.pct ?? pick(s.usage, 'five')
   const seven = s.seven?.pct ?? pick(s.usage, 'seven')
   return {
     rows: [{ id: 'current', name: s.account.split('@')[0], email: s.account, plan: s.plan, five: five == null ? null : Math.round(five), seven: seven == null ? null : Math.round(seven), threads: null, inUse: true }],
-    several: false,
+    several: r.ok,
   }
 }
 
@@ -54,10 +54,14 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
   const [flow, setFlow] = useState<'off' | 'ask' | 'signing' | 'done' | 'failed'>('off')
   // after a switch: the new login, and how many threads move when their work ends
   const [moved, setMoved] = useState<{ account: string | null; closed: number; waiting: number } | null>(null)
-  useEffect(() => window.api.onAccountSwitched(setMoved), [])
+  useEffect(() => onAccountSwitched(setMoved), [])
   const [email, setEmail] = useState('')
   const [out, setOut] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [said, setSaid] = useState<{ text: string; bad: boolean; signIn?: string } | null>(null)
+  const [forgetting, setForgetting] = useState<string | null>(null) // row id whose Remove awaits its confirm
   useEscape(() => {
+    if (forgetting) { setForgetting(null); return }
     if (flow === 'signing') void window.api.accountCancel()
     onClose()
   })
@@ -65,30 +69,37 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
 
   const refresh = useCallback(() => void load().then((s) => { setState(s); setSel((i) => (i === 0 ? Math.max(0, s.rows.findIndex((r) => r.inUse)) : i)) }), [])
   useEffect(() => { refresh(); return onAccountsChanged(refresh) }, [refresh])
+  useEffect(() => onAccountSwitched(refresh), [refresh])
   useEffect(() => window.api.onAccountOutput((t) => setOut((o) => o + t)), [])
 
   const rows = state?.rows ?? []
   const several = state?.several ?? false
-  const tab = activeId()
-  const other = rows.find((r) => !r.inUse)
+  const saved = (r: Row) => several && r.id !== 'current'
 
   const switchTo = async (r: Row) => {
-    if (r.inUse || !several) return
-    const res = await accountUse(r.id)
-    if (res.ok) { notice(`Switched to ${r.name}`); onClose() } else notice(`Could not switch: ${res.reason}`)
+    if (r.inUse || !saved(r) || busy) return
+    setBusy(r.id); setSaid(null)
+    const res = await accountsSwitch(r.id)
+    setBusy(null)
+    if (!res.ok) { setSaid({ text: `Could not switch: ${res.reason}`, bad: true }); return }
+    const d = res.data
+    const warn = d.warning ? ` ${d.warning}` : ''
+    if (d.ok) {
+      setSaid({ text: `Switched to ${d.account ?? r.name}${d.waiting ? `; ${d.waiting} thread${d.waiting > 1 ? 's' : ''} move when ${d.waiting > 1 ? 'they finish' : 'it finishes'}` : ''}.${warn}`, bad: false })
+      notice(`New threads use ${r.name}`)
+    } else {
+      setSaid({ text: `${d.error ?? 'The switch did not finish.'}${warn}`, bad: true, ...(d.needsSignIn && r.email ? { signIn: r.email } : {}) })
+    }
   }
-  const move = async () => {
-    if (!tab || !other) return
-    const res = await threadAccount(tab, other.id)
-    notice(res.ok ? `This thread moves to ${other.name}` : `Could not move the thread: ${res.reason}`)
-    if (res.ok) onClose()
-  }
-  const add = async () => {
-    const res = await accountAdd()
-    if (res.ok) refresh(); else notice(`Could not add an account: ${res.reason}`)
+  const forget = async (r: Row) => {
+    setForgetting(null)
+    const res = await accountsRemove(r.id)
+    if (!res.ok) notice(`Could not remove ${r.name}: ${res.reason}`)
+    else if (!res.data) notice(`Could not remove ${r.name}`)
+    else refresh()
   }
   const start = async () => {
-    setFlow('signing'); setOut('')
+    setFlow('signing'); setOut(''); setSaid(null)
     const r = await window.api.accountSwitch(email)
     setOut((o) => o || r.output)
     setFlow(r.ok ? 'done' : 'failed')
@@ -114,57 +125,71 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
         <div className="poph">Accounts <span>Switching is instant. Running threads are not restarted.</span></div>
         {state && rows.length === 0 && <Unavailable reason="No signed-in account was found." />}
         {rows.map((r, i) => (
-          <div
-            key={r.id}
-            className={`acct-row${r.inUse ? ' on' : ''}`}
-            role="option"
-            aria-selected={r.inUse}
-            tabIndex={i === sel ? 0 : -1}
-            onFocus={() => setSel(i)}
-            data-testid="account-row"
-          >
-            <div className="acct-name"><b>{r.name}</b><span>{r.email ?? ''}</span></div>
-            <div className="acct-plan">{r.plan ?? ''}</div>
-            <div className="acct-use">
-              <span>5h</span><span className="acct-bar"><Bar pct={r.five ?? 0} /><em className="acct-pct">{r.five == null ? '' : `${r.five}%`}</em></span>
-              <span>7d</span><span className="acct-bar"><Bar pct={r.seven ?? 0} /><em className="acct-pct">{r.seven == null ? '' : `${r.seven}%`}</em></span>
+          <Fragment key={r.id}>
+            <div
+              className={`acct-row${r.inUse ? ' on' : ''}`}
+              role="option"
+              aria-selected={r.inUse}
+              tabIndex={i === sel ? 0 : -1}
+              onFocus={() => setSel(i)}
+              data-testid="account-row"
+            >
+              <div className="acct-name"><b>{r.name}</b><span>{r.email ?? ''}</span></div>
+              <div className="acct-plan">{r.plan ?? ''}</div>
+              <div className="acct-use">
+                <span>5h</span><span className="acct-bar"><Bar pct={r.five ?? 0} /><em className="acct-pct">{r.five == null ? '' : `${r.five}%`}</em></span>
+                <span>7d</span><span className="acct-bar"><Bar pct={r.seven ?? 0} /><em className="acct-pct">{r.seven == null ? '' : `${r.seven}%`}</em></span>
+              </div>
+              <div className="acct-threads">{r.threads == null ? '' : `${r.threads} thread${r.threads === 1 ? '' : 's'}`}</div>
+              <div className="acct-act">
+                {r.inUse
+                  ? <State word="IN USE" tone="done" />
+                  : saved(r) && <Btn kind="link" disabled={!!busy} onClick={() => void switchTo(r)} testid="account-use">{busy === r.id ? 'Switching' : 'Switch'}</Btn>}
+                {saved(r) && <Btn kind="link" className="x" onClick={() => setForgetting(r.id)} testid="account-remove">Remove</Btn>}
+              </div>
             </div>
-            <div className="acct-threads">{r.threads == null ? '' : `${r.threads} thread${r.threads === 1 ? '' : 's'}`}</div>
-            <div className="acct-act">
-              {r.inUse
-                ? <State word="IN USE" tone="done" />
-                : <button type="button" className="acct-keys" tabIndex={-1} onClick={() => void switchTo(r)} data-testid="account-use">Ctrl+Alt+{i + 1}</button>}
-            </div>
-          </div>
+            {forgetting === r.id && (
+              <ConfirmBar
+                testid="account-remove-confirm"
+                actions={<><Btn kind="danger" onClick={() => void forget(r)} testid="account-remove-yes">Remove</Btn><Btn kind="plain" onClick={() => setForgetting(null)} testid="account-remove-no">Keep it</Btn></>}
+              >
+                Forget the saved login for {r.email ?? r.name}? The account itself is not touched; you can add it again by signing in.
+              </ConfirmBar>
+            )}
+          </Fragment>
         ))}
 
-        {state && !several && (
-          <div className="acct-old">
-            <div className="acct-dim">Several signed-in accounts need the main-process update. Until then, switching signs in again in the browser; nothing restarts, and every thread moves to the new login (a working one when its work ends).</div>
-            {flow === 'off' && <Btn kind="plain" onClick={() => setFlow('ask')} testid="account-switch-old">Switch account</Btn>}
-            {flow === 'ask' && (
-              <div className="acct-flow">
-                <input className="uline" autoFocus value={email} placeholder="Email to pre-fill (optional)" aria-label="Email" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void start() }} data-testid="account-email" />
-                <Btn kind="primary" onClick={() => void start()}>Sign in</Btn>
-              </div>
-            )}
-            {flow !== 'off' && flow !== 'ask' && (
-              <>
-                <pre className="log acct-log" data-testid="account-log">{out || (flow === 'signing' ? 'Finish signing in in the browser.' : '')}</pre>
-                <div className="acct-flow">
-                  {flow === 'signing' && <Btn kind="plain" onClick={cancel} testid="account-cancel">Cancel</Btn>}
-                  {flow === 'done' && <span className="acct-dim" data-testid="account-done">{moved ? `Switched to ${moved.account ?? 'the new account'}${moved.waiting ? `; ${moved.waiting} thread${moved.waiting > 1 ? 's' : ''} move when ${moved.waiting > 1 ? 'they finish' : 'it finishes'}` : ''}.` : 'Signed in. Moving the threads to the new login.'}</span>}
-                  {flow === 'failed' && <span className="acct-dim">The sign-in did not finish; nothing changed.</span>}
-                </div>
-              </>
-            )}
+        {said && (
+          <div className={said.bad ? 'derr' : 'acct-dim'} data-testid="account-said">
+            {said.text}
+            {said.signIn && <> <Btn kind="link" onClick={() => { setEmail(said.signIn!); setSaid(null); setFlow('ask') }}>Sign in to {said.signIn} in the browser</Btn></>}
           </div>
         )}
 
+        <div className="acct-old">
+          {flow === 'ask' && (
+            <div className="acct-flow">
+              <input className="uline" autoFocus value={email} placeholder="Email to pre-fill (optional)" aria-label="Email" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void start() }} data-testid="account-email" />
+              <Btn kind="primary" onClick={() => void start()} testid="account-signin">Sign in</Btn>
+              <Btn kind="plain" onClick={() => setFlow('off')}>Cancel</Btn>
+            </div>
+          )}
+          {flow !== 'off' && flow !== 'ask' && (
+            <>
+              <pre className="log acct-log" data-testid="account-log">{out || (flow === 'signing' ? 'Finish signing in in the browser.' : '')}</pre>
+              <div className="acct-flow">
+                {flow === 'signing' && <Btn kind="plain" onClick={cancel} testid="account-cancel">Cancel</Btn>}
+                {flow === 'done' && <span className="acct-dim" data-testid="account-done">{moved ? `Switched to ${moved.account ?? 'the new account'}${moved.waiting ? `; ${moved.waiting} thread${moved.waiting > 1 ? 's' : ''} move when ${moved.waiting > 1 ? 'they finish' : 'it finishes'}` : ''}.` : 'Signed in. Moving the threads to the new login.'}</span>}
+                {flow === 'failed' && <span className="acct-dim">The sign-in did not finish; nothing changed.</span>}
+                {(flow === 'done' || flow === 'failed') && <Btn kind="plain" onClick={() => setFlow('off')}>Close</Btn>}
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="acct-foot">
-          <span>New threads use the account in use. A running thread keeps its account until you move it.</span>
-          {several && <Btn kind="quiet" onClick={() => void add()} testid="account-add">Add account</Btn>}
-          {several && tab && other && <Btn kind="quiet" onClick={() => void move()} testid="account-move">Move this thread to {other.name}</Btn>}
+          <span data-testid="account-warning">New threads use the account in use. A running thread keeps its account until its work ends. Other Claude sessions (a terminal or an IDE) keep the old login until restarted and may write it back; close them for a clean switch.</span>
+          {flow === 'off' && <Btn kind="quiet" onClick={() => setFlow('ask')} testid="account-add">Add account</Btn>}
         </div>
       </div>
     </div>

@@ -106,7 +106,7 @@ export function ScheduledPage() {
                 <tr key={r.key} data-testid="sch-row">
                   <td className="big sch-when">{r.every ?? (r.at ? bigTime(r.at, now) : 'soon')}</td>
                   <td className="sch-rel">{r.rel}</td>
-                  <td><span className="kind-word">{r.kind}</span></td>
+                  <td><span className="kind-word">{r.kind.toLowerCase()}</span></td>
                   <td>{r.thread}</td>
                   <td className="sch-what">{r.what}</td>
                   <td className="sch-rel">{r.repeats}</td>
@@ -132,7 +132,7 @@ export function ScheduledPage() {
                 <tr key={w.id}>
                   <td className="strong">{w.name}</td>
                   <td className="sch-rel">{w.goal}</td>
-                  <td><span className="kind-word">WATCHER</span></td>
+                  <td><span className="kind-word">watcher</span></td>
                   <td className="acts">
                     <Btn kind="link" onClick={() => void window.api.watcherEnable(w.id, true)}>Resume</Btn>
                     <Btn kind="link" onClick={() => { openPage('watchers'); pickWatcher(w.id) }}>Edit</Btn>

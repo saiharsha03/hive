@@ -11,7 +11,7 @@ import { fileOfTab, fileTabId, openInEditor, releaseFile } from './EditorView'
 import { forgetStatus, getAllStatus } from './statusStore'
 import { forgetSent } from './RunPanels'
 import type { DiffSpec } from './DiffPanel'
-import { stopEverythingMain } from './api/next'
+import { resumeEverything as resumeEverythingMain, stopEverythingMain } from './api/next'
 import { getAppearance, setLayout } from './appearance'
 
 // ---- where new threads start: the workspace root, else the home folder ----
@@ -311,9 +311,10 @@ export const talkAbout = (t: Todo) => threadWithDraft(t.text, `Let's talk about 
 export const diagnose = (prompt: string, cwd: string) => threadWithDraft('Diagnose deploy', prompt, cwd)
 
 // ---- Stop everything: every turn stopped, every background task stopped; queues are held, wake-ups stay ----
-export async function stopEverything(): Promise<{ threads: number; tasks: number }> {
-  const viaMain = await stopEverythingMain()
-  if (viaMain.ok) { notice(`Stopped ${viaMain.data.threads} threads and ${viaMain.data.tasks} tasks. Wake-ups stay scheduled.`); return viaMain.data }
+// pause: also hold the wake-ups and automatic continues until Resume
+export async function stopEverything(pause = false): Promise<{ threads: number; tasks: number }> {
+  const viaMain = await stopEverythingMain(pause)
+  if (viaMain.ok) { notice(`Stopped ${viaMain.data.threads} thread${viaMain.data.threads === 1 ? '' : 's'} and ${viaMain.data.tasks} task${viaMain.data.tasks === 1 ? '' : 's'}. ${pause ? 'Wake-ups and continues are paused.' : 'Wake-ups stay scheduled.'}`); return viaMain.data }
   const busy = getSessions().filter((s) => s.busy && !s.tool && !s.file)
   const tasks = [...getAllStatus()].flatMap(([tab, st]) => st.tasks.filter((t) => t.status === 'running').map((t) => ({ tab, id: t.id })))
   await Promise.all([
@@ -322,6 +323,12 @@ export async function stopEverything(): Promise<{ threads: number; tasks: number
   ])
   notice(`Stopped ${busy.length} thread${busy.length === 1 ? '' : 's'} and ${tasks.length} task${tasks.length === 1 ? '' : 's'}. Wake-ups stay scheduled.`)
   return { threads: busy.length, tasks: tasks.length }
+}
+// Resume: the held queues go again and paused wake-ups are resumed
+export async function resumeEverything(): Promise<boolean> {
+  const r = await resumeEverythingMain()
+  notice(r.ok ? 'Resumed. Held queues go again.' : `Could not resume: ${r.reason}`)
+  return r.ok
 }
 // what Stop everything would stop, for its confirm line
 export function stopEverythingCount(): { threads: number; tasks: number } {

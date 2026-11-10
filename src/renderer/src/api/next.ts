@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 // The main-process calls the new UI needs that are still landing (accounts, live status and usage, the wake-up list,
 // quiet hours, stop everything). Each one feature-detects window.api.<method> and answers { ok: false, reason } when
 // main does not have it yet, so every page draws before and after the main-process work lands. When a method lands
@@ -11,13 +13,15 @@ const api = (): Record<string, unknown> => (window as unknown as { api?: Record<
 // (an object with byArg answers by the first argument, with fallback for the rest)
 const seeded = (name: string): unknown => (window.api?.testMode ? (window as unknown as { __hiveSeed?: Record<string, unknown> }).__hiveSeed?.[name] : undefined)
 export const hasApi = (name: string): boolean => typeof api()[name] === 'function' || seeded(name) !== undefined
-async function call<T>(name: string, ...args: unknown[]): Promise<Avail<T>> {
+// `name` is the seed key (what scripts/ui-shots.mjs seeds); `real` is the preload method when it is named differently
+async function call<T>(name: string, ...args: unknown[]): Promise<Avail<T>> { return callAs<T>(name, name, ...args) }
+async function callAs<T>(name: string, real: string, ...args: unknown[]): Promise<Avail<T>> {
   const seed = seeded(name) as { byArg?: Record<string, T>; fallback?: T } | T | undefined
   if (seed !== undefined) {
     const s = seed as { byArg?: Record<string, T>; fallback?: T }
     return { ok: true, data: (s && typeof s === 'object' && ('byArg' in s || 'fallback' in s) ? s.byArg?.[String(args[0])] ?? s.fallback : seed) as T }
   }
-  const f = api()[name]
+  const f = api()[real]
   if (typeof f !== 'function') return { ok: false, reason: NOT_YET }
   try {
     return { ok: true, data: (await (f as (...a: unknown[]) => Promise<T>)(...args)) }
@@ -64,38 +68,71 @@ export const statusView = (tabId: string, known?: { cwd?: string; sessionId?: st
 // ---- wake-ups and automatic continues (main: wakeups:list / wakeups:cancel / wakeups:changed) ----
 export type WakeRow = { id: number; sessionId: string; title: string; wakeAt: string; prompt: string; everyMinutes: number | null; firedAt: string | null }
 export type ContinueRow = { key: string; tabId: string; title: string; at: number }
-export type Wakeups = { wakeups: WakeRow[]; continues: ContinueRow[] }
+export type Wakeups = { wakeups: WakeRow[]; continues: ContinueRow[]; paused?: boolean; held?: number }
 export const wakeupsList = () => call<Wakeups>('wakeupsList')
 export const wakeupsCancel = (kind: 'wake' | 'continue', id: string | number) => call<boolean>('wakeupsCancel', kind, id)
-// expected: fire one now (a wake-up's prompt into its thread, or a continue at once)
+// fire one now (a wake-up's prompt into its thread, or a continue at once)
 export const wakeupsRunNow = (kind: 'wake' | 'continue', id: string | number) => call<boolean>('wakeupsRunNow', kind, id)
 export const onWakeupsChanged = (cb: () => void) => listen('onWakeupsChanged', cb)
 
-// ---- accounts: several signed-in accounts, switched at once (expected: accounts:list / accounts:use / ...) ----
+// ---- accounts: the saved logins, switched without a restart (main: accounts:list / accounts:switch / accounts:remove) ----
 export type Account = {
   id: string
-  label: string // "Work", "Personal"
-  email: string | null // or the API key's name
-  plan: string | null // "Max 20x", "Pro", "Console, pay as you go"
+  label: string // the name before the @, or the seed's "Work"
+  email: string | null
+  plan: string | null // "Max 20x", "Pro"
+  organization?: string | null
   kind: 'subscription' | 'console'
   inUse: boolean
-  limits?: UsageRow[] // 5-hour and weekly use, when the plan has them
-  spend?: string | null // a console account's spend this month
-  threads?: number // threads running on it now
+  limits?: UsageRow[] // 5-hour and weekly use, when known
+  spend?: string | null
+  threads?: number
 }
-export const accountsList = () => call<Account[]>('accountsList')
-export const accountUse = (id: string) => call<boolean>('accountUse', id)
-export const accountAdd = () => call<boolean>('accountAdd')
-export const threadAccount = (tabId: string, accountId: string) => call<boolean>('threadSetAccount', tabId, accountId)
+type SavedAccount = { id: string; email: string; organization: string | null; plan: string | null; active: boolean }
+const toAccount = (a: Account | SavedAccount): Account =>
+  'inUse' in a ? a : { id: a.id, label: a.email.split('@')[0] || a.email, email: a.email, plan: a.plan, organization: a.organization, kind: 'subscription', inUse: a.active }
+export const accountsList = async (): Promise<Avail<Account[]>> => {
+  const r = await call<(Account | SavedAccount)[]>('accountsList')
+  return r.ok ? { ok: true, data: r.data.map(toAccount) } : r
+}
+export type SwitchResult = { ok: boolean; account: string | null; closed: number; waiting: number; warning?: string; needsSignIn?: boolean; error?: string }
+export const accountsSwitch = (id: string) => callAs<SwitchResult>('accountsSwitch', 'accountsSwitch', id)
+// the old adapter name: true when the switch finished
+export const accountUse = async (id: string): Promise<Avail<boolean>> => {
+  const r = await accountsSwitch(id)
+  if (!r.ok) return r
+  return r.data.ok ? { ok: true, data: true } : { ok: false, reason: r.data.error ?? 'The switch did not finish.' }
+}
+export const accountsRemove = (id: string) => call<boolean>('accountsRemove', id)
 export const onAccountsChanged = (cb: () => void) => listen('onAccountsChanged', cb)
+export const onAccountSwitched = (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => listen('onAccountSwitched', cb)
 
-// ---- quiet hours: no desktop or phone ring between two times, except failures and deploys ----
-export type QuietHours = { on: boolean; from: string; to: string; ringFailures: boolean; ringDeploys: boolean }
-export const quietHoursGet = () => call<QuietHours>('quietHoursGet')
-export const quietHoursSet = (q: QuietHours) => call<boolean>('quietHoursSet', q)
+// ---- quiet hours: no desktop or phone ring between two times; a failure still rings (main: quiet:get / quiet:set) ----
+export type QuietHours = { on: boolean; from: string; to: string }
+export const quietHoursGet = () => callAs<QuietHours>('quietHoursGet', 'quietGet')
+const quietListeners = new Set<(q: QuietHours) => void>()
+export const quietHoursSet = async (q: QuietHours): Promise<Avail<QuietHours>> => {
+  const r = await callAs<QuietHours>('quietHoursSet', 'quietSet', { on: q.on, from: q.from, to: q.to })
+  if (r.ok) { const now = r.data && typeof r.data === 'object' ? r.data : q; for (const f of quietListeners) f(now) }
+  return r
+}
+// for the status line: null until read; refreshed after Settings saves
+export function useQuietHours(): QuietHours | null {
+  const [q, setQ] = useState<QuietHours | null>(null)
+  useEffect(() => {
+    let live = true
+    void quietHoursGet().then((r) => { if (live && r.ok && r.data) setQ({ on: !!r.data.on, from: r.data.from, to: r.data.to }) })
+    const f = (n: QuietHours) => setQ({ on: !!n.on, from: n.from, to: n.to })
+    quietListeners.add(f)
+    return () => { live = false; quietListeners.delete(f) }
+  }, [])
+  return q
+}
 
-// ---- stop everything: every turn interrupted, every task stopped, every queue held; wake-ups stay ----
-export const stopEverythingMain = () => call<{ threads: number; tasks: number }>('stopEverything')
+// ---- stop everything: every turn interrupted, every task stopped, every queue held (main: hive:stopAll / hive:resumeAll) ----
+export const stopEverythingMain = (pause?: boolean) => callAs<{ threads: number; tasks: number }>('stopEverything', 'stopAll', !!pause)
+export const resumeEverything = () => callAs<{ queues: number; wakeups: boolean }>('resumeAll', 'resumeAll')
+export const wakeupsPause = (on: boolean) => call<boolean>('wakeupsPause', on)
 
 
 // ---- the engine's slash commands for the composer and the palette (exists: chat:commands) ----
