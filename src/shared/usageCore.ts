@@ -1,11 +1,14 @@
 // A placeholder usage answer (what an idle process, or a rate-limited usage endpoint, gives): 5 h at 0 with no reset
 // time. It is not a reading, so it never replaces a real one (the status bar sat at 0% while the session was at 37%).
 // A plan without a 5-hour window (some personal plans) is a reading when a weekly window has a reset time (the
-// placeholder never has one); before this the meters hid for good on such a plan.
+// placeholder never has one); before this the meters hid for good on such a plan. The same holds when the 5-hour
+// window is there but idle: the weekly number in that answer is real (adaptive watchers read it).
 const WEEKS = ['seven_day', 'seven_day_sonnet', 'seven_day_opus']
 export const realLimits = (l: any): boolean => {
   if (!l) return false
-  if (l.five_hour) return !(l.five_hour.utilization === 0 && !l.five_hour.resets_at)
+  if (l.five_hour && !(l.five_hour.utilization === 0 && !l.five_hour.resets_at)) return true
+  // no 5-hour window, or an idle one (0 with no reset time, which a real answer also gives between sessions): a
+  // weekly window with a reset time still makes it a reading
   return WEEKS.some((k) => typeof l[k]?.utilization === 'number' && !!l[k].resets_at)
 }
 
