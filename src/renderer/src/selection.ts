@@ -7,7 +7,7 @@ export function visibleOrder<T extends { id: string }>(sections: Section<T>[], o
 }
 
 // the ids from `from` to `to` inclusive, in either direction; just `to` if `from` isn't on screen
-export function rangeIds(order: string[], from: string | null, to: string): string[] {
+function rangeIds(order: string[], from: string | null, to: string): string[] {
   const a = from === null ? -1 : order.indexOf(from)
   const b = order.indexOf(to)
   if (a < 0 || b < 0) return [to]

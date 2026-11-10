@@ -6,14 +6,7 @@ import { useWatchers, type WatcherRow } from './useWatchers'
 import { WatchersToggleList } from './WatchersView'
 import { Icon } from './ui'
 
-const when = (t: number | null) => {
-  if (!t) return '-'
-  const d = new Date(t)
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { weekday: 'short' })} ${time}`
-}
-
-export function stateWord(w: WatcherRow): { word: string; cls: string } {
+function stateWord(w: WatcherRow): { word: string; cls: string } {
   if (w.waiting) return { word: 'WAITING', cls: 's-wait blink' }
   if (w.state === 'running') return { word: 'RUNNING', cls: 's-work' }
   if (w.state === 'failed') return { word: 'FAILED', cls: 's-fail' }
@@ -28,8 +21,8 @@ function Switch({ on, onChange, label, testid, busy }: { on: boolean; onChange: 
   )
 }
 
-// sidebar rows: every watcher with its own switch, state, next run and findings; a click opens its detail
-export function WatcherRows({ onOpen, compact }: { onOpen: (id: string) => void; compact?: boolean }) {
+// sidebar rows: every watcher with its own switch and state; a click opens its detail
+export function WatcherRows({ onOpen }: { onOpen: (id: string) => void }) {
   const { watchers, busy, setEnabled, error } = useWatchers()
   return (
     <div className="watch-list">
@@ -42,7 +35,6 @@ export function WatcherRows({ onOpen, compact }: { onOpen: (id: string) => void;
             <Icon name="eye" className={w.waiting ? 'mk-watch blink' : 'mk-watch'} />
             <span className="watch-name">{w.name}</span>
             <span className={`st ${st.cls}`}>{st.word}</span>
-            {!compact && <span className="watch-meta">{w.enabled ? `next ${when(w.nextRun)}` : ''}{w.findings ? `, ${w.findings} ${w.builtin ? 'reviewed' : 'findings'}` : ''}</span>}
             <Switch on={w.enabled} busy={!!busy[w.id]} label={`${w.name} on or off`} onChange={(v) => void setEnabled(w.id, v)} testid={`watcher-toggle-${w.id}`} />
           </div>
         )

@@ -9,7 +9,7 @@ const ab = (r: { upstream: string | null; ahead: number; behind: number }) =>
   (!r.upstream ? 'no upstream' : !r.ahead && !r.behind ? 'up to date' : [r.ahead && `↑${r.ahead}`, r.behind && `↓${r.behind}`].filter(Boolean).join(' '))
 
 // focus: open this repo's view (from a chat diff's "Open in Git panel"); n changes on every request
-export function GitPanel({ onClose, onDiff, focus }: { onClose?: () => void; onDiff: (s: DiffSpec) => void; focus?: { dir: string; n: number } | null }) {
+export function GitPanel({ onDiff, focus }: { onDiff: (s: DiffSpec) => void; focus?: { dir: string; n: number } | null }) {
   const [rows, setRows] = useState<GitRow[] | null>(null)
   const [listErr, setListErr] = useState('')
   const [sel, setSel] = useState<GitRow | null>(null)
@@ -37,7 +37,6 @@ export function GitPanel({ onClose, onDiff, focus }: { onClose?: () => void; onD
         <span className="dspace" />
         <DiffModeToggle />
         {!sel && <button data-testid="git-button-2" className="dlink" onClick={() => { setRows(null); loadList() }}>Refresh</button>}
-        {onClose && <button className="dlink" aria-label="Close" onClick={onClose} data-testid="tool-close">×</button>}
       </div>
       <div className="dbody">
         {sel ? <RepoDetail key={sel.dir} row={sel} onDiff={onDiff} /> : (

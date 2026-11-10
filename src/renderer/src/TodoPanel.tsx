@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { dueLabel, groupTodos, parseQuickAdd } from '../../shared/todoCore'
 
 // onTalk: start a thread with Claude about this to-do
-type Props = { todos: Todo[]; today: string; error: string; reload: () => void; onClose?: () => void; onTalk?: (t: Todo) => void }
+type Props = { todos: Todo[]; today: string; error: string; reload: () => void; onTalk?: (t: Todo) => void }
 const STATUSES: { s: TodoStatus; label: string }[] = [{ s: 'todo', label: 'To do' }, { s: 'talk', label: 'Talk' }, { s: 'holding', label: 'Hold' }]
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
@@ -26,7 +26,7 @@ function DatePick({ value, onPick, onClear, onCancel }: { value?: string; onPick
   )
 }
 
-export function TodoPanel({ todos, today, error, reload, onClose, onTalk }: Props) {
+export function TodoPanel({ todos, today, error, reload, onTalk }: Props) {
   const [text, setText] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const editingRef = useRef<string | null>(null)
@@ -145,7 +145,6 @@ export function TodoPanel({ todos, today, error, reload, onClose, onTalk }: Prop
         <span className="dtitle"><span className="ph ph-todos">✓</span>To-dos</span>
         <span className="dnote">{open.length} open{late ? `, ${late} overdue` : ''}. Claude and the terminal helper can add here too.</span>
         <span className="dspace" />
-        {onClose && <button className="dlink" aria-label="Close" onClick={onClose} data-testid="tool-close">×</button>}
       </div>
       <div className="dbody">
         <div className="td-add">

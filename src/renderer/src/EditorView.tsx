@@ -11,7 +11,7 @@ import { MdBody } from './MdBody'
 
 type Doc = { model: monaco.editor.ITextModel; savedVersion: number; mtime: number; sync: monaco.IDisposable; viewState: monaco.editor.ICodeEditorViewState | null; dirty: boolean }
 
-export const FILE_TAB = 'file:'
+const FILE_TAB = 'file:'
 export const fileTabId = (path: string) => `${FILE_TAB}${path}`
 export const fileOfTab = (id: string) => (id.startsWith(FILE_TAB) ? id.slice(FILE_TAB.length) : null)
 const base = (p: string) => p.split(/[\\/]/).pop() ?? p

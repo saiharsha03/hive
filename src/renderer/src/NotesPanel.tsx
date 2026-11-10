@@ -12,7 +12,7 @@ const ago = (t: number) => {
   return m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export function NotesPanel({ onClose }: { onClose?: () => void }) {
+export function NotesPanel() {
   const [notes, setNotes] = useState<NoteInfo[]>([])
   const [query, setQuery] = useState('')
   const [sel, setSel] = useState<string | null>(null)
@@ -91,7 +91,6 @@ export function NotesPanel({ onClose }: { onClose?: () => void }) {
         <span className="dnote">{notes.length} note{notes.length === 1 ? '' : 's'}, saved as markdown in ~/.claude/hive/notes</span>
         <span className="dspace" />
         <button className="dlink" onClick={create} data-testid="notes-new">New note</button>
-        {onClose && <button className="dlink" aria-label="Close" onClick={onClose} data-testid="tool-close">×</button>}
       </div>
       {error && <div className="derr" data-testid="notes-error">{error}</div>}
       <div className="nt-body">

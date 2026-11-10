@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { elapsed, type ScriptRun, type ScriptView } from '../../shared/scriptsCore'
 
-type Props = { runs: ScriptRun[]; onClose?: () => void; onOpen: (path: string) => void }
+type Props = { runs: ScriptRun[]; onOpen: (path: string) => void }
 type Cfg = { scripts: ScriptView[]; message: string; path: string }
 
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
@@ -55,7 +55,7 @@ function Card({ s, run, onOpen }: { s: ScriptView; run?: ScriptRun; onOpen: (pat
 }
 
 // Scripts: one card per entry in the local scripts.json; each button runs a plain command, no Claude
-export function ScriptsPanel({ runs, onClose, onOpen }: Props) {
+export function ScriptsPanel({ runs, onOpen }: Props) {
   const [cfg, setCfg] = useState<Cfg | null>(null)
   const [err, setErr] = useState('')
   const reload = () => { setErr(''); window.api.scriptsConfig().then(setCfg).catch((e) => setErr(clean(e))) }
@@ -67,7 +67,6 @@ export function ScriptsPanel({ runs, onClose, onOpen }: Props) {
         <span className="dnote">Runs a command from scripts.json in its folder and shows the output. The last 400 lines show here; the log has all of it.</span>
         <span className="dspace" />
         <button data-testid="scripts-button-4" className="dlink" onClick={reload}>Reload</button>
-        {onClose && <button className="dlink" aria-label="Close" onClick={onClose} data-testid="tool-close">×</button>}
       </div>
       <div className="dbody">
         {cfg?.message && <div className="derr">{cfg.message}</div>}

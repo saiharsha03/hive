@@ -7,9 +7,6 @@ type Props = {
   w: Wizard
   out: string
   act: (a: Action) => void
-  collapsed?: boolean
-  onCollapse?: () => void
-  onClose?: () => void
   onDiagnose: (prompt: string, cwd: string) => void
 }
 
@@ -90,7 +87,7 @@ function Steps({ w }: { w: Wizard }) {
   )
 }
 
-export function DeployPanel({ cfg, w, out, act, collapsed, onCollapse, onClose, onDiagnose }: Props) {
+export function DeployPanel({ cfg, w, out, act, onDiagnose }: Props) {
   const dc = cfg?.config ?? null
   const [tab, setTab] = useState<'deploy' | 'status'>('deploy')
   const pre = useRef<HTMLPreElement>(null)
@@ -110,12 +107,10 @@ export function DeployPanel({ cfg, w, out, act, collapsed, onCollapse, onClose, 
         </div>
         <span className="dspace" />
         {w.phase !== 'pick' && w.phase !== 'done' && w.phase !== 'stopped' && <button data-testid="deploy-button-4" className="dlink" onClick={() => act({ t: 'stop' })} disabled={wizardBusy(w)}>Stop</button>}
-        {onCollapse && <button data-testid="deploy-button-5" className="dlink" onClick={onCollapse}>{collapsed ? 'Expand' : 'Collapse'}</button>}
-        {onClose && <button className="dlink" aria-label="Close" onClick={onClose} data-testid="tool-close">×</button>}
       </div>
-      {!collapsed && cfg && !dc && <div data-testid="deploy-config-error" className="dbody"><div className="derr">{cfg.message}</div></div>}
-      {!collapsed && dc && tab === 'status' && <Status cfg={dc} />}
-      {!collapsed && dc && tab === 'deploy' && (
+      {cfg && !dc && <div data-testid="deploy-config-error" className="dbody"><div className="derr">{cfg.message}</div></div>}
+      {dc && tab === 'status' && <Status cfg={dc} />}
+      {dc && tab === 'deploy' && (
         <div className="dbody">
           {w.phase === 'pick' && (
             <div>

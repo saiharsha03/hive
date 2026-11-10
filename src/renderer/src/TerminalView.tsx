@@ -101,7 +101,7 @@ function create(id: string, cwd: string): Entry {
 }
 
 // the selection, or else the last 200 lines of output, as a fenced block for the message box
-export function terminalTextForChat(id: string): string | null {
+function terminalTextForChat(id: string): string | null {
   const e = entries.get(id)
   if (!e) return null
   let text = e.term.hasSelection() ? e.term.getSelection() : ''

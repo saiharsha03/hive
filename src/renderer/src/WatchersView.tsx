@@ -8,7 +8,7 @@ import { reloadWatchers, useWatchers, type WatcherRow } from './useWatchers'
 import { Confirm } from './ui'
 
 export type OpenThread = { tabId: string | null; sessionId: string | null; path: string | null; cwd: string; title: string; at: number }
-type Props = { onOpen: (path: string) => void; onOpenThread: (t: OpenThread) => void; onClose?: () => void }
+type Props = { onOpen: (path: string) => void; onOpenThread: (t: OpenThread) => void }
 
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 const when = (t: number | null | undefined) => (t ? new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-')
@@ -265,7 +265,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
 }
 
 // the list plus the selected watcher's detail, or the New watcher form
-export function WatchersView({ onOpen, onOpenThread, onClose }: Props) {
+export function WatchersView({ onOpen, onOpenThread }: Props) {
   const { list, watchers, error, busy, setEnabled, reload } = useWatchers()
   const [sel, setSel] = useState<string | null>(wantedWatcher)
   const [creating, setCreating] = useState(false)
@@ -287,7 +287,6 @@ export function WatchersView({ onOpen, onOpenThread, onClose }: Props) {
         <span className="dspace" />
         <button data-testid="watcher-new" className="dlink" onClick={() => { setCreating(true); setSel(null) }}>New watcher</button>
         <button data-testid="watchers-reload" className="dlink" onClick={() => void reload()}>Reload</button>
-        {onClose && <button className="dlink" aria-label="Close" onClick={onClose}>×</button>}
       </div>
       <div className="wsplit">
         <div className="wlist">

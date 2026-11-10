@@ -71,7 +71,7 @@ async function act(id: string, fn: () => Promise<string | unknown>): Promise<str
 }
 
 export const setWatcherEnabled = (id: string, on: boolean) => act(id, () => window.api.watcherEnable(id, on))
-export const runWatcher = (id: string, kind: 'sweep' | 'daily' | 'weekly' = 'sweep') => act(id, () => window.api.watcherRun(id, kind))
+const runWatcher = (id: string, kind: 'sweep' | 'daily' | 'weekly' = 'sweep') => act(id, () => window.api.watcherRun(id, kind))
 
 export function useWatchers() {
   const s = useSyncExternalStore(subscribe, () => snap)

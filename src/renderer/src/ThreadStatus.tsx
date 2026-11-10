@@ -24,7 +24,7 @@ const ago = (ms: number) => untilText(ms).replace(/ 0s$/, '')
 const k = (n?: number) => (n == null ? '' : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M tok` : n >= 1000 ? `${Math.round(n / 1000)}k tok` : `${n} tok`)
 const dur = (ms?: number) => (ms == null ? '' : ms < 1000 ? `${ms}ms` : untilText(ms))
 
-export const kindIcon = (kind: string) => (kind === 'codex' ? 'hubot' : kind.includes('workflow') ? 'type-hierarchy' : kind.includes('bash') ? 'terminal' : 'person')
+const kindIcon = (kind: string) => (kind === 'codex' ? 'hubot' : kind.includes('workflow') ? 'type-hierarchy' : kind.includes('bash') ? 'terminal' : 'person')
 const stateIcon = (s: string) => (s === 'running' || s === 'start' ? 'loading spin s-work' : s === 'failed' ? 'error s-fail' : s === 'done' || s === 'completed' ? 'pass-filled s-done' : 'circle-large-outline s-idle')
 
 export function TaskRow({ t, tabId, open: startOpen = false }: { t: Task; tabId: string; open?: boolean }) {

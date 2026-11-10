@@ -172,7 +172,7 @@ export function App() {
   // the tabs on screen (each pane's active one): only their replies are drawn as they stream
   const shownKey = panes.panes.map((p) => p.active ?? '').join(' ')
   shownTabs.current = new Set(shownKey.split(' ').filter(Boolean))
-  useEffect(() => { flushDeltas((t) => shownTabs.current.has(t)) }, [shownKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { flushDeltas((t) => shownTabs.current.has(t)) }, [shownKey])
   const visibleNow = () => sessionsRef.current.filter((s) => !s.background).map((s) => s.id)
 
   // ---- opening views wherever this UI keeps them ----
@@ -918,7 +918,7 @@ export function App() {
 
   const watchersTools = (
     <Fold id="watchers" title="Watchers" icon={<Icon name="eye" className="mk-watch" />} count={`${wc.on}/${wc.total} on`} testid="sidebar-watchers">
-      <WatcherRows compact onOpen={(id) => { pickWatcher(id); showView('watchers') }} />
+      <WatcherRows onOpen={(id) => { pickWatcher(id); showView('watchers') }} />
     </Fold>
   )
 

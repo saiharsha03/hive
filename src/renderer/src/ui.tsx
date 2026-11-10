@@ -30,7 +30,7 @@ export function useEscape(onEscape: EscHandler, on = true) {
 }
 
 // close on a click outside `ref` (and outside any other open popover or menu) or on Escape
-export function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
+function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
   const close = useRef(onClose)
   close.current = onClose
   useEscape(() => close.current())
@@ -77,7 +77,8 @@ export function useFocusTrap(ref: React.RefObject<HTMLElement | null>) {
     if (!box) return
     const before = document.activeElement as HTMLElement | null
     const items = () => [...box.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null)
-    if (!box.contains(document.activeElement)) (items()[0] ?? box).focus()
+    // the dialog itself takes the focus (not its first button, which Enter would press) unless a field inside asked for it
+    if (!box.contains(document.activeElement)) box.focus()
     const key = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
       const all = items()
