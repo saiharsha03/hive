@@ -1,27 +1,26 @@
-/* Running and Scheduled pages. Only run- and sch- classes; tokens only. */
+/* Running and Scheduled pages. Only run- and sch- classes; tokens only. No rules between rows. */
 .run-thread { color: var(--dim); max-width: 180px; }
 .run-what { color: var(--hi); max-width: 280px; }
 .run-for { white-space: nowrap; }
 .run-ask { display: flex; gap: 12px; align-items: baseline; padding: 6px 0 2px; }
 .run-ask .uline { flex: 1; min-width: 0; }
-.run-ask-to { color: var(--dim); font-size: 12px; white-space: nowrap; }
+.run-ask-to { color: var(--faint); font-size: 12px; white-space: nowrap; }
 .run-logrow td { padding-top: 0; }
 .run-trail { margin: 0; padding: 0; list-style: none; }
-.run-tr { display: grid; grid-template-columns: 52px 80px minmax(200px, 380px) 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 12.5px; align-items: baseline; }
-.run-tr-t { color: var(--dim); font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }
+.run-tr { display: grid; grid-template-columns: 52px 80px minmax(200px, 380px) 1fr; gap: 10px; padding: 5px 0; font-size: 12.5px; align-items: baseline; }
+.run-tr-t { color: var(--faint); font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }
 .run-tr-d { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run-tr-w { color: var(--hi); }
 
-.sch-strip { position: relative; height: 104px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin: 12px 0 4px; overflow: hidden; }
-.sch-hr { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--rule); font: 10.5px var(--mono); color: var(--faint); padding: 3px 4px; }
-.sch-now { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--mark); }
-.sch-now span { position: absolute; top: -1px; left: 4px; font: 700 10.5px var(--mono); color: var(--mark); background: var(--bg, transparent); }
-.sch-ev { position: absolute; height: 22px; border-left: 2px solid var(--hi); padding-left: 5px; font-size: 11px; line-height: 22px; color: var(--hi); white-space: nowrap; background: none; border-top: 0; border-right: 0; border-bottom: 0; cursor: default; }
-.sch-ev.k-loop { border-left-color: var(--work); color: var(--work); }
-.sch-ev.k-continue { border-left-color: var(--hold); color: var(--hold); }
-.sch-ev.k-watcher { border-left-color: var(--ink); color: var(--ink); }
-.sch-band { position: absolute; height: 3px; background: var(--work); opacity: .6; }
+/* the day strip: a lifted band, the hour marks as faint text, "now" in the main text colour */
+.sch-strip { position: relative; height: 104px; background: var(--raised); margin: 12px 0 8px; overflow: hidden; }
+.sch-hr { position: absolute; top: 0; bottom: 0; font: 11px var(--mono); color: var(--faint); padding: 5px 6px; }
+.sch-now { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--hi); }
+.sch-now span { position: absolute; top: 5px; left: 6px; font: 500 11px var(--mono); color: var(--hi); }
+.sch-ev { position: absolute; height: 22px; padding: 0 6px; font-size: 12px; line-height: 22px; color: var(--hi); white-space: nowrap; background: var(--lift2); border: 0; cursor: default; }
+.sch-ev.k-loop, .sch-ev.k-continue, .sch-ev.k-watcher { color: var(--hi); }
+.sch-band { position: absolute; height: 3px; background: var(--dim); opacity: .6; }
 .sch-when { white-space: nowrap; }
-.sch-rel { color: var(--dim); }
+.sch-rel { color: var(--faint); }
 .sch-what { max-width: 320px; }
-.sch-guard { color: var(--dim); padding: 4px 0 10px; font-size: 12.5px; }
+.sch-guard { color: var(--faint); padding: 4px 0 10px; font-size: 12.5px; }

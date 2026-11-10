@@ -149,7 +149,7 @@ export function DeploysPage({ deploy }: { deploy: Deploy }) {
               <Section title={target ? `Will ship to ${target}` : 'Shipped'} note={target ? commitsWord(ship.rows.length) : undefined}>
                 {w.error && zone === 'review' && <div data-testid="deploy-diffs-error" className="dep-err">diffs.sh did not finish, still showing local refs: {w.error}</div>}
                 {ship.errors.map((e) => <div key={e.repo} className="dep-err">{e.repo}: {e.error}</div>)}
-                {ship.migrations.length > 0 && <div className="dep-row"><State word="MIGRATIONS" tone="wait" /><span className="dep-dim"> in {ship.migrations.join(', ')}</span></div>}
+                {ship.migrations.length > 0 && <div className="dep-row"><State word="migrations" tone="wait" /><span className="dep-dim"> in {ship.migrations.join(', ')}</span></div>}
                 {target === 'staging' && w.diffs.some((d) => stagingAheadOfProd(d) > 0) && (
                   <div className="dep-dimline">Staging is already ahead of prod. Those commits ship with the next prod deploy.</div>
                 )}

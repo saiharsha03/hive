@@ -57,7 +57,7 @@ function TodoRow({ t, owner }: { t: Todo; owner?: string }) {
     <div className={`ofc-todo ofc-t-${t.state}`} title={t.note ? `${t.id}: ${t.note}` : t.id}>
       <i className="ofc-box" data-t={t.state} /><span className="ofc-tt">{t.text}</span>
       {owner !== undefined && <span className="ofc-tow">{owner}</span>}
-      <span className={`ofc-tw ofc-w-${t.state}`}>{t.state.toUpperCase()}</span>
+      <span className={`ofc-tw ofc-w-${t.state}`}>{t.state}</span>
     </div>
   )
 }
@@ -233,7 +233,7 @@ function PauseButton({ v }: { v: View }) {
   }
   return (
     <>
-      {paused && <span className="tv-paused s-wait" data-testid="team-paused">PAUSED</span>}
+      {paused && <span className="tv-paused s-wait" data-testid="team-paused">paused</span>}
       <button className="link" disabled={busy} onClick={go} title={note || (paused ? 'Wake every teammate to carry on' : 'Stop every running turn; posts are held until you resume')} data-testid="team-pause">
         {busy ? (paused ? 'Resuming…' : 'Pausing…') : paused ? 'Resume team' : 'Pause team'}
       </button>
