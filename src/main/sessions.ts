@@ -135,7 +135,7 @@ async function scan(full: boolean): Promise<SessionInfo[]> {
     if (!dir.isDirectory()) continue
     const folder = join(root(), dir.name)
     folders.add(folder)
-    let mtime = 0
+    let mtime: number
     try { mtime = (await stat(folder)).mtimeMs } catch { continue }
     if (!full && folderTimes.get(folder) === mtime) continue
     folderTimes.set(folder, mtime)
