@@ -61,7 +61,7 @@ export function AskCard({ tabId, id, input, open }: { tabId: string; id: string;
       ))}
       {open
         ? <div className="ask2-foot"><span className="hint">{qs.some((q) => q.multiSelect) ? 'Pick any that apply' : 'Pick one'} with a click or the number keys. Enter sends. Or just reply below.</span>{err && <span className="s-fail">{err}</span>}<button className="primary" disabled={!answers || sending} onClick={() => void submit()} data-testid="ask-submit">{sending ? 'Sending' : 'Answer'}</button></div>
-        : <div className="hint">Question closed</div>}
+        : <div className="hint">Question answered</div>}
     </div>
   )
 }
