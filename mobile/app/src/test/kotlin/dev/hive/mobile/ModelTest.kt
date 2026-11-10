@@ -77,6 +77,31 @@ class ModelTest {
         assertEquals(7 * 86_400_000L, Usage.windowMs("seven_day_opus"))
     }
 
+    @Test fun theUsageGuardSaysWhatPausesAndWhenItCarriesOn() {
+        val five = Limit("five_hour", "Current session (5 hours)", 92.0, "2026-11-09T15:00:00Z")
+        val week = Limit("seven_day_opus", "Current week (Opus)", 41.0, "2026-11-12T09:00:00Z")
+        assertEquals(five, Usage.guard(listOf(week, five), now))
+        assertNull(Usage.guard(listOf(week, five.copy(pct = 84.0)), now)) // under 85%
+        assertNull(Usage.guard(listOf(five.copy(resetsAt = "2026-11-09T13:00:00Z")), now)) // already reset
+        assertEquals("seven_day_opus", Usage.guard(listOf(five, week.copy(pct = 97.0)), now)!!.key) // the fuller one
+        val wakes = listOf(Wake("wake", "1", "s", "A", at("2026-11-09T14:00:00Z"), "p", null), Wake("wake", "2", "s", "B", at("2026-11-09T16:00:00Z"), "p", null), Wake("continue", "c", "c", "C", at("2026-11-09T15:00:00Z"), "p", null))
+        // opened 10:00, 92% after 3 h 27 m: full at 13:45
+        assertEquals("The 5-hour window is at 92%. If the rate holds it fills at 13:45. 4 working threads pause then and continue at 15:00. 1 wake-up is due before then.", Usage.guardWords(five, now, 4, wakes, utc))
+        assertEquals("The 5-hour window is at 92%. If the rate holds it fills at 13:45. 1 working thread pauses then and continues at 15:00.", Usage.guardWords(five, now, 1, emptyList(), utc))
+        assertEquals("The 5-hour window is at 92%. If the rate holds it fills at 13:45. It resets at 15:00.", Usage.guardWords(five, now, 0, emptyList(), utc))
+        assertEquals("The 5-hour window is at 100%. It is full. It resets at 15:00.", Usage.guardWords(five.copy(pct = 100.0), now, 0, emptyList(), utc))
+        // slow enough to last: said so, and nothing pauses
+        assertEquals("The 5-hour window is at 86%. At this rate it lasts until it resets at 13:40.", Usage.guardWords(five.copy(pct = 86.0, resetsAt = "2026-11-09T13:40:00Z"), now, 0, emptyList(), utc))
+        assertEquals(listOf("5-hour window", "7-day window", "7-day Opus window", "plan window"), listOf("five_hour", "seven_day", "seven_day_opus", "monthly").map { Usage.windowName(it) })
+    }
+
+    @Test fun aThreadRowCarriesItsNextWakeUp() {
+        val rows = Read.threads(JSONObject("""{"threads":[{"id":"t1","wakes":1700000000000},{"id":"t2","continues":1700000003000},{"id":"t3"}]}"""))
+        assertEquals(listOf(1700000000000L, 0L, 0L), rows.map { it.wakes })
+        assertEquals(listOf(0L, 1700000003000L, 0L), rows.map { it.continues })
+        assertEquals(4, Read.inbox(JSONObject("""{"counts":{"working":4}}""")).counts.working)
+    }
+
     @Test fun quietHoursRunOverMidnightAndLetFailuresThrough() {
         val q = Quiet(true, "22:00", "07:00")
         assertTrue(QuietHours.within(q, 23 * 60))
@@ -138,7 +163,7 @@ class ModelTest {
         assertEquals(emptyList<String>(), box.needs[1].options)
         assertEquals(1, box.coming.size) // the same wake-up twice is one row
         assertNull(box.coming[0].every)
-        assertEquals(Counts(2, 10, 7, 5), box.counts)
+        assertEquals(Counts(2, 10, 7, 5, 0), box.counts)
         assertEquals(Inbox(), Read.inbox(JSONObject())) // an older Hive: nothing, not a crash
 
         val v = Read.thread(JSONObject("""{"title":"Ship","working":true,"items":[{"k":"you","t":"go","seen":true},{"k":"you","t":"and this","seen":false},{"k":"claude","t":"ok"}],

@@ -3,12 +3,17 @@ package dev.hive.mobile
 // Every screen drawn to a PNG on the JVM, no phone or emulator: Robolectric runs the same Compose code the app
 // shows (Screens.kt), Roborazzi saves the picture to build/shots/. The content is invented. Run:
 //   ./gradlew :app:testDebugUnitTest --tests "*ScreensTest*"
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Before
 import org.junit.Test
@@ -62,8 +67,9 @@ class ScreensTest {
             ThreadRow("t-inv", "Fix duplicate invoice numbers", "ledger-api", "working", "", ago(1), "working"),
             ThreadRow("t-exp", "Report exports team", "reports", "working", "", ago(2), "working"),
             ThreadRow("t-sync", "Offline sync spike", "ledger-android", "working", "", ago(4), "working"),
-            ThreadRow("t-drafts", "Android app drops drafts on relock", "ledger-android", "idle", "", ago(95), "pinned"),
+            ThreadRow("t-drafts", "Android app drops drafts on relock", "ledger-android", "idle", "", ago(95), "pinned", continues = at("15:00")),
             ThreadRow("t-node", "Bump node to 22 in CI images", "infra", "idle", "", ago(183), "recent"),
+            ThreadRow("t-pay", "Payout reconciliation", "ledger-api", "idle", "", ago(300), "recent", wakes = at("14:00")),
             ThreadRow("t-csv", "CSV export loses the header row", "reports", "idle", "", ago(60 * 26), "recent"),
         ), now, drafts = setOf("t-drafts"))
     }
@@ -124,6 +130,13 @@ class ScreensTest {
         ))
     }
 
+    @Test fun usageGuard() = shot("usage-guard") {
+        UsageScreen(listOf(
+            Limit("five_hour", "Current session (5 hours)", 92.0, "2026-11-09T15:00:00Z"),
+            Limit("seven_day", "Current week (all models)", 41.0, "2026-11-12T09:00:00Z"),
+        ), now, plan = "Max", working = 4, wakes = wakes)
+    }
+
     @Test fun teams() = shot("teams") {
         TeamsScreen(listOf(Team("team1", "Report exports team", "Move every export to the job queue. Board 5 of 9 done.", "WORKING", listOf(
             Member("t-lead", "Re-queueing PDF exports", "lead", "working"),
@@ -145,6 +158,11 @@ class ScreensTest {
     @Test fun pair() = shot("pair") { PairScreen(paste = true, text = "") }
 
     @Test fun locked() = shot("locked") { LockedScreen() }
+
+    // the launcher icon as a square launcher shows it: the adaptive icon's two layers, full size
+    @Test fun icon() = captureRoboImage("build/shots/phone-icon.png") {
+        Box(Modifier.size(108.dp).background(Color(0xFF1C1F23))) { Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize()) }
+    }
 
     @Test fun offline() = shot("inbox-offline", 0) { InboxScreen(Inbox(), now, notice = "The computer is offline (Hive is closed or asleep).") }
 }

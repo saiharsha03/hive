@@ -64,6 +64,8 @@ class MainActivity : FragmentActivity() {
     private val lockNote = mutableStateOf("") // why the app did not open
     private val broken = mutableStateOf(false) // the saved pairing cannot be opened any more
     private val openThread = mutableStateOf<String?>(null)
+    // a screen a notification asked for instead of a thread (the usage guard opens Usage)
+    private val openPane = mutableStateOf("")
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     // two minutes off the screen: the pairing key leaves memory even if the app is never looked at again
     private val forget = Runnable { if (!Relay.visible) Vault.lock() }
@@ -74,6 +76,7 @@ class MainActivity : FragmentActivity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
         openThread.value = intent.getStringExtra("thread")?.takeIf { it.isNotEmpty() }
+        openPane.value = intent.getStringExtra("pane") ?: ""
         // the screen was rebuilt (a setting changed) while the app was open and unlocked: no second fingerprint
         unlocked.value = Vault.session != null && !away()
         if (!unlocked.value) Vault.lock()
@@ -81,7 +84,7 @@ class MainActivity : FragmentActivity() {
             HiveTheme {
                 Surface(Modifier.fillMaxSize(), color = C.bg) {
                     Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
-                        if (!unlocked.value) LockedScreen(lockNote.value, broken.value, onUnlock = { unlock() }, onForget = { forgetPairing() }) else App(openThread)
+                        if (!unlocked.value) LockedScreen(lockNote.value, broken.value, onUnlock = { unlock() }, onForget = { forgetPairing() }) else App(openThread, openPane)
                     }
                 }
             }
@@ -92,6 +95,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra("thread")?.takeIf { it.isNotEmpty() }?.let { openThread.value = it }
+        intent.getStringExtra("pane")?.takeIf { it.isNotEmpty() }?.let { openPane.value = it }
     }
 
     private fun away(): Boolean = Vault.hiddenAt > 0 && SystemClock.elapsedRealtime() - Vault.hiddenAt > LOCK_AFTER_MS
@@ -275,7 +279,7 @@ private fun rememberMic(onText: (String) -> Unit, onError: (String) -> Unit): ()
 private fun joinDraft(old: String, said: String): String = if (old.isBlank()) said else old.trimEnd() + " " + said
 
 @Composable
-private fun App(openThread: MutableState<String?>) {
+private fun App(openThread: MutableState<String?>, openPane: MutableState<String>) {
     val ctx = LocalContext.current
     val state by Relay.state.collectAsState()
     val can by Relay.can.collectAsState()
@@ -285,6 +289,8 @@ private fun App(openThread: MutableState<String?>) {
     var tab by rememberSaveable { mutableStateOf(0) }
     var pane by rememberSaveable { mutableStateOf("") } // "new", "usage", "teams", "settings", or "" for the open thread
     var pairNote by remember { mutableStateOf("") }
+    // a notification that opens a screen: only the ones it may name
+    LaunchedEffect(openPane.value) { if (openPane.value == "usage") pane = "usage"; openPane.value = "" }
     // the inbox is loaded here, not in its tab: its counts sit on the tab bar under every screen
     var box by remember { mutableStateOf(Inbox()) }
     var boxLoaded by remember { mutableStateOf(false) }
@@ -324,7 +330,7 @@ private fun App(openThread: MutableState<String?>) {
     // the one place that decides what is beside (or instead of) the tabs
     val detail: @Composable () -> Unit = {
         when (pane) {
-            "usage" -> UsageRoute(notice, "accounts" in can, closeDetail)
+            "usage" -> UsageRoute(notice, "accounts" in can, box.counts.working, closeDetail)
             "teams" -> TeamsRoute(notice, open, closeDetail)
             "settings" -> SettingsRoute(notice, online, "quiet" in can, closeDetail, onUnpaired = { told ->
                 Drafts.clear()
@@ -539,12 +545,13 @@ private fun MoreRoute(notice: String, counts: Counts, canPause: Boolean, account
 }
 
 @Composable
-private fun UsageRoute(notice: String, canAccounts: Boolean, onBack: () -> Unit) {
+private fun UsageRoute(notice: String, canAccounts: Boolean, working: Int, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val now = rememberNow()
     var plan by remember { mutableStateOf("") }
     var limits by remember { mutableStateOf<List<Limit>?>(null) }
     var accounts by remember { mutableStateOf<List<Account>?>(null) }
+    var wakes by remember { mutableStateOf<List<Wake>>(emptyList()) }
     var err by remember { mutableStateOf("") }
     var switching by remember { mutableStateOf<Account?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -556,9 +563,11 @@ private fun UsageRoute(notice: String, canAccounts: Boolean, onBack: () -> Unit)
             limits = Read.limits(u)
             // the accounts only when this Hive has account profiles; otherwise the zone is not drawn at all
             accounts = if (canAccounts) Read.accounts(Relay.ask("accounts")) else null
+            // the guard names the wake-ups due before the reset: asked for only while a window is close to its limit
+            if (Usage.guard(limits ?: emptyList(), System.currentTimeMillis()) != null) wakes = Read.wakes(Relay.ask("wakeups"))
         }
     }
-    UsageScreen(limits, now, plan, accounts, notice, err, switching, busy, onBack = onBack, onPick = { switching = it }, onCancelSwitch = { switching = null }, onSwitch = { a ->
+    UsageScreen(limits, now, plan, accounts, notice, err, switching, busy, working, wakes, onBack = onBack, onPick = { switching = it }, onCancelSwitch = { switching = null }, onSwitch = { a ->
         busy = true
         scope.launch { err = attempt { Relay.ask("switchAccount", mapOf("id" to a.id)) }; busy = false; switching = null; reload() }
     })

@@ -105,9 +105,11 @@ fun Rule(color: Color = C.rule) = Box(Modifier.fillMaxWidth().height(1.dp).backg
 
 // a screen's head: the title, a count beside it, and one word or action at the right
 @Composable
-fun Head(title: String, count: String = "", right: String = "", rightColor: Color = C.dim, sub: Boolean = false, onRight: (() -> Unit)? = null, onBack: (() -> Unit)? = null) {
+fun Head(title: String, count: String = "", right: String = "", rightColor: Color = C.dim, sub: Boolean = false, mark: Boolean = false, onRight: (() -> Unit)? = null, onBack: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = Pad, end = Pad, top = 8.dp, bottom = 10.dp)) {
         if (onBack != null) Text("Back", Modifier.clickable(onClick = onBack).padding(end = 12.dp).alignByBaseline(), style = T.action)
+        // the mark (an H in a cell, its crossbar in the accent) on the screens that stand before the app: Locked, Pair
+        if (mark) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.ic_hive_mark), contentDescription = null, modifier = Modifier.padding(end = 10.dp).size(24.dp).align(Alignment.CenterVertically))
         // the title takes what it needs, the count sits right after it, and the word at the right keeps the edge
         Row(Modifier.weight(1f).alignByBaseline()) {
             Text(title, Modifier.weight(1f, fill = false).alignByBaseline(), style = if (sub) T.sub else T.page, maxLines = if (sub) 2 else 1, overflow = TextOverflow.Ellipsis)
@@ -134,12 +136,15 @@ fun Modifier.selected(on: Boolean, bar: Color = C.accent): Modifier = if (!on) t
 @Composable
 fun ListRow(
     title: String, meta: String = "", word: String = "", note: String = "", detail: String = "", on: Boolean = false,
+    // metaWord: a word with a time in place of the age (WAKES 14:00), in the state type
+    metaWord: String = "", metaColor: Color = C.hi,
     onClick: (() -> Unit)? = null, actions: @Composable (RowScope.() -> Unit)? = null,
 ) {
     Column((if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).fillMaxWidth().selected(on).padding(horizontal = Pad, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Text(title, Modifier.weight(1f), style = T.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (meta.isNotEmpty()) Text(meta, Modifier.padding(start = 10.dp, top = 2.dp), style = T.mono, maxLines = 1)
+            if (metaWord.isNotEmpty()) StateWord(metaWord, Modifier.padding(start = 10.dp, top = 4.dp), metaColor)
+            else if (meta.isNotEmpty()) Text(meta, Modifier.padding(start = 10.dp, top = 2.dp), style = T.mono, maxLines = 1)
         }
         if (word.isNotEmpty() || note.isNotEmpty()) Row(Modifier.padding(top = 2.dp)) {
             if (word.isNotEmpty()) StateWord(word, Modifier.padding(end = 6.dp, top = 3.dp))

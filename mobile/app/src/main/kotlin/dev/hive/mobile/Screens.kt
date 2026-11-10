@@ -86,10 +86,13 @@ fun ThreadsScreen(
             groups.forEach { (section, group) ->
                 if (section.isNotEmpty()) item(key = "section:$section") { Group(sectionNames[section] ?: section, group.size.toString(), if (section == "waiting") C.wait else C.dim) }
                 items(group, key = { "thread:" + it.id }) { t ->
-                    val word = when (t.state) { "working" -> "WORKING"; "waiting" -> "WAITING"; else -> "" }
+                    // a thread stopped by a usage limit is PAUSED until its auto-continue; that is not a failure
+                    val word = when { t.state == "working" -> "WORKING"; t.state == "waiting" -> "WAITING"; t.continues > 0 -> "PAUSED"; else -> "" }
+                    // a pending wake-up or auto-continue takes the place of the age
+                    val due = when { t.continues > 0 -> "CONTINUES " + Words.clock(t.continues, now); t.wakes > 0 -> "WAKES " + Words.clock(t.wakes, now); else -> "" }
                     // what it is doing now, else where it lives; a thread with unsent text says so
                     val about = listOf(if (t.id in drafts) "Draft kept" else "", t.note.ifEmpty { t.folder }).filter { it.isNotEmpty() }.joinToString(", ")
-                    ListRow(t.title, meta = Words.age(t.updated, now), word = word, note = about, on = t.id == open, onClick = { onOpen(t.id) })
+                    ListRow(t.title, meta = Words.age(t.updated, now), word = word, note = about, on = t.id == open, metaWord = due, metaColor = if (t.continues > 0) C.hold else C.hi, onClick = { onOpen(t.id) })
                 }
             }
             if (shown.isEmpty()) item { Empty(if (rows.isEmpty()) "No threads yet." else "No thread matches.") }
@@ -347,6 +350,7 @@ fun MoreScreen(
 @Composable
 fun UsageScreen(
     limits: List<Limit>?, now: Long, plan: String = "", accounts: List<Account>? = null, notice: String = "", error: String = "", switching: Account? = null, busy: Boolean = false,
+    working: Int = 0, wakes: List<Wake> = emptyList(),
     onBack: () -> Unit = {}, onPick: (Account) -> Unit = {}, onCancelSwitch: () -> Unit = {}, onSwitch: (Account) -> Unit = {},
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -354,6 +358,14 @@ fun UsageScreen(
         Notice(notice)
         Notice(error)
         if (limits != null && limits.isEmpty()) { Empty("No reading yet."); Rule() }
+        // the usage guard: a calm band with an amber rule at the left when a window is close to its limit
+        Usage.guard(limits ?: emptyList(), now)?.let { g ->
+            Column(Modifier.fillMaxWidth().background(C.raised).drawBehind { drawRect(C.wait, Offset.Zero, Size(3.dp.toPx(), size.height)) }.padding(horizontal = Pad, vertical = 10.dp)) {
+                StateWord("USAGE GUARD", color = C.wait)
+                Text(Usage.guardWords(g, now, working, wakes), Modifier.padding(top = 4.dp), style = T.note.copy(color = C.hi))
+            }
+            Rule()
+        }
         limits?.forEach { l ->
             val warn = l.pct >= 60
             Column(Modifier.fillMaxWidth().padding(horizontal = Pad, vertical = 10.dp)) {
@@ -361,7 +373,7 @@ fun UsageScreen(
                     Text(l.label, Modifier.weight(1f).alignByBaseline(), style = T.body.copy(color = C.hi))
                     Text("${l.pct.toInt()}%", Modifier.alignByBaseline(), style = T.page.copy(fontSize = 22.sp, fontWeight = FontWeight.SemiBold), color = if (warn) C.wait else C.hi)
                 }
-                Box(Modifier.padding(top = 6.dp, bottom = 4.dp)) { Meter((l.pct / 100).toFloat(), if (l.pct >= 90) C.fail else if (warn) C.wait else C.ink) }
+                Box(Modifier.padding(top = 6.dp, bottom = 4.dp)) { Meter((l.pct / 100).toFloat(), if (warn) C.wait else C.ink) }
                 val resets = Usage.resets(l, now)
                 if (resets.isNotEmpty()) Text(resets, style = T.note.copy(fontSize = 12.5.sp))
                 val ahead = Usage.forecast(l, now)
@@ -500,7 +512,7 @@ fun SettingsScreen(
 @Composable
 fun PairScreen(note: String = "", error: String = "", text: String = "", paste: Boolean = false, onScan: () -> Unit = {}, onPasteMode: () -> Unit = {}, onText: (String) -> Unit = {}, onPair: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Head("Pair with Hive")
+        Head("Pair with Hive", mark = true)
         Notice(note, C.wait)
         val steps = listOf(
             "In Hive on your computer open Settings, General, Phone app and press Pair.",
@@ -530,7 +542,7 @@ fun PairScreen(note: String = "", error: String = "", text: String = "", paste: 
 @Composable
 fun LockedScreen(note: String = "", broken: Boolean = false, onUnlock: () -> Unit = {}, onForget: () -> Unit = {}) {
     Column(Modifier.fillMaxSize()) {
-        Head("Hive", right = "locked")
+        Head("Hive", right = "locked", mark = true)
         Column(Modifier.padding(horizontal = Pad, vertical = 16.dp)) {
             if (broken) {
                 // the Keystore dropped the key (the screen lock was removed or reset): the pairing cannot be read again

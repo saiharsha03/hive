@@ -15,11 +15,12 @@ fun objs(a: JSONArray?): List<JSONObject> = if (a == null) emptyList() else (0 u
 fun strs(a: JSONArray?): List<String> = if (a == null) emptyList() else (0 until a.length()).map { a.optString(it) }.filter { it.isNotEmpty() }
 
 // ---- the rows ----
-data class ThreadRow(val id: String, val title: String, val folder: String, val state: String, val note: String, val updated: Long, val section: String)
+// wakes / continues: when its next wake-up or auto-continue is due (0 = none)
+data class ThreadRow(val id: String, val title: String, val folder: String, val state: String, val note: String, val updated: Long, val section: String, val wakes: Long = 0, val continues: Long = 0)
 // one thing that needs the user. askId/options: a question one tap can answer
 data class Need(val kind: String, val thread: String, val title: String, val note: String, val at: Long, val askId: String = "", val question: String = "", val options: List<String> = emptyList())
 data class Wake(val kind: String, val id: String, val open: String, val title: String, val at: Long, val prompt: String, val every: Int?)
-data class Counts(val needs: Int = 0, val threads: Int = 0, val running: Int = 0, val scheduled: Int = 0)
+data class Counts(val needs: Int = 0, val threads: Int = 0, val running: Int = 0, val scheduled: Int = 0, val working: Int = 0)
 data class Inbox(val needs: List<Need> = emptyList(), val coming: List<Wake> = emptyList(), val counts: Counts = Counts())
 data class RunRow(val thread: String, val threadTitle: String, val id: String, val kind: String, val title: String, val now: String, val state: String)
 data class Limit(val key: String, val label: String, val pct: Double, val resetsAt: String?)
@@ -38,7 +39,7 @@ data class Quiet(val on: Boolean = false, val from: String = "22:00", val to: St
 
 object Read {
     fun threads(j: JSONObject): List<ThreadRow> = objs(j.optJSONArray("threads")).map {
-        ThreadRow(it.optString("id"), it.optString("title"), it.optString("folder"), it.optString("state", "idle"), it.optString("note"), it.optLong("updated"), it.optString("section"))
+        ThreadRow(it.optString("id"), it.optString("title"), it.optString("folder"), it.optString("state", "idle"), it.optString("note"), it.optLong("updated"), it.optString("section"), it.optLong("wakes"), it.optLong("continues"))
     }.filter { it.id.isNotEmpty() }.distinctBy { it.id }
 
     fun wake(w: JSONObject) = Wake(w.optString("kind"), w.optString("id"), w.optString("open"), w.optString("title"), w.optLong("at"), w.optString("prompt"), if (w.isNull("every")) null else w.optInt("every"))
@@ -50,7 +51,7 @@ object Read {
             Need(it.optString("kind"), it.optString("thread"), it.optString("title"), it.optString("note"), it.optLong("at"), a?.optString("id") ?: "", a?.optString("question") ?: "", strs(a?.optJSONArray("options")))
         }.filter { it.thread.isNotEmpty() }
         val c = j.optJSONObject("counts") ?: JSONObject()
-        return Inbox(needs, wakes(j, "coming"), Counts(c.optInt("needs", needs.size), c.optInt("threads"), c.optInt("running"), c.optInt("scheduled")))
+        return Inbox(needs, wakes(j, "coming"), Counts(c.optInt("needs", needs.size), c.optInt("threads"), c.optInt("running"), c.optInt("scheduled"), c.optInt("working")))
     }
 
     fun running(j: JSONObject): List<RunRow> = objs(j.optJSONArray("running")).map {
@@ -174,6 +175,33 @@ object Usage {
     }
 
     fun forecast(l: Limit, now: Long, zone: ZoneId = ZoneId.systemDefault()): String = fullAt(l, now)?.let { "At this rate you reach 100% at ${Words.clock(it, now, zone)}" } ?: ""
+
+    // "5-hour window", "7-day window", "7-day Opus window"
+    fun windowName(key: String): String {
+        if (key.startsWith("five_hour")) return "5-hour window"
+        val model = key.removePrefix("seven_day").trimStart('_')
+        return if (key.startsWith("seven_day")) "7-day " + (if (model.isEmpty()) "" else model.replaceFirstChar { it.uppercase() } + " ") + "window" else "plan window"
+    }
+
+    // The usage guard: the window closest to its limit, once one is at 85% or more and has a reset still to come.
+    const val GUARD_AT = 85.0
+    fun guard(limits: List<Limit>, now: Long): Limit? = limits.filter { it.pct >= GUARD_AT && (resetMs(it) ?: 0) > now }.maxByOrNull { it.pct }
+
+    // What the guard says: which window, how full, when it fills at this rate, what pauses then and when it carries
+    // on, and how many wake-ups fall before the reset. working: threads working now; wakes: every scheduled wake-up.
+    fun guardWords(l: Limit, now: Long, working: Int, wakes: List<Wake>, zone: ZoneId = ZoneId.systemDefault()): String {
+        val reset = resetMs(l) ?: return ""
+        val at = Words.clock(reset, now, zone)
+        val head = "The ${windowName(l.key)} is at ${l.pct.toInt()}%."
+        val fills = when {
+            l.pct >= 100 -> " It is full."
+            else -> fullAt(l, now)?.let { " If the rate holds it fills at ${Words.clock(it, now, zone)}." } ?: " At this rate it lasts until it resets at $at."
+        }
+        val pauses = if (working > 0) " ${Words.plural(working, "working thread")} ${if (working == 1) "pauses" else "pause"} then and ${if (working == 1) "continues" else "continue"} at $at." else if (l.pct >= 100 || fullAt(l, now) != null) " It resets at $at." else ""
+        val due = wakes.count { it.kind == "wake" && it.at in now..reset }
+        val inside = if (due > 0) " ${Words.plural(due, "wake-up")} ${if (due == 1) "is" else "are"} due before then." else ""
+        return head + fills + pauses + inside
+    }
 }
 
 // ---- quiet hours ----

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- the Hive mark on the app's dark ground: an H inside a cell, the crossbar in the accent (logo candidate 2, "H cell") -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
+    <path android:strokeColor="#F1F3F5" android:strokeWidth="2.1" android:strokeLineJoin="round" android:fillColor="#00000000" android:pathData="M16,2.6L27.6,9.3L27.6,22.7L16,29.4L4.4,22.7L4.4,9.3Z" />
+    <path android:strokeColor="#F1F3F5" android:strokeWidth="2.6" android:pathData="M11.6,10V22M20.4,10V22" />
+    <path android:strokeColor="#3D8BFF" android:strokeWidth="2.6" android:pathData="M11.6,16H20.4" />
+</vector>

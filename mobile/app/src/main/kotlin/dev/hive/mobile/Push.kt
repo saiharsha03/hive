@@ -34,8 +34,9 @@ object Notes {
 
     fun idOf(seq: Long): Int = (seq % Int.MAX_VALUE).toInt()
 
-    private fun openApp(ctx: Context, thread: String, code: Int): PendingIntent {
-        val open = Intent(ctx, MainActivity::class.java).putExtra("thread", thread).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    // pane: a screen to open instead of a thread ("usage", from the usage guard)
+    private fun openApp(ctx: Context, thread: String, code: Int, pane: String = ""): PendingIntent {
+        val open = Intent(ctx, MainActivity::class.java).putExtra("thread", thread).putExtra("pane", pane).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         return PendingIntent.getActivity(ctx, code, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
@@ -55,7 +56,7 @@ object Notes {
             .setContentTitle(m.optString("title").ifEmpty { "Hive" })
             .setContentText(m.optString("body"))
             .setStyle(Notification.BigTextStyle().bigText(m.optString("body")))
-            .setContentIntent(openApp(ctx, thread, thread.hashCode()))
+            .setContentIntent(openApp(ctx, thread, (thread + m.optString("open")).hashCode(), m.optString("open")))
         // Hive stamps each one with its clock. The time shown is when Hive sent it, and one that took more than ten
         // minutes to arrive (the phone was off, or the relay held it back) says so: it may no longer be true.
         val at = m.optLong("at")
