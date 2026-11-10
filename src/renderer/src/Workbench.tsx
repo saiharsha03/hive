@@ -78,13 +78,14 @@ export function ActivityBar() {
   const mark = (v: SideView) => (v === 'threads' && waiting > 0 ? String(waiting) : v === 'running' && working > 0 ? String(working) : v === 'allow' && allow?.changed ? '!' : '')
   return (
     <nav className="abar" aria-label="Sections" data-testid="activity-bar">
+      <div className="abar-list">
       {VIEWS.filter((v) => v.id !== 'accounts' && (v.id !== 'quarry' || quarry?.available)).map((v) => (
         <button key={v.id} className={`abar-item${on(v.id) ? ' on' : ''}`} onClick={() => pick(v.id)} title={v.label} aria-label={v.label} aria-pressed={on(v.id)} data-testid={`abar-${v.id}`}>
           {v.brand ? <BrandIcon name={v.brand} size={22} /> : <i className={`codicon codicon-${v.icon}`} aria-hidden />}
           {mark(v.id) && <span className="abar-mark">{mark(v.id)}</span>}
         </button>
       ))}
-      <span className="abar-gap" />
+      </div>
       <button className={`abar-item${layout.drawer ? ' on' : ''}`} onClick={() => toggleTerminal()} title="Terminal (Ctrl+`)" aria-label="Terminal" aria-pressed={layout.drawer} data-testid="abar-terminal"><i className="codicon codicon-terminal" aria-hidden /></button>
       <button className={`abar-item${view === 'accounts' ? ' on' : ''}`} onClick={() => showSide('accounts')} title="Accounts" aria-label="Accounts" data-testid="abar-accounts"><i className="codicon codicon-account" aria-hidden /></button>
       {/* Settings opens as a tab, so it is shown in the tab area (Threads) when a whole-page section is on show */}

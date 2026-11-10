@@ -175,3 +175,12 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .panel-kill:hover .codicon { color: var(--hi); }
 .panel .term-slot { padding-left: 12px; }
 .panel .term-bar { padding: 3px 12px; }
+
+/* the icon bar: the sections scroll when there are more than fit (a short window, the panel open); Terminal, Accounts
+   and Settings stay in view at the bottom */
+.abar { min-height: 0; }
+.abar-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; scrollbar-width: none; }
+.abar-list::-webkit-scrollbar { display: none; }
+.abar-item { height: 40px; }
+.abar-item .codicon { font-size: 22px; }
+.abar > .abar-item:first-of-type { border-top: 1px solid var(--rule); }
