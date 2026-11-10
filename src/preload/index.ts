@@ -262,7 +262,6 @@ contextBridge.exposeInMainWorld('api', {
   devStack: (id: string, sources: Record<string, unknown>, only?: string[]) => ipcRenderer.invoke('dev:stack', id, sources, only),
   devStart: (name: string, source: unknown) => ipcRenderer.invoke('dev:start', name, source),
   devStop: (name: string) => ipcRenderer.invoke('dev:stop', name),
-  devStopAll: () => ipcRenderer.invoke('dev:stopAll'),
   devLogs: (name: string) => ipcRenderer.invoke('dev:logs', name),
   onDevUpdate: (cb: (s: unknown) => void) => {
     const fn = (_e: unknown, s: unknown) => cb(s)
@@ -273,7 +272,6 @@ contextBridge.exposeInMainWorld('api', {
   terminalOpen: (id: string, cwd: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:open', id, cwd, cols, rows),
   terminalWrite: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
   terminalResize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
-  terminalKill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
   onTerminalData: (cb: (id: string, chunk: string) => void) => {
     const fn = (_e: unknown, id: string, chunk: string) => cb(id, chunk)
     ipcRenderer.on('terminal:data', fn)

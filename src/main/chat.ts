@@ -1343,7 +1343,7 @@ export async function liveUsage(): Promise<{ u: any; at: number } | null> {
 // a thread's live state for Hive's own schedulers (watchers): working = a turn is running; null = no live process
 export function threadState(tabId: string): { working: boolean; sessionId: string | null; waitingReason?: string; lastOk: boolean | null; lastReply: string | null } | null {
   const s = live.get(tabId)
-  return s ? { working: s.turns.busy(), sessionId: s.sessionId, waitingReason: s.waitingReason, lastOk: s.lastOk, lastReply: s.lastReply } : null
+  return s ? { working: s.turns.isBusy(), sessionId: s.sessionId, waitingReason: s.waitingReason, lastOk: s.lastOk, lastReply: s.lastReply } : null
 }
 
 // a watcher's run: a new turn in its thread when that is live (the tab shows the message like a started thread's

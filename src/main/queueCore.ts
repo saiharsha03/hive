@@ -65,6 +65,5 @@ export function turnQueue<T>(deliver: (msg: T, priority?: Priority) => void, not
     clear: () => { waiting.length = 0 },
     has: (id: string) => waiting.some((w) => w.id === id),
     size: () => waiting.length,
-    busy: () => busy,
   }
 }

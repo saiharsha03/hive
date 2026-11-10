@@ -480,7 +480,6 @@ handle('dev:sources', (_e, repo: string) => dev.sources(repo))
 handle('dev:stack', (_e, id: string, srcs: Record<string, Source>, only?: string[]) => dev.startStack(id, srcs ?? {}, dev.USER, Array.isArray(only) ? only : undefined, true))
 handle('dev:start', (_e, name: string, src: Source) => dev.startService(name, src, dev.USER))
 handle('dev:stop', (_e, name: string) => dev.stopService(name, dev.USER))
-handle('dev:stopAll', () => dev.stopAll(dev.USER))
 handle('dev:logs', (_e, name: string) => dev.logs(name, 1000))
 handle('history:load', (_e, path: string) => loadHistory(path))
 // /btw: a side question about a thread, answered by a throwaway fork (nothing goes into the thread)
@@ -520,7 +519,6 @@ setTerminalSink({
 handle('terminal:open', (_e, id: string, cwd: string, cols: number, rows: number) => openTerminal(String(id), String(cwd ?? ''), cols, rows))
 handle('terminal:write', (_e, id: string, data: string) => writeTerminal(String(id), String(data)))
 handle('terminal:resize', (_e, id: string, cols: number, rows: number) => resizeTerminal(String(id), cols, rows))
-handle('terminal:kill', (_e, id: string) => killTerminal(String(id)))
 handle('dialog:folder', async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender)!
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
