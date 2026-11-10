@@ -2,6 +2,7 @@
 import { hookWarning, isContinuation } from '../../shared/summaryCore'
 import { isWatcherTab } from '../../shared/readOnlyCore'
 import { modelLabel } from '../../shared/statusCore'
+import { ADVISOR_TOOL, advisorOutput, isAdvisorCall, isAdvisorResult } from '../../shared/advisorCallCore'
 import { resultText } from '../../shared/toolOutputCore'
 import { nowLine } from './conversationCore'
 // pages: each opens as a tab (id "tool:<page>") so it can sit beside a thread; diff is the full diff of a change
@@ -65,6 +66,7 @@ export function toolLine(name: string, input: any): { verb: string; what: string
     case 'TodoWrite': return { verb: 'Updated the plan', what: '' }
     case SHOW: return { verb: 'Showed you', what: file(input?.path) }
     case CODEX: return { verb: 'Codex', what: short(input?.task) }
+    case ADVISOR_TOOL: return { verb: 'Advisor', what: 'asked for advice on the conversation so far' }
     case 'mcp__hive__list_threads': return { verb: 'Listed threads', what: '' }
     case 'mcp__hive__agent_status': return { verb: 'Checked background work', what: '' }
     case 'mcp__hive__start_thread': return { verb: 'Started thread', what: short(input?.title) }
@@ -198,6 +200,13 @@ export function applyEvent(s: Session, ev: any): Session {
         else if (b.type === 'tool_use') {
           if (b.name === SHOW) items.push({ kind: 'show', path: b.input?.path })
           items.push({ kind: 'tool', id: b.id, name: b.name, input: b.input, status: 'running' })
+        }
+        // Claude asked its advisor: a row like any tool's, done when the answer block arrives
+        else if (isAdvisorCall(b)) { if (!items.some((it) => it.kind === 'tool' && it.id === b.id)) items.push({ kind: 'tool', id: b.id, name: ADVISOR_TOOL, input: b.input ?? {}, status: 'running' }) }
+        else if (isAdvisorResult(b)) {
+          const out = advisorOutput(b, ev.message?.usage)
+          const at = items.findIndex((it) => it.kind === 'tool' && it.id === b.tool_use_id)
+          if (at >= 0) items[at] = { ...(items[at] as Extract<Item, { kind: 'tool' }>), status: out.failed ? 'error' : 'done', output: out.text }
         }
       }
       return { ...s, items, answeredBy, streaming: '' }

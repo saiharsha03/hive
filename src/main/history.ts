@@ -6,6 +6,7 @@ import { parseFromThread } from '../shared/threadTalkCore'
 import { isContinuation } from '../shared/summaryCore'
 import { appName } from '../shared/appName'
 import { resultText } from '../shared/toolOutputCore'
+import { ADVISOR_TOOL, advisorOutput, isAdvisorCall, isAdvisorResult } from '../shared/advisorCallCore'
 
 export type Item =
   | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string } // images as data: URLs; at = when it was sent (ms); uuid = its transcript entry (Rewind)
@@ -131,10 +132,19 @@ function historyParser(): { line: (line: string) => void; done: () => Item[] } {
       if (words || images.length) items.push(userItem(words, images, at, e.uuid))
     } else if (e.type === 'assistant' && Array.isArray(c)) {
       for (const b of c) {
-        const key = `${e.message.id}:${b.type}:${b.id ?? b.text}`
+        const key = `${e.message.id}:${b.type}:${b.id ?? b.tool_use_id ?? b.text}`
         if (seen.has(key)) continue
         seen.add(key)
         if (b.type === 'text' && b.text.trim()) items.push({ kind: 'assistant', text: b.text, ...(at ? { at } : {}) })
+        else if (isAdvisorCall(b)) {
+          const t = { kind: 'tool' as const, id: b.id, name: ADVISOR_TOOL, input: b.input ?? {}, status: 'running' as const }
+          tools.set(b.id, t)
+          items.push(t)
+        } else if (isAdvisorResult(b)) {
+          const t = tools.get(b.tool_use_id)
+          const out = advisorOutput(b, e.message?.usage)
+          if (t) { t.status = out.failed ? 'error' : 'done'; t.output = out.text }
+        }
         else if (b.type === 'tool_use') {
           if (b.name === SHOW) items.push({ kind: 'show', path: b.input?.path })
           if (b.name === CODEX) {

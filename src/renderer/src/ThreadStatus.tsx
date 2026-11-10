@@ -190,10 +190,16 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   const st = useThreadStatus(tabId)
   const dfl = useStore(defaults, (d) => d)
   const [models, setModels] = useState<{ value: string; displayName: string }[] | null>(null)
-  const [open, setOpen] = useState<'model' | 'effort' | null>(null)
+  const [open, setOpen] = useState<'model' | 'effort' | 'advisor' | null>(null)
   const [err, setErr] = useState('')
   const mref = useRef<HTMLButtonElement>(null)
   const eref = useRef<HTMLButtonElement>(null)
+  const aref = useRef<HTMLButtonElement>(null)
+  const openAdvisor = () => {
+    setOpen(open === 'advisor' ? null : 'advisor')
+    void readAdvisorDefault().then(setDflt)
+    if (!models) { setLoadErr(false); window.api.chatModels(tabId).then(setModels).catch(() => setLoadErr(true)) }
+  }
   // a list that failed to load is asked for again the next time the picker opens
   const [loadErr, setLoadErr] = useState(false)
   const openModels = () => {
@@ -222,14 +228,20 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
       <button ref={eref} className={thinking ? 'pick ultra' : 'pick'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} aria-haspopup="listbox" data-testid="effort-picker">
         <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? (dfl.effort || 'default')}
       </button>
-      {word && <span className="pick" title="The advisor model for this thread (change it in the model menu)" data-testid="advisor-word">{word}</span>}
+      <button ref={aref} className="pick" onClick={openAdvisor} title="The advisor for this thread: a second model Claude can ask for advice" aria-haspopup="listbox" data-testid="advisor-picker">
+        <i>Advisor</i>{word ? word.replace(/^advisor /, 'advisor ') : 'advisor off'}
+      </button>
       {(err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>}
       {open === 'model' && (
         <PickList anchor={anchorOf(mref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.model : isAdvisorValue(v) ? v === advisorOn : v === st.model)} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
           items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName })),
-            ...(models ? advisorItems(models, dflt, modelLabel).map((a) => ({ ...a, group: 'Advisor' })) : []),
             ...(models ?? []).filter((m) => m.value !== 'default').map((m) => ({ value: DEFAULT_PICK + m.value, label: m.displayName, group: 'Default for new threads' }))]}
           onPick={(v) => { if (v.startsWith(DEFAULT_PICK)) { setErr(''); void saveDefault({ model: v.slice(DEFAULT_PICK.length) }).catch((x) => setErr(String(x?.message ?? x))); return } if (isAdvisorValue(v)) { pickAdvisor(v); return } const was = st.model; setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => { setPicked(tabId, { model: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
+      )}
+      {open === 'advisor' && (
+        <PickList anchor={anchorOf(aref.current)} isOn={(v) => v === advisorOn} loading={!models && !loadErr} testid="advisor-list" onClose={() => setOpen(null)}
+          items={models ? advisorItems(models, dflt, modelLabel) : []}
+          onPick={(v) => pickAdvisor(v)} />
       )}
       {open === 'effort' && (
         <PickList anchor={anchorOf(eref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.effort : v === st.effort)} testid="effort-list" onClose={() => setOpen(null)}

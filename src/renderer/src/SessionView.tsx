@@ -791,8 +791,9 @@ export function SessionView(p: Props) {
           <Btn kind="link" onClick={() => fileInput.current?.click()} testid="composer-attach" title="Attach files or images">Attach</Btn>
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />
           <span className="cbtns">
-            {session.busy && <Btn kind="link" onClick={() => submit('queue')} testid="send-queue" title="Held until Claude finishes, then starts a new turn (Tab)">Queue</Btn>}
-            {session.busy && <Btn kind="link" onClick={p.onStop} testid="chat-stop" title="Stop this turn; the queue holds (Esc)">Stop</Btn>}
+            <Btn kind="link" disabled={!session.busy} onClick={() => submit('queue')} testid="send-queue" title={session.busy ? 'Held until Claude finishes, then starts a new turn (Tab)' : 'Queue: while Claude works, holds your message until it finishes (Tab)'}>Queue</Btn>
+            <Btn kind="link" disabled={!session.busy} onClick={() => submit('interrupt')} testid="send-interrupt" title={session.busy ? 'Stops what Claude is doing and sends this at once (Ctrl+Shift+Enter)' : 'Interrupt: while Claude works, stops it and sends your message at once (Ctrl+Shift+Enter)'}>Interrupt</Btn>
+            <Btn kind="link" disabled={!session.busy} onClick={p.onStop} testid="chat-stop" title={session.busy ? 'Stop this turn; the queue holds (Esc)' : 'Stop: while Claude works, stops the turn (Esc)'}>Stop</Btn>
             <Btn kind="primary" className={draft.trim() || images.length ? '' : 'idle'} onClick={() => submit('steer')} testid="send" title={session.busy ? 'Delivered at Claude\'s next step, inside the running turn (Enter)' : 'Send (Enter)'}>{session.busy ? 'Steer' : 'Send'}</Btn>
           </span>
         </div>
