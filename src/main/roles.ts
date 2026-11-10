@@ -46,7 +46,6 @@ export function ensureRole(role: string): Role {
 }
 
 export const roleMemoryPath = (id: string) => join(rolesDir(), id, 'memory.md')
-export const sharedMemoryPath = () => sharedFile()
 
 // The newest entries of a memory file that fit in `bytes` (the file itself keeps everything): the brief carries those and
 // says how many older ones are in the file. Lines that are not entries (the heading) are left out of the count.

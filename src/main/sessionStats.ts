@@ -4,7 +4,6 @@
 // keeps its size, mtime, how far it was read and the running numbers, and only bytes appended since are read. The first
 // read of a big file takes the head (start time) and the tail (everything the bar shows) at once; the part between is
 // scanned in the background for the compaction count and the token totals.
-import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
 
 export type SessionStats = {
@@ -180,29 +179,3 @@ export async function sessionTotals(path: string): Promise<SessionTotals> {
 
 // the background scan of a big file, for tests and callers that want the full totals
 export async function settled(path: string): Promise<void> { await cache.get(path)?.middle }
-
-// the context the thread's last request sent (fresh + cache written + cache read), read from the transcript's end only,
-// so it is cheap enough to ask before every watcher run; null when unknown
-export function lastContextTokens(path: string, tailBytes = 512 * 1024): number | null {
-  let text: string
-  try {
-    const fd = openSync(path, 'r')
-    try {
-      const size = fstatSync(fd).size
-      const n = Math.min(size, tailBytes)
-      const buf = Buffer.alloc(n)
-      readSync(fd, buf, 0, n, size - n)
-      text = buf.toString('utf8')
-    } finally { closeSync(fd) }
-  } catch { return null }
-  const lines = text.split('\n')
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i].includes('"usage"')) continue
-    let e: any
-    try { e = JSON.parse(lines[i]) } catch { continue }
-    const u = e.message?.usage
-    if (e.type !== 'assistant' || !u || e.isSidechain) continue
-    return (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
-  }
-  return null
-}
