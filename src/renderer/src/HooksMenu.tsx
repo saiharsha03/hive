@@ -1,23 +1,14 @@
 // Dropdown under the Hooks button: every hook with an on/off switch, grouped by settings file.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-export function HooksMenu({ folder, onClose }: { folder: string; onClose: () => void }) {
+export function HooksMenu({ folder }: { folder: string }) {
   const [hooks, setHooks] = useState<HookRow[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
 
   const load = () => window.api.listHooks(folder).then(setHooks).catch((e) => setError(String(e?.message ?? e)))
   useEffect(() => { load() }, [folder])
 
-  // close on a click outside the menu or on Escape
-  useEffect(() => {
-    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose() }
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    setTimeout(() => document.addEventListener('mousedown', down))
-    document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
-  }, [onClose])
 
   const toggle = async (h: HookRow) => {
     setBusy(h.id)
@@ -31,7 +22,7 @@ export function HooksMenu({ folder, onClose }: { folder: string; onClose: () => 
   const on = hooks?.filter((h) => h.enabled).length ?? 0
 
   return (
-    <div className="dropdown" ref={ref}>
+    <div className="dropdown">
       <div className="dd-head">
         <span>Hooks</span>
         <span className="dd-count">{hooks ? `${on} on, ${hooks.length - on} off` : ''}</span>

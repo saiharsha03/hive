@@ -1000,9 +1000,9 @@ export function App() {
           className={`pop-${pop.kind}`} testid={`popover-${pop.kind}`}>
           {pop.kind === 'pull' && <PullPanel onClose={() => setPop(null)} />}
           {pop.kind === 'dev' && <DevPanel state={dev.state} setState={dev.setState} onClose={() => setPop(null)} />}
-          {pop.kind === 'mcp' && <McpMenu tabId={activeId} onClose={() => setPop(null)} />}
-          {pop.kind === 'hooks' && <HooksMenu folder={folder} onClose={() => setPop(null)} />}
-          {pop.kind === 'plugins' && <PluginsMenu onClose={() => setPop(null)} />}
+          {pop.kind === 'mcp' && <McpMenu tabId={activeId} />}
+          {pop.kind === 'hooks' && <HooksMenu folder={folder} />}
+          {pop.kind === 'plugins' && <PluginsMenu />}
           {pop.kind === 'threads' && <div className="pop-threads">{threadsList(undefined, () => { setPop(null); newSession() })}</div>}
           {pop.kind === 'watchers' && <WatchersPopover onOpen={() => { setPop(null); showView('watchers') }} onOpenAll={() => { setPop(null); showView('watchers') }} />}
           {pop.kind === 'appearance' && <div className="pop-appearance"><AppearancePicker /></div>}

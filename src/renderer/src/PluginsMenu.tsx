@@ -1,27 +1,18 @@
 // Dropdown under the Plugins button: every installed plugin with an on/off switch,
 // grouped by where it came from, plus what it hooks into.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { setClipboardOn, useClipboardOn } from './clipboardOffer'
 
-export function PluginsMenu({ onClose }: { onClose: () => void }) {
+export function PluginsMenu() {
   const [plugins, setPlugins] = useState<PluginInfo[] | null>(null)
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
   const clipOn = useClipboardOn()
 
   const load = () => window.api.listPlugins().then(setPlugins).catch((e) => setError(String(e?.message ?? e)))
   useEffect(() => { load() }, [])
 
-  // close on a click outside the menu or on Escape
-  useEffect(() => {
-    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose() }
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    setTimeout(() => document.addEventListener('mousedown', down))
-    document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
-  }, [onClose])
 
   const toggle = async (p: PluginInfo) => {
     setBusy(p.key)
@@ -37,7 +28,7 @@ export function PluginsMenu({ onClose }: { onClose: () => void }) {
   const on = plugins?.filter((p) => p.enabled).length ?? 0
 
   return (
-    <div className="dropdown wide" ref={ref}>
+    <div className="dropdown wide">
       <div className="dd-head">
         <span>Plugins</span>
         <span className="dd-count">{plugins ? `${on} on, ${plugins.length - on} off` : ''}</span>
