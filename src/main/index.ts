@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, watch, writ
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
-import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, setThreadMode, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
+import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, setThreadMode, THREAD_MODES, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { busyTranscript, configureChat, liveQuery, resumeEverything, runningEverywhere, stopEverything, stoppedQueues, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, pauseWakeups, runWakeupNow, tick as wakeupsTick, wakeupsPaused } from './threadWakeups'
@@ -17,7 +17,8 @@ import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
 import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
-import { registerStatusIpc } from './liveStatus'
+import { registerStatusIpc, setEffort, setModel } from './liveStatus'
+import { modeLabel } from '../shared/modeCore'
 import { threadStatusView } from './statusView'
 import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
@@ -272,6 +273,43 @@ const mobileDeps = () => ({
     return true
   },
   wakeups: () => phoneWakeups(listWakeups(), listContinues()),
+  // 3.0 app: what a thread runs on and in which mode, and changing it (a thread with no process starts in the mode
+  // picked; its model and effort can only be changed once it runs)
+  settings: async (id: string) => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    const f = l ? threadFacts(l.tabId) : null
+    let models: { value: string; label: string }[] = []
+    try { models = ((await Promise.race([idle().supportedModels(), new Promise<never>((_r, rej) => setTimeout(() => rej(new Error('slow')), 8000))])) as { value: string; displayName: string }[]).map((m) => ({ value: m.value, label: m.displayName })) } catch { /* none to offer */ }
+    return {
+      live: !!l, mode: f?.mode ?? '', model: f?.model ?? '', effort: f?.effort ?? '',
+      modes: THREAD_MODES.map((m) => ({ value: m, label: modeLabel(m) })), models, efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    }
+  },
+  setThread: async (id: string, what: 'mode' | 'model' | 'effort', value: string) => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    const w = mainWeb()
+    if (!w) throw new Error(`The ${appName()} window is not open`)
+    if (what === 'mode') { setThreadMode(l?.tabId ?? id, value, w); return 'set' }
+    if (!l) throw new Error('Send this thread a message first: its model and effort can be changed once it is running')
+    if (what === 'model') await setModel(l.tabId, liveQuery(l.tabId), value)
+    else await setEffort(l.tabId, liveQuery(l.tabId), value)
+    return 'set'
+  },
+  // queue: the message waits for the running turn to end (what a send to a working thread does). interrupt: the
+  // running turn is stopped first, so the message goes in at once
+  sendHow: async (id: string, text: string, how: 'queue' | 'interrupt') => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    const r = await sendTo(id, text, true)
+    if (how === 'interrupt' && l?.busy) await interrupt(l.tabId)
+    return r
+  },
+  notes: async () => (await listNotes()).map((n) => ({ id: n.id, title: n.title, text: n.text.length > 20_000 ? `${n.text.slice(0, 20_000)}…` : n.text, updated: n.updated })),
+  noteSave: (id: string | null, text: string) => saveNote(id, text),
+  todos: async () => (await listTodos()).map((t) => ({ id: t.id, text: t.text, status: t.status, ...(t.due ? { due: t.due } : {}) })),
+  todoAdd: async (text: string) => (await addTodo(text, 'user')).id,
+  todoDone: async (id: string, done: boolean) => { await setDone(id, done); return done ? 'done' : 'open' },
+  watchers: async () => (await listWatchersView()).watchers.map((x) => ({ id: x.id, name: x.name, goal: x.goal, enabled: x.enabled, status: String(x.status), note: x.message || x.waitingReason, lastRun: x.lastRun, nextRun: x.nextRun })),
+  watcherRun: async (id: string) => { await runWatcherNow(id, 'sweep'); return 'started' },
   // 2.0 app: a thread now without its transcript, all running background work, stop everything, run a wake-up now,
   // and the quiet hours it shares with Hive
   peek: (id: string) => {

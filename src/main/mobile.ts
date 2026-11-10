@@ -52,7 +52,20 @@ type Deps = {
   switchAccount?: (id: string) => Promise<string>
   // Hive's own quiet hours: read them, or set and read them
   quietHours?: (set?: QuietHours) => QuietHours | Promise<QuietHours>
+  // 3.0 app: a thread's model, effort and permission mode (read and set), a message that waits or interrupts, the
+  // notes, the to-dos and the watchers
+  settings?: (id: string) => Promise<PhoneThreadSettings>
+  setThread?: (id: string, what: 'mode' | 'model' | 'effort', value: string) => Promise<string>
+  sendHow?: (id: string, text: string, how: 'queue' | 'interrupt') => Promise<string>
+  notes?: () => Promise<{ id: string; title: string; text: string; updated: number }[]>
+  noteSave?: (id: string | null, text: string) => Promise<string>
+  todos?: () => Promise<{ id: string; text: string; status: string; due?: string }[]>
+  todoAdd?: (text: string) => Promise<string>
+  todoDone?: (id: string, done: boolean) => Promise<string>
+  watchers?: () => Promise<{ id: string; name: string; goal: string; enabled: boolean; status: string; note: string; lastRun: number | null; nextRun: number | null }[]>
+  watcherRun?: (id: string) => Promise<string>
 }
+export type PhoneThreadSettings = { live: boolean; mode: string; model: string; effort: string; modes: { value: string; label: string }[]; models: { value: string; label: string }[]; efforts: string[] }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
 // nk: the app said (hello, v 2) that it opens notifications with the notification key
 type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; future?: number[]; floor?: number; nk?: boolean }
@@ -274,7 +287,7 @@ let staleSaid = 0
 
 // ---- what the 2.0 app asks for, from the optional deps or from the ones every Hive has ----
 // which optional requests this Hive answers; the app hides the screens and buttons for the others
-const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
+const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.settings && d.setThread ? ['threadSettings'] : []), ...(d.sendHow ? ['sendHow'] : []), ...(d.notes && d.noteSave ? ['notes'] : []), ...(d.todos ? ['todos'] : []), ...(d.watchers ? ['watchers'] : []), ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
 
 async function peekThread(d: Deps, id: string): Promise<PhonePeek | null> {
   if (d.peek) return d.peek(id)
@@ -409,7 +422,37 @@ async function onMessage(raw: string): Promise<void> {
       case 'hello':
         if (typeof m.v === 'number' && m.v >= 2 && !pairing.nk) { pairing.nk = true; store() }
         return reply({ ok: 'hello', v: 3, can: can(deps) })
-      case 'send': { const d = deps; fails.delete(id); return reply({ ok: await oncePerMid(m.mid, () => d.send(id, String(m.text ?? ''))) }) }
+      case 'send': {
+        const d = deps; fails.delete(id)
+        const how = m.how === 'queue' || m.how === 'interrupt' ? m.how : null
+        return reply({ ok: await oncePerMid(m.mid, () => (how && d.sendHow ? d.sendHow(id, String(m.text ?? ''), how) : d.send(id, String(m.text ?? '')))) })
+      }
+      // ---- the 3.0 app ----
+      case 'threadSettings': return deps.settings ? reply({ settings: await deps.settings(id) }) : reply({ error: 'unknown request threadSettings' })
+      case 'setThread': {
+        const what = String(m.what ?? '')
+        if (!deps.setThread || (what !== 'mode' && what !== 'model' && what !== 'effort')) return reply({ error: 'unknown request setThread' })
+        return reply({ ok: await deps.setThread(id, what, String(m.value ?? '')) })
+      }
+      case 'notes': return deps.notes ? reply({ notes: await deps.notes() }) : reply({ error: 'unknown request notes' })
+      case 'noteSave': {
+        if (!deps.noteSave) return reply({ error: 'unknown request noteSave' })
+        const d = deps
+        const text = String(m.text ?? '')
+        if (!text.trim()) return reply({ error: 'The note is empty' })
+        return reply({ ok: 'saved', note: await oncePerMid(m.mid, () => d.noteSave!(id || null, text)) })
+      }
+      case 'todos': return deps.todos ? reply({ todos: await deps.todos() }) : reply({ error: 'unknown request todos' })
+      case 'todoAdd': {
+        if (!deps.todoAdd) return reply({ error: 'unknown request todoAdd' })
+        const d = deps
+        const text = String(m.text ?? '').trim()
+        if (!text) return reply({ error: 'The to-do is empty' })
+        return reply({ ok: await oncePerMid(m.mid, () => d.todoAdd!(text)) })
+      }
+      case 'todoDone': return deps.todoDone ? reply({ ok: await deps.todoDone(id, m.done !== false) }) : reply({ error: 'unknown request todoDone' })
+      case 'watchers': return deps.watchers ? reply({ watchers: await deps.watchers() }) : reply({ error: 'unknown request watchers' })
+      case 'watcherRun': return deps.watcherRun ? reply({ ok: await deps.watcherRun(id) }) : reply({ error: 'unknown request watcherRun' })
       case 'new': {
         const d = deps
         const r = await oncePerMid(m.mid, () => d.start(String(m.folder ?? ''), String(m.text ?? '')))

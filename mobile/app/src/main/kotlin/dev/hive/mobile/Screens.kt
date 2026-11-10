@@ -106,9 +106,11 @@ fun ThreadsScreen(
 private fun ItemRow(it: Item) {
     when (it.k) {
         // your own message: a band across the pane, a little heavier; whether Claude has taken it in, when Hive says
-        "you" -> Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).background(C.band).padding(horizontal = Pad, vertical = 9.dp)) {
-            SelectionContainer { Text(it.t, style = T.conv.copy(fontWeight = FontWeight.Medium, color = C.hi)) }
-            if (it.seen != null) StateWord(if (it.seen) "SEEN BY CLAUDE" else "NOT READ YET", Modifier.padding(top = 4.dp))
+        "you" -> Box(Modifier.fillMaxWidth().padding(start = 56.dp, end = Pad, top = 6.dp, bottom = 6.dp), contentAlignment = Alignment.CenterEnd) {
+            Column(Modifier.background(C.sel, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 12.dp, bottomEnd = 2.dp)).padding(horizontal = 12.dp, vertical = 8.dp), horizontalAlignment = Alignment.End) {
+                SelectionContainer { Text(it.t, style = T.conv.copy(color = C.hi)) }
+                if (it.seen != null) StateWord(if (it.seen) "SEEN BY CLAUDE" else "NOT READ YET", Modifier.padding(top = 4.dp))
+            }
         }
         "claude" -> SelectionContainer {
             val code = T.mono.copy(color = C.hi, fontSize = 12.5.sp, lineHeight = 19.sp)
@@ -174,7 +176,7 @@ fun AskCard(ask: Ask, sent: Boolean = false, onAnswer: (JSONObject) -> Unit = {}
 
 // the composer: an underlined input with Mic beside it, and under it what Send will do and that the draft is kept
 @Composable
-fun Composer(draft: String, working: Boolean, canSend: Boolean, placeholder: String = "Message Claude", mic: Boolean = true, onDraft: (String) -> Unit = {}, onSend: () -> Unit = {}, onMic: () -> Unit = {}) {
+fun Composer(draft: String, working: Boolean, canSend: Boolean, placeholder: String = "Message Claude", mic: Boolean = true, onDraft: (String) -> Unit = {}, onSend: () -> Unit = {}, onMic: () -> Unit = {}, onQueue: (() -> Unit)? = null, onInterrupt: (() -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().background(C.side)) {
         Rule()
         Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 10.dp)) {
@@ -183,7 +185,10 @@ fun Composer(draft: String, working: Boolean, canSend: Boolean, placeholder: Str
                 Text(if (working) "Steers Claude" else "Starts a turn", style = T.label)
                 if (draft.isNotBlank()) Text("Draft kept", style = T.label)
                 Spacer(Modifier.weight(1f))
-                Text("Send", Modifier.clickable(enabled = canSend && draft.isNotBlank(), onClick = onSend).padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
+                val ok = canSend && draft.isNotBlank()
+                if (working && onQueue != null) Text("Queue", Modifier.clickable(enabled = ok, onClick = onQueue).padding(horizontal = 6.dp, vertical = 2.dp), style = T.label.copy(fontSize = 13.sp), color = if (ok) C.link else C.faint)
+                if (working && onInterrupt != null) Text("Interrupt", Modifier.clickable(enabled = ok, onClick = onInterrupt).padding(horizontal = 6.dp, vertical = 2.dp), style = T.label.copy(fontSize = 13.sp), color = if (ok) C.fail else C.faint)
+                Text(if (working) "Steer" else "Send", Modifier.clickable(enabled = canSend && draft.isNotBlank(), onClick = onSend).padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
                     style = T.label.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = if (canSend && draft.isNotBlank()) C.accent else C.faint)
             }
         }
@@ -197,6 +202,8 @@ fun ThreadScreen(
     list: LazyListState = rememberLazyListState(),
     onBack: () -> Unit = {}, onStay: () -> Unit = {}, onLeave: () -> Unit = {}, onDraft: (String) -> Unit = {}, onSend: () -> Unit = {}, onQuick: (Quick.Reply) -> Unit = {},
     onStop: () -> Unit = {}, onStopTask: (Task) -> Unit = {}, onAnswer: (Ask, JSONObject) -> Unit = { _, _ -> }, onMic: () -> Unit = {},
+    settings: ThreadSettings? = null, settingsOpen: String = "", onSettingsOpen: (String) -> Unit = {}, onSetting: (String, String) -> Unit = { _, _ -> },
+    onQueue: (() -> Unit)? = null, onInterrupt: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize()) {
         Head(v.title.ifEmpty { if (loaded) "Thread" else "Opening" }, sub = true, onBack = onBack, right = if (v.working) "Stop" else "", rightColor = C.fail, onRight = onStop)
@@ -233,7 +240,8 @@ fun ThreadScreen(
             }
             Text("Stop", Modifier.weight(1f).clickable(enabled = v.working, onClick = onStop).padding(vertical = 9.dp), style = T.action, color = if (v.working) C.fail else C.faint, textAlign = TextAlign.Center)
         }
-        Composer(draft, v.working, online, if (v.working) "Steer Claude" else "Message Claude", onDraft = onDraft, onSend = onSend, onMic = onMic)
+        if (settings != null) ThreadSettingsBar(settings, settingsOpen, onSettingsOpen, onSetting)
+        Composer(draft, v.working, online, if (v.working) "Steer Claude" else "Message Claude", onDraft = onDraft, onSend = onSend, onMic = onMic, onQueue = onQueue, onInterrupt = onInterrupt)
     }
 }
 
@@ -330,6 +338,7 @@ fun MoreScreen(
     notice: String = "", stopAll: Boolean? = null, canPause: Boolean = false, threads: Int = 0, tasks: Int = 0, scheduled: Int = 0, done: String = "", accounts: Boolean = false,
     onAskStopAll: () -> Unit = {}, onPause: (Boolean) -> Unit = {}, onCancelStopAll: () -> Unit = {}, onStopAll: () -> Unit = {},
     onUsage: () -> Unit = {}, onTeams: () -> Unit = {}, onNew: () -> Unit = {}, onSettings: () -> Unit = {},
+    onNotes: (() -> Unit)? = null, onTodos: (() -> Unit)? = null, onWatchers: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Head("More")
@@ -338,6 +347,9 @@ fun MoreScreen(
         if (stopAll != null) StopAllBar(threads, tasks, scheduled, stopAll, canPause, onPause, onCancelStopAll, onStopAll)
         else MoreRow("Stop everything", C.fail, onAskStopAll)
         MoreRow(if (accounts) "Usage and accounts" else "Usage", onClick = onUsage)
+        if (onNotes != null) MoreRow("Notes", onClick = onNotes)
+        if (onTodos != null) MoreRow("To do", onClick = onTodos)
+        if (onWatchers != null) MoreRow("Watchers", onClick = onWatchers)
         MoreRow("Teams", onClick = onTeams)
         MoreRow("New thread", onClick = onNew)
         MoreRow("Settings", onClick = onSettings)

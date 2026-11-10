@@ -321,7 +321,7 @@ private fun App(openThread: MutableState<String?>, openPane: MutableState<String
                     1 -> ThreadsRoute(notice, online, openThread.value ?: "", open, onNew = { pane = "new" })
                     2 -> RunningRoute(notice, box.counts, "pause" in can, open, reloadBox)
                     3 -> ScheduledRoute(notice, "runWake" in can, open, reloadBox)
-                    else -> MoreRoute(notice, box.counts, "pause" in can, "accounts" in can, reloadBox, onPane = { pane = it })
+                    else -> MoreRoute(notice, box.counts, "pause" in can, "accounts" in can, can, reloadBox, onPane = { pane = it })
                 }
             }
             Tabs(box.counts, tab) { tab = it }
@@ -332,6 +332,9 @@ private fun App(openThread: MutableState<String?>, openPane: MutableState<String
         when (pane) {
             "usage" -> UsageRoute(notice, "accounts" in can, box.counts.working, closeDetail)
             "teams" -> TeamsRoute(notice, open, closeDetail)
+            "notes" -> NotesRoute(notice, closeDetail)
+            "todos" -> TodosRoute(notice, closeDetail)
+            "watchers" -> WatchersRoute(notice, closeDetail)
             "settings" -> SettingsRoute(notice, online, "quiet" in can, closeDetail, onUnpaired = { told ->
                 Drafts.clear()
                 closeDetail()
@@ -341,7 +344,7 @@ private fun App(openThread: MutableState<String?>, openPane: MutableState<String
             })
             "new" -> NewThreadRoute(notice, online, onDone = { id -> pane = ""; if (id != null) openThread.value = id })
             // keyed: another thread is another screen, never this one's text box with a different id behind it
-            else -> { val id = openThread.value; if (id != null) key(id) { ThreadRoute(id, notice, online) { openThread.value = null } } }
+            else -> { val id = openThread.value; if (id != null) key(id) { ThreadRoute(id, notice, online, can) { openThread.value = null } } }
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -418,7 +421,7 @@ private fun ThreadsRoute(notice: String, online: Boolean, open: String, onOpen: 
 }
 
 @Composable
-private fun ThreadRoute(id: String, notice: String, online: Boolean, onBack: () -> Unit) {
+private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collection<String>, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var v by remember { mutableStateOf(ThreadView()) }
     var loaded by remember { mutableStateOf(false) }
@@ -453,20 +456,26 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, onBack: () 
             reload()
         }
     }
-    val send: (String) -> Unit = { text ->
+    var settings by remember { mutableStateOf<ThreadSettings?>(null) }
+    var settingsOpen by remember { mutableStateOf("") }
+    val loadSettings: () -> Unit = { if ("threadSettings" in can) scope.launch { attempt { settings = ReadMore.settings(Relay.ask("threadSettings", mapOf("id" to id)).optJSONObject("settings")) } } }
+    LaunchedEffect(id, v.working) { loadSettings() }
+    val sendHow: (String, String) -> Unit = { text, how ->
         // the same text sent again after a try that got no answer carries the same id: Hive runs it once
         val mid = Drafts.midFor(id, text)
         follow = true
         // not this screen's own scope: a send that fails after the screen is left still puts the text back
         appScope.launch {
-            val failed = attempt { Relay.ask("send", mapOf("id" to id, "text" to text, "mid" to mid)) }
+            val failed = attempt { Relay.ask("send", if (how.isEmpty()) mapOf("id" to id, "text" to text, "mid" to mid) else mapOf("id" to id, "text" to text, "mid" to mid, "how" to how)) }
             if (failed.isEmpty()) { Drafts.pending.remove(id); v = v.copy(working = true) }
             else if (Drafts.text[id].isNullOrEmpty()) Drafts.text[id] = text // unless something new was typed meanwhile
             err = failed
             reload()
         }
     }
+    val send: (String) -> Unit = { text -> sendHow(text, "") }
     val mic = rememberMic(onText = { Drafts.text[id] = joinDraft(Drafts.text[id] ?: "", it) }, onError = { err = it })
+    val how = "sendHow" in can
     ThreadScreen(v, draft, online, loaded, err, notice, leaving, sentAsks, list,
         onBack = back, onStay = { leaving = false }, onLeave = { leaving = false; onBack() },
         onDraft = { Drafts.text[id] = it },
@@ -476,7 +485,70 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, onBack: () 
         onStop = { act("stop", mapOf("id" to id)) { } },
         onStopTask = { t -> act("stopTask", mapOf("id" to id, "task" to t.id)) { } },
         onAnswer = { a, answers -> sentAsks = sentAsks + a.id; act("answer", mapOf("id" to id, "ask" to a.id, "answers" to answers)) { ok -> if (!ok) sentAsks = sentAsks - a.id } },
-        onMic = mic)
+        onMic = mic,
+        settings = settings, settingsOpen = settingsOpen, onSettingsOpen = { settingsOpen = it },
+        onSetting = { what, value -> settingsOpen = ""; scope.launch { err = attempt { Relay.ask("setThread", mapOf("id" to id, "what" to what, "value" to value)) }; loadSettings() } },
+        onQueue = if (how) ({ val text = draft.trim(); Drafts.text.remove(id); sendHow(text, "queue") }) else null,
+        onInterrupt = if (how) ({ val text = draft.trim(); Drafts.text.remove(id); sendHow(text, "interrupt") }) else null)
+}
+
+// ---- the 3.0 screens ----
+@Composable
+private fun NotesRoute(notice: String, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var notes by remember { mutableStateOf<List<Note>?>(null) }
+    var err by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf<String?>(null) }
+    var draft by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    val back: () -> Unit = { if (editing != null) editing = null else onBack() }
+    BackHandler(onBack = back)
+    val reload = rememberLoader { err = attempt("notes") { notes = ReadMore.notes(Relay.ask("notes")) } }
+    NotesScreen(notes, editing, draft, notice, err, saving, onBack = back,
+        onOpen = { n -> editing = n.id; draft = n.text }, onNew = { editing = ""; draft = "" }, onDraft = { draft = it },
+        onSave = {
+            val id = editing ?: ""
+            if (draft.isNotBlank() && !saving) {
+                saving = true
+                scope.launch {
+                    err = attempt { Relay.ask("noteSave", mapOf("id" to id, "text" to draft, "mid" to java.util.UUID.randomUUID().toString())) }
+                    saving = false
+                    if (err.isEmpty()) editing = null
+                    reload()
+                }
+            }
+        })
+}
+
+@Composable
+private fun TodosRoute(notice: String, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var todos by remember { mutableStateOf<List<Todo>?>(null) }
+    var err by remember { mutableStateOf("") }
+    var draft by remember { mutableStateOf("") }
+    var showDone by remember { mutableStateOf(false) }
+    BackHandler(onBack = onBack)
+    val reload = rememberLoader(every = { 15_000L }) { err = attempt("todos") { todos = ReadMore.todos(Relay.ask("todos")) } }
+    TodosScreen(todos, draft, notice, err, showDone, onBack = onBack, onDraft = { draft = it },
+        onAdd = { val text = draft.trim(); draft = ""; scope.launch { err = attempt { Relay.ask("todoAdd", mapOf("text" to text, "mid" to java.util.UUID.randomUUID().toString())) }; reload() } },
+        onToggle = { t -> scope.launch { err = attempt { Relay.ask("todoDone", mapOf("id" to t.id, "done" to (t.status != "done"))) }; reload() } },
+        onShowDone = { showDone = !showDone })
+}
+
+@Composable
+private fun WatchersRoute(notice: String, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var watchers by remember { mutableStateOf<List<Watcher>?>(null) }
+    var err by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf("") }
+    var done by remember { mutableStateOf("") }
+    val now = rememberNow()
+    BackHandler(onBack = onBack)
+    val reload = rememberLoader(every = { 10_000L }) { err = attempt("watchers") { watchers = ReadMore.watchers(Relay.ask("watchers")) } }
+    WatchersScreen(watchers, notice, err, busy, done, now, onBack = onBack, onRun = { w ->
+        busy = w.id; done = ""
+        scope.launch { err = attempt { Relay.ask("watcherRun", mapOf("id" to w.id)) }; if (err.isEmpty()) done = "${w.name} started a run."; busy = ""; reload() }
+    })
 }
 
 // "Stop everything" as Running and More both offer it: the question first, then what was stopped, in words
@@ -537,11 +609,12 @@ private fun ScheduledRoute(notice: String, canRun: Boolean, onOpen: (String) -> 
 }
 
 @Composable
-private fun MoreRoute(notice: String, counts: Counts, canPause: Boolean, accounts: Boolean, reloadBox: () -> Unit, onPane: (String) -> Unit) {
+private fun MoreRoute(notice: String, counts: Counts, canPause: Boolean, accounts: Boolean, can: Collection<String>, reloadBox: () -> Unit, onPane: (String) -> Unit) {
     val stop = rememberStopAll { reloadBox() }
     MoreScreen(listOf(notice, stop.error).filter { it.isNotEmpty() }.joinToString(" "), stop.asking, canPause, counts.threads, counts.running, counts.scheduled, stop.done, accounts,
         onAskStopAll = stop.ask, onPause = stop.pause, onCancelStopAll = stop.cancel, onStopAll = stop.go,
-        onUsage = { onPane("usage") }, onTeams = { onPane("teams") }, onNew = { onPane("new") }, onSettings = { onPane("settings") })
+        onUsage = { onPane("usage") }, onTeams = { onPane("teams") }, onNew = { onPane("new") }, onSettings = { onPane("settings") },
+        onNotes = if ("notes" in can) ({ onPane("notes") }) else null, onTodos = if ("todos" in can) ({ onPane("todos") }) else null, onWatchers = if ("watchers" in can) ({ onPane("watchers") }) else null)
 }
 
 @Composable
