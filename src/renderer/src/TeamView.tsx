@@ -159,7 +159,9 @@ export function TeamView({ onActivate, onMessage, inWindow }: { onActivate: (thr
   useEffect(() => {
     if (!id) { setV(null); return }
     let on = true
-    const load = () => void window.api.teamView(id).then((x) => { if (on) setV(x) }).catch(() => {})
+    // the 2 s refresh mostly answers what is already on screen: then nothing re-renders (plan, log, office)
+    let last = ''
+    const load = () => void window.api.teamView(id).then((x) => { const j = JSON.stringify(x); if (on && j !== last) { last = j; setV(x) } }).catch(() => {})
     load()
     const off = window.api.onTeamsChanged((changed) => { if (changed === id) load() })
     const t = setInterval(load, 2000)
@@ -216,11 +218,12 @@ export function TeamView({ onActivate, onMessage, inWindow }: { onActivate: (thr
 function PauseButton({ v }: { v: View }) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
+  const [failed, setFailed] = useState(false)
   const paused = !!v.team.pausedAt
   const go = () => {
-    setBusy(true)
+    setBusy(true); setNote(''); setFailed(false)
     void (paused ? window.api.teamResume(v.team.id) : window.api.teamPause(v.team.id))
-      .then((m) => setNote(m)).catch((e) => setNote(String(e?.message ?? e))).finally(() => setBusy(false))
+      .then((m) => setNote(m)).catch((e) => { setFailed(true); setNote(String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) }).finally(() => setBusy(false))
   }
   return (
     <>
@@ -228,6 +231,7 @@ function PauseButton({ v }: { v: View }) {
       <button className="link" disabled={busy} onClick={go} title={note || (paused ? 'Wake every teammate to carry on' : 'Stop every running turn; posts are held until you resume')} data-testid="team-pause">
         {busy ? (paused ? 'Resuming…' : 'Pausing…') : paused ? 'Resume team' : 'Pause team'}
       </button>
+      {note && <span className={failed ? 'tv-note s-fail' : 'tv-note'} title={note} data-testid="team-pause-note">{note}</span>}
     </>
   )
 }
