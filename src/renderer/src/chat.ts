@@ -199,14 +199,21 @@ export function applyEvent(s: Session, ev: any): Session {
       const model: string | undefined = ev.message?.model
       const answeredBy = model && model !== '<synthetic>' ? model : s.answeredBy
       if (answeredBy && s.answeredBy && answeredBy !== s.answeredBy) items.push({ kind: 'note', text: `Model changed: ${modelLabel(s.answeredBy)} → ${modelLabel(answeredBy)}` })
+      // What Claude says goes above any message of yours it has not read yet (one you sent while it was still writing):
+      // the conversation reads in the order things happened for Claude, and your message moves down to where it is read.
+      const put = (it: Item) => {
+        let at = items.length
+        while (at > 0) { const prev = items[at - 1]; if (prev.kind === 'user' && prev.uuid && !prev.seen && !prev.queue) at--; else break }
+        items.splice(at, 0, it)
+      }
       for (const b of ev.message?.content ?? []) {
-        if (b.type === 'text' && b.text.trim()) items.push({ kind: 'assistant', text: b.text, at: Date.now() })
+        if (b.type === 'text' && b.text.trim()) put({ kind: 'assistant', text: b.text, at: Date.now() })
         else if (b.type === 'tool_use') {
-          if (b.name === SHOW) items.push({ kind: 'show', path: b.input?.path })
-          items.push({ kind: 'tool', id: b.id, name: b.name, input: b.input, status: 'running' })
+          if (b.name === SHOW) put({ kind: 'show', path: b.input?.path })
+          put({ kind: 'tool', id: b.id, name: b.name, input: b.input, status: 'running' })
         }
         // Claude asked its advisor: a row like any tool's, done when the answer block arrives
-        else if (isAdvisorCall(b)) { if (!items.some((it) => it.kind === 'tool' && it.id === b.id)) items.push({ kind: 'tool', id: b.id, name: ADVISOR_TOOL, input: b.input ?? {}, status: 'running' }) }
+        else if (isAdvisorCall(b)) { if (!items.some((it) => it.kind === 'tool' && it.id === b.id)) put({ kind: 'tool', id: b.id, name: ADVISOR_TOOL, input: b.input ?? {}, status: 'running' }) }
         else if (isAdvisorResult(b)) {
           const out = advisorOutput(b, ev.message?.usage)
           const at = items.findIndex((it) => it.kind === 'tool' && it.id === b.tool_use_id)
