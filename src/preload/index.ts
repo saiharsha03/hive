@@ -216,14 +216,7 @@ contextBridge.exposeInMainWorld('api', {
   handoffAt: () => ipcRenderer.invoke('handoff:at'),
   handoffFile: (tabId: string) => ipcRenderer.invoke('handoff:file', tabId),
   handoffReady: (file: string, since: number) => ipcRenderer.invoke('handoff:ready', file, since),
-  pullConfig: () => ipcRenderer.invoke('pull:config'),
-  pullList: () => ipcRenderer.invoke('pull:list'),
   pullRun: (dry: boolean) => ipcRenderer.invoke('pull:run', dry),
-  onPullRow: (cb: (row: { repo: string; result: string }) => void) => {
-    const fn = (_e: unknown, row: { repo: string; result: string }) => cb(row)
-    ipcRenderer.on('pull:row', fn)
-    return () => ipcRenderer.removeListener('pull:row', fn)
-  },
   allowStatus: () => ipcRenderer.invoke('allow:status'),
   allowRun: () => ipcRenderer.invoke('allow:run'),
   updateState: () => ipcRenderer.invoke('update:state'),

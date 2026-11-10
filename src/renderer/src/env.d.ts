@@ -206,10 +206,7 @@ interface Window {
     handoffAt: () => Promise<number>
     handoffFile: (tabId: string) => Promise<string>
     handoffReady: (file: string, since: number) => Promise<boolean>
-    pullConfig: () => Promise<{ ok: boolean; message: string }>
-    pullList: () => Promise<string[]>
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>
-    onPullRow: (cb: (row: { repo: string; result: string }) => void) => () => void
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
     updateState: () => Promise<import('../../shared/versionCore').UpdateState | null>
@@ -237,13 +234,11 @@ interface Window {
     devStack: (id: string, sources: Record<string, import('../../shared/devCore').Source>, only?: string[]) => Promise<string[]>
     devStart: (name: string, source: import('../../shared/devCore').Source) => Promise<string>
     devStop: (name: string) => Promise<string>
-    devStopAll: () => Promise<string[]>
     devLogs: (name: string) => Promise<string>
     onDevUpdate: (cb: (s: import('../../shared/devCore').DevState) => void) => () => void
     terminalOpen: (id: string, cwd: string, cols: number, rows: number) => Promise<{ scrollback: string; fresh: boolean; shell: string; cwd: string }>
     terminalWrite: (id: string, data: string) => Promise<void>
     terminalResize: (id: string, cols: number, rows: number) => Promise<void>
-    terminalKill: (id: string) => Promise<void>
     onTerminalData: (cb: (id: string, chunk: string) => void) => () => void
     onTerminalExit: (cb: (id: string, code: number, closed: boolean) => void) => () => void
     // per-thread status: model / effort switches, the lists the session offers, stopping background work

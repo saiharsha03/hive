@@ -51,7 +51,7 @@ import { loadConfig, readDotEnv } from './devConfig'
 import { loadSettings, saveSettings, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
 import { parseDropChoices } from '../shared/dropCore'
-import { pullAll, scanRepos } from './pull'
+import { pullAll } from './pull'
 import * as gitPanel from './git'
 import { dismissClipboard, setClipboardEnabled, takeClipboard, watchClipboard } from './clipboard'
 import { initScripts, runScript, scriptsConfig, scriptsState, stopAllScripts, stopScript } from './scripts'
@@ -470,11 +470,9 @@ handle('handoff:ready', (_e, file: string, since: number) => {
   if (dirname(f) !== resolve(HANDOFFS())) return false
   try { const st = statSync(f); return st.isFile() && st.size >= 200 && st.mtimeMs >= Number(since) - 2000 } catch { return false }
 })
-handle('pull:config', () => ({ ok: !!appConfig.config, message: appConfig.message }))
-handle('pull:list', () => (appConfig.config ? scanRepos(appConfig.config).map((r) => r.name) : []))
-handle('pull:run', (e, dry: boolean) => {
+handle('pull:run', (_e, dry: boolean) => {
   if (!appConfig.config) throw new Error(appConfig.message)
-  return pullAll(appConfig.config, !!dry, (row) => { if (!e.sender.isDestroyed()) e.sender.send('pull:row', row) })
+  return pullAll(appConfig.config, !!dry) // the rows come back as the answer (nothing listens for them one by one)
 })
 handle('allow:status', () => allowStatus())
 handle('allow:run', () => runAllowlist())
