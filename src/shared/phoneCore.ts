@@ -2,6 +2,8 @@
 // it can be tested without Electron; the relay ops in mobile.ts send these as they are.
 import type { LogEntry, MemberStatus, Team } from './teamCore'
 import { kindLabel, type Task } from './taskCore'
+import type { AskQuestion } from './askCore'
+import type { PhoneThread } from './threadsCore'
 
 export type PhoneMember = { id: string; open: string; name: string; role: string; state: string }
 export type PhoneTeam = { id: string; name: string; goal: string; word: 'WORKING' | 'IDLE' | 'PAUSED'; members: PhoneMember[]; posts: { from: string; text: string; at: number }[] }
@@ -34,4 +36,81 @@ export function phoneWakeups(rows: WakeRow[], continues: { key: string; title: s
   }))
   const cont = continues.map((c) => ({ kind: 'continue' as const, id: c.key, open: c.key, title: c.title, at: c.at, prompt: 'Continue after the usage limit resets', every: null }))
   return [...own, ...cont].filter((w) => Number.isFinite(w.at)).sort((a, b) => a.at - b.at)
+}
+
+// ---- 2.0 app: the Needs me inbox, Running across threads, answers from a notification ----
+
+export type PhoneAsk = { id: string; questions: AskQuestion[] }
+// a thread right now, as far as the phone's inbox and notifications need it
+export type PhonePeek = { working: boolean; asks: PhoneAsk[] }
+export type PhoneRunning = { thread: string; threadTitle: string; id: string; kind: string; title: string; now: string; state: 'working' | 'failed' }
+export type PhoneFail = { thread: string; title: string; note: string; at: number }
+// ask: a question that one tap can answer (one question, one choice); options are its labels
+export type PhoneNeed = { kind: 'waiting' | 'failed'; thread: string; title: string; note: string; at: number; ask?: { id: string; question: string; options: string[] } }
+export type PhoneAccount = { id: string; name: string; detail: string; note: string; inUse: boolean }
+export type QuietHours = { on: boolean; from: string; to: string }
+
+// The one question a single tap can answer: the thread has exactly one open ask, with one question that takes one
+// choice. Anything else (several questions, pick-many) needs the question card, so it gets none.
+export function oneTapAsk(asks: PhoneAsk[]): { id: string; question: string; options: string[] } | null {
+  if (asks.length !== 1 || asks[0].questions.length !== 1) return null
+  const q = asks[0].questions[0]
+  if (q.multiSelect || !q.options.length) return null
+  return { id: asks[0].id, question: q.question, options: q.options.map((o) => o.label) }
+}
+
+// What needs the user, most pressing first: threads waiting for an answer, then threads that failed and were not
+// looked at since; and what is coming up (the next wake-ups and auto-continues).
+export function phoneInbox(threads: PhoneThread[], asks: Record<string, PhoneAsk[]>, fails: PhoneFail[], wakeups: PhoneWakeup[], now: number, comingMax = 5): { needs: PhoneNeed[]; coming: PhoneWakeup[] } {
+  const waiting: PhoneNeed[] = threads.filter((t) => t.state === 'waiting').map((t) => {
+    const ask = oneTapAsk(asks[t.id] ?? [])
+    return { kind: 'waiting' as const, thread: t.id, title: t.title, note: t.note || ask?.question || 'Needs your input', at: t.updated, ...(ask ? { ask } : {}) }
+  })
+  // a thread that failed and is now waiting or working again is not a failure any more
+  const busy = new Set(threads.filter((t) => t.state !== 'idle').map((t) => t.id))
+  const failed: PhoneNeed[] = fails.filter((f) => !busy.has(f.thread)).sort((a, b) => b.at - a.at).map((f) => ({ kind: 'failed' as const, thread: f.thread, title: f.title, note: f.note, at: f.at }))
+  return { needs: [...waiting, ...failed], coming: wakeups.filter((w) => w.at >= now - 60_000).slice(0, comingMax) }
+}
+
+// ---- answering from a notification ----
+// A notification's buttons work while the app is locked, with the notification key and no fingerprint. So they may
+// only do what is safe from a phone someone else could be holding unlocked: stop a thread, or pick a choice that
+// holds back, declines or asks to see more. Every other choice ("Promote now", "Yes", "Delete the branch") opens the
+// app, and its fingerprint, instead. So a choice is taken from a button only when it starts like one that holds back
+// AND names nothing that acts ("Wait for the freeze, then promote" still promotes). Hive checks again on arrival.
+const HOLDS = /^\s*(no\b|not\b|wait|later|hold|pause|stop|cancel|skip|don'?t\b|do not\b|show\b|explain|summar|review|neither|none\b|nothing|leave\b|keep (it|this|that|as)\b|let me\b|ask me\b|i'?ll\b)/i
+const ACTS = /\b(deploy\w*|promot\w*|ship\w*|releas\w*|publish\w*|push\w*|merg\w*|rebas\w*|forc\w*|delet\w*|remov\w*|drop\w*|destroy\w*|wip\w*|reset\w*|overwrit\w*|rm|prod|production|migrat\w*|pay\w*|send\w*|email\w*|buy|purchas\w*|charg\w*|refund\w*|grant\w*|install\w*|upgrad\w*|then|and then|after that)\b/i
+export const riskyChoice = (label: string): boolean => !HOLDS.test(label) || ACTS.test(label)
+
+// what a notification for this thread may offer: the one-tap question's choices (open: that one opens the app) and Stop
+export type NoteActions = { ask?: { id: string; opts: { l: string; open?: true }[] }; stop?: true }
+export function noteActions(peek: PhonePeek | null, maxOpts = 3, maxLabel = 40): NoteActions {
+  if (!peek) return {}
+  const ask = oneTapAsk(peek.asks)
+  // a label too long for a button, or more choices than fit: the card in the app is the place to answer
+  if (ask && ask.options.length <= maxOpts && ask.options.every((l) => l.length <= maxLabel)) {
+    return { ask: { id: ask.id, opts: ask.options.map((l) => (riskyChoice(l) ? { l, open: true as const } : { l })) } }
+  }
+  return peek.working && !peek.asks.length ? { stop: true } : {}
+}
+
+// An answer that came sealed with the notification key: taken only for the thread's one open one-tap question, with
+// one of its own labels, and never a risky one. Returns what to hand the ask, or why not.
+export function limitedAnswer(peek: PhonePeek | null, askId: string, label: string): { answers: Record<string, string> } | { refused: string } {
+  const ask = peek ? oneTapAsk(peek.asks) : null
+  if (!ask || ask.id !== askId) return { refused: 'That question is no longer open' }
+  if (!ask.options.includes(label)) return { refused: 'That is not one of the choices' }
+  if (riskyChoice(label)) return { refused: 'That choice needs the app to be opened' }
+  return { answers: { [ask.question]: label } }
+}
+
+// what kind of notification a title is (chat.ts writes "Question: ...", "Failed: ..." and so on): the app rings
+// through quiet hours only for failures
+export type NoteKind = 'ask' | 'fail' | 'done' | 'limit' | 'note'
+export function noteKind(title: string): NoteKind {
+  if (/^(Question|Waiting):/.test(title)) return 'ask'
+  if (/^Failed:/.test(title)) return 'fail'
+  if (/^Finished:/.test(title)) return 'done'
+  if (/^Usage limit:/.test(title)) return 'limit'
+  return 'note'
 }

@@ -17,6 +17,11 @@ test('a notification fits one push even when JSON escaping grows it (quotes, new
   // sealed: 12 nonce + 16 tag, base64 -> well under the relay's 3600 inline limit
   assert.ok(Math.ceil((Buffer.byteLength(JSON.stringify({ ...n, seq: 1e15, at: 1e15 })) + 28) / 3) * 4 <= 3600)
   assert.equal(fitNotification('Hi', 'short', 't').body, 'short')
+  // with its kind and buttons it still fits, and they are kept whole while the text gives way
+  const more = { kind: 'ask' as const, ask: { id: 'a'.repeat(40), opts: [{ l: 'x'.repeat(40), open: true as const }, { l: 'y'.repeat(40) }, { l: 'z'.repeat(40) }] } }
+  const b = fitNotification('"'.repeat(500), '"\n'.repeat(1500), 't', more)
+  assert.ok(Buffer.byteLength(JSON.stringify({ ...b, seq: 1e15, at: 1e15 })) <= 2500)
+  assert.deepEqual([b.kind, b.ask], [more.kind, more.ask])
 })
 
 test('phone requests: run once, in order, while fresh; others dropped; future-dated ones always remembered', async () => {
