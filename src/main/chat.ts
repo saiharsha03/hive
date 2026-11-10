@@ -6,7 +6,7 @@ import { typeInTerminal } from './terminal'
 import { cliLine, cliOnlyCommand } from '../shared/cliCommandCore'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { appendFile, readFile } from 'node:fs/promises'
+import { appendFile } from 'node:fs/promises'
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -61,7 +61,8 @@ import { formatRoles } from '../shared/roleCore'
 import { addTodo as addTeamTodo, formatTodos, openMajor, updateTodo } from '../shared/teamTodoCore'
 import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
-import { forkPoint, partialRestore, rewindBlock } from '../shared/rewindCore'
+import { partialRestore, rewindBlock } from '../shared/rewindCore'
+import { forkPointOfFile } from './rewindFile'
 import { addPending, pendingDelivered, pendingIsSteer, pendingReturned, pendingSeen, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // the events the user should hear about: the phone and the desktop get the same ones
@@ -1557,7 +1558,7 @@ export function rewindPreview(tabId: string, cwd: string, sessionId: string, uui
 // files came back than listed, the conversation is left as it is and the result says what was not restored
 export type RewindResult = { ok: boolean; error?: string; partial?: { missing: string[]; skipped: number } }
 export async function rewindApply(tabId: string, cwd: string, sessionId: string, uuid: string, files: string[] | null): Promise<RewindResult> {
-  const p = forkPoint(await readFile(transcriptPath(cwd, sessionId), 'utf8').catch(() => ''), uuid)
+  const p = await forkPointOfFile(transcriptPath(cwd, sessionId), uuid) // streamed: transcripts can be hundreds of MB
   if (!p.found) return { ok: false, error: "That message is not in this thread's transcript." }
   if (p.midTurn) return { ok: false, error: 'That message was steered into a running turn: rewind to the message that started the turn.' }
   const s = live.get(tabId)

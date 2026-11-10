@@ -1,5 +1,7 @@
 // Turns a session transcript into chat items, so a reopened session shows its conversation.
-import { open, readFile } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { open } from 'node:fs/promises'
+import { createInterface } from 'node:readline'
 import { parseFromThread } from '../shared/threadTalkCore'
 import { isContinuation } from '../shared/summaryCore'
 import { appName } from '../shared/appName'
@@ -30,10 +32,14 @@ function userItem(text: string, images: string[], at?: number, uuid?: string): I
   return t ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.text } : { kind: 'user', text, images, ...(at ? { at } : {}), ...(uuid ? { uuid } : {}) }
 }
 
+// the whole transcript, read line by line (a transcript can be hundreds of MB: never one string in memory)
 export async function loadHistory(path: string): Promise<Item[]> {
-  let text: string
-  try { text = await readFile(path, 'utf8') } catch { return [] }
-  return parseHistory(text)
+  const p = historyParser()
+  try {
+    const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity })
+    for await (const line of rl) p.line(line)
+  } catch { return [] }
+  return p.done()
 }
 
 // The end of a long transcript only, so a reopened thread shows at once: the last `bytes` from the first whole line on,
@@ -59,21 +65,28 @@ export async function loadRecentHistory(path: string, bytes = RECENT_BYTES, minI
 export const RECENT_BYTES = 2 * 1024 * 1024
 const RECENT_ITEMS = 150
 
-function parseHistory(text: string): Item[] {
+export function parseHistory(text: string): Item[] {
+  const p = historyParser()
+  for (const line of text.split('\n')) p.line(line)
+  return p.done()
+}
+
+// the transcript one line at a time; done() settles what was left open and returns the items
+function historyParser(): { line: (line: string) => void; done: () => Item[] } {
   const items: Item[] = []
   const tools = new Map<string, Extract<Item, { kind: 'tool' }>>()
   const seen = new Set<string>() // assistant content blocks repeat across streamed lines
   const codexByCall = new Map<string, Extract<Item, { kind: 'codex' }>>() // tool_use id -> box
   const codexByTask = new Map<string, Extract<Item, { kind: 'codex' }>>() // Codex task id -> box
 
-  for (const line of text.split('\n')) {
-    if (!line.startsWith('{')) continue
+  const line = (line: string): void => {
+    if (!line.startsWith('{')) return
     let e: any
-    try { e = JSON.parse(line) } catch { continue }
-    if (e.isSidechain || e.isMeta) continue
+    try { e = JSON.parse(line) } catch { return }
+    if (e.isSidechain || e.isMeta) return
     if (e.type === 'system' && e.subtype === 'compact_boundary') {
       items.push({ kind: 'note', text: `Conversation ${e.compactMetadata?.trigger === 'manual' ? 'compacted' : 'auto-compacted'} to free up context` })
-      continue
+      return
     }
     const c = e.message?.content
     const at = Date.parse(e.timestamp ?? '') || undefined
@@ -86,20 +99,20 @@ function parseHistory(text: string): Item[] {
         .replace(/^\[from Codex, answering your codex message "[\s\S]*?"; reply with the codex tool only if needed\]\s*/, '')
         .replace(/\n*This is how Claude Code surfaces a prompt a plugin submits[\s\S]*$/, '')
         .trim() })
-      continue
+      return
     }
 
     if (e.type === 'user') {
       const plain = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n') : ''
-      if (e.isCompactSummary || isContinuation(plain)) { items.push({ kind: 'summary', text: plain }); continue }
+      if (e.isCompactSummary || isContinuation(plain)) { items.push({ kind: 'summary', text: plain }); return }
       if (typeof c === 'string') {
         const done = c.match(CODEX_DONE)
         const box = done && codexByTask.get(done[1])
-        if (box) { box.answer = c.replace(CODEX_DONE, '').replace(/^Below is the output of the Codex subagent[^\n]*\n/, '').replace(/<\/?codex_output(_\w+)?>/g, '').trim(); box.status = done![2] ? 'error' : 'done'; continue }
+        if (box) { box.answer = c.replace(CODEX_DONE, '').replace(/^Below is the output of the Codex subagent[^\n]*\n/, '').replace(/<\/?codex_output(_\w+)?>/g, '').trim(); box.status = done![2] ? 'error' : 'done'; return }
         if (!WRAPPER.test(c)) items.push(userItem(c, [], at, e.uuid))
-        continue
+        return
       }
-      if (!Array.isArray(c)) continue
+      if (!Array.isArray(c)) return
       for (const b of c) if (b.type === 'tool_result') {
         const t = tools.get(b.tool_use_id)
         if (t) { t.status = b.is_error ? 'error' : 'done'; t.output = resultText(b.content) }
@@ -136,12 +149,15 @@ function parseHistory(text: string): Item[] {
       }
     }
   }
-  // a tool with no result in the transcript was cut off
-  for (const t of tools.values()) if (t.status === 'running') t.status = 'done'
-  // a background Codex run whose answer never came back was stopped (tab closed, Hive restarted)
-  for (const b of codexByCall.values()) if (b.status === 'running') {
-    b.status = 'error'
-    b.answer = `Stopped before Codex answered (the tab was closed or ${appName()} restarted).`
+  const done = (): Item[] => {
+    // a tool with no result in the transcript was cut off
+    for (const t of tools.values()) if (t.status === 'running') t.status = 'done'
+    // a background Codex run whose answer never came back was stopped (tab closed, Hive restarted)
+    for (const b of codexByCall.values()) if (b.status === 'running') {
+      b.status = 'error'
+      b.answer = `Stopped before Codex answered (the tab was closed or ${appName()} restarted).`
+    }
+    return items
   }
-  return items
+  return { line, done }
 }
