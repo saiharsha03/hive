@@ -10,6 +10,8 @@ export type ThreadStatus = {
   effort?: string | null // the level the session runs at (Stop hook, or what Hive set)
   ultrathink?: boolean // max effort for this one turn
   effortError?: string
+  advisor?: string | null // the advisor model main reported (hive_advisor); null = none, undefined = not told yet
+  advisorPick?: string // the Advisor row picked in the model menu (advisorCore.ts), shown before main answers
   goal: Goal | null
   crons: LoopJob[]
   wakeRunning: string | null // the scheduled fire running right now (command uuid)
@@ -53,6 +55,8 @@ export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStat
     }
     case 'hive_model':
       return { ...st, model: ev.model }
+    case 'hive_advisor':
+      return { ...st, advisor: typeof ev.model === 'string' && ev.model ? ev.model : null }
     case 'hive_effort':
       return { ...st, effort: ev.level ?? st.effort, ultrathink: !!ev.ultrathink, effortError: ev.error }
     case 'hive_stop':

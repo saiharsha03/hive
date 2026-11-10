@@ -1,7 +1,8 @@
 // A thread's live status, in three places: goal and loop rows in the chat header, the model and effort pickers
 // (popovers) in the message box, and its background work (workflows, subagents, Codex runs) above the message box.
 // Plain views over statusStore; the logic is in shared/*Core.
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import { advisorChecked, advisorItems, advisorModelOf, advisorWord, isAdvisorValue } from '../../shared/advisorCore'
 import { describeCron, nextRun, untilText } from '../../shared/cronCore'
 import { EFFORTS, modelLabel } from '../../shared/statusCore'
 import { kindLabel, type Task } from '../../shared/taskCore'
@@ -138,24 +139,33 @@ let showAgents: () => void = () => {}
 export const setShowAgents = (f: () => void) => { showAgents = f }
 export const openAgentsView = () => showAgents()
 
-function PickList({ anchor, items, value, onPick, onClose, testid, loading }: {
-  anchor: Anchor; items: { value: string; label: string; note?: string }[]; value?: string | null; onPick: (v: string) => void; onClose: () => void; testid: string; loading?: boolean
+type PickItem = { value: string; label: string; note?: string; group?: string }
+function PickList({ anchor, items, value, isOn, onPick, onClose, testid, loading }: {
+  anchor: Anchor; items: PickItem[]; value?: string | null; isOn?: (v: string) => boolean; onPick: (v: string) => void; onClose: () => void; testid: string; loading?: boolean
 }) {
+  const on = (v: string) => (isOn ? isOn(v) : v === value)
   return (
     <Popover anchor={anchor} onClose={onClose} width={260} testid={testid}>
       <div className="poplist">
         {loading && <div className="pop-hint">Loading…</div>}
-        {items.map((m) => (
-          <button key={m.value} className={m.value === value ? 'pop-row on' : 'pop-row'} onClick={() => { onPick(m.value); onClose() }} data-testid={`${testid}-${m.value}`}>
-            <Icon name={m.value === value ? 'check' : 'blank'} />
-            <span className="pop-label">{m.label}</span>
-            {m.note && <span className="pop-note">{m.note}</span>}
-          </button>
+        {items.map((m, i) => (
+          <Fragment key={m.value}>
+            {m.group && m.group !== items[i - 1]?.group && <div className="pop-group" data-testid={`${testid}-group`}>{m.group}</div>}
+            <button className={on(m.value) ? 'pop-row on' : 'pop-row'} onClick={() => { onPick(m.value); onClose() }} data-testid={`${testid}-${m.value}`}>
+              <Icon name={on(m.value) ? 'check' : 'blank'} />
+              <span className="pop-label">{m.label}</span>
+              {m.note && <span className="pop-note">{m.note}</span>}
+            </button>
+          </Fragment>
         ))}
       </div>
     </Popover>
   )
 }
+
+// the Settings > General advisor model, the Default row's value (read when the model menu opens)
+let advisorDefault = ''
+const readAdvisorDefault = () => window.api.settingsGet().then((s) => { advisorDefault = s.general.advisorModel ?? ''; return advisorDefault }).catch(() => advisorDefault)
 
 // model and effort pickers for the message box: a button each, the list in a popover
 export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean }) {
@@ -169,11 +179,22 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   const [loadErr, setLoadErr] = useState(false)
   const openModels = () => {
     setOpen(open === 'model' ? null : 'model')
+    void readAdvisorDefault().then(setDflt)
     if (!models) { setLoadErr(false); window.api.chatModels(tabId).then(setModels).catch(() => setLoadErr(true)) }
   }
   const levels: string[] = [...EFFORTS]
   if (st.effort && !levels.includes(st.effort)) levels.push(st.effort)
   const thinking = ultra || st.ultrathink
+  const [dflt, setDflt] = useState(advisorDefault)
+  useEffect(() => { void readAdvisorDefault().then(setDflt) }, [])
+  const word = advisorWord(st, dflt, modelLabel)
+  const advisorOn = advisorChecked(st, dflt)
+  const pickAdvisor = (v: string) => {
+    const was = { advisorPick: st.advisorPick, advisor: st.advisor }
+    setErr('')
+    setPicked(tabId, { advisorPick: v, advisor: undefined })
+    window.api.chatSetAdvisor(tabId, advisorModelOf(v, dflt)).catch((x) => { setPicked(tabId, was); setErr(String(x?.message ?? x)) })
+  }
   return (
     <>
       <button ref={mref} className="pick" onClick={openModels} title={err || 'Model for this thread'} aria-haspopup="listbox" data-testid="model-picker">
@@ -182,11 +203,13 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
       <button ref={eref} className={thinking ? 'pick ultra' : 'pick'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} aria-haspopup="listbox" data-testid="effort-picker">
         <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? 'default'}
       </button>
+      {word && <span className="pick" title="The advisor model for this thread (change it in the model menu)" data-testid="advisor-word">{word}</span>}
       {(err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>}
       {open === 'model' && (
-        <PickList anchor={anchorOf(mref.current)} value={st.model} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
-          items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName }))]}
-          onPick={(v) => { const was = st.model; setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => { setPicked(tabId, { model: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
+        <PickList anchor={anchorOf(mref.current)} isOn={(v) => (isAdvisorValue(v) ? v === advisorOn : v === st.model)} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
+          items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName })),
+            ...(models ? advisorItems(models, dflt, modelLabel).map((a) => ({ ...a, group: 'Advisor' })) : [])]}
+          onPick={(v) => { if (isAdvisorValue(v)) { pickAdvisor(v); return } const was = st.model; setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => { setPicked(tabId, { model: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
       )}
       {open === 'effort' && (
         <PickList anchor={anchorOf(eref.current)} value={st.effort} testid="effort-list" onClose={() => setOpen(null)}

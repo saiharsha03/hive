@@ -6,6 +6,12 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Advisor per thread**: the model menu in the message box ends with an Advisor group (Off, Default with the
+  Settings > General value, and the same models), switched live for that thread; the message box line says
+  "advisor <model>" while the thread has one and nothing otherwise, and the Status page shows it.
+
 ## [2.1.0] - 2026-11-10
 
 ### Added

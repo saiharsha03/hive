@@ -48,4 +48,4 @@ export const onStatusChange = subscribe
 export const getStatusOf = (tabId: string): ThreadStatus => store.get(tabId) ?? EMPTY
 
 // a model or effort picked in the page shows at once, before the session runs (main only reports it once there is one)
-export const setPicked = (tabId: string, v: { model?: string; effort?: string }) => patch(tabId, (s) => ({ ...s, ...v }))
+export const setPicked = (tabId: string, v: { model?: string; effort?: string; advisorPick?: string; advisor?: string | null }) => patch(tabId, (s) => ({ ...s, ...v }))
