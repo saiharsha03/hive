@@ -20,6 +20,9 @@ import { focusedTab } from './panes'
 import { age, clock, State, type Tone } from './kit'
 import { PAGE_LABEL, type ToolTab } from './chat'
 
+// at rest a row shows its state word only when it needs you or failed
+const loud = (t: Tone) => t === 'wait' || t === 'fail'
+
 // a live row's state word: waiting (amber), failed (red), finished (green), working (cyan)
 export const liveLook = (r: LiveRow): { word: string; tone: Tone; icon: string; cls: string } =>
   r.state === 'working' ? { word: 'WORKING', tone: 'work', icon: 'loading', cls: 's-work spin' }
@@ -54,9 +57,7 @@ type Retiring = { kind: 'close' | 'archive'; ids: string[]; trees: { thread: str
 // the panes' focused tab and the tabs on screen, as one small value
 const onScreen = (p: ReturnType<typeof panes.get>) => ({ focus: focusedTab(p), shown: p.panes.map((x) => x.active ?? '').join(' ') })
 
-export type ViewSummary = Partial<Record<ToolTab, { text: string; warm?: boolean }>>
-
-export function Rail({ views, currentPage }: { views: ViewSummary; currentPage: ToolTab | null }) {
+export function Rail({ currentPage }: { currentPage: ToolTab | null }) {
   const live = useStore(liveStore, (l) => l)
   const scr = useStore(panes, onScreen, shallowEq)
   const shown = useMemo(() => new Set(scr.shown.split(' ').filter(Boolean)), [scr.shown])
@@ -67,7 +68,7 @@ export function Rail({ views, currentPage }: { views: ViewSummary; currentPage: 
       <nav className="rail-views" aria-label="Views">
         {(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings'] as ToolTab[]).map((v) => (
           <button key={v} className={`rail-view${currentPage === v ? ' on' : ''}${v === 'settings' ? ' settings' : ''}`} onClick={(e) => (e.shiftKey ? openPageBeside(v) : openPage(v))} title="Shift+click opens it beside the current pane" data-testid={`rail-view-${v}`}>
-            <span>{PAGE_LABEL[v]}</span>{views[v] && <b className={views[v]!.warm ? 'warm' : ''}>{views[v]!.text}</b>}
+            <span>{PAGE_LABEL[v]}</span>
           </button>
         ))}
       </nav>
@@ -202,8 +203,8 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
         onClick={() => activate(r.id)}
         onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter') { e.preventDefault(); activate(r.id) } else if (e.key === ' ' && !r.kind) { e.preventDefault(); openBeside(r.id) } }}
         data-testid="live-row" data-id={r.id}>
-        <div className="rail-l1"><span className="rail-t"><span className="tt">{title}</span>{kind && <span className="rail-kd">{kind}</span>}</span><span className="rail-age">{r.since ? age(r.since, now) : ''}</span></div>
-        <div className="rail-l2"><State word={look.word} tone={look.tone} /><span className="rail-now">{noteOf(r)}</span></div>
+        <div className="rail-l1"><span className="rail-t"><span className="tt">{title}</span></span>{loud(look.tone) && <State word={look.word} tone={look.tone} />}</div>
+        <div className="rail-l2">{!loud(look.tone) && <State word={look.word} tone={look.tone} />}<span className="rail-now">{[kind, noteOf(r)].filter(Boolean).join(', ')}</span><span className="rail-age">{r.since ? age(r.since, now) : ''}</span></div>
         {!r.kind && <button className="more" aria-label="Close thread" title="Close (stops it)" onClick={(e) => { e.stopPropagation(); closeSession(r.id) }} data-testid={`thread-live-close-${r.id}`}>×</button>}
       </div>
     )
@@ -232,8 +233,8 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
         }}
         onContextMenu={(e) => { e.preventDefault(); openMenu(s.id, e.clientX, e.clientY) }}
         data-testid="thread-row" data-id={s.id}>
-        <div className="rail-l1"><span className="rail-t"><span className="tt">{s.title}</span>{kind && <span className="rail-kd">{kind}</span>}</span><span className="rail-age">{age(s.updated, now)}</span></div>
-        <div className="rail-l2"><State word={second[0]} tone={second[1]} /><span className="rail-now">{second[2]}</span></div>
+        <div className="rail-l1"><span className="rail-t"><span className="tt">{s.title}</span></span>{loud(second[1]) && <State word={second[0]} tone={second[1]} />}</div>
+        <div className="rail-l2">{!loud(second[1]) && <State word={second[0]} tone={second[1]} />}<span className="rail-now">{[kind, second[2]].filter(Boolean).join(', ')}</span><span className="rail-age">{age(s.updated, now)}</span></div>
         <button className="more" aria-label="Thread actions" onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); openMenu(s.id, r.left, r.bottom) }} data-testid="thread-actions">⋯</button>
       </div>
     )
@@ -255,9 +256,9 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
       <div key={key} data-testid="team-group" data-id={g.roster.id}>
         <div className="rail-row" role="button" tabIndex={0} title={g.roster.name} onClick={openLead}
           onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter') { e.preventDefault(); openLead() } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); toggle(key) } }} data-testid="team-row">
-          <div className="rail-l1"><span className="rail-t"><span className="tt">{g.roster.name}</span><span className="rail-kd">lead</span></span>
+          <div className="rail-l1"><span className="rail-t"><span className="tt">{g.roster.name}</span></span>{waiting > 0 && <State word={`${waiting} WAITING`} tone="wait" />}
             <button className="rail-age" style={{ background: 'none', border: 0, cursor: 'pointer' }} aria-label={folded ? 'Show members' : 'Hide members'} onClick={(e) => { e.stopPropagation(); toggle(key) }} data-testid="team-fold">{folded ? `+${g.total}` : 'hide'}</button></div>
-          <div className="rail-l2">{folded && waiting ? <State word={`${waiting} WAITING`} tone="wait" /> : <State word={g.word} tone={tone} />}<span className="rail-now">Team of {g.total}, {g.working} working</span></div>
+          <div className="rail-l2"><State word={g.word} tone={tone} /><span className="rail-now">lead, team of {g.total}, {g.working} working</span></div>
         </div>
         {!folded && g.rows.filter((x) => x.person.role !== 'lead').map((x) => (x.kind === 'live' ? liveRow(x.row, { who: x.person, member: true }) : savedRow(x.s, 'team', x.person, true)))}
       </div>

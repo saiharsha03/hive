@@ -23,7 +23,7 @@ export type PaletteSources = {
   runSlash: (c: EngineCommand) => void
 }
 
-// the counts: NEED YOU (waiting, not failed), WORKING, FAILED
+// the counts of what needs you: NEED YOU (waiting, not failed) and FAILED
 function Counts() {
   const live = useStore(liveStore, (l) => l)
   const failed = live.waiting.filter((r) => liveLook(r).word === 'FAILED')
@@ -33,9 +33,9 @@ function Counts() {
   )
   return (
     <div className="tb-counts" data-testid="title-counts">
-      {word(need.length, 'NEED YOU', 'w', need[0]?.id, 'count-need')}
-      {word(live.working.length, 'WORKING', 'k', live.working[0]?.id, 'count-working')}
-      {word(failed.length, 'FAILED', 'f', failed[0]?.id, 'count-failed')}
+      {/* only what needs you; nothing at all when nothing does */}
+      {need.length > 0 && word(need.length, 'NEED YOU', 'w', need[0]?.id, 'count-need')}
+      {failed.length > 0 && word(failed.length, 'FAILED', 'f', failed[0]?.id, 'count-failed')}
     </div>
   )
 }
@@ -141,9 +141,7 @@ function AccountButton({ open, setOpen }: { open: boolean; setOpen: (b: boolean)
     <>
       <button className={`tb-acct${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title="Accounts (Ctrl+Alt+1..3 switches)" data-testid="account-button">
         <span>{a.label || 'Account'}</span>
-        {a.plan && <i className="lim">{a.plan}</i>}
-        {a.five != null && <span className={`lim${a.five > WARN_PCT ? ' warm' : ''}`}>5h {pct(a.five)}</span>}
-        {a.seven != null && <i className="lim">7d {pct(a.seven)}</i>}
+        {a.five != null && <i className={`lim${a.five > WARN_PCT ? ' warm' : ''}`}>5h {pct(a.five)}</i>}
       </button>
       {open && <AccountSwitcher onClose={() => setOpen(false)} />}
     </>

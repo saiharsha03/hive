@@ -3,7 +3,7 @@
 // or the deploy / scripts rows change, never for a streaming reply.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TitleBar, type Command, type PaletteSources } from './TitleBar'
-import { Rail, type ViewSummary } from './Rail'
+import { Rail } from './Rail'
 import { Panes, TabRow } from './PaneArea'
 import { Inspector } from './Inspector'
 import { StatusLine, runPull } from './StatusLine'
@@ -14,8 +14,6 @@ import { FileEditor } from './EditorView'
 import { ThreadPane } from './ThreadPane'
 import { useDeploy } from './useDeploy'
 import { useScripts } from './useScripts'
-import { useWatcherCounts } from './watchers'
-import { useAllStatus } from './statusStore'
 import { CODE_FONTS, UI_FONTS, getAppearance, getThemes, setFonts, setLayout, setTheme, toggleLayout, useAppearance } from './appearance'
 import { DROP_TYPES, dropMessage, dropTitle, pickDropFile, type DropChoice } from '../../shared/dropCore'
 import {
@@ -34,8 +32,8 @@ import { WorkspacePage } from './pages/WorkspacePage'
 import { SettingsPage, pickSettingsSection } from './pages/SettingsPage'
 import { DiffPage } from './pages/DiffPage'
 import { insertIntoComposer } from './SessionView'
-import { accountsList, accountUse, engineCommands, onWakeupsChanged, wakeupsList } from './api/next'
-import { Boundary, Btn, WARN_PCT } from './kit'
+import { accountsList, accountUse, engineCommands } from './api/next'
+import { Boundary, Btn } from './kit'
 
 // slash commands that print a screen in the terminal open a real view here instead
 const SLASH_VIEW: Record<string, ToolTab | 'accounts' | 'settings-claude'> = {
@@ -52,42 +50,12 @@ export function Shell() {
   const [accountsOpen, setAccountsOpen] = useState(false)
   const deploy = useDeploy()
   const scripts = useScripts((p) => setPreview(p))
-  const wc = useWatcherCounts()
-  const statuses = useAllStatus()
   const live = useStore(liveStore, (l) => l)
   const pv = useStore(preview, (p) => p)
   const toasts = useStore(notices, (n) => n)
 
   // the deploy wizard's and the scripts' rows join the threads in Needs you / Working
   useEffect(() => { setExtraRows([...(deploy.liveRow ? [deploy.liveRow] : []), ...scripts.liveRows]) }, [deploy.liveRow, scripts.liveRows])
-
-  // what each view link says at the foot of the rail
-  const runningTasks = useMemo(() => [...statuses.values()].reduce((n, st) => n + st.tasks.filter((t) => t.status === 'running').length, 0), [statuses])
-  const [wakes, setWakes] = useState<number[]>([])
-  useEffect(() => {
-    const load = () => void wakeupsList().then((r) => setWakes(r.ok ? [...r.data.wakeups.map((w) => Date.parse(w.wakeAt)), ...r.data.continues.map((c) => c.at)] : []))
-    load()
-    const t = setInterval(load, 60_000)
-    const off = onWakeupsChanged(load)
-    return () => { clearInterval(t); off() }
-  }, [])
-  const nextWake = useMemo(() => [...[...statuses.values()].map((st) => st.nextWake), ...wakes].filter((t): t is number => !!t && t > Date.now()).sort((a, b) => a - b)[0], [statuses, wakes])
-  const [five, setFive] = useState<number | null>(null)
-  useEffect(() => {
-    const load = () => void window.api.getStatus().then((s) => setFive(s.five?.pct ?? null)).catch(() => {})
-    load()
-    const t = setInterval(load, 30_000)
-    return () => clearInterval(t)
-  }, [])
-  const views: ViewSummary = {
-    running: { text: `${runningTasks} now` },
-    scheduled: nextWake ? { text: `next ${new Date(nextWake).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` } : { text: '' },
-    deploys: deploy.liveRow ? { text: deploy.liveRow.state === 'waiting' ? 'waiting' : 'deploying', warm: deploy.liveRow.state === 'waiting' } : { text: '' },
-    status: five != null ? { text: `5h ${Math.round(five)}%`, warm: five > WARN_PCT } : { text: '' },
-    watchers: wc.waiting ? { text: 'finding', warm: true } : { text: `${wc.on} on` },
-    workspace: { text: scripts.runs.some((r) => r.phase === 'running') ? 'script running' : 'scripts, stacks' },
-    settings: { text: 'Ctrl ,' },
-  }
 
   // ---- the command field's sources ----
   const commands: Command[] = useMemo(() => [
@@ -231,7 +199,7 @@ export function Shell() {
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
       <TitleBar src={src} paletteN={paletteN} accountsOpen={accountsOpen} setAccountsOpen={setAccountsOpen} />
       <div className={`body${layout.railRight ? ' rail-right' : ''}`}>
-        {showRail && <Rail views={views} currentPage={currentPage} />}
+        {showRail && <Rail currentPage={currentPage} />}
         <div className="centre">
           <TabRow />
           <Panes render={render} empty={empty} />

@@ -213,3 +213,12 @@ button.pick:hover { color: var(--mark); }
 .ed-problems .pl { background: none; border: 0; color: var(--ink); font: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-align: left; padding: 0; }
 .ed-problems .pr { margin-left: auto; background: none; border: 0; color: var(--link); font: inherit; cursor: pointer; padding: 0; }
 .cin:focus-within { border-bottom-color: var(--hi); }
+
+/* calm: a run of tool calls is one dim line until opened; keyboard hints only while the box has focus */
+.trun { display: flex; gap: 12px; align-items: baseline; width: 100%; background: none; border: 0; padding: 0; cursor: pointer; font: 12px/22px var(--sans); color: var(--dim); text-align: left; }
+.trun:hover { color: var(--hi); }
+.trun .trun-now { color: var(--ink); font-weight: 600; }
+.trun .trun-k { margin-left: auto; color: var(--faint); }
+.trun[aria-expanded="true"] { margin-bottom: 2px; }
+.cin-keys { visibility: hidden; }
+.cin:focus-within .cin-keys { visibility: visible; }

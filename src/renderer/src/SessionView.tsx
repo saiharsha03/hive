@@ -202,6 +202,25 @@ function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<It
   )
 }
 
+// A run of tool calls rests as one dim line ("6 steps: Read, Grep, 2 Edit, Write, Bash") that opens on click; a failed
+// step stays in view under it
+type RunStep = { key: string; word: string; failed: boolean; running: boolean; node: ReactNode }
+function ToolRun({ steps }: { steps: RunStep[] }) {
+  const [open, setOpen] = useState(false)
+  const counts = new Map<string, number>()
+  for (const s of steps) counts.set(s.word, (counts.get(s.word) ?? 0) + 1)
+  const what = [...counts].map(([w, n]) => (n > 1 ? `${n} ${w}` : w)).join(', ')
+  const running = steps.some((s) => s.running)
+  return (
+    <div className="tools">
+      <button className="trun" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="tool-run">
+        <span>{steps.length} steps: {what}</span>{running && <span className="trun-now">working</span>}<span className="trun-k">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open ? steps.map((s) => s.node) : steps.filter((s) => s.failed).map((s) => s.node)}
+    </div>
+  )
+}
+
 // Ctrl+F in the focused pane: Enter next, Shift+Enter previous, Esc closes
 function FindBar({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('')
@@ -304,19 +323,23 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
   }
   // runs of tool rows share one block; queued messages wait in the queue box, not here
   const out: ReactNode[] = []
-  let tools: ReactNode[] = []
-  const flush = (k: string) => { if (tools.length) { out.push(<div key={`tools:${k}`} className="tools">{tools}</div>); tools = [] } }
+  let tools: RunStep[] = []
+  const flush = () => {
+    if (!tools.length) return
+    out.push(tools.length === 1 ? <div key={`tools:${tools[0].key}`} className="tools">{tools[0].node}</div> : <ToolRun key={`run:${tools[0].key}`} steps={tools} />)
+    tools = []
+  }
   session.items.forEach((it, i) => {
     if (i < session.items.length - limit) return
     const key = keyOf(it, i)
     if (it.kind === 'tool' && it.name !== SHOW && it.name !== CODEX && it.name !== 'AskUserQuestion') {
       const bg = bgOf.get(it.id)
       const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
-      tools.push(<ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} />)
+      tools.push({ key, word: toolVerb(it.name).word, failed: status === 'error', running: status === 'running', node: <ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
       return
     }
-    if (it.kind === 'codex') { tools.push(<CodexBox key={key} it={it} />); return }
-    flush(key)
+    if (it.kind === 'codex') { tools.push({ key, word: 'Codex', failed: it.status === 'error', running: it.status === 'running', node: <CodexBox key={key} it={it} /> }); return }
+    flush()
     if (it.kind === 'user') {
       if (it.queue?.pending) return
       out.push(
@@ -354,7 +377,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     if (it.kind === 'agent') { out.push(<div key={key} className="msg cl from"><div className="msg-note">{it.from}</div><MdBody text={it.text} /></div>); return }
     if (it.kind === 'error') { out.push(<div key={key} className="msg err" data-testid="msg-error"><State word="FAILED" tone="fail" /> <span>{it.text}</span></div>) }
   })
-  flush('end')
+  flush()
   return (
     <>
       {!session.loaded && <div className="note">Loading the conversation</div>}
@@ -734,8 +757,8 @@ export function SessionView(p: Props) {
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />
           <span className="cbtns">
             <Btn kind="primary" onClick={() => submit('steer')} testid="send" title={session.busy ? 'Delivered at Claude\'s next step, inside the running turn (Enter)' : 'Send (Enter)'}>{session.busy ? 'Steer' : 'Send'}</Btn>
-            {session.busy && <Btn kind="plain" onClick={() => submit('queue')} testid="send-queue" title="Held until Claude finishes, then starts a new turn (Tab)">Queue</Btn>}
-            {session.busy && <Btn kind="danger" onClick={p.onStop} testid="chat-stop" title="Stop this turn; the queue holds (Esc)">Stop</Btn>}
+            {session.busy && <Btn kind="link" onClick={() => submit('queue')} testid="send-queue" title="Held until Claude finishes, then starts a new turn (Tab)">Queue</Btn>}
+            {session.busy && <Btn kind="link" onClick={p.onStop} testid="chat-stop" title="Stop this turn; the queue holds (Esc)">Stop</Btn>}
           </span>
         </div>
       </div>

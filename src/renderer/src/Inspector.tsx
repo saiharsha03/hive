@@ -85,7 +85,7 @@ function TaskItem({ t, tabId, thread, busy, elsewhere }: { t: Task; tabId: strin
     setMsg(null)
   }
   return (
-    <div className={`item${open ? ' open' : ''}`} data-testid="activity-item">
+    <div className={`item${open ? ' open' : ''}`} tabIndex={0} data-testid="activity-item">
       <div className="i1"><State word={w.word} tone={w.tone} /><span className="n" title={t.title}>{elsewhere ? `${t.title} in ${thread}` : `${kindLabel(t.kind)}: ${t.title}`}</span>
         <span className="d">{t.status === 'running' ? dur(now - t.startedAt) : clock(t.endedAt ?? t.startedAt)}</span></div>
       {last && <div className="i2" title={last}>{last}</div>}
@@ -110,6 +110,9 @@ function Activity({ s }: { s?: SessionMeta }) {
   const session = useThreadSlice(s?.id)
   const now = useNow(true)
   const st = s ? all.get(s.id) : undefined
+  // Finished and Elsewhere rest folded, with their counts
+  const [showFinished, setShowFinished] = useState(false)
+  const [showElsewhere, setShowElsewhere] = useState(false)
   const name = useMemo(() => describer(session?.items ?? []), [session?.items])
   const tasks = (st?.tasks ?? []).map((t) => ({ ...t, title: shellName(t, name) }))
   const runningHere = tasks.filter((t) => t.status === 'running')
@@ -143,19 +146,21 @@ function Activity({ s }: { s?: SessionMeta }) {
         : <div className="iempty">{s.busy ? 'Claude is working; nothing runs in the background.' : 'Nothing running.'}</div>}
       <div className="isec"><span>Scheduled for this thread</span><span>{schedule.length}</span></div>
       {schedule.length ? schedule.map((x, i) => (
-        <div key={i} className="item"><div className="i1"><State word={x.word} tone={x.tone} /><span className="n" title={x.what}>{x.what}</span><span className="d">{x.at}</span></div>
+        <div key={i} className="item" tabIndex={0}><div className="i1"><State word={x.word} tone={x.tone} /><span className="n" title={x.what}>{x.what}</span><span className="d">{x.at}</span></div>
           <div className="i3"><Btn kind="link" onClick={() => openPage('scheduled')}>Scheduled page</Btn></div></div>
       )) : <div className="iempty">Nothing scheduled.</div>}
-      <div className="isec"><span>Finished</span><span>{finishedHere.length + edits.length}</span></div>
+      <button className="isec fold" onClick={() => setShowFinished((x) => !x)} aria-expanded={showFinished} data-testid="insp-finished"><span>Finished</span><span>{finishedHere.length + edits.length}</span></button>
+      {showFinished && <>
       {finishedHere.map((t) => s && <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
       {edits.map((e) => (
-        <div key={e.id} className="item"><div className="i1"><State word="DONE" tone="done" /><span className="n" title={e.label}>Edit {e.label}</span><span className="d" /></div>
+        <div key={e.id} className="item" tabIndex={0}><div className="i1"><State word="DONE" tone="done" /><span className="n" title={e.label}>Edit {e.label}</span><span className="d" /></div>
           <div className="i2"><span className="add-t">+{e.c.add}</span> <span className="del-t">-{e.c.del}</span> <Btn kind="link" onClick={() => showDiff(e.spec)}>open the diff</Btn></div></div>
       ))}
       {!finishedHere.length && !edits.length && <div className="iempty">Nothing finished yet today.</div>}
-      <div className="isec"><span>Elsewhere</span><span>{elsewhere.length}</span></div>
-      {elsewhere.length ? elsewhere.slice(0, 12).map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)
-        : <div className="iempty">Nothing running in other threads.</div>}
+      </>}
+      <button className="isec fold" onClick={() => setShowElsewhere((x) => !x)} aria-expanded={showElsewhere} data-testid="insp-elsewhere"><span>Elsewhere</span><span>{elsewhere.length}</span></button>
+      {showElsewhere && (elsewhere.length ? elsewhere.slice(0, 12).map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)
+        : <div className="iempty">Nothing running in other threads.</div>)}
     </div>
   )
 }

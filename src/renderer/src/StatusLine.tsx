@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react'
 import { panes as panesStore, useSessionMetas, useStore } from './store'
 import { focusedTab } from './panes'
 import { notice, openPage, runUndo, undo as undoStore } from './actions'
-import { quietHoursGet, type QuietHours } from './api/next'
 
 type KnownIp = { ip: string; at: number | null; label?: string }
 import type { AllowStatus } from '../../shared/allowCore'
@@ -13,7 +12,6 @@ import type { UpdateState } from '../../shared/versionCore'
 import { tokens as fmtTokens, clock, Btn, when, WARN_PCT } from './kit'
 import { useEscape, useFocusTrap } from './ui'
 import { useRef } from 'react'
-import { pickSettingsSection } from './pages/SettingsPage'
 
 const left = (iso: string | null) => (iso ? clock(Date.parse(iso)) : '')
 
@@ -83,24 +81,19 @@ export function StatusLine() {
   const u = useStore(undoStore, (x) => x)
   const [status, setStatus] = useState<Status | null>(null)
   const [ctx, setCtx] = useState<{ total: number; max: number } | null>(null)
-  const [phone, setPhone] = useState<{ paired: boolean; connected: boolean } | null>(null)
   const [allow, setAllow] = useState<AllowStatus | null>(null)
   const [allowOpen, setAllowOpen] = useState(false)
   const [busyPull, setBusyPull] = useState(false)
-  const [quiet, setQuiet] = useState<QuietHours | null>(null)
   const [update, setUpdate] = useState<UpdateState | null>(null)
   useEffect(() => {
     const load = () => void window.api.getStatus().then(setStatus).catch(() => {})
     load()
     const t = setInterval(load, 15_000)
-    void window.api.mobileStatus().then(setPhone).catch(() => {})
-    const offPhone = window.api.onMobileStatus(setPhone)
     void window.api.allowStatus().then(setAllow).catch(() => {})
     const offAllow = window.api.onAllowStatus(setAllow)
-    void quietHoursGet().then((r) => setQuiet(r.ok ? r.data : null))
     void window.api.updateState().then(setUpdate).catch(() => {})
     const offUpd = window.api.onUpdateState(setUpdate)
-    return () => { clearInterval(t); offPhone(); offAllow(); offUpd() }
+    return () => { clearInterval(t); offAllow(); offUpd() }
   }, [])
   useEffect(() => {
     setCtx(null)
@@ -112,22 +105,18 @@ export function StatusLine() {
     return () => { alive = false; clearInterval(t) }
   }, [f?.id, f?.busy])
   const branch = f ? (f.worktrees?.at(-1)?.branch ?? (f.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? '') : ''
-  const five = status?.five, seven = status?.seven
-  const c = status?.connectors
+  const five = status?.five
   return (
     <footer className="sline" data-testid="status-bar">
       {branch && <span className="branch" data-testid="status-branch">{branch}</span>}
       {ctx && <span data-testid="status-context">Context <b className="num">{fmtTokens(ctx.total)}</b>{ctx.max ? <> of <b>{fmtTokens(ctx.max)}</b></> : null}</span>}
       {five?.pct != null && <button className={five.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-five">5-hour <b className="num">{Math.round(five.pct)}%</b>{five.resetsAt ? `, resets ${left(five.resetsAt)}` : ''}</button>}
-      {seven?.pct != null && <button className={seven.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-seven">7-day <b className="num">{Math.round(seven.pct)}%</b></button>}
-      {c && <button onClick={() => openPage('status')} className={c.failed ? 'warm' : ''} data-testid="status-mcp">MCP <b className="num">{c.connected} of {c.total}</b>{c.needsAuth ? `, ${c.needsAuth} needs sign-in` : ''}{c.failed ? `, ${c.failed} failed` : ''}</button>}
-      {phone?.paired && <span data-testid="status-phone">{phone.connected ? 'Phone paired' : 'Phone away'}</span>}
+      {/* at most five items: the 7-day use, MCP, the phone and quiet hours live on the Status and Settings pages */}
       <span className="r" />
-      {u && <span className="undo" data-testid="undo-line">{u.text}<button onClick={() => runUndo()} data-testid="undo">Undo</button></span>}
-      {update && <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Hive ${update.version} available`}</button>}
       {allow?.configured && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `Your address: ${allow.ip}` : allow.error} data-testid="status-allow">{allow.running ? 'Allowing your IP' : 'Allow my IP'}</button>}
-      <button onClick={() => void runPull(setBusyPull)} disabled={busyPull} data-testid="status-pull">{busyPull ? 'Pulling' : 'Pull latest'}</button>
-      <button onClick={() => { pickSettingsSection('notify'); openPage('settings') }} data-testid="status-quiet">{quiet?.on ? `Quiet hours from ${quiet.from}` : 'Quiet hours off'}</button>
+      {u ? <span className="undo" data-testid="undo-line">{u.text}<button onClick={() => runUndo()} data-testid="undo">Undo</button></span>
+        : update ? <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Hive ${update.version} available`}</button>
+          : <button onClick={() => void runPull(setBusyPull)} disabled={busyPull} data-testid="status-pull">{busyPull ? 'Pulling' : 'Pull latest'}</button>}
       {allowOpen && allow && <AllowPop allow={allow} onClose={() => setAllowOpen(false)} />}
     </footer>
   )
