@@ -14,7 +14,7 @@ export type { PhoneThread } from '../shared/threadsCore'
 import type { PhoneThread } from '../shared/threadsCore'
 import type { UsageRow } from '../shared/usageCore'
 import type { AskQuestion } from '../shared/askCore'
-import { limitedAnswer, noteActions, noteKind, phoneInbox, type NoteActions, type NoteKind, type PhoneAccount, type PhoneAsk, type PhoneFail, type PhonePeek, type PhoneRunning, type PhoneTeam, type PhoneWakeup, type QuietHours } from '../shared/phoneCore'
+import { guardNote, guardStep, limitedAnswer, noteActions, noteKind, phoneInbox, usageGuard, withWakes, type NoteActions, type NoteKind, type PhoneAccount, type PhoneAsk, type PhoneFail, type PhonePeek, type PhoneRunning, type PhoneTeam, type PhoneWakeup, type QuietHours } from '../shared/phoneCore'
 // seen: on your own message, whether Claude has taken it in (true) or not yet (false); absent when Hive cannot tell
 export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string; seen?: boolean }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
@@ -89,6 +89,29 @@ export function initMobile(env: Record<string, string>, d: Deps): void {
 
   if (TEST_MODE) return
   connect()
+  clearInterval(guardTimer)
+  guardTimer = setInterval(() => { void guardCheck() }, GUARD_EVERY_MS)
+  guardTimer.unref?.()
+}
+
+// The usage guard on the phone: when a plan window passes 85% (and again at 95%) the phone is told which window, how
+// full, when it fills, how many threads pause then and when they carry on. Looked at every five minutes from the
+// reading Hive already keeps; said once per step, window and reset (kept in memory: a restart may say it again).
+const GUARD_EVERY_MS = 5 * 60_000
+let guardTimer: ReturnType<typeof setInterval> | undefined
+const guardSaid = new Set<string>()
+const clockOf = (ms: number): string => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+async function guardCheck(): Promise<void> {
+  const d = deps
+  if (!d || !pairing || !connected) return
+  try {
+    const g = usageGuard((await d.usage()).rows, Date.now())
+    if (!g || guardSaid.has(guardStep(g))) return
+    guardSaid.add(guardStep(g))
+    const working = (await d.threads()).filter((t) => t.state === 'working').length
+    const n = guardNote(g, working, clockOf)
+    sendToPhone(fitNotification(n.title, n.body, '', { kind: 'guard', open: 'usage' }), true, true)
+  } catch { /* no reading now: the next look will do */ }
 }
 
 // ---- pairing ----
@@ -190,8 +213,9 @@ export function checkPhoneSeq(st: SeqState, seq: number, now: number): { run: bo
 const NOTIFY_JSON_MAX = 2500
 // more: its kind (the app rings through quiet hours only for a failure) and the buttons it may carry (noteActions);
 // both are small and bounded, and the text gives way to them
-export type PhoneNote = { op: 'notify'; title: string; body: string; thread: string; kind?: NoteKind } & NoteActions
-export function fitNotification(title: string, body: string, thread: string, more: { kind?: NoteKind } & NoteActions = {}): PhoneNote {
+// open: the screen a tap opens when it is not a thread (the usage guard opens Usage)
+export type PhoneNote = { op: 'notify'; title: string; body: string; thread: string; kind?: NoteKind | 'guard'; open?: 'usage' } & NoteActions
+export function fitNotification(title: string, body: string, thread: string, more: { kind?: NoteKind | 'guard'; open?: 'usage' } & NoteActions = {}): PhoneNote {
   const msg: PhoneNote = { op: 'notify' as const, title: byteCap(title, 240), body: byteCap(body, 1500), thread: thread.slice(0, 120), ...more }
   const size = () => Buffer.byteLength(JSON.stringify({ ...msg, seq: 1e15, at: 1e15 }))
   while (size() > NOTIFY_JSON_MAX && msg.body) msg.body = byteCap(msg.body, Math.floor(Buffer.byteLength(msg.body) * 0.8))
@@ -344,7 +368,7 @@ async function onMessage(raw: string): Promise<void> {
         for (const [k, f] of fails) if (now - f.at > FAIL_KEEP_MS) fails.delete(k)
         const wake = d.wakeups()
         const box = phoneInbox(threads, asks, [...fails.values()], wake, now)
-        return reply({ ...box, counts: { needs: box.needs.length, threads: threads.length, running: (await runningNow(d, threads)).length, scheduled: wake.length } })
+        return reply({ ...box, counts: { needs: box.needs.length, threads: threads.length, working: threads.filter((t) => t.state === 'working').length, running: (await runningNow(d, threads)).length, scheduled: wake.length } })
       }
       case 'running': return reply({ running: await runningNow(deps, await deps.threads()) })
       case 'stopAll': return reply({ ok: 'stopped', ...(await stopEverything(deps, m.wakeups === true)) })
@@ -367,7 +391,7 @@ async function onMessage(raw: string): Promise<void> {
         const ok = q && typeof q.on === 'boolean' && /^\d\d:\d\d$/.test(String(q.from)) && /^\d\d:\d\d$/.test(String(q.to))
         return reply({ quiet: await deps.quietHours(ok ? { on: q.on as boolean, from: String(q.from), to: String(q.to) } : undefined) })
       }
-      case 'threads': return reply({ threads: await deps.threads(), folders: deps.folders() })
+      case 'threads': return reply({ threads: withWakes(await deps.threads(), deps.wakeups()), folders: deps.folders() })
       case 'thread': return reply({ thread: await deps.read(id) })
       case 'usage': return reply({ usage: await deps.usage() })
       case 'answer': return deps.answer(id, String(m.ask ?? ''), m.answers) ? reply({ ok: 'answered' }) : reply({ error: 'That question is no longer open' })

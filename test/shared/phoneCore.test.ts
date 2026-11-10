@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { limitedAnswer, noteActions, noteKind, oneTapAsk, phoneInbox, phoneTasks, phoneTeams, phoneWakeups, riskyChoice, type PhoneAsk } from '../../src/shared/phoneCore'
+import { guardNote, guardStep, usageGuard, windowName, withWakes, limitedAnswer, noteActions, noteKind, oneTapAsk, phoneInbox, phoneTasks, phoneTeams, phoneWakeups, riskyChoice, type PhoneAsk } from '../../src/shared/phoneCore'
 import type { PhoneThread } from '../../src/shared/threadsCore'
 import type { Team } from '../../src/shared/teamCore'
 
@@ -95,4 +95,49 @@ test('limitedAnswer: an answer under the notification key is taken only for the 
 
 test('noteKind: from the titles Hive writes', () => {
   assert.deepEqual(['Question: Ship', 'Waiting: Ship', 'Failed: Bump node', 'Finished: Sweep', 'Usage limit: Drafts', 'Deploy is green'].map(noteKind), ['ask', 'ask', 'fail', 'done', 'limit', 'note'])
+})
+
+test('withWakes: a thread row carries its next wake-up and auto-continue', () => {
+  const wake = phoneWakeups([
+    { id: 1, session_id: 's1', title: 'Saved thread', wake_at: new Date(5_000_000).toISOString(), prompt: 'a', every_minutes: null, status: 'pending' },
+    { id: 2, session_id: 's1', title: 'Saved thread', wake_at: new Date(9_000_000).toISOString(), prompt: 'later', every_minutes: null, status: 'pending' },
+    { id: 3, session_id: 'sess-live', title: 'Open thread', wake_at: new Date(6_000_000).toISOString(), prompt: 'b', every_minutes: null, status: 'pending' },
+    { id: 4, session_id: 'sess-x', title: 'Twin', wake_at: new Date(7_000_000).toISOString(), prompt: 'c', every_minutes: null, status: 'pending' },
+  ], [{ key: 'tab-9', title: 'Limited', at: 8_000_000 }])
+  const rows = withWakes([thread('s1', 'idle', { title: 'Saved thread' }), thread('tab-1', 'working', { title: 'Open thread' }), thread('tab-9', 'idle', { title: 'Limited' }), thread('a', 'idle', { title: 'Twin' }), thread('b', 'idle', { title: 'Twin' }), thread('c', 'idle')], wake)
+  assert.deepEqual(rows.map((r) => [r.id, r.wakes, r.continues]), [
+    ['s1', 5_000_000, undefined], // by id, the soonest of its two
+    ['tab-1', 6_000_000, undefined], // an open thread: by its title, the only one with it
+    ['tab-9', undefined, 8_000_000],
+    ['a', undefined, undefined], ['b', undefined, undefined], // two threads with the title: neither is guessed
+    ['c', undefined, undefined],
+  ])
+})
+
+test('usageGuard: the window closest to its limit from 85%, when it fills, and what the phone is told', () => {
+  const now = Date.parse('2026-11-09T13:41:00Z')
+  const rows = [
+    { key: 'five_hour', label: 'Current session (5 hours)', pct: 92.4, resetsAt: '2026-11-09T15:00:00Z' },
+    { key: 'seven_day', label: 'Current week (all models)', pct: 41, resetsAt: '2026-11-12T09:00:00Z' },
+  ]
+  const g = usageGuard(rows, now)!
+  assert.deepEqual([g.key, g.window, g.pct, g.resetAt], ['five_hour', '5-hour window', 92, Date.parse('2026-11-09T15:00:00Z')])
+  // opened 10:00, 92.4% after 3 h 41 m: full 3 h 59 m after it opened
+  assert.equal(new Date(g.fullAt!).toISOString().slice(11, 16), '13:59')
+  const clock = (ms: number) => new Date(ms).toISOString().slice(11, 16)
+  assert.deepEqual(guardNote(g, 4, clock), { title: '5-hour window at 92%', body: 'Fills about 13:59. 4 working threads pause then and continue at 15:00.' })
+  assert.equal(guardNote(g, 1, clock).body, 'Fills about 13:59. 1 working thread pauses then and continues at 15:00.')
+  assert.equal(guardNote(g, 0, clock).body, 'Fills about 13:59. It resets at 15:00.')
+  assert.equal(guardNote({ ...g, pct: 100, fullAt: null }, 0, clock).body, 'It is full. It resets at 15:00.')
+  // below 85, no reset time, or a reset already past: no guard
+  assert.equal(usageGuard([{ ...rows[0], pct: 84.9 }], now), null)
+  assert.equal(usageGuard([{ ...rows[0], resetsAt: null }], now), null)
+  assert.equal(usageGuard([{ ...rows[0], resetsAt: '2026-11-09T13:00:00Z' }], now), null)
+  // it will last until the reset: a guard, with no fill time
+  assert.equal(usageGuard([{ key: 'five_hour', label: '', pct: 86, resetsAt: '2026-11-09T13:50:00Z' }], now)!.fullAt, null)
+  // the fuller of two windows; said once at 85 and once more at 95, per window and reset
+  assert.equal(usageGuard([rows[0], { ...rows[1], pct: 97, key: 'seven_day_opus' }], now)!.window, '7-day Opus window')
+  assert.equal(guardStep(g), `five_hour:${g.resetAt}:85`)
+  assert.equal(guardStep({ ...g, pct: 96 }), `five_hour:${g.resetAt}:95`)
+  assert.deepEqual(['five_hour', 'seven_day', 'seven_day_sonnet', 'other'].map(windowName), ['5-hour window', '7-day window', '7-day Sonnet window', 'plan window'])
 })

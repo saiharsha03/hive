@@ -114,3 +114,49 @@ export function noteKind(title: string): NoteKind {
   if (/^Usage limit:/.test(title)) return 'limit'
   return 'note'
 }
+
+// ---- wake-ups on thread rows, and the usage guard ----
+
+// A thread with a wake-up or an auto-continue pending says so on its row (WAKES 14:00, CONTINUES 15:00) in place of
+// its age: the time of the next one. A wake-up names its thread by session id, which is a saved thread's id; a thread
+// that is open has a tab id instead, so it is matched by its title when exactly one thread has it.
+export type PhoneThreadRow = PhoneThread & { wakes?: number; continues?: number }
+export function withWakes(threads: PhoneThread[], wakeups: PhoneWakeup[]): PhoneThreadRow[] {
+  const titles = new Map<string, number>()
+  for (const t of threads) titles.set(t.title, (titles.get(t.title) ?? 0) + 1)
+  return threads.map((t) => {
+    const mine = wakeups.filter((w) => w.open === t.id || (w.title === t.title && titles.get(t.title) === 1))
+    const wake = mine.find((w) => w.kind === 'wake')
+    const cont = mine.find((w) => w.kind === 'continue')
+    return { ...t, ...(wake ? { wakes: wake.at } : {}), ...(cont ? { continues: cont.at } : {}) }
+  })
+}
+
+// The usage guard: the plan window closest to its limit once one is at 85% or more. fullAt: when it reaches 100% if
+// it goes on as it has since the window opened, when that is before it resets (else null: it will last).
+export type GuardRow = { key: string; label: string; pct: number; resetsAt: string | null }
+export type UsageGuard = { key: string; window: string; pct: number; resetAt: number; fullAt: number | null }
+export const GUARD_AT = 85
+const windowMs = (key: string): number | null => (key.startsWith('five_hour') ? 5 * 3_600_000 : key.startsWith('seven_day') ? 7 * 86_400_000 : null)
+// "5-hour window", "7-day window", "7-day Opus window"
+export function windowName(key: string): string {
+  if (key.startsWith('five_hour')) return '5-hour window'
+  const model = key.replace(/^seven_day_?/, '')
+  return key.startsWith('seven_day') ? `7-day ${model ? `${model[0].toUpperCase()}${model.slice(1)} ` : ''}window` : 'plan window'
+}
+export function usageGuard(rows: GuardRow[], now: number, at = GUARD_AT): UsageGuard | null {
+  const near = rows.filter((r) => r.pct >= at && r.resetsAt && Date.parse(r.resetsAt) > now).sort((a, b) => b.pct - a.pct)[0]
+  if (!near) return null
+  const resetAt = Date.parse(near.resetsAt as string)
+  const len = windowMs(near.key)
+  const full = len && near.pct < 100 ? resetAt - len + ((now - (resetAt - len)) * 100) / near.pct : null
+  return { key: near.key, window: windowName(near.key), pct: Math.floor(near.pct), resetAt, fullAt: full !== null && full > now && full < resetAt ? Math.round(full) : null }
+}
+// the guard as a notification: which window, how full, when it fills, what pauses and when it carries on
+export function guardNote(g: UsageGuard, working: number, clock: (ms: number) => string): { title: string; body: string } {
+  const fills = g.pct >= 100 ? 'It is full. ' : g.fullAt ? `Fills about ${clock(g.fullAt)}. ` : ''
+  const then = working > 0 ? `${working} working ${working === 1 ? 'thread pauses' : 'threads pause'} then and ${working === 1 ? 'continues' : 'continue'} at ${clock(g.resetAt)}.` : `It resets at ${clock(g.resetAt)}.`
+  return { title: `${g.window[0].toUpperCase()}${g.window.slice(1)} at ${g.pct}%`, body: fills + then }
+}
+// said once when a window passes 85% and once more at 95%, per window and reset
+export const guardStep = (g: UsageGuard): string => `${g.key}:${g.resetAt}:${g.pct >= 95 ? 95 : GUARD_AT}`
