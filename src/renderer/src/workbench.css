@@ -41,3 +41,9 @@ body.side-drag { cursor: col-resize; user-select: none; }
 /* nothing open: the message sits in the middle of the editor area */
 .panes > .pane-empty { max-width: none; align-items: center; text-align: center; padding: 24px; }
 .panes > .pane-empty > div { max-width: 520px; }
+
+/* Allow IP in the editor area: the command's output under the button, as the script printed it */
+.panes > .pane-empty.allow-run { justify-content: flex-start; padding-top: 12vh; }
+.allow-run .ar-ok { color: var(--ok, var(--hi)); font-weight: 600; }
+.allow-run .ar-fail { color: var(--fail); font-weight: 600; }
+.panes > .pane-empty > pre.ar-out { max-width: min(900px, 100%); width: 100%; margin-top: 14px; padding: 12px 14px; text-align: left; font: 12.5px/1.5 var(--mono); color: var(--ink); background: var(--side); border: 1px solid var(--rule); white-space: pre-wrap; overflow: auto; max-height: 60vh; user-select: text; }

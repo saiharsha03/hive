@@ -2,7 +2,7 @@
 // on the right where this computer's address stands (in the signal colour only when it is not allowed: that needs
 // you), the phone, quiet hours, and the Undo of the last list action or an update or Pull latest.
 import { useEffect, useState } from 'react'
-import { panes as panesStore, useSessionMetas, useStore } from './store'
+import { createStore, panes as panesStore, useSessionMetas, useStore } from './store'
 import { focusedTab } from './panes'
 import { notice, openPage, runUndo, undo as undoStore } from './actions'
 
@@ -38,6 +38,25 @@ export async function runPull(setBusy?: (b: boolean) => void) {
   } finally { pulling = false; setBusy?.(false) }
 }
 
+// The last run of the allowlist command: what it printed, kept so the editor area can show it. One run at a time.
+export type AllowOut = { running: boolean; ok: boolean | null; ip: string | null; output: string; at: number | null }
+export const allowOut = createStore<AllowOut>({ running: false, ok: null, ip: null, output: '', at: null })
+export async function runAllow(): Promise<{ ok: boolean } | null> {
+  if (allowOut.get().running) return null
+  allowOut.set({ ...allowOut.get(), running: true })
+  try {
+    const r = await window.api.allowRun()
+    allowOut.set({ running: false, ok: r.ok, ip: r.ip ?? null, output: r.output, at: Date.now() })
+    notice(r.ok ? `IP allowlist: ${r.ip ?? ''} allowed` : `IP allowlist failed: ${r.output.split('\n').slice(-3).join(' ')}`)
+    return { ok: r.ok }
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e)
+    allowOut.set({ running: false, ok: false, ip: null, output: msg, at: Date.now() })
+    notice(`IP allowlist failed: ${msg}`)
+    return { ok: false }
+  }
+}
+
 // Allow my IP, as a body: the addresses and the Allow now button. The status line shows it in a pop-up (with Close),
 // the side bar's Allow IP view shows it as it is.
 export function AllowBody({ allow, onClose }: { allow: AllowStatus; onClose?: () => void }) {
@@ -53,11 +72,7 @@ export function AllowBody({ allow, onClose }: { allow: AllowStatus; onClose?: ()
   ]
   const run = async () => {
     setBusy(true)
-    try {
-      const r = await window.api.allowRun()
-      notice(r.ok ? `IP allowlist: ${r.ip ?? ''} allowed` : `IP allowlist failed: ${r.output.split('\n').slice(-3).join(' ')}`)
-      if (r.ok) onClose?.()
-    } catch (e) { notice(`IP allowlist failed: ${(e as Error)?.message ?? e}`) } finally { setBusy(false) }
+    try { const r = await runAllow(); if (r?.ok) onClose?.() } finally { setBusy(false) }
   }
   return (
     <>

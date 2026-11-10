@@ -6,14 +6,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createStore, useStore } from './store'
 import { getPref, setPref } from './prefs'
 import { setLayout, useAppearance } from './appearance'
-import { live as liveStore, newSession, notice, openFileTab, openPage, showDiffBeside, talkAbout } from './actions'
+import { live as liveStore, newSession, openFileTab, openPage, showDiffBeside, talkAbout } from './actions'
 import { Rail } from './Rail'
 import { Files, useInspected } from './Inspector'
 import { GitPanel } from './GitPanel'
 import { NotesPanel } from './NotesPanel'
 import { TodoPanel } from './TodoPanel'
 import { useTodos } from './useTodos'
-import { AllowBody, useAllow } from './StatusLine'
+import { AllowBody, allowOut, runAllow, useAllow } from './StatusLine'
 import { DeploysPage } from './pages/DeploysPage'
 import type { useDeploy } from './useDeploy'
 import type { ToolTab } from './chat'
@@ -120,18 +120,12 @@ const inSide = (v: SideView, testid: string, how: 'click' | 'focus') => {
   showSide(v)
   setTimeout(() => { const el = document.querySelector<HTMLElement>(`.side [data-testid="${testid}"]`); if (how === 'click') el?.click(); else el?.focus() }, 60)
 }
-const allowNow = async () => {
-  try {
-    const r = await window.api.allowRun()
-    notice(r.ok ? `IP allowlist: ${r.ip ?? ''} allowed` : `IP allowlist failed: ${r.output.split('\n').slice(-3).join(' ')}`)
-  } catch (e) { notice(`IP allowlist failed: ${(e as Error)?.message ?? e}`) }
-}
 type Start = { title: string; text: string; action: string; run: () => void; testid: string }
 const STARTS: Record<SideView, Start> = {
   threads: { title: 'No thread open', text: 'Start one, or pick one from Threads.', action: 'New thread', run: () => newSession(), testid: 'welcome-new' },
   files: { title: 'No file open', text: 'Pick a file from Files and it opens here. The command field finds a file by name.', action: 'Find a file', run: () => {}, testid: 'welcome-files' },
   git: { title: 'Nothing to compare yet', text: 'Pick a repo in Git, then a changed file, and its diff opens here.', action: 'Open Git', run: () => showSide('git'), testid: 'welcome-git' },
-  allow: { title: 'Allow my IP', text: "Runs your allowlist command for the address this computer has now.", action: 'Allow now', run: () => void allowNow(), testid: 'welcome-allow' },
+  allow: { title: 'Allow my IP', text: "Runs your allowlist command for the address this computer has now.", action: 'Allow now', run: () => void runAllow(), testid: 'welcome-allow' },
   deploy: { title: 'No deploy running', text: 'Pick what ships and where. Your deploy scripts do the work.', action: 'Start a deploy', run: () => openPage('deploys'), testid: 'welcome-deploy' },
   notes: { title: 'No note open', text: 'Notes are kept as markdown files.', action: 'New note', run: () => inSide('notes', 'notes-new', 'click'), testid: 'welcome-note' },
   todo: { title: 'To do', text: 'Write it down now, give it a date later.', action: 'New to-do', run: () => inSide('todo', 'todo-add', 'focus'), testid: 'welcome-todo' },
@@ -140,6 +134,16 @@ const STARTS: Record<SideView, Start> = {
 export function Welcome({ onPalette }: { onPalette: () => void }) {
   const view = useStore(sideView, (v) => v)
   const s = STARTS[view]
+  const out = useStore(allowOut, (o) => o)
+  // Allow IP: the command's own output, under the button, from the last run in this window
+  if (view === 'allow' && (out.running || out.at)) return (
+    <div className="pane-empty allow-run" data-testid="welcome" data-view={view}>
+      <div className="pe-t">Allow my IP</div>
+      <div>{out.running ? 'Running your allowlist command' : <><span className={out.ok ? 'ar-ok' : 'ar-fail'}>{out.ok ? 'Allowed' : 'Failed'}</span>{out.ip ? ` ${out.ip}` : ''}{out.at ? `, ${new Date(out.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</>}</div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}><Btn kind="primary" onClick={() => void runAllow()} disabled={out.running} testid="welcome-allow">{out.running ? 'Allowing' : 'Run again'}</Btn></div>
+      {out.output && <pre className="ar-out" data-testid="allow-output">{out.output}</pre>}
+    </div>
+  )
   return (
     <div className="pane-empty" data-testid="welcome" data-view={view}>
       <div className="pe-t">{s.title}</div>
