@@ -1,0 +1,39 @@
+/* The workbench frame: an icon bar, then one side bar for the view its icon names, the way a code editor lays it out. */
+
+/* ---------- icon bar ---------- */
+.abar { width: 48px; flex: none; display: flex; flex-direction: column; align-items: stretch; background: var(--side); border-right: 1px solid var(--rule); }
+.abar-item { position: relative; height: 48px; flex: none; display: grid; place-items: center; background: none; border: 0; border-left: 2px solid transparent; border-right: 2px solid transparent; color: var(--faint); cursor: pointer; }
+.abar-item .codicon { font-size: 24px; }
+.abar-item:hover { color: var(--hi); }
+.abar-item.on { color: var(--hi); border-left-color: var(--accent); }
+.abar-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.abar-mark { position: absolute; right: 5px; bottom: 6px; font: 650 11px/1 var(--sans); color: var(--signal); font-variant-numeric: tabular-nums; }
+.abar-gap { flex: 1; }
+
+/* ---------- side bar ---------- */
+.side { position: relative; flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--side); border-right: 1px solid var(--rule); }
+.side-head { height: 35px; flex: none; display: flex; align-items: center; padding: 0 20px; font: 400 11px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+.side-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.side-pad { padding: 4px 16px 16px; }
+.side-empty { padding: 8px 20px; font-size: 13px; color: var(--dim); line-height: 1.5; }
+.side-grip { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+.side-grip:hover, body.side-drag .side-grip { background: var(--accent); opacity: .5; }
+body.side-drag { cursor: col-resize; user-select: none; }
+.app > .body.rail-right .abar, .app > .body.rail-right .side { border-right: 0; border-left: 1px solid var(--rule); }
+.app > .body.rail-right .side-grip { right: auto; left: -3px; }
+
+/* the views, fitted to the side bar */
+.side .rail { width: auto; min-width: 0; flex: 1; background: none; padding-top: 0; }
+.side .ftree-wrap { flex: 1; min-height: 0; }
+.side .page { padding: 4px 16px 16px; }
+.side .page .page-head h1 { display: none; }
+.side .page .grid2, .side .page .grid-even { grid-template-columns: 1fr; gap: 10px; }
+.side .gitgrid { grid-template-columns: 1fr; gap: 12px; }
+.side-allow .poph { padding: 4px 20px 10px; display: flex; flex-direction: column; gap: 4px; font-weight: 600; color: var(--hi); }
+.side-allow .poph span { font-weight: 400; color: var(--dim); font-size: 12px; }
+.side-allow .ip-row { grid-template-columns: 1fr auto; padding: 7px 20px; }
+.side-allow .ip-row .w { grid-column: 1 / -1; text-align: left; }
+.side-allow .ip-foot { padding: 12px 20px 14px; flex-direction: column; align-items: flex-start; }
+/* the side bar's own heading names the view, so a panel's title is not said twice */
+.side .ws-page .dtitle { display: none; }
+.side .ws-page .dhead { padding-top: 0; }

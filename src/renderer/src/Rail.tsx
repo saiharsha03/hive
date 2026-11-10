@@ -133,7 +133,7 @@ export function Rail({ currentPage }: { currentPage: ToolTab | null }) {
       <button className="rail-new" onClick={() => newSession()} data-testid="top-new"><span>New thread</span><span className="keys">Ctrl N</span></button>
       <RailList live={live} focus={scr.focus} shown={shown} />
       <nav className="rail-views" aria-label="Views">
-        {(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', ...(quarry?.available ? ['quarry'] : []), 'settings'] as ToolTab[]).map((v) => (
+        {(['running', 'scheduled', 'status', 'watchers', 'workspace', ...(quarry?.available ? ['quarry'] : [])] as ToolTab[]).map((v) => (
           <button key={v} className={`rail-view${currentPage === v ? ' on' : ''}`} onClick={(e) => (e.shiftKey ? openPageBeside(v) : openPage(v))} title={`${PAGE_LABEL[v]}. Shift+click opens it beside the current pane`} data-testid={`rail-view-${v}`}>
             {VIEW_NAME[v] ?? PAGE_LABEL[v]}{v === 'running' && live.working.length > 0 ? ` ${live.working.length}` : ''}
           </button>

@@ -38,10 +38,9 @@ export async function runPull(setBusy?: (b: boolean) => void) {
   } finally { pulling = false; setBusy?.(false) }
 }
 
-function AllowPop({ allow, onClose }: { allow: AllowStatus; onClose: () => void }) {
-  const box = useRef<HTMLDivElement>(null)
-  useEscape(onClose)
-  useFocusTrap(box)
+// Allow my IP, as a body: the addresses and the Allow now button. The status line shows it in a pop-up (with Close),
+// the side bar's Allow IP view shows it as it is.
+export function AllowBody({ allow, onClose }: { allow: AllowStatus; onClose?: () => void }) {
   const [busy, setBusy] = useState(false)
   // every address the command succeeded for (main keeps them, newest first), else what the status says
   const fromStatus = allow.known
@@ -57,25 +56,46 @@ function AllowPop({ allow, onClose }: { allow: AllowStatus; onClose: () => void 
     try {
       const r = await window.api.allowRun()
       notice(r.ok ? `IP allowlist: ${r.ip ?? ''} allowed` : `IP allowlist failed: ${r.output.split('\n').slice(-3).join(' ')}`)
-      if (r.ok) onClose()
+      if (r.ok) onClose?.()
     } catch (e) { notice(`IP allowlist failed: ${(e as Error)?.message ?? e}`) } finally { setBusy(false) }
   }
   return (
     <>
+      <div className="poph">Allow my IP<span>{allow.changed ? 'Your address is not allowed yet' : allow.ip ? 'Your address is allowed' : allow.unreadable ? 'Could not read your public address' : allow.error || 'Address not read yet'}</span></div>
+      {rows.map((r) => (
+        <div key={r.ip} className={`ip-row${r.ip === allow.ip && allow.changed ? ' new' : ''}`}>
+          <span className="hi">{r.ip === allow.ip ? 'This computer' : 'Before'}</span><span className="a">{r.ip}</span>
+          <span className="w">{r.label ?? ''}{r.at ? `${r.label ? ', ' : ''}${when(r.at)}` : ''}
+            {r.at && fromStatus?.some((k) => k.ip === r.ip) && <> <Btn kind="link" onClick={() => void window.api.allowForget(r.ip).then(() => notice(`Forgot ${r.ip}: Allow my IP offers it again`)).catch((e) => notice(`Could not forget ${r.ip}: ${e?.message ?? e}`))} testid={`allow-forget-${r.ip}`} title="Its rule is gone on the other side: forget it, so Allow my IP offers it again">Forget</Btn></>}</span>
+        </div>
+      ))}
+      {!rows.length && <div className="ip-row"><span className="dimt">No address known yet.</span></div>}
+      <div className="ip-foot"><span>Runs your allowlist command for the address this computer has now.</span>
+        {onClose && <Btn kind="plain" onClick={onClose}>Close</Btn>}
+        <Btn kind="primary" onClick={() => void run()} disabled={busy || allow.running} testid="dock-allow">{busy || allow.running ? 'Allowing' : 'Allow now'}</Btn></div>
+    </>
+  )
+}
+
+// this computer's address and whether it is allowed, kept current
+export function useAllow(): AllowStatus | null {
+  const [allow, setAllow] = useState<AllowStatus | null>(null)
+  useEffect(() => {
+    void window.api.allowStatus().then(setAllow).catch(() => {})
+    return window.api.onAllowStatus(setAllow)
+  }, [])
+  return allow
+}
+
+function AllowPop({ allow, onClose }: { allow: AllowStatus; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null)
+  useEscape(onClose)
+  useFocusTrap(box)
+  return (
+    <>
       <div className="ovl-scrim" style={{ background: 'transparent' }} onMouseDown={onClose} />
       <div className="ip-pop ovl" ref={box} tabIndex={-1} role="dialog" aria-label="Allow my IP" data-testid="allow-pop">
-        <div className="poph">Allow my IP<span>{allow.changed ? 'Your address is not allowed yet' : allow.ip ? 'Your address is allowed' : allow.unreadable ? 'Could not read your public address' : allow.error || 'Address not read yet'}</span></div>
-        {rows.map((r) => (
-          <div key={r.ip} className={`ip-row${r.ip === allow.ip && allow.changed ? ' new' : ''}`}>
-            <span className="hi">{r.ip === allow.ip ? 'This computer' : 'Before'}</span><span className="a">{r.ip}</span>
-            <span className="w">{r.label ?? ''}{r.at ? `${r.label ? ', ' : ''}${when(r.at)}` : ''}
-              {r.at && fromStatus?.some((k) => k.ip === r.ip) && <> <Btn kind="link" onClick={() => void window.api.allowForget(r.ip).then(() => notice(`Forgot ${r.ip}: Allow my IP offers it again`)).catch((e) => notice(`Could not forget ${r.ip}: ${e?.message ?? e}`))} testid={`allow-forget-${r.ip}`} title="Its rule is gone on the other side: forget it, so Allow my IP offers it again">Forget</Btn></>}</span>
-          </div>
-        ))}
-        {!rows.length && <div className="ip-row"><span className="dimt">No address known yet.</span></div>}
-        <div className="ip-foot"><span>Runs your allowlist command for the address this computer has now.</span>
-          <Btn kind="plain" onClick={onClose}>Close</Btn>
-          <Btn kind="primary" onClick={() => void run()} disabled={busy || allow.running} testid="dock-allow">{busy || allow.running ? 'Allowing' : 'Allow now'}</Btn></div>
+        <AllowBody allow={allow} onClose={onClose} />
       </div>
     </>
   )

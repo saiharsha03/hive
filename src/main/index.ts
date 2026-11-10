@@ -794,7 +794,11 @@ function guardWebviews(web: Electron.WebContents): void {
 }
 
 function createWindow(): void {
+  // test mode with HIVE_TEST_OFFSCREEN=1: the window is drawn off the screen and never takes the focus, so a test or a
+  // screenshot run does not land on top of someone's work
+  const offscreen = TEST_MODE && process.env.HIVE_TEST_OFFSCREEN === '1'
   const win = new BrowserWindow({
+    ...(offscreen ? { show: false, x: -32000, y: -32000, skipTaskbar: true } : {}),
     title: windowTitle(),
     width: 1400,
     height: 900,
@@ -809,6 +813,7 @@ function createWindow(): void {
   })
   mainWin = win
   win.on('closed', () => { if (mainWin === win) mainWin = null })
+  if (offscreen) win.showInactive()
   const web = win.webContents
   watchClipboard(win)
   // the window only ever shows the app; links in chat replies go to the browser instead

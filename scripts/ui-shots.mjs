@@ -329,7 +329,7 @@ const events = [
 // ---- run ----
 const require = createRequire(import.meta.url)
 const executablePath = require(join(ROOT, 'node_modules', 'electron'))
-const env = { ...process.env, HIVE_TEST_MODE: '1', HIVE_DATA_DIR: DATA, HIVE_ENV_FILE: join(RUN, 'workspace.env'), HIVE_SCRIPTS_FILE: join(RUN, 'scripts.json') }
+const env = { ...process.env, HIVE_TEST_MODE: '1', HIVE_TEST_OFFSCREEN: process.env.HIVE_TEST_OFFSCREEN ?? '1', HIVE_DATA_DIR: DATA, HIVE_ENV_FILE: join(RUN, 'workspace.env'), HIVE_SCRIPTS_FILE: join(RUN, 'scripts.json') }
 delete env.ELECTRON_RUN_AS_NODE
 delete env.ELECTRON_RENDERER_URL
 const app = await electron.launch({ executablePath, args: [ROOT], cwd: ROOT, env, timeout: 60_000 })
@@ -413,6 +413,17 @@ await page.keyboard.press('Enter')
 await page.mouse.move(700, 880)
 if (await tid('drawer').isVisible().catch(() => false)) await tid('drawer-close').click()
 await shot('A-main')
+
+// SIDE=<folder>: the main window with each side bar view open, then with the side bar closed
+if (process.env.SIDE) {
+  const D = resolve(process.env.SIDE)
+  mkdirSync(D, { recursive: true })
+  const d = async (name) => { await page.waitForTimeout(900); await page.screenshot({ path: join(D, `${name}.png`) }); console.log('side', name) }
+  for (const v of ['files', 'threads', 'git', 'allow', 'deploy', 'notes', 'todo']) { await page.locator(`[data-testid="abar-${v}"]`).click(); await d(v) }
+  await page.locator('[data-testid="abar-todo"]').click()
+  await d('closed')
+  await app.close(); process.exit(0)
+}
 
 // QUIET=<folder>: the quiet desk's proof (main, main-clear, each page, the editor, narrow, every theme); QUIET_MAIN=1 stops after main
 if (process.env.QUIET) {

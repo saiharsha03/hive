@@ -37,7 +37,7 @@ inspectorTab.set(getPref<ITab>('inspector.tab', 'activity'))
 
 // the thread the inspector follows: the focused tab when it is a thread, else the last thread that was
 let lastThread: string | null = null
-function useInspected(): SessionMeta | undefined {
+export function useInspected(): SessionMeta | undefined {
   const metas = useSessionMetas()
   const focus = useStore(panesStore, focusedTab)
   const f = metas.find((s) => s.id === focus)
@@ -47,16 +47,17 @@ function useInspected(): SessionMeta | undefined {
 
 export const Inspector = memo(function Inspector() {
   const s = useInspected()
-  const tab = useStore(inspectorTab, (t) => t)
+  const stored = useStore(inspectorTab, (t) => t)
+  const tab: ITab = stored === 'files' ? 'activity' : stored // Files lives in the side bar now
   const setTab = (t: ITab) => { inspectorTab.set(t); setPref('inspector.tab', t) }
   const st = useThreadStatus(s?.id)
   const running = st.tasks.filter((t) => t.status === 'running').length
   return (
     <aside className="insp" data-testid="inspector" aria-label="Inspector">
       <div className="itabs" role="tablist">
-        {(['activity', 'changes', 'files', 'status'] as ITab[]).map((t) => (
+        {(['activity', 'changes', 'status'] as ITab[]).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`itab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)} data-testid={`insp-${t}`}>
-            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : t === 'files' ? 'Files' : 'Status'}
+            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : 'Status'}
             {t === 'activity' && running > 0 && <span className="n">{running}</span>}
           </button>
         ))}
@@ -64,7 +65,6 @@ export const Inspector = memo(function Inspector() {
       <div className="ibody">
         {tab === 'activity' && <Activity s={s} />}
         {tab === 'changes' && (s ? <Changes id={s.id} /> : <div className="iempty">Open a thread to see its changes.</div>)}
-        {tab === 'files' && <Files s={s} />}
         {tab === 'status' && (s ? <MiniStatus s={s} /> : <div className="iempty">Open a thread to see its status.</div>)}
       </div>
     </aside>
@@ -201,7 +201,7 @@ function Changes({ id }: { id: string }) {
 
 // ---- Files: its own browser, not tied to the thread. It opens on the workspace folder (or the folder picked last, which
 // is remembered) and stays there when the focused thread changes; "Thread folder" jumps to the thread's own checkout ----
-function Files({ s }: { s?: SessionMeta }) {
+export function Files({ s, onOpenFile = setPreview }: { s?: SessionMeta; onOpenFile?: (p: string) => void }) {
   const [root, setRootState] = useState<string | null>(() => getPref<string | null>('filesRoot', null))
   const setRoot = (f: string | null) => { setRootState(f); setPref('filesRoot', f) }
   const own = s?.worktrees?.at(-1)?.path ?? s?.cwd ?? null
@@ -217,7 +217,7 @@ function Files({ s }: { s?: SessionMeta }) {
         {home && !same(dir, home) && <button className="btn-link" onClick={() => setRoot(null)} data-testid="files-workspace">Workspace</button>}
         {own && !same(dir, own) && <button className="btn-link" onClick={() => setRoot(own)} title={own} data-testid="files-thread">Thread folder</button>}
       </div>
-      <FileTree root={dir} onOpenFolder={() => void window.api.pickFolder().then((f) => f && setRoot(f))} selected={null} onOpenFile={(p) => setPreview(p)} />
+      <FileTree root={dir} onOpenFolder={() => void window.api.pickFolder().then((f) => f && setRoot(f))} selected={null} onOpenFile={(p) => onOpenFile(p)} />
     </div>
   )
 }

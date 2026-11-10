@@ -3,7 +3,7 @@
 // or the deploy / scripts rows change, never for a streaming reply.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TitleBar, type Command, type PaletteSources } from './TitleBar'
-import { Rail } from './Rail'
+import { ActivityBar, SideBar } from './Workbench'
 import { Panes, TabRow } from './PaneArea'
 import { Inspector } from './Inspector'
 import { StatusLine, runPull } from './StatusLine'
@@ -206,7 +206,8 @@ export function Shell() {
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
       <TitleBar src={src} paletteN={paletteN} accountsOpen={accountsOpen} setAccountsOpen={setAccountsOpen} />
       <div className={`body${layout.railRight ? ' rail-right' : ''}`}>
-        {showRail && <Rail currentPage={currentPage} />}
+        {!layout.focus && <ActivityBar onAccounts={() => setAccountsOpen(true)} />}
+        {showRail && <SideBar currentPage={currentPage} deploy={deploy} />}
         <div className="centre">
           <TabRow />
           <Panes render={render} empty={empty} />
