@@ -1,6 +1,7 @@
 // Dependabot watcher, main process: plain code. Once a day at the configured local time (or at the first start after
 // a missed one) it lists open Dependabot PRs with `gh` (read-only) and starts one background review thread per PR that
-// is new or has a new head since its last review. It never merges or comments; the review prompt tells the threads the same.
+// is new or has a new head since its last review, at most HIVE_DEPENDABOT_MAX_REVIEWS (default 3) working at once: the
+// rest start on later ticks. It never merges or comments; the review prompt tells the threads the same.
 // No Electron imports: the thread starter is passed in.
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -15,6 +16,16 @@ import { writeFileSafe } from './safeWrite'
 
 type State = { lastRun: number | null; reviewed: Reviewed; enabled?: boolean } // enabled: the Watchers view's switch (default on)
 export type StartReview = (t: { tabId: string; cwd: string; title: string; prompt: string }) => boolean // false: no window yet
+export type ActiveReviews = () => number // review threads still working
+
+export const DEFAULT_MAX_REVIEWS = 3
+// HIVE_DEPENDABOT_MAX_REVIEWS: review threads working at once (a whole number above 0, else the default)
+export function reviewCap(env: Record<string, string>): number {
+  const n = Number((env.HIVE_DEPENDABOT_MAX_REVIEWS ?? '').trim())
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_MAX_REVIEWS
+}
+// how many more may start now
+export const reviewSlots = (cap: number, active: number) => Math.max(0, cap - active)
 
 const FILE = join(dataDir(), 'hive', 'dependabot.json')
 
@@ -50,11 +61,18 @@ export async function listDependabotPrs(c: DependabotConfig): Promise<{ prs: Ope
 let cfg: DependabotConfig | null = null
 let root = ''
 let busy = false
+let cap = DEFAULT_MAX_REVIEWS
+let active: ActiveReviews = () => 0
+// this run's PRs still to review (over the cap), started on later ticks; the run counts as done once it is empty
+let backlog: OpenPr[] = []
+let runAt = 0
 
 // called again when the settings change: the timer runs once and reads the latest config on every tick
 let timers = false
-export function initDependabot(env: Record<string, string>, workspaceRoot: string, startReview: StartReview) {
+export function initDependabot(env: Record<string, string>, workspaceRoot: string, startReview: StartReview, activeReviews?: ActiveReviews) {
   if (TEST_MODE) return
+  cap = reviewCap(env)
+  if (activeReviews) active = activeReviews
   const p = parseDependabotConfig(env)
   cfg = p.config
   root = workspaceRoot
@@ -70,25 +88,32 @@ export function initDependabot(env: Record<string, string>, workspaceRoot: strin
 async function runIfDue(startReview: StartReview) {
   if (!cfg || busy) return
   const state = load()
-  if (state.enabled === false) return
+  if (state.enabled === false) { backlog = []; return }
   const now = new Date()
-  if (!isDue(now, state.lastRun, cfg.time)) return
+  if (!backlog.length && !isDue(now, state.lastRun, cfg.time)) return
   busy = true
   try {
-    const { prs, errors } = await listDependabotPrs(cfg)
-    if (errors.length) console.warn(`Dependabot watcher: ${errors.join('; ')}`)
-    if (errors.length === cfg.repos.length) return // offline or gh logged out: try again on the next tick
-    for (const pr of prs.filter((x) => needsReview(x, state.reviewed))) {
+    if (!backlog.length) {
+      const { prs, errors } = await listDependabotPrs(cfg)
+      if (errors.length) console.warn(`Dependabot watcher: ${errors.join('; ')}`)
+      if (errors.length === cfg.repos.length) return // offline or gh logged out: try again on the next tick
+      backlog = prs.filter((x) => needsReview(x, state.reviewed))
+      runAt = now.getTime()
+    }
+    for (let free = reviewSlots(cap, active()); free > 0 && backlog.length; free--) {
+      const pr = backlog[0]
       const local = join(root, pr.repo.split('/')[1])
       const started = startReview({
         tabId: `dependabot-${pr.repo.replace(/\W+/g, '-')}-${pr.number}-${Date.now()}`, cwd: root,
         title: reviewTitle(pr), prompt: reviewPrompt(pr, existsSync(local) ? local : null),
       })
-      if (!started) return // no window yet: try again on the next tick, nothing recorded
+      if (!started) return // no window yet: try again on the next tick
+      backlog.shift()
       state.reviewed[prKey(pr)] = { head: pr.head, at: Date.now(), title: pr.title }
       save(state)
     }
-    state.lastRun = now.getTime()
+    if (backlog.length) return // over the cap: the rest start on later ticks
+    state.lastRun = runAt
     save(state)
   } finally {
     busy = false
@@ -108,7 +133,7 @@ export function dependabotSummary(): WatcherSummary {
   return {
     id: 'dependabot', builtin: true, name: 'Dependabot',
     goal: cfg ? `Reviews new Dependabot PRs in ${cfg.repos.join(', ')} once a day (one background thread per PR)` : 'Reviews new Dependabot PRs once a day',
-    enabled: on, status: busy ? 'running' : on ? 'idle' : 'off', waitingReason: '',
+    enabled: on, status: busy || backlog.length ? 'running' : on ? 'idle' : 'off', waitingReason: backlog.length ? `${backlog.length} PRs wait for a free review slot (at most ${cap} at once)` : '',
     message: cfg ? '' : 'Not set up: add repos under Settings > Dependabot watcher.',
     lastRun: s.lastRun, nextRun: on && cfg ? (isDue(new Date(), s.lastRun, cfg.time) ? Date.now() : next) : null,
     schedule: { every: 'off', daily: cfg?.time ?? null, weekly: null }, tier: null,

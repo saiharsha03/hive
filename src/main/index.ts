@@ -102,7 +102,9 @@ function spawnThread(t: BackgroundThread) {
 }
 // Dependabot reviewers: background threads in auto mode, like any other
 const startReview = (t: BackgroundThread) => { try { spawnThread(t); return true } catch { return false } }
-initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
+// review threads still working, for the cap on how many run at once
+const activeReviews = () => liveThreads().filter((t) => t.tabId.startsWith('dependabot-') && t.busy).length
+initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview, activeReviews)
 // IP allowlist button: on when the public IP changed since the configured command last succeeded
 const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('allow:status', st) }
 initAllowlist(appConfig.env, allowChanged)
@@ -262,7 +264,7 @@ function applySettings() {
   dev.init(appConfig)
   initDeploy(appConfig)
   gitPanel.initGit(appConfig)
-  initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
+  initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview, activeReviews)
   configureWatchers(appConfig.config?.root ?? '', appConfig.env)
   initAllowlist(appConfig.env, allowChanged)
   setWatcherPosts(appConfig.env)
