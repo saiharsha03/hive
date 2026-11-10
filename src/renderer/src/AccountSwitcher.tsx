@@ -66,7 +66,9 @@ export function useAccountSummary(): { label: string; plan: string; five: number
   return sum
 }
 
-export function AccountSwitcher({ onClose }: { onClose: () => void }) {
+// page: drawn in place as a whole page (the Accounts section), not as a pop-up over the window
+export function AccountSwitcher({ onClose, page = false }: { onClose: () => void; page?: boolean }) {
+  const idle = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<{ rows: Row[]; several: boolean } | null>(null)
   const [sel, setSel] = useState(0)
@@ -83,8 +85,8 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
     if (forgetting) { setForgetting(null); return }
     if (flow === 'signing') void window.api.accountCancel()
     onClose()
-  })
-  useFocusTrap(box)
+  }, !page)
+  useFocusTrap(page ? idle : box)
 
   const refresh = useCallback(() => void load().then((s) => { setState(s); setSel((i) => (i === 0 ? Math.max(0, s.rows.findIndex((r) => r.inUse)) : i)) }), [])
   useEffect(() => { refresh(); return onAccountsChanged(refresh) }, [refresh])
@@ -139,8 +141,8 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="ovl-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="acct-pop" ref={box} role="dialog" aria-modal="true" aria-label="Accounts" tabIndex={-1} onKeyDown={keys} data-testid="account-switcher">
+    <div className={page ? 'acct-page-wrap' : 'ovl-scrim'} onMouseDown={(e) => { if (!page && e.target === e.currentTarget) onClose() }}>
+      <div className={page ? 'acct-pop acct-page' : 'acct-pop'} ref={box} role={page ? 'region' : 'dialog'} aria-modal={page ? undefined : 'true'} aria-label="Accounts" tabIndex={-1} onKeyDown={keys} data-testid="account-switcher">
         <div className="poph">Accounts <span>Switching is instant. Running threads are not restarted.</span></div>
         {state && rows.length === 0 && <Unavailable reason="No signed-in account was found." />}
         {rows.map((r, i) => (

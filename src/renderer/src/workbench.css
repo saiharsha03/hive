@@ -132,3 +132,10 @@ button.rail-gh:hover { color: var(--hi); }
 .side .rail-fold-h > span:first-child { display: flex; align-items: center; gap: 4px; }
 .side .rail-fold-h .codicon { font-size: 14px; color: var(--dim); }
 .side .rail-fold-h:hover { background: var(--raised); }
+
+/* Accounts as a page: the same rows as the pop-up, drawn in place across the page */
+.acct-page-wrap { display: block; }
+.acct-pop.acct-page { position: static; width: auto; max-width: none; background: none; box-shadow: none; outline: 0; z-index: auto; font-size: 13px; }
+.acct-page > .poph { padding-left: 0; padding-right: 0; font-size: 0; }
+.acct-page > .poph span { font-size: 13px; }
+.acct-page .acct-row, .acct-page .acct-foot { padding-left: 0; padding-right: 0; }

@@ -23,11 +23,12 @@ import type { useDeploy } from './useDeploy'
 import type { ToolTab } from './chat'
 import { Boundary, Btn } from './kit'
 import { BrandIcon } from './brandIcons'
+import { AccountSwitcher } from './AccountSwitcher'
 import { CodexOutput, CodexSide } from './CodexView'
 import './pages/workspace.css'
 import './workbench.css'
 
-export type SideView = 'files' | 'threads' | 'codex' | 'git' | 'env' | 'allow' | 'deploy' | 'notes' | 'todo' | 'watchers' | 'quarry'
+export type SideView = 'files' | 'threads' | 'codex' | 'git' | 'env' | 'allow' | 'deploy' | 'notes' | 'todo' | 'watchers' | 'quarry' | 'accounts'
 const VIEWS: { id: SideView; label: string; icon: string; brand?: 'claude' | 'openai' }[] = [
   { id: 'files', label: 'Files', icon: 'files' },
   { id: 'threads', label: 'Threads', icon: 'comment-discussion', brand: 'claude' },
@@ -40,6 +41,7 @@ const VIEWS: { id: SideView; label: string; icon: string; brand?: 'claude' | 'op
   { id: 'todo', label: 'To do', icon: 'checklist' },
   { id: 'watchers', label: 'Watchers', icon: 'eye' },
   { id: 'quarry', label: 'Quarry', icon: 'database' },
+  { id: 'accounts', label: 'Accounts', icon: 'account' },
 ]
 const labelOf = (v: SideView) => VIEWS.find((x) => x.id === v)!.label
 const isView = (v: unknown): v is SideView => VIEWS.some((x) => x.id === v)
@@ -51,7 +53,7 @@ export const sideView = createStore<SideView>((() => { const v = getPref<unknown
 /** go to a section (a side bar section also shows its side bar when that is hidden) */
 export function showSide(v: SideView) { sideView.set(v); setPref('side.view', v); setLayout({ rail: true, focus: false }) }
 
-export function ActivityBar({ onAccounts }: { onAccounts: () => void }) {
+export function ActivityBar() {
   const quarry = useQuarry() // the Quarry icon only when Quarry is installed and usable
   const { layout } = useAppearance()
   const view = useStore(sideView, (v) => v)
@@ -65,14 +67,14 @@ export function ActivityBar({ onAccounts }: { onAccounts: () => void }) {
   const mark = (v: SideView) => (v === 'threads' && waiting > 0 ? String(waiting) : v === 'allow' && allow?.changed ? '!' : '')
   return (
     <nav className="abar" aria-label="Sections" data-testid="activity-bar">
-      {VIEWS.filter((v) => v.id !== 'quarry' || quarry?.available).map((v) => (
+      {VIEWS.filter((v) => v.id !== 'accounts' && (v.id !== 'quarry' || quarry?.available)).map((v) => (
         <button key={v.id} className={`abar-item${on(v.id) ? ' on' : ''}`} onClick={() => pick(v.id)} title={v.label} aria-label={v.label} aria-pressed={on(v.id)} data-testid={`abar-${v.id}`}>
           {v.brand ? <BrandIcon name={v.brand} size={22} /> : <i className={`codicon codicon-${v.icon}`} aria-hidden />}
           {mark(v.id) && <span className="abar-mark">{mark(v.id)}</span>}
         </button>
       ))}
       <span className="abar-gap" />
-      <button className="abar-item" onClick={onAccounts} title="Accounts" aria-label="Accounts" data-testid="abar-accounts"><i className="codicon codicon-account" aria-hidden /></button>
+      <button className={`abar-item${view === 'accounts' ? ' on' : ''}`} onClick={() => showSide('accounts')} title="Accounts" aria-label="Accounts" data-testid="abar-accounts"><i className="codicon codicon-account" aria-hidden /></button>
       {/* Settings opens as a tab, so it is shown in the tab area (Threads) when a whole-page section is on show */}
       <button className="abar-item" onClick={() => { openPage('settings'); if (isFull(view)) showSide('threads') }} title="Settings (Ctrl+,)" aria-label="Settings" data-testid="abar-settings"><i className="codicon codicon-settings-gear" aria-hidden /></button>
     </nav>
@@ -137,6 +139,7 @@ function FullPage({ view, deploy }: { view: SideView; deploy: ReturnType<typeof 
     case 'quarry': return <QuarryPage />
     case 'deploy': return <DeploysPage deploy={deploy} />
     case 'watchers': return <WatchersPage />
+    case 'accounts': return <Page title="Accounts"><AccountSwitcher page onClose={() => {}} /></Page>
     case 'codex': return <Page title="Codex"><CodexSide /><CodexOutput /></Page>
     case 'env': return <Page title="Environments"><EnvPage /></Page>
     case 'allow': return <Page title="Allow IP"><AllowPage /></Page>

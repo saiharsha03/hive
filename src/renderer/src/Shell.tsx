@@ -50,7 +50,8 @@ export function Shell() {
   const focused = metas.find((s) => s.id === focus)
   const onScreen = useStore(panesStore, (p) => p.panes.map((x) => x.active ?? '').filter(Boolean).join(' ')).split(' ').filter(Boolean)
   const [paletteN, setPaletteN] = useState(0)
-  const [accountsOpen, setAccountsOpen] = useState(false)
+  // Accounts is a whole-page section; whatever used to open its pop-up goes there
+  const setAccountsOpen = (b: boolean) => { if (b) showSide('accounts') }
   const deploy = useDeploy()
   const scripts = useScripts((p) => setPreview(p))
   const live = useStore(liveStore, (l) => l)
@@ -218,9 +219,9 @@ export function Shell() {
 
   return (
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
-      <TitleBar src={src} paletteN={paletteN} accountsOpen={accountsOpen} setAccountsOpen={setAccountsOpen} />
+      <TitleBar src={src} paletteN={paletteN} accountsOpen={false} setAccountsOpen={setAccountsOpen} />
       <div className={`body${layout.railRight ? ' rail-right' : ''}`}>
-        {!layout.focus && <ActivityBar onAccounts={() => setAccountsOpen(true)} />}
+        {!layout.focus && <ActivityBar />}
         {showRail && !full && <SideBar currentPage={currentPage} />}
         <FullSections deploy={deploy} />
         <div className="centre" style={full ? { display: 'none' } : undefined}>
