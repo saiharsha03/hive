@@ -17,7 +17,7 @@ type Seeds = {
 }
 
 const SEEDS: Record<ThemeId, Seeds & { label: string; description: string }> = {
-  dark: { label: 'Quiet', description: 'Charcoal with the code editor blue, honey for what needs you', accent: '#3794FF', fill: '#0078D4', bg: '#16171A', side: '#111214', lift: '#1E2024', hi: '#ECEAE5', dim: '#8B8983', signal: '#E9B44C', red: '#E2574C', lift2: '#26282D' },
+  dark: { label: 'Quiet', description: 'The code editor look: near black editor, charcoal panels, a calm blue', accent: '#48A0C7', fill: '#297AA0', bg: '#121314', side: '#191A1B', lift: '#242526', hi: '#CCCCCC', ink: '#BFBFBF', dim: '#8C8C8C', signal: '#E9B44C', red: '#E2574C', lift2: '#2D2E30', rule: '#2A2B2C' },
   graphite: { label: 'Graphite', description: 'Grey and white with a steel blue accent', accent: '#7FB2E5', bg: '#18191B', side: '#121314', lift: '#222326', hi: '#F0F0EE', dim: '#8E8E8A', signal: null, red: '#E2574C' },
   classic: { label: 'Classic', description: 'The pre-rebuild Hive: VS Code Dark Modern, square corners', accent: '#4DA3FF', bg: '#1F1F1F', side: '#181818', lift: '#2A2D2E', hi: '#CCCCCC', dim: '#9D9D9D', signal: '#3794FF', red: '#F14C4C', square: true, ink: '#CCCCCC' },
   midnight: { label: 'Midnight', description: 'Deep navy, a blue accent and an ice signal', accent: '#5B9DFF', bg: '#0F1420', side: '#0B0F18', lift: '#18202F', hi: '#E6EAF2', dim: '#8792A6', signal: '#8FC7FF', red: '#F0625A' },

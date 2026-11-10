@@ -113,3 +113,11 @@ body.side-drag { cursor: col-resize; user-select: none; }
 .side .rail-new { background: var(--accent); color: var(--on-accent); justify-content: center; gap: 10px; height: 28px; font: 400 13px var(--sans); margin: 6px 16px 12px; }
 .side .rail-new:hover { background: var(--accent); filter: brightness(1.12); }
 .side .rail-new .keys { color: var(--on-accent); opacity: .75; }
+
+/* group labels (Recent, Today, Yesterday, a section's name): a light tint of the accent, not grey */
+.app { --label: color-mix(in srgb, var(--accent-text) 45%, var(--hi)); }
+.side .rail-gh, .side .rail-sub, .side .rail-head, .side-head, .side .side.files .sidehead { color: var(--label); }
+.side .rail-gh .n, .side .rail-sub .n { color: var(--dim); }
+button.rail-gh:hover { color: var(--hi); }
+/* a section's name reads as a title, the way the explorer's does: sentence case, strong */
+.side-head { text-transform: none; letter-spacing: 0; font: 600 13px var(--sans); color: var(--hi); }
