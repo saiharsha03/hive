@@ -330,6 +330,14 @@ export function App() {
     // a command only the interactive CLI runs: main typed `claude "/x"` into this thread's terminal; show it
     // a background or phone-started thread is brought on screen first: the terminal panel shows the on-screen threads
     if (ev.type === 'hive_open_terminal') { activateRef.current(tabId); openTerminalRef.current(tabId); return }
+    // the thread's process ended before Claude read these: what you wrote goes back in the message box
+    if (ev.type === 'hive_unsent') {
+      const mine = (ev.messages ?? []).filter((m: { source: string; text: string }) => m.source === 'you' && m.text.trim())
+      for (const m of mine) insertIntoComposer(tabId, m.text)
+      const pics = (ev.messages ?? []).reduce((n: number, m: { source: string; images?: unknown[] }) => n + (m.source === 'you' ? m.images?.length ?? 0 : 0), 0)
+      if (mine.length || pics) notice(`The thread stopped before Claude read ${mine.length || 'your'} message${mine.length === 1 ? '' : 's'}: back in its message box${pics ? ` (attach the ${pics} picture${pics > 1 ? 's' : ''} again)` : ''}.`)
+      return
+    }
     if (ev.type === 'hive_organize') {
       if (ev.action === 'waiting') {
         setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(s, ev.reason, Date.now(), activeIdRef.current === s.id && !s.background) : s)))
@@ -355,7 +363,9 @@ export function App() {
     // a message from the phone, another thread or an automatic continue: a closed or archived thread comes back too
     const known = sessionsRef.current.find((s) => s.id === t.tabId)?.sessionId
     for (const id of new Set([t.sessionId, known, t.tabId])) if (id) keepVisible(id)
-    const first: Item = t.from ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.prompt } : { kind: 'user', text: t.prompt, images: [] }
+    // queueId: it waits behind the running turn, like a queued message typed here
+    const queue = t.queueId ? { queue: { id: t.queueId, pending: true } } : {}
+    const first: Item = t.from ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.prompt, ...queue } : { kind: 'user', text: t.prompt, images: [], ...queue }
     setSessions((all) => (all.some((s) => s.id === t.tabId) ? all.map((s) => (s.id === t.tabId ? { ...s, busy: true, items: [...s.items, first] } : s)) : [...all, {
       id: t.tabId, title: t.title, cwd: t.cwd, sessionId: t.sessionId, path: t.path, items: [first], streaming: '', busy: true, loaded: !t.path, background: !t.foreground,
     }]))

@@ -232,6 +232,12 @@ contextBridge.exposeInMainWorld('api', {
   },
   accountSwitch: (email: string) => ipcRenderer.invoke('account:switch', email),
   accountCancel: () => ipcRenderer.invoke('account:cancel'),
+  // after a successful switch: the new login, how many threads moved at once and how many follow when their work ends
+  onAccountSwitched: (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => {
+    const fn = (_e: unknown, s: { account: string | null; closed: number; waiting: number }) => cb(s)
+    ipcRenderer.on('account:switched', fn)
+    return () => ipcRenderer.removeListener('account:switched', fn)
+  },
   onAccountOutput: (cb: (t: string) => void) => {
     const fn = (_e: unknown, t: string) => cb(t)
     ipcRenderer.on('account:output', fn)

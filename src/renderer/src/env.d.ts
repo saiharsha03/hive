@@ -191,7 +191,7 @@ interface Window {
     gitLocate: (file: string) => Promise<{ dir: string; name: string; path: string } | null>
     deployConfig: () => Promise<{ config: import('../../shared/deployCore').DeployConfig | null; message: string }>
     deployDiffs: (suite: string, fetch?: boolean) => Promise<DeployDiffs>
-    onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean; from?: { id: string; title: string }; sessionId?: string; path?: string }) => void) => () => void
+    onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean; from?: { id: string; title: string }; sessionId?: string; path?: string; queueId?: string }) => void) => () => void
     deployStatus: () => Promise<DeployEnvStatus[]>
     deployRun: (repo: string, target: 'staging' | 'prod') => Promise<{ runId: string }>
     deployRewatch: (repo: string, target: 'staging' | 'prod', sha: string) => Promise<string>
@@ -219,6 +219,14 @@ interface Window {
     accountSwitch: (email: string) => Promise<{ ok: boolean; output: string }>
     accountCancel: () => Promise<void>
     onAccountOutput: (cb: (t: string) => void) => () => void
+    onAccountSwitched: (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => () => void
+    wakeupsList: () => Promise<{
+      wakeups: { id: number; sessionId: string; title: string; wakeAt: string; prompt: string; everyMinutes: number | null; firedAt: string | null }[]
+      continues: { key: string; tabId: string; title: string; at: number }[]
+    }>
+    wakeupsCancel: (kind: 'wake' | 'continue', id: string | number) => Promise<boolean>
+    onWakeupsChanged: (cb: () => void) => () => void
+    chatStatusView: (tabId: string, known?: { cwd?: string; sessionId?: string }) => Promise<import('../../main/statusView').ThreadStatusView>
     onAllowStatus: (cb: (s: import('../../shared/allowCore').AllowStatus) => void) => () => void
     scriptsConfig: () => Promise<{ scripts: import('../../shared/scriptsCore').ScriptView[]; message: string; path: string }>
     scriptsState: () => Promise<import('../../shared/scriptsCore').ScriptRun[]>
