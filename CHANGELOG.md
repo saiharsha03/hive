@@ -6,6 +6,8 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-09
+
 ### Added
 
 - **Seen by Claude.** A message shows "seen" once Claude has taken it in; one steered into a running turn says
@@ -126,7 +128,8 @@ First public release.
   Python), ESLint with typescript-eslint and react-hooks, GitHub Actions CI on Windows and Ubuntu, and an
   electron-builder Windows installer and portable build published from version tags.
 
-[Unreleased]: https://github.com/saiharsha03/hive/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/saiharsha03/hive/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/saiharsha03/hive/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/saiharsha03/hive/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/saiharsha03/hive/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/saiharsha03/hive/releases/tag/v0.1.0
