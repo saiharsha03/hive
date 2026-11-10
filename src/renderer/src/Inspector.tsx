@@ -133,11 +133,27 @@ function Activity({ s }: { s?: SessionMeta }) {
     load()
     return onWakeupsChanged(load)
   }, [])
-  const schedule: { what: string; how: string; at: string }[] = []
-  for (const j of st?.crons ?? []) { const n = nextRun(j.schedule, new Date(now)); schedule.push({ what: j.prompt, how: describeCron(j.schedule), at: n ? clock(n) : '' }) }
-  if (st?.nextWake) schedule.push({ what: 'Claude wakes this thread', how: 'wake-up', at: clock(st.nextWake) })
-  for (const w of wakes?.wakeups ?? []) if (s?.sessionId && w.sessionId === s.sessionId) schedule.push({ what: w.prompt, how: 'wake-up', at: clock(Date.parse(w.wakeAt)) })
-  for (const c of wakes?.continues ?? []) if (s && (c.tabId === s.id || c.key === s.sessionId)) schedule.push({ what: 'Continues after the usage limit resets', how: 'automatic continue', at: clock(c.at) })
+  type Due = { what: string; how: string; at: string }
+  const loops: Due[] = []
+  const wakeups: Due[] = []
+  for (const j of st?.crons ?? []) { const n = nextRun(j.schedule, new Date(now)); loops.push({ what: j.prompt, how: describeCron(j.schedule), at: n ? clock(n) : '' }) }
+  if (st?.nextWake) wakeups.push({ what: 'Claude wakes this thread', how: 'wake-up', at: clock(st.nextWake) })
+  for (const w of wakes?.wakeups ?? []) if (s?.sessionId && w.sessionId === s.sessionId) wakeups.push({ what: w.prompt, how: 'wake-up', at: clock(Date.parse(w.wakeAt)) })
+  for (const c of wakes?.continues ?? []) if (s && (c.tabId === s.id || c.key === s.sessionId)) wakeups.push({ what: 'Continues after the usage limit resets', how: 'automatic continue', at: clock(c.at) })
+  // what runs now, by kind: each has its own heading, with its count, whether or not anything is in it
+  const isShell = (t: Task) => /bash|shell/.test(t.kind)
+  const isMonitor = (t: Task) => /monitor/.test(t.kind)
+  const shells = runningHere.filter(isShell)
+  const monitors = runningHere.filter(isMonitor)
+  const agents = runningHere.filter((t) => !isShell(t) && !isMonitor(t))
+  // the last things you said in this thread, newest first: each is a point to rewind to
+  const points = useMemo(() => (session?.items ?? []).flatMap((it) => (it.kind === 'user' && it.uuid ? [{ uuid: it.uuid, text: it.text.replace(/\s+/g, ' ').trim() }] : [])).slice(-5).reverse(), [session?.items])
+  const sec = (label: string, n: number) => <div className="isec isec-k"><span>{label}</span><span className="n">{n}</span></div>
+  const due = (x: Due, i: number) => (
+    <div key={i} className="item" tabIndex={0}><div className="tm">{x.at}</div>
+      <div><div className="nm" title={x.what}>{x.what}</div><div className="ds">{x.how}</div>
+        <div className="ac"><Btn kind="link" onClick={() => openPage('scheduled')}>Scheduled</Btn></div></div></div>
+  )
   const elsewhere = [...all].filter(([tab]) => tab !== s?.id).flatMap(([tab, x]) => x.tasks.filter((t) => t.status === 'running' || (t.status === 'failed' && now - (t.endedAt ?? 0) < 3_600_000)).map((t) => ({ t, tab })))
   const titleOf = (tab: string) => metas.find((m) => m.id === tab)?.title ?? tab
   const elseRunning = elsewhere.filter((x) => x.t.status === 'running').length
@@ -145,15 +161,23 @@ function Activity({ s }: { s?: SessionMeta }) {
   const earlier = finishedHere.length + edits.length
   return (
     <div data-testid="inspector-activity">
-      <div className="isec"><span>Running now</span></div>
-      {!s ? <div className="iempty">No thread on screen.</div> : runningHere.length ? runningHere.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)
-        : <div className="iempty">{s.busy ? 'Claude is working; nothing runs in the background.' : 'Nothing running.'}</div>}
-      {schedule.length > 0 && <>
-        <div className="isec"><span>Coming up</span></div>
-        {schedule.map((x, i) => (
-          <div key={i} className="item" tabIndex={0}><div className="tm">{x.at}</div>
-            <div><div className="nm" title={x.what}>{x.what}</div><div className="ds">{x.how}</div>
-              <div className="ac"><Btn kind="link" onClick={() => openPage('scheduled')}>Scheduled</Btn></div></div></div>
+      {!s && <div className="iempty" style={{ paddingTop: 16 }}>No thread on screen.</div>}
+      {s && <>
+        {sec('Subagents', agents.length)}
+        {agents.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
+        {sec('Shells', shells.length)}
+        {shells.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
+        {sec('Monitors', monitors.length)}
+        {monitors.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
+        {sec('Wake-ups', wakeups.length)}
+        {wakeups.map(due)}
+        {sec('Loops', loops.length)}
+        {loops.map(due)}
+        {sec('Rewind', points.length)}
+        {points.map((p) => (
+          <div key={p.uuid} className="item" tabIndex={0}><div className="tm" />
+            <div><div className="nm" title={p.text}>{p.text || 'A message with only attachments'}</div>
+              <div className="ac"><Btn kind="link" onClick={() => window.dispatchEvent(new CustomEvent('hive:rewind', { detail: { tab: s.id, uuid: p.uuid } }))} testid="insp-rewind" title="Go back to before this message: put back the files Claude changed since, and edit the message">Rewind to before this</Btn></div></div></div>
         ))}
       </>}
       {earlier > 0 && s && <>

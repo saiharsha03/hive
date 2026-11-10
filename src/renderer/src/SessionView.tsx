@@ -589,6 +589,18 @@ export function SessionView(p: Props) {
       .then((preview) => setRewind((cur) => (cur?.it === it ? { ...cur, preview } : cur)))
       .catch((e) => setRewind((cur) => (cur?.it === it ? { ...cur, preview: { canRewind: false, error: String(e?.message ?? e) } } : cur)))
   }, [session.id, session.cwd, session.sessionId])
+  // Rewind asked for from the right-hand panel: the same confirm as the button on the message
+  useEffect(() => {
+    const f = (e: Event) => {
+      const d = (e as CustomEvent).detail as { tab?: string; uuid?: string } | undefined
+      if (d?.tab !== session.id) return
+      const i = session.items.findIndex((it) => it.kind === 'user' && it.uuid === d.uuid)
+      const it = session.items[i]
+      if (it?.kind === 'user') startRewind(it, i)
+    }
+    window.addEventListener('hive:rewind', f)
+    return () => window.removeEventListener('hive:rewind', f)
+  }, [session.id, session.items, startRewind])
   const doRewind = async (files: boolean) => {
     const r = rewind
     if (!r?.it.uuid || !session.sessionId) return

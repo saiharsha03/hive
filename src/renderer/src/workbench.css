@@ -196,3 +196,7 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 @media (max-width: 1300px) { .side { max-width: 30vw; } .insp { width: 260px; } }
 @media (max-width: 1050px) { .insp { display: none; } .side { max-width: 36vw; } }
 @media (max-width: 760px) { .side { max-width: 46vw; } .tb { grid-template-columns: auto minmax(0, 1fr) auto; } .full-page { padding: 10px 12px 12px; } }
+
+/* the right-hand panel's Activity: one heading per kind of thing, its count at the right, the same order always */
+.insp .isec.isec-k { padding: 12px 22px 2px; color: var(--label); font: 600 12px var(--sans); }
+.insp .isec.isec-k .n { color: var(--dim); font-weight: 400; font-variant-numeric: tabular-nums; }
