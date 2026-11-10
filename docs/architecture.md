@@ -51,6 +51,11 @@ Claude Code process. The conversation continues, the prompt cache stays warm, an
   model and effort; watcher runs, Dependabot reviews and `/btw` the background ones; teammates and a team's own Lead
   the team ones (`main/threadCore.ts` `threadClass`). An empty one falls back to the main default. Claude in Chrome
   (`general.chrome`) reaches every thread except a watcher's.
+- **Teams.** Hive Teams are the team layer: Claude Code's own agent teams are not spawned in SDK sessions, and Hive
+  does not set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (what else that variable changes in the engine is not documented).
+- **Advisor and Workflows.** Settings > General's advisor model and Workflows switch go to every new thread as the
+  `advisorModel` and `enableWorkflows` settings (the flag-settings layer); `chat:setAdvisor` changes one thread's live.
+  Hive's permission handler lets the Workflow tool through (auto mode can hand a call to it); it is never refused.
 - **Flag settings.** `main/liveStatus.ts` `sessionOptions` puts Hive's switches in the SDK's flag-settings layer
   (above user, project and local settings, no file written): the plugins Hive covers itself are off; unattended
   threads (background at start, teammates, watcher runs) also turn off the `learning-output-style` and
