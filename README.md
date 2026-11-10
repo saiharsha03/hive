@@ -280,6 +280,17 @@ the phone's token and the key. Scan it from the app (or paste it); it is shown o
 (or point `HIVE_FIREBASE_DIR` at it). Then run `cd mobile && ./gradlew assembleDebug` (JDK 17+, Android SDK 35), and
 install `app/build/outputs/apk/debug/app-debug.apk` with `adb install` or by copying it to the phone.
 
+For the copy you keep on your phone, build a release (`./gradlew assembleRelease`) signed with **your own** keystore,
+never the debug key (its password is public, so anyone could sign an update that replaces the app). Name it in
+`~/.gradle/gradle.properties` or the environment, never in the repo: `HIVE_KEYSTORE` (the `.jks` file),
+`HIVE_KEYSTORE_PASSWORD`, `HIVE_KEY_ALIAS` (and `HIVE_KEY_PASSWORD` if the key's own password differs). Without them
+the release build stops and says why. Make one with
+`keytool -genkeypair -v -keystore hive-release.jks -alias hive -keyalg RSA -keysize 4096 -validity 10000`.
+
+The phone needs a **screen lock** (PIN, pattern or password): the pairing key is kept in the phone's keystore behind
+it, and the app does not open without one. Pairing needs an **`https://` relay address**; the app refuses a code with
+a plain `http://` relay.
+
 ## How it works
 
 ```
