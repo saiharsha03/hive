@@ -147,3 +147,31 @@ button.rail-gh:hover { color: var(--hi); }
 .allow-page .ip-row .w { text-align: left; }
 .allow-page .poph { font-size: 0; }
 .allow-page .poph span { font-size: 13px; }
+
+/* ---------- the bottom panel: Terminal and Environment logs ---------- */
+.drawer.panel { position: relative; background: var(--bg); border-top: 1px solid var(--rule); min-height: 120px; }
+.panel-grip { position: absolute; top: -3px; left: 0; right: 0; height: 6px; cursor: row-resize; z-index: 5; }
+.panel-grip:hover, body.panel-drag .panel-grip { background: var(--accent); opacity: .5; }
+body.panel-drag { cursor: row-resize; user-select: none; }
+.panel-head { height: 35px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 12px; }
+.panel-head .sp { flex: 1; }
+.panel-tab { height: 35px; padding: 0 10px; background: none; border: 0; border-bottom: 1px solid transparent; color: var(--dim); font: 400 13px var(--sans); cursor: pointer; }
+.panel-tab:hover { color: var(--hi); }
+.panel-tab.on { color: var(--hi); border-bottom-color: var(--accent); }
+.panel-act { width: 24px; height: 24px; display: grid; place-items: center; background: none; border: 0; color: var(--dim); cursor: pointer; }
+.panel-act:hover:not(:disabled) { color: var(--hi); background: var(--raised); }
+.panel-act:disabled { opacity: .35; cursor: default; }
+.panel-split { flex: 1; min-height: 0; display: flex; }
+.panel-split > .termview { flex: 1; min-width: 0; }
+.panel-list { width: 200px; flex: none; border-left: 1px solid var(--rule); overflow-y: auto; padding: 4px 0; }
+.panel-item { display: flex; align-items: center; gap: 8px; width: 100%; height: 22px; padding: 0 8px 0 12px; background: none; border: 0; color: var(--ink); font: 400 13px var(--sans); text-align: left; cursor: pointer; }
+.panel-item > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel-item em { font-style: normal; font-size: 12px; color: var(--dim); }
+.panel-item .codicon { font-size: 14px; color: var(--dim); }
+.panel-item:hover { background: var(--raised); }
+.panel-item.on { background: var(--raised); color: var(--hi); }
+.panel-kill { display: none; background: none; border: 0; color: var(--dim); cursor: pointer; padding: 0; }
+.panel-item:hover .panel-kill { display: block; }
+.panel-kill:hover .codicon { color: var(--hi); }
+.panel .term-slot { padding-left: 12px; }
+.panel .term-bar { padding: 3px 12px; }

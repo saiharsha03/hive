@@ -318,6 +318,7 @@ contextBridge.exposeInMainWorld('api', {
   terminalOpen: (id: string, cwd: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:open', id, cwd, cols, rows),
   terminalWrite: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
   terminalResize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
+  terminalKill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
   onTerminalData: (cb: (id: string, chunk: string) => void) => {
     const fn = (_e: unknown, id: string, chunk: string) => cb(id, chunk)
     ipcRenderer.on('terminal:data', fn)

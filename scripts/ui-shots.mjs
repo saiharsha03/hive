@@ -422,6 +422,12 @@ if (process.env.SIDE) {
   for (const v of ['files', 'threads', 'git', 'codex', 'env', 'allow', 'deploy', 'notes', 'todo', 'watchers', 'running', 'scheduled', 'pull', 'scripts', 'dependabot', 'usage']) { await page.locator(`[data-testid="abar-${v}"]`).click(); await d(v) }
   await page.locator('[data-testid="abar-todo"]').click()
   await d('closed')
+  await page.locator('[data-testid="abar-threads"]').click()
+  await page.locator('[data-testid="abar-terminal"]').click()
+  await page.waitForTimeout(2500)
+  await page.locator('[data-testid="terminal-new"]').click()
+  await page.waitForTimeout(1500)
+  await d('terminal')
   await app.close(); process.exit(0)
 }
 

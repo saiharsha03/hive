@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createStore, useStore } from './store'
 import { getPref, setPref } from './prefs'
 import { setLayout, useAppearance } from './appearance'
-import { live as liveStore, newSession, openStackLog, openFileTab, openPage, showDiffBeside, talkAbout } from './actions'
+import { live as liveStore, newSession, openStackLog, openFileTab, openPage, showDiffBeside, talkAbout, toggleTerminal } from './actions'
 import { Rail } from './Rail'
 import { Files, useInspected } from './Inspector'
 import { GitPanel } from './GitPanel'
@@ -47,7 +47,7 @@ const VIEWS: { id: SideView; label: string; icon: string; brand?: 'claude' | 'op
   { id: 'running', label: 'Running', icon: 'pulse' },
   { id: 'scheduled', label: 'Scheduled', icon: 'clock' },
   { id: 'pull', label: 'Pull', icon: 'repo-pull' },
-  { id: 'scripts', label: 'Scripts', icon: 'terminal' },
+  { id: 'scripts', label: 'Scripts', icon: 'play' },
   { id: 'dependabot', label: 'Dependabot', icon: 'package' },
   { id: 'usage', label: 'Usage', icon: 'graph' },
   { id: 'quarry', label: 'Quarry', icon: 'database' },
@@ -85,6 +85,7 @@ export function ActivityBar() {
         </button>
       ))}
       <span className="abar-gap" />
+      <button className={`abar-item${layout.drawer ? ' on' : ''}`} onClick={() => toggleTerminal()} title="Terminal (Ctrl+`)" aria-label="Terminal" aria-pressed={layout.drawer} data-testid="abar-terminal"><i className="codicon codicon-terminal" aria-hidden /></button>
       <button className={`abar-item${view === 'accounts' ? ' on' : ''}`} onClick={() => showSide('accounts')} title="Accounts" aria-label="Accounts" data-testid="abar-accounts"><i className="codicon codicon-account" aria-hidden /></button>
       {/* Settings opens as a tab, so it is shown in the tab area (Threads) when a whole-page section is on show */}
       <button className="abar-item" onClick={() => { openPage('settings'); if (isFull(view)) showSide('threads') }} title="Settings (Ctrl+,)" aria-label="Settings" data-testid="abar-settings"><i className="codicon codicon-settings-gear" aria-hidden /></button>

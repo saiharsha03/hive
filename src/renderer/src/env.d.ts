@@ -269,6 +269,7 @@ interface Window {
     terminalOpen: (id: string, cwd: string, cols: number, rows: number) => Promise<{ scrollback: string; fresh: boolean; shell: string; cwd: string }>
     terminalWrite: (id: string, data: string) => Promise<void>
     terminalResize: (id: string, cols: number, rows: number) => Promise<void>
+    terminalKill: (id: string) => Promise<void>
     onTerminalData: (cb: (id: string, chunk: string) => void) => () => void
     onTerminalExit: (cb: (id: string, code: number, closed: boolean) => void) => () => void
     // per-thread status: model / effort switches, the lists the session offers, stopping background work

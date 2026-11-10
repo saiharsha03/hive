@@ -69,7 +69,7 @@ function create(id: string, cwd: string): Entry {
   const term = new Terminal({
     theme: themeFromTokens(),
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || 'Consolas, monospace',
-    fontSize: 13,
+    fontSize: 14,
     scrollback: 5000,
     cursorBlink: true,
     allowProposedApi: false,
@@ -125,6 +125,13 @@ function terminalTextForChat(id: string): string | null {
 }
 
 export type TermTarget = { tabId: string; title: string; cwd: string }
+
+/** end a terminal for good: its shell is killed and its screen is dropped */
+export function disposeTerminal(id: string) {
+  const e = entries.get(id)
+  if (e) { e.host.remove(); try { e.term.dispose() } catch { /* already gone */ } entries.delete(id) }
+  void window.api.terminalKill(id).catch(() => {})
+}
 
 // The Terminal tab: the focused thread's shell, with a switcher when several chats are on screen
 export function TerminalView({ targets, current, onPick, onSendToChat, focus }: {

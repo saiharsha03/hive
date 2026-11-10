@@ -692,6 +692,7 @@ setTerminalSink({
 handle('terminal:open', (_e, id: string, cwd: string, cols: number, rows: number) => openTerminal(String(id), String(cwd ?? ''), cols, rows))
 handle('terminal:write', (_e, id: string, data: string) => writeTerminal(String(id), String(data)))
 handle('terminal:resize', (_e, id: string, cols: number, rows: number) => resizeTerminal(String(id), cols, rows))
+handle('terminal:kill', (_e, id: string) => killTerminal(String(id)))
 handle('dialog:folder', async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender)!
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
