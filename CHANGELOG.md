@@ -6,6 +6,8 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-11-10
+
 ### Fixed
 
 - Picking Off in a thread's Advisor menu now really turns the advisor off when the thread started with one (the
