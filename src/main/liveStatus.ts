@@ -60,6 +60,7 @@ type Tab = {
   reported?: string // the level the Stop hook last reported outside an ultrathink turn
   advisor?: string // picked in Hive for this thread ('' = none); also passed when the process restarts
   advisorNow?: string | null // what the running process has (the pick, else Settings > General), for /status
+  advisorAtStart?: string // the advisor the running process was started with ('' = none): Off has to override that one
   boost?: { prev: string | undefined; left: number } // ultrathink: what to go back to, after how many turn ends
 }
 const tabs = new Map<string, Tab>()
@@ -80,6 +81,7 @@ export function sessionOptions(tabId: string, send: Send, o: { unattended?: bool
   const { advisorModel: dflt, ...flags } = o.flags ?? {}
   const advisor = t.advisor !== undefined ? t.advisor : dflt ?? ''
   t.advisorNow = advisor || null
+  t.advisorAtStart = advisor
   return {
     // plugin hook output (security warnings on edits) reaches the stream only with this on
     includeHookEvents: true,
@@ -231,11 +233,13 @@ export async function setEffort(tabId: string, q: Query | undefined, level: stri
   t.send({ type: 'hive_effort', level })
 }
 
-// a thread's advisor model, switched live ('' = none: Hive's flag goes, so the user's own settings apply again)
+// a thread's advisor model, switched live. '' = none: Hive's flag goes, so the user's own settings apply again. A
+// process started with an advisor keeps that one under whatever is applied later (clearing the key with null brings
+// it back, seen on a live process), so there Off is sent as an empty advisor, which the process runs as no advisor
 export async function setAdvisor(tabId: string, q: Query | undefined, model: string): Promise<void> {
   const t = tab(tabId)
   const m = model.trim()
-  if (q) await q.applyFlagSettings({ advisorModel: m || null })
+  if (q) await q.applyFlagSettings({ advisorModel: m || (t.advisorAtStart ? '' : null) })
   t.advisor = m
   t.advisorNow = m || null
   t.send({ type: 'hive_advisor', model: m || null })

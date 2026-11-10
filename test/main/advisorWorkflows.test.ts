@@ -2,7 +2,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { emptyGeneral, normalizeSettings } from '../../src/shared/settingsCore'
-import { saveSettings, sessionFlags } from '../../src/main/settings'
+import { idleCloseMs, idleSweepMs, saveSettings, sessionFlags } from '../../src/main/settings'
 import { advisorNow, sessionOptions, setAdvisor } from '../../src/main/liveStatus'
 import { permitWithoutPrompt } from '../../src/main/threadCore'
 import { applyTask, kindLabel, taskHeading } from '../../src/shared/taskCore'
@@ -19,7 +19,20 @@ test('settings: advisor model ("" = off) and Workflows (on, off, or Claude Code\
 test('a new session gets them in the flag-settings layer; test mode adds no advisor', () => {
   saveSettings({ version: 1, env: {}, scripts: null, general: { ...emptyGeneral(), advisorModel: 'claude-opus-5-5', workflows: 'off' } })
   assert.deepEqual(sessionFlags(false), { advisorModel: 'claude-opus-5-5', enableWorkflows: false })
-  assert.deepEqual(sessionFlags(true), {})
+  assert.deepEqual(sessionFlags(true, {}), {})
+  // a test run may name its own (the e2e that reads them back from the live process); outside test mode they are not read
+  const own = { HIVE_TEST_ADVISOR: ' sonnet ', HIVE_TEST_WORKFLOWS: 'on' }
+  assert.deepEqual(sessionFlags(true, own), { advisorModel: 'sonnet', enableWorkflows: true })
+  assert.deepEqual(sessionFlags(true, { HIVE_TEST_WORKFLOWS: 'off' }), { enableWorkflows: false })
+  assert.deepEqual(sessionFlags(true, { HIVE_TEST_WORKFLOWS: 'maybe' }), {})
+  assert.deepEqual(sessionFlags(false, own), { advisorModel: 'claude-opus-5-5', enableWorkflows: false })
+  // the idle limit in milliseconds, for test runs only; the sweep then runs as often as it takes to see it
+  saveSettings({ version: 1, env: {}, scripts: null, general: { ...emptyGeneral(), idleCloseMinutes: 5 } })
+  assert.equal(idleCloseMs(false, { HIVE_TEST_IDLE_CLOSE_MS: '2000' }), 5 * 60_000)
+  assert.equal(idleCloseMs(true, {}), 5 * 60_000)
+  assert.equal(idleCloseMs(true, { HIVE_TEST_IDLE_CLOSE_MS: '2000' }), 2000)
+  assert.equal(idleCloseMs(true, { HIVE_TEST_IDLE_CLOSE_MS: 'soon' }), 5 * 60_000)
+  assert.deepEqual([idleSweepMs(false, { HIVE_TEST_IDLE_CLOSE_MS: '2000' }), idleSweepMs(true, {}), idleSweepMs(true, { HIVE_TEST_IDLE_CLOSE_MS: '2000' })], [60_000, 60_000, 500])
   saveSettings({ version: 1, env: {}, scripts: null, general: emptyGeneral() })
   assert.deepEqual(sessionFlags(false), {}) // nothing set: nothing passed, Claude Code's own defaults stand
   const o = sessionOptions('adv-1', () => {}, { flags: { advisorModel: 'opus', enableWorkflows: true } })
@@ -38,10 +51,15 @@ test("a thread's own advisor: switched live, and kept for its next process", asy
   sessionOptions('adv-3', (e) => events.push(e), { flags: { advisorModel: 'opus' } })
   await setAdvisor('adv-3', q, 'sonnet')
   await setAdvisor('adv-3', q, '')
-  assert.deepEqual(applied, [{ advisorModel: 'sonnet' }, { advisorModel: null }]) // '' drops Hive's flag
+  // the process started with an advisor: clearing the key would bring that one back, so Off is an empty advisor
+  assert.deepEqual(applied, [{ advisorModel: 'sonnet' }, { advisorModel: '' }])
   assert.deepEqual(events, [{ type: 'hive_advisor', model: 'sonnet' }, { type: 'hive_advisor', model: null }])
   const again = sessionOptions('adv-3', () => {}, { flags: { advisorModel: 'opus' } }) // the default does not come back
   assert.equal('advisorModel' in (again.settings as object), false)
+  // that next process started with none: Off there drops Hive's flag, so the user's own settings apply
+  await setAdvisor('adv-3', q, 'sonnet')
+  await setAdvisor('adv-3', q, '')
+  assert.deepEqual(applied.slice(2), [{ advisorModel: 'sonnet' }, { advisorModel: null }])
 })
 
 test('a Workflow call is never denied by Hive (auto mode can hand it over); a watcher keeps its rules', () => {

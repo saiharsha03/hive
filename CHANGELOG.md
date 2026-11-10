@@ -6,6 +6,12 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Picking Off in a thread's Advisor menu now really turns the advisor off when the thread started with one (the
+  Settings > General default, or an earlier pick): before, the running Claude process went back to the advisor it
+  started with while Hive showed none.
+
 ## [2.2.0] - 2026-11-10
 
 ### Added
