@@ -119,3 +119,11 @@ export function closeStatus(): void {
   q?.close()
   q = null
 }
+
+// signed in to another account: the next question starts a fresh idle process on the new login, and the old login's
+// usage reading is dropped (the credentials-file check does the same when the login changes outside Hive)
+export function restartStatus(): void {
+  closeStatus()
+  usage = null
+  lastIdleTry = 0
+}

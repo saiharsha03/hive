@@ -2,16 +2,17 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, shell, Tray } from 'electron'
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
-import { appendFileSync, existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
-import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
+import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { configureChat, liveQuery, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { cancelWakeup, initThreadWakeups, listWakeups, tick as wakeupsTick } from './threadWakeups'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
-import { resendGroups, takePending } from './pending'
+import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc } from './liveStatus'
@@ -44,7 +45,7 @@ import { cancelContinue, continueAt, initAutoContinue, listContinues } from './a
 import { readTodos } from './teamTodos'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
-import { closeStatus, getStatus, setLiveUsage, weeklyUsage } from './status'
+import { closeStatus, getStatus, restartStatus, setLiveUsage, weeklyUsage } from './status'
 import { loadConfig, readDotEnv } from './devConfig'
 import { loadSettings, saveSettings, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
@@ -75,6 +76,8 @@ let settings: Settings = loadSettings(readDotEnv(APP_DIR).env, SCRIPTS_FILE)
 let appConfig = loadConfig(APP_DIR, (env) => effectiveEnv(env, settings))
 // the app name and tagline (Settings > General) for the system prompt, messages and the window title
 setAppName(settings.general.appName, settings.general.appTagline)
+// the workspace root and its worktrees folder: threads under them share the root's auto-memory folder
+function chatRoots() { return { root: appConfig.config?.root ?? '', worktrees: appConfig.config?.worktreesDir } }
 dev.init(appConfig)
 initDeploy(appConfig)
 gitPanel.initGit(appConfig)
@@ -104,7 +107,7 @@ initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview)
 const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('allow:status', st) }
 initAllowlist(appConfig.env, allowChanged)
 setWatcherPosts(appConfig.env)
-configureChat(appConfig.env)
+configureChat(appConfig.env, chatRoots())
 setWatcherStop(watcherStopReason)
 // usage limits: the idle status process has none, so a live thread's answer stands in
 setLiveUsage(liveUsage)
@@ -157,6 +160,20 @@ const phoneItems = (items: Awaited<ReturnType<typeof loadRecentHistory>>['items'
   if (it.kind === 'note' || it.kind === 'summary') return [{ k: 'note', t: it.kind === 'summary' ? 'Earlier conversation compacted' : it.text }]
   return []
 }).slice(-80).map((p) => ({ ...p, t: p.t.length > 4000 ? `${p.t.slice(0, 4000)}…` : p.t })) // well under the relay's frame limit
+// a message to a thread by tab or session id: a live one takes it like a window message, a closed one is resumed.
+// user: typed on the phone (it passes a paused team's hold); an automatic continue is not
+async function sendTo(id: string, text: string, user: boolean): Promise<string> {
+  const w = appWindow()
+  if (!w) throw new Error(`The ${appName()} window is not open`)
+  if (text !== CONTINUE_PROMPT) cancelContinue(id) // the user wrote to it: no automatic continue
+  const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+  if (l) { runInThread({ tabId: l.tabId, cwd: l.cwd, title: l.title, prompt: text, user }, w.webContents); return 'sent' }
+  const s = (await listSessions()).find((x) => x.id === id)
+  if (!s) throw new Error('That thread is gone')
+  // a watcher's session resumes in the watcher's own tab, so it stays read-only
+  runInThread({ tabId: watcherTabFor(s.id) ?? s.id, cwd: s.cwd, title: s.title, prompt: text, resume: s.id, user }, w.webContents)
+  return 'sent'
+}
 const mobileDeps = () => ({
   threads: async (): Promise<PhoneThread[]> => {
     // the sidebar's sections (Watchers, Pinned, Waiting, Working, Recent), from the same pins and watcher runs
@@ -180,25 +197,14 @@ const mobileDeps = () => ({
     const ended: PhoneItem[] = saved?.watcherRun ? [{ k: 'note', t: 'This watcher run has ended and its thread is closed. Replying reopens it: Claude reads the whole conversation again, which counts against your usage.' }] : []
     return { title: l?.title ?? saved?.title ?? id, items: [...phoneItems(items), ...ended], working: !!l?.busy, asks: l ? openAsks(l.tabId) : [], tasks }
   },
-  send: async (id: string, text: string) => {
-    const w = appWindow()
-    if (!w) throw new Error(`The ${appName()} window is not open`)
-    if (text !== CONTINUE_PROMPT) cancelContinue(id) // the user wrote to it: no automatic continue
-    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
-    if (l) { runInThread({ tabId: l.tabId, cwd: l.cwd, title: l.title, prompt: text }, w.webContents); return 'sent' }
-    const s = (await listSessions()).find((x) => x.id === id)
-    if (!s) throw new Error('That thread is gone')
-    // a watcher's session resumes in the watcher's own tab, so it stays read-only
-    runInThread({ tabId: watcherTabFor(s.id) ?? s.id, cwd: s.cwd, title: s.title, prompt: text, resume: s.id }, w.webContents)
-    return 'sent'
-  },
+  send: (id: string, text: string) => sendTo(id, text, true),
   start: async (folder: string, text: string) => {
     const w = appWindow()
     if (!w) throw new Error(`The ${appName()} window is not open`)
     // only a folder this app offered the phone (folders below); empty = the workspace root
     const cwd = folder ? phoneFolder(folder, mobileDeps().folders()) : appConfig.config?.root || homedir()
     if (!cwd) throw new Error('That folder is not one the phone can start a thread in')
-    runInThread({ tabId: `phone-${Date.now()}`, cwd, title: text.replace(/\s+/g, ' ').slice(0, 50), prompt: text }, w.webContents)
+    runInThread({ tabId: `phone-${Date.now()}`, cwd, title: text.replace(/\s+/g, ' ').slice(0, 50), prompt: text, user: true }, w.webContents)
     return 'started'
   },
   stop: async (id: string) => { const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id); if (l) await interrupt(l.tabId) },
@@ -241,7 +247,7 @@ initMobile(appConfig.env, mobileDeps())
 initAutoContinue({
   fire: async (w, prompt) => {
     if (!appWindow()) return false // tried again in a minute
-    try { await mobileDeps().send(w.key, prompt) } catch (e) { console.warn(`auto-continue ${w.title}: ${(e as Error).message}`) } // a thread that is gone is dropped
+    try { await sendTo(w.key, prompt, false) } catch (e) { console.warn(`auto-continue ${w.title}: ${(e as Error).message}`) } // a thread that is gone is dropped
     return true
   },
   // to the tab it started in and to a tab reopened under the session id (after a restart)
@@ -260,7 +266,7 @@ function applySettings() {
   configureWatchers(appConfig.config?.root ?? '', appConfig.env)
   initAllowlist(appConfig.env, allowChanged)
   setWatcherPosts(appConfig.env)
-  configureChat(appConfig.env)
+  configureChat(appConfig.env, chatRoots())
   initMobile(appConfig.env, mobileDeps())
 }
 const draftOf = (d: unknown): Draft => {
@@ -454,15 +460,16 @@ handle('update:apply', () => { if (updateState()?.kind === 'ready') quitting = t
 // a newer Claude Code engine (new models arrive with it) and `claude update`
 handle('engine:latest', () => latestEngine())
 handle('engine:update', () => updateEngine())
-// Switch account: the engine's browser sign-in; on success the app restarts so everything runs on the new login
+// Switch account: the engine's browser sign-in. Nothing restarts: the status process starts again on the new login, every
+// quiet thread closes its process (tab and session stay; the next message resumes it on the new login) and a busy one
+// does the same when its work ends. The window hears account:switched
 handle('account:switch', async (e, email: string) => {
   const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
-  if (r.ok) setTimeout(() => {
-    // the restart is asked for first, so a failing cleanup step cannot leave Hive closed without it
-    app.relaunch({ args: [...process.argv.slice(1).filter((a) => a !== RELAUNCH_FLAG), RELAUNCH_FLAG] })
-    for (const stop of [closeStatus, stopLanguageServers, closeAll, stopAllScripts, killAllTerminals]) { try { stop() } catch { /* keep going */ } }
-    app.exit(0)
-  }, 1500)
+  if (!r.ok) return r
+  restartStatus()
+  const { closed, waiting } = recycleThreads()
+  const account = await getStatus().then((st) => st.account).catch(() => null)
+  for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('account:switched', { account, closed, waiting })
   return r
 })
 handle('account:cancel', () => cancelSwitch())
@@ -592,7 +599,10 @@ function openTeamWindow(teamId: string | null): void {
 function resendPending(web: Electron.WebContents): void {
   for (const p of TEST_MODE ? [] : resendGroups(takePending())) {
     // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
-    try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: p.prompt, foreground: p.background === false, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
+    // under one uuid, so the CLI's echo of it clears these messages from the pending file
+    const uuid = randomUUID()
+    pendingResent(p.keys, uuid)
+    try { runInThread({ tabId: p.tabId, cwd: p.cwd, title: p.title, prompt: p.prompt, foreground: p.background === false, user: true, uuid, ...(p.sessionId ? { resume: p.sessionId } : {}) }, web) } catch (e) { console.error('pending message not resent:', e) }
   }
 }
 
@@ -657,22 +667,8 @@ function makeTray(): void {
 }
 app.on('before-quit', () => { quitting = true })
 
-// one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one. A restart Hive made
-// itself (account switch) can come up while the old one is still shutting down its threads and terminals and holds
-// the lock: that copy waits for it (up to 15 s) instead of quitting, which closed Hive for good after a switch
-const RELAUNCH_FLAG = '--hive-relaunch' // marks a restart Hive made itself
-function singleInstance(): boolean {
-  if (app.requestSingleInstanceLock()) return true
-  if (!process.argv.includes(RELAUNCH_FLAG)) return false
-  const pause = new Int32Array(new SharedArrayBuffer(4))
-  for (const until = Date.now() + 15_000; Date.now() < until;) {
-    Atomics.wait(pause, 0, 0, 250)
-    if (app.requestSingleInstanceLock()) return true
-  }
-  try { appendFileSync(join(app.getPath('userData'), 'hive-start.log'), `${new Date().toISOString()} restart gave up: the old Hive still held the lock after 15 s\n`) } catch { /* nowhere to write */ }
-  return false
-}
-if (!TEST_MODE && !singleInstance()) app.quit()
+// one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one
+if (!TEST_MODE && !app.requestSingleInstanceLock()) app.quit()
 app.on('second-instance', showWindow)
 
 Menu.setApplicationMenu(null)

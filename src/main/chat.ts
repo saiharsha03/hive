@@ -16,7 +16,7 @@ import { claudeExecutable } from './engine'
 import { ORGANIZE_ACTIONS, checkOrganize, localNow } from './organize'
 import { searchInSession, searchSessions, sessionMeta } from './search'
 import { formatChunks, formatSessions } from './searchCore'
-import { promptNeverChecked, turnQueue } from './queueCore'
+import { inOrder, promptNeverChecked, turnQueue } from './queueCore'
 import { addTodo } from './todos'
 import { addToNote } from './notes'
 import { listSessions } from './sessions'
@@ -25,8 +25,9 @@ import { agentStack, ensureWorktree, logs as devLogs, releaseThread, setThreadTi
 import { linkThread, moveThreadLinks } from './threadWorktrees'
 import { appName } from '../shared/appName'
 import { modeFor, modeSwitch } from '../shared/modeCore'
-import { threadDefaults } from './settings'
-import { boostForMessage, forgetTab, observe, sessionOptions } from './liveStatus'
+import { idleCloseMs, threadDefaults } from './settings'
+import { boostForMessage, forgetTab, observe, sessionOptions, userMemoryDir } from './liveStatus'
+import { busyWith, idleToClose, messageParts, retireStep, sharedMemoryDir, threadClass, type Activity } from './threadCore'
 import { readOnlyOptions } from './readOnly'
 import { isWatcherTab, isWatcherTranscript } from '../shared/readOnlyCore'
 import { createWatcher, deleteWatcher, formatWatchers, runWatcherNow, setWatcherEnabled, updateWatcher } from './watchers'
@@ -61,7 +62,7 @@ import { addTodo as addTeamTodo, formatTodos, openMajor, updateTodo } from '../s
 import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
 import { forkPoint, partialRestore, rewindBlock } from '../shared/rewindCore'
-import { addPending, pendingDelivered, pendingIsSteer, pendingSession, steersDelivered, threadClosed } from './pending'
+import { addPending, pendingDelivered, pendingIsSteer, pendingReturned, pendingSeen, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // the events the user should hear about: the phone and the desktop get the same ones
 const notifyUser = (title: string, body: string, thread: string): void => { notifyPhone(title, body, thread); notifyDesktop(title, body, thread) }
@@ -162,7 +163,18 @@ type Live = {
   onIdle: Set<() => void> // wait_for_thread callers, told when the thread has no turn running and nothing queued
   emit: (event: unknown) => void // an event to this thread's tab
   status: ThreadStatus // the same live status the tab shows (background work, loops, wake-up, goal), for agent_status
+  watcher: boolean // a watcher run's thread (read-only; it closes itself when the run ends)
+  // messages handed to the engine that Claude has not taken in yet (by uuid; the CLI's echo removes them), and where
+  // each queued one came from: what goes back to the window when the process ends by itself
+  outbox: Map<string, Unsent>
+  queuedFrom: Map<string, Unsent['source']>
+  stopTasks: number // background tasks the last Stop hook reported still in flight
+  lastActiveAt: number // the last event from this process
+  retiring?: 'idle' | 'account' // Hive closes the process on purpose and keeps the tab: the next message resumes the session
+  recycle?: boolean // signed in to another account: close the process once nothing of it runs (account switch)
 }
+// a message the window gets back: source you = typed in the window or on the phone; hive = a thread, a wake-up, a run
+export type Unsent = { uuid?: string; queueId?: string; text: string; images: { mediaType: string; data: string }[]; source: 'you' | 'hive' }
 const live = new Map<string, Live>()
 
 // threads whose process ended, so message_thread can resume them and wait_for_thread can still give their last reply.
@@ -171,7 +183,13 @@ type Gone = { tabId: string; sessionId: string; cwd: string; title: string; last
 const gone = new Map<string, Gone>()
 const findGone = (ref: string) => [...gone.values()].find((g) => g.tabId === ref || g.sessionId === ref)
 const wake = (s: Live) => { for (const cb of [...s.onIdle]) cb() }
-const userMsg = (text: string) => ({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] }, parent_tool_use_id: null }) as SDKUserMessage
+const userMsg = (text: string, uuid: string = randomUUID()) => ({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] }, parent_tool_use_id: null, uuid }) as SDKUserMessage
+// a message on its way to Claude: kept until Claude takes it in, so a process that ends first gives it back
+const track = (s: Live, m: SDKUserMessage, source: Unsent['source'], queueId?: string) => {
+  if (m.uuid) s.outbox.set(m.uuid, { uuid: m.uuid, ...(queueId ? { queueId } : {}), ...messageParts(m.message.content), source })
+}
+// the user's sends to one tab go in the order they were made (an ultrathink waits for its effort to be raised first)
+const sends = inOrder()
 // a watcher's schedule, for create_watcher and update_watcher
 const SCHEDULE = z.object({
   every: z.string().optional().describe('"adaptive" (default: follows the weekly usage limit), a fixed interval like "30m", "1h", "1d", or "off" (no sweeps: only the daily / weekly reports)'),
@@ -233,10 +251,16 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   const resumedFrom = forkedFrom ?? resume ?? null
   if (fork && !fork.at) resume = undefined
   const watcher = isWatcherThread(tabId, cwd, resume)
+  const cls = threadClass(tabId, watcher)
   // events only while this process is still the tab's live one; a closed process stays silent
   let s: Live
   const send = (event: unknown) => {
-    if (s) s.status = reduceStatus(s.status, event, Date.now())
+    if (s) {
+      s.status = reduceStatus(s.status, event, Date.now())
+      s.lastActiveAt = Date.now()
+      const ev = event as { type?: string; tasks?: unknown }
+      if (ev?.type === 'hive_stop') s.stopTasks = Array.isArray(ev.tasks) ? ev.tasks.length : 0
+    }
     if (live.get(tabId) === s && !web.isDestroyed()) web.send('chat:event', tabId, event)
   }
 
@@ -965,7 +989,9 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       // default). A watcher never gets Chrome: it is read-only, and the browser tools act in the user's real Chrome
       // replay-user-messages: the CLI echoes each message back when Claude takes it in, which is the only sign that a
       // message steered into a running turn was read (hive_seen below)
-      ...(({ extraArgs, ...d }) => ({ ...d, extraArgs: { 'replay-user-messages': null, ...(watcher ? {} : extraArgs) } }))(threadDefaults()),
+      // the defaults of the thread's class: watcher runs and Dependabot reviews take the background ones, teammates the
+      // team ones (each empty one falls back to the main default)
+      ...(({ extraArgs, ...d }) => ({ ...d, extraArgs: { 'replay-user-messages': null, ...(watcher ? {} : extraArgs) } }))(threadDefaults(cls)),
       // Claude's multiple-choice questions (AskUserQuestion) as a card in the thread and on the phone; giving the SDK a
       // permission handler is what makes the tool available. Any other tool reaching it is denied, as with no handler
       canUseTool: async (name, input, { signal, toolUseID }) => {
@@ -986,18 +1012,31 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         return { behavior: 'deny', message: end.kind === 'chat' ? 'The user replied in the chat instead of picking an option: read their next message.' : 'The question was dismissed (the turn was stopped).' }
       },
       // hook events, Hive-only plugin switches, the Stop hook that reports loops and effort; watcher threads read-only
-      ...withReadOnly(watcher, tabId, sessionOptions(tabId, send)),
+      // unattended (background at start, a teammate, a watcher run): the output styles that hand the code to a human go off.
+      // A thread in a repo or worktree under the workspace root shares the root's auto-memory folder
+      ...withReadOnly(watcher, tabId, sessionOptions(tabId, send, {
+        unattended: background || cls !== 'main',
+        memoryDir: userMemoryDir() ? null : sharedMemoryDir(cwd, memoryRoots.root, memoryRoots.extra, join(homedir(), '.claude')),
+      })),
     },
   })
   // messages queued while Claude works wait here until the turn's result (priority 'later' once handed over)
+  // a queued message handed over (sent, or steered by "Send now") stays on disk until Claude reads it or its turn ends
   const turns = turnQueue<SDKUserMessage>(
-    (m, priority) => s.push(priority ? ({ ...m, priority } as SDKUserMessage) : m),
-    (id, phase) => { if (phase === 'sent' || phase === 'removed') pendingDelivered(id); else if (phase === 'steered') pendingIsSteer(id); // kept until that turn ends
-      send({ type: 'hive_queue', id, phase }) },
+    (m, priority, id) => {
+      track(s, m, s.queuedFrom.get(id) ?? 'hive', id)
+      s.queuedFrom.delete(id)
+      s.push(priority ? ({ ...m, priority } as SDKUserMessage) : m)
+    },
+    (id, phase) => {
+      if (phase === 'removed') { pendingDelivered(id); s.queuedFrom.delete(id) } else pendingIsSteer(id)
+      send({ type: 'hive_queue', id, phase })
+    },
   )
   s = {
     q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(),
     cwd, lastReply: null, lastOk: null, onIdle: new Set(), emit: send, status: emptyStatus(),
+    watcher, outbox: new Map(), queuedFrom: new Map(), stopTasks: 0, lastActiveAt: Date.now(),
   }
   let lastText = '' // the turn's latest assistant text, in case its result carries none
   // this turn hit the plan's usage limit: set by a rejected rate-limit event (with its reset) or a rate_limit error
@@ -1022,7 +1061,12 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           syncMode(s, send)
         }
         // the echo of a message Claude has just taken in: the window marks it seen; it is not a new message
-        if (m.type === 'user' && (m as any).isReplay) { if ((m as any).uuid) send({ type: 'hive_seen', uuid: (m as any).uuid }); continue }
+        // (and it is no longer pending: quitting now must not send it again)
+        if (m.type === 'user' && (m as any).isReplay) {
+          const uuid = (m as any).uuid
+          if (uuid) { s.outbox.delete(uuid); pendingSeen(uuid); send({ type: 'hive_seen', uuid }) }
+          continue
+        }
         send(m)
         // a command only the interactive CLI runs (/design-login, /login, /mcp, ...): run it there, in this
         // thread's terminal, instead of leaving "isn't available in this environment" (not for watchers)
@@ -1062,6 +1106,10 @@ ${s.lastReply}`, Date.now())
           limited = false; limitReset = null; limitKind = undefined
           lastText = ''
           longCommands.clear()
+          // a message steered into this turn went in with it (the fallback for an engine that sends no echo); done
+          // before the queue hands over the next one, which rides the next turn
+          steersDelivered(tabId)
+          s.outbox.clear()
           // stopped before its prompt was checked: that message never reached Claude, so it goes again, ahead of
           // whatever was queued behind it (the interrupting message)
           const lost = promptNeverChecked(r) ? s.unchecked : null
@@ -1069,8 +1117,9 @@ ${s.lastReply}`, Date.now())
           if (lost) s.push({ ...lost, uuid: randomUUID() } as SDKUserMessage)
           s.turns.turnEnded()
           if (lost) { s.turns.markBusy(); s.unchecked = lost }
-          steersDelivered(tabId) // a message steered into this turn went in with it
           if (!s.turns.isBusy()) wake(s)
+          // signed in to another account while this turn ran: the process closes now if nothing else of it runs
+          if (s.recycle && !busyWith(activity(tabId, s)).length) retire(s, 'account')
           // a background thread (not a watcher: they say themselves when they need you) finished: tell the phone
           if (s.background && !tabId.startsWith('watcher-') && !s.turns.isBusy()) {
             notifyUser(s.lastOk ? `Finished: ${titleOf(tabId)}` : `Failed: ${titleOf(tabId)}`, (s.lastReply ?? '').split('\n').find((l) => l.trim()) ?? '', tabId)
@@ -1078,13 +1127,22 @@ ${s.lastReply}`, Date.now())
         }
       }
     } catch (e: any) {
-      send({ type: 'hive_error', message: String(e?.message ?? e) })
+      if (!s.retiring) send({ type: 'hive_error', message: String(e?.message ?? e) }) // closed on purpose: no error
     } finally {
       // only if this tab still points at this process: a reopened tab may already have a new one. A process closeTab
       // stopped is already out of live, but the window still shows it working until it hears hive_closed
       if (s.closedByApp && !live.has(tabId)) { if (!web.isDestroyed()) web.send('chat:event', tabId, { type: 'hive_closed' }) }
       else if (live.get(tabId) === s) {
-        send({ type: 'hive_closed' })
+        // ended by itself (or idle / an account switch) with messages Claude never got: they go back to the window's
+        // message box, and off the pending file, which would otherwise send them again at the next start
+        const unsent: Unsent[] = [
+          ...s.turns.drain().map(({ id, msg }) => ({ queueId: id, ...(msg.uuid ? { uuid: msg.uuid } : {}), ...messageParts(msg.message.content), source: s.queuedFrom.get(id) ?? ('hive' as const) })),
+          ...s.outbox.values(),
+        ]
+        s.outbox.clear()
+        pendingReturned(tabId)
+        if (unsent.length) send({ type: 'hive_unsent', messages: unsent })
+        send({ type: 'hive_closed', ...(s.retiring ? { reason: s.retiring } : {}) })
         live.delete(tabId)
         if (s.sessionId) gone.set(tabId, { tabId, sessionId: s.sessionId, cwd, title: titleOf(tabId), lastReply: s.lastReply, tabOpen: true })
         wake(s)
@@ -1141,21 +1199,24 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   // the turn's end, so the question stays open until then)
   if ((msg.text || msg.images.length) && msg.mode !== 'queue') replyInChat(tabId)
   if (msg.text || msg.images.length) { cancelContinue(tabId); if (s.sessionId) cancelContinue(s.sessionId) } // the user took over
-  // sent while Claude works (steer) or queued: kept on disk until it reaches Claude, so closing Hive loses nothing
+  // sent while Claude works (steer) or queued: kept on disk until Claude reads it, so closing Hive loses nothing
   if ((msg.text || msg.images.length) && (msg.mode === 'queue' || cur.turns.isBusy())) {
-    addPending({ key: msg.queueId, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer', background: cur.background })
+    addPending({ key: msg.queueId, uuid: m.uuid, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer', background: cur.background })
   }
   const go = () => {
-    if (msg.mode === 'queue' && msg.queueId) return cur.turns.submit(msg.queueId, m, !!msg.interrupt) // an interrupt goes ahead of older queued messages
+    // the user's own message: a paused team's hold does not keep it waiting; an interrupt goes ahead of older queued ones
+    if (msg.mode === 'queue' && msg.queueId) { cur.queuedFrom.set(msg.queueId, 'you'); return cur.turns.submit(msg.queueId, m, !!msg.interrupt, true) }
     if (!cur.turns.isBusy() && msg.mode !== 'steer') cur.unchecked = m
     cur.turns.markBusy()
+    track(cur, m, 'you')
     cur.push(msg.mode === 'steer' ? ({ ...m, priority: 'next' } as SDKUserMessage) : m)
   }
   // "ultrathink": max effort for this message's turn, set before the message goes in
   const boost = boostForMessage(tabId, s.q, msg.text, msg.mode === 'queue')
   const interrupt = !!msg.interrupt && msg.mode === 'queue' && cur.turns.isBusy() // decided before the message goes in
-  if (boost && !interrupt) void boost.finally(go)
-  else go() // an interrupt takes its place in the queue now (its effort is still being set meanwhile)
+  // in the order sent: a message after an ultrathink one waits for it instead of overtaking it. An interrupt does not
+  // wait for its own effort change (it takes its place in the queue now), only for sends made before it
+  sends.run(tabId, go, boost && !interrupt ? boost : null)
   if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
 }
 
@@ -1175,7 +1236,9 @@ export function stopCodex(id: string): boolean {
 // from: another thread started it (start_thread, or message_thread resuming a stopped one), so the prompt goes in labelled;
 // resume: the Claude session to continue
 // foreground: opened as a normal tab (its usual permission mode), e.g. messages resent after a restart from a tab
-export type BackgroundThread = { tabId: string; cwd: string; title: string; prompt: string; from?: From; resume?: string; foreground?: boolean }
+// user: the user wrote it (the phone): it goes through a paused team's hold like a message typed in the window;
+// uuid: the message's id (messages resent after a restart are seen under it)
+export type BackgroundThread = { tabId: string; cwd: string; title: string; prompt: string; from?: From; resume?: string; foreground?: boolean; user?: boolean; uuid?: string }
 export function startBackgroundThread(t: BackgroundThread, web: WebContents): void {
   if (holdForRewind(t.tabId, t.resume, () => startBackgroundThread(t, web))) return
   if (live.has(t.tabId)) throw new Error(`Thread ${t.tabId} is already running`)
@@ -1190,7 +1253,9 @@ export function startBackgroundThread(t: BackgroundThread, web: WebContents): vo
   live.set(t.tabId, s)
   gone.delete(t.tabId)
   s.turns.markBusy()
-  s.push(userMsg(t.from ? labelFromThread(t.from, t.prompt) : t.prompt))
+  const m = userMsg(t.from ? labelFromThread(t.from, t.prompt) : t.prompt, t.uuid)
+  track(s, m, t.user || (!t.from && t.foreground) ? 'you' : 'hive')
+  s.push(m)
 }
 
 // a team person's live tab: its own id, or the session id it was reopened under from saved history
@@ -1205,18 +1270,67 @@ function liveIdOf(team: Team, id: string): string {
   return (p?.sessionId && resolveThread(p.sessionId, live)) || id
 }
 
+// what a live thread still has going (threadCore.Activity): anything in it keeps the process
+function activity(id: string, s: Live): Activity {
+  return {
+    busy: s.turns.isBusy(), queued: s.turns.size(), unseen: s.outbox.size,
+    tasks: s.status.tasks.filter((x) => x.status === 'running').map((x) => x.title || x.kind),
+    stopTasks: s.stopTasks, codex: codexRuns.get(id)?.size ?? 0, crons: s.status.crons.length,
+    wake: !!s.status.nextWake || !!s.status.wakeRunning, goal: s.status.goal?.status === 'active',
+    asks: openAsks(id).length, rewind: forks.has(id) || !!rewindKey(id, s.sessionId ?? undefined),
+  }
+}
+
+// Hive closes this process on purpose and keeps the tab (idle, or an account switch): it ends like a process that ended
+// by itself, so the tab and its session stay and the next message resumes the session
+function retire(s: Live, why: 'idle' | 'account'): void {
+  if (s.retiring) return
+  s.retiring = why
+  s.recycle = false
+  s.q.close()
+}
+
 // an ended team's thread: closed in the sidebar (which also retires its worktrees) and its process stopped, but only
-// once nothing of it still runs, so a worktree is never retired under a running agent or shell
-// A background shell (a dev server, a watch) never ends by itself, so only agents, workflows and Codex are waited for,
-// and for at most RETIRE_WAIT_MS
+// once nothing of it still runs (no turn, agent, workflow, shell, monitor or Codex run), so a worktree is never retired
+// under running work. Still running after RETIRE_WAIT_MS: it stays open, marked waiting, instead
 const RETIRE_WAIT_MS = 10 * 60_000
 function retireWhenQuiet(id: string, since = Date.now()): void {
   const t = live.get(id)
   if (!t) return
-  const busy = t.turns.isBusy() || t.status.tasks.some((x) => x.status === 'running' && x.kind !== 'local_bash') || (codexRuns.get(id)?.size ?? 0) > 0
-  if (busy && Date.now() - since < RETIRE_WAIT_MS) { setTimeout(() => retireWhenQuiet(id, since), 5_000); return }
+  const step = retireStep(activity(id, t), Date.now() - since, RETIRE_WAIT_MS)
+  if (step.act === 'wait') { setTimeout(() => retireWhenQuiet(id, since), 5_000); return }
+  if (step.act === 'keep') {
+    t.waitingReason = step.why
+    t.emit({ type: 'hive_organize', action: 'waiting', reason: step.why })
+    return
+  }
   t.emit({ type: 'hive_organize', action: 'close' })
   closeTab(id)
+}
+
+// Idle processes (Settings > General, idleCloseMinutes; 0 = never): a thread with nothing running and nothing waiting
+// closes its Claude process (and the MCP servers it started) after that long; the next message resumes the session.
+// Watcher runs close themselves. A thread waiting for an account switch closes as soon as it is quiet.
+setInterval(() => {
+  const limit = idleCloseMs()
+  for (const [id, s] of live) {
+    if (s.watcher || !s.sessionId || s.retiring) continue
+    const a = activity(id, s)
+    if (s.recycle) { if (!busyWith(a).length) retire(s, 'account') }
+    else if (idleToClose(a, Date.now() - s.lastActiveAt, limit)) retire(s, 'idle')
+  }
+}, 60_000).unref()
+
+// Signed in to another account: every thread whose process is quiet closes it now (its tab and session stay, the next
+// message resumes it on the new login); the others close theirs when their work ends. Watcher runs end by themselves.
+export function recycleThreads(): { closed: number; waiting: number } {
+  let closed = 0
+  let waiting = 0
+  for (const [id, s] of live) {
+    if (s.watcher || s.retiring) continue
+    if (s.sessionId && !busyWith(activity(id, s)).length) { retire(s, 'account'); closed++ } else { s.recycle = true; waiting++ }
+  }
+  return { closed, waiting }
 }
 
 // Pause: stop every running turn of the team (background agents keep going) and hold team posts.
@@ -1298,6 +1412,7 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
     if ((busy && mode === 'queue') || t.turns.isHeld()) { // a held (paused) receiver takes anything through its queue, a steer too
       const queueId = randomUUID()
       t.emit({ ...ev, queueId })
+      t.queuedFrom.set(queueId, 'hive')
       t.turns.submit(queueId, m)
       if (teamId) {
         const tm = getTeam(teamId)
@@ -1308,6 +1423,7 @@ export async function messageThread(ref: string, text: string, mode: 'queue' | '
     }
     t.emit({ ...ev, ...(busy ? { steer: true } : {}) })
     t.turns.markBusy()
+    track(t, m, 'hive')
     t.push(busy ? ({ ...m, priority: 'next' } as SDKUserMessage) : m)
     return `Sent to thread "${titleOf(id)}" (${id})${busy ? ', inside its running turn' : ''}.`
   }
@@ -1347,15 +1463,30 @@ export function threadState(tabId: string): { working: boolean; sessionId: strin
   return s ? { working: s.turns.isBusy(), sessionId: s.sessionId, waitingReason: s.waitingReason, lastOk: s.lastOk, lastReply: s.lastReply } : null
 }
 
-// a watcher's run: a new turn in its thread when that is live (the tab shows the message like a started thread's
-// first one), else the thread starts, or resumes its Claude session
+// A message Hive delivers to a thread on someone's behalf (the phone, a watcher run, an automatic continue, messages
+// resent after a restart): the thread starts, or resumes its Claude session, when it is not live. A live one takes it
+// the way it takes a window message: straight in when idle, else queued behind the running turn (kept on disk until
+// Claude reads it). The tab shows it like a started thread's first message (queueId: it waits in the queue).
 export function runInThread(t: BackgroundThread, web: WebContents): void {
+  if (holdForRewind(t.tabId, t.resume, () => runInThread(t, web))) return
   const s = live.get(t.tabId)
   if (!s) return startBackgroundThread(t, web)
   if (web.isDestroyed()) throw new Error('No window to show the thread in')
+  const m = userMsg(t.prompt, t.uuid)
+  const source = t.user ? 'you' : 'hive'
+  if (s.turns.isBusy() || s.turns.isHeld()) {
+    const queueId = randomUUID()
+    addPending({ key: queueId, uuid: m.uuid, tabId: t.tabId, cwd: s.cwd, sessionId: s.sessionId, title: titleOf(t.tabId), text: t.prompt, mode: 'queue', background: s.background })
+    s.queuedFrom.set(queueId, source)
+    web.send('hive:thread', { tabId: t.tabId, title: t.title, cwd: t.cwd, prompt: t.prompt, queueId })
+    s.turns.submit(queueId, m, false, !!t.user)
+    return
+  }
   web.send('hive:thread', { tabId: t.tabId, title: t.title, cwd: t.cwd, prompt: t.prompt })
   s.turns.markBusy()
-  s.push(userMsg(t.prompt))
+  s.unchecked = m
+  track(s, m, source)
+  s.push(m)
 }
 
 // take a queued message back before it is delivered; false if it already went in
@@ -1381,7 +1512,10 @@ export async function contextUsage(tabId: string): Promise<{ total: number; max:
 // After this long a running shell command is moved to the background: HIVE_AUTO_BACKGROUND_S in Hive's settings,
 // default 60, 0 turns it off (empty or not a number = the default). Threads started from then on use it.
 let autoBackgroundMs = 60_000
-export function configureChat(env: Record<string, string>): void {
+// the workspace root and the worktrees folder: threads started under them share the root's auto-memory folder
+let memoryRoots: { root: string; extra: string[] } = { root: '', extra: [] }
+export function configureChat(env: Record<string, string>, roots?: { root: string; worktrees?: string }): void {
+  memoryRoots = { root: roots?.root ?? '', extra: roots?.worktrees ? [roots.worktrees] : [] }
   const raw = (env.HIVE_AUTO_BACKGROUND_S ?? '').trim()
   const v = Number(raw)
   autoBackgroundMs = raw === '' || !Number.isFinite(v) ? 60_000 : v > 0 ? v * 1000 : 0
