@@ -38,7 +38,12 @@ function AllowPop({ allow, onClose }: { allow: AllowStatus; onClose: () => void 
   const [known, setKnown] = useState<KnownIp[] | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => { void allowKnown().then((r) => setKnown(r.ok ? r.data : null)) }, [])
-  const rows: KnownIp[] = known ?? [
+  // every address the command succeeded for (main keeps them, newest first), else what the status says
+  const fromStatus = (allow as AllowStatus & { known?: { ip: string; at: string; trusted: boolean }[] }).known
+  const rows: KnownIp[] = known ?? (fromStatus?.length ? [
+    ...(allow.ip && !fromStatus.some((k) => k.ip === allow.ip) ? [{ ip: allow.ip, at: null, label: 'now, not allowed yet' }] : []),
+    ...fromStatus.map((k) => ({ ip: k.ip, at: Date.parse(k.at), label: k.ip === allow.ip ? 'now, allowed' : 'allowed before' })),
+  ] : null) ?? [
     ...(allow.ip ? [{ ip: allow.ip, at: null, label: allow.changed ? 'now, not allowed yet' : 'now, allowed' }] : []),
     ...(allow.lastIp && allow.lastIp !== allow.ip ? [{ ip: allow.lastIp, at: allow.at ? Date.parse(allow.at) : null, label: 'last allowed' }] : []),
   ]

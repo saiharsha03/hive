@@ -41,9 +41,9 @@ function PullTab() {
   const [busy, setBusy] = useState<'' | 'pull' | 'check'>('')
   const [err, setErr] = useState('')
   const [said, setSaid] = useState('')
+  // the repos under the workspace root (worktrees are not pulled); each one's result comes back with the run
   useEffect(() => {
-    window.api.pullList().then(setNames).catch((e) => setErr(clean(e)))
-    return window.api.onPullRow((r) => setRes((x) => ({ ...x, [r.repo]: r.result })))
+    window.api.gitList().then((rows) => setNames(rows.filter((r) => !r.worktree).map((r) => r.name))).catch((e) => setErr(clean(e)))
   }, [])
 
   const run = (dry: boolean) => {
