@@ -95,7 +95,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     // every screen drawn to a PNG without a device (ScreensTest): Robolectric runs Compose, Roborazzi captures it
-    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.40.1")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.40.1")
     testImplementation("androidx.compose.ui:ui-test-junit4")
