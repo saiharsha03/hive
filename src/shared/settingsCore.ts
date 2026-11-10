@@ -15,7 +15,16 @@ export type Effort = (typeof EFFORTS)[number]
 // '' = the default; ui / theme '' = the built-in look (the Appearance pickers fill them); appName / appTagline = what the app calls itself
 // desktopNotify: a Windows toast + taskbar flash when a thread needs you and Hive is not focused; on by default
 // chrome: threads start with Claude in Chrome (claude --chrome; needs the Claude extension in Chrome); on by default
-export type General = { shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean; desktopNotify: boolean }
+// bgModel / bgEffort: watcher runs, Dependabot reviews and /btw; teamModel / teamEffort: teammates and a team's own Lead
+// ('' = the same as model / effort, so nothing changes until they are set)
+// idleCloseMinutes: an idle thread's Claude process closes after this long (the next message resumes it); 0 = never
+// teamMemoryKb: how much of each role memory file (the newest entries) goes into a teammate's brief
+export type General = {
+  shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean; desktopNotify: boolean
+  bgModel: string; bgEffort: Effort | ''; teamModel: string; teamEffort: Effort | ''; idleCloseMinutes: number; teamMemoryKb: number
+}
+export const DEFAULT_IDLE_CLOSE_MINUTES = 30
+export const DEFAULT_TEAM_MEMORY_KB = 6
 export const DEFAULT_APP_NAME = 'Hive'
 export const DEFAULT_APP_TAGLINE = 'One desk, many agents'
 export type Settings = {
@@ -24,7 +33,10 @@ export type Settings = {
   scripts: unknown[] | null // the scripts.json array as written (bad entries kept so nothing is lost); null = use the file
   general: General
 }
-export const emptyGeneral = (): General => ({ shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true, desktopNotify: true })
+export const emptyGeneral = (): General => ({
+  shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true, desktopNotify: true,
+  bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: DEFAULT_IDLE_CLOSE_MINUTES, teamMemoryKb: DEFAULT_TEAM_MEMORY_KB,
+})
 
 // what the panel edits and gets back
 export type Draft = { env: Record<string, string>; scripts: unknown[] | null; general: General }
@@ -60,6 +72,9 @@ export function normalizeSettings(v: unknown): Settings | null {
   const g = (o.general && typeof o.general === 'object' ? o.general : {}) as Record<string, unknown>
   const str = (x: unknown) => (typeof x === 'string' ? x.trim() : '')
   const effort = str(g.effort)
+  const level = (x: unknown): Effort | '' => ((EFFORTS as readonly string[]).includes(str(x)) ? (str(x) as Effort) : '')
+  // a whole number from 0 up; anything else is the default
+  const count = (x: unknown, dflt: number, max: number) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.min(Math.round(x), max) : dflt)
   return {
     version: 1,
     env,
@@ -70,6 +85,9 @@ export function normalizeSettings(v: unknown): Settings | null {
       appTagline: typeof g.appTagline === 'string' ? g.appTagline.trim() : DEFAULT_APP_TAGLINE, // '' = no tagline
       chrome: g.chrome !== false, // on unless turned off
       desktopNotify: g.desktopNotify !== false, // on unless turned off
+      bgModel: str(g.bgModel), bgEffort: level(g.bgEffort), teamModel: str(g.teamModel), teamEffort: level(g.teamEffort),
+      idleCloseMinutes: count(g.idleCloseMinutes, DEFAULT_IDLE_CLOSE_MINUTES, 7 * 24 * 60),
+      teamMemoryKb: count(g.teamMemoryKb, DEFAULT_TEAM_MEMORY_KB, 1024),
     },
   }
 }
@@ -156,6 +174,13 @@ export function validateSettings(d: { env: Record<string, string>; scripts: unkn
 
   // General
   if (d.general.effort && !(EFFORTS as readonly string[]).includes(d.general.effort)) err('general.effort', `${d.general.effort} is not an effort level`)
+  for (const k of ['bgEffort', 'teamEffort'] as const) if (d.general[k] && !(EFFORTS as readonly string[]).includes(d.general[k])) err(`general.${k}`, `${d.general[k]} is not an effort level`)
+  for (const k of ['idleCloseMinutes', 'teamMemoryKb'] as const) {
+    const n = d.general[k]
+    if (n !== undefined && !(typeof n === 'number' && Number.isInteger(n) && n >= 0)) err(`general.${k}`, `${n} is not a whole number of ${k === 'idleCloseMinutes' ? 'minutes' : 'KB'}`)
+  }
+  const cap = v('HIVE_DEPENDABOT_MAX_REVIEWS')
+  if (cap && !(Number.isInteger(Number(cap)) && Number(cap) > 0)) err('HIVE_DEPENDABOT_MAX_REVIEWS', `${cap} is not a whole number above 0`)
   if (d.general.appName.length > 40) err('general.appName', 'App name is longer than 40 characters')
   if (!d.general.appName.trim()) err('general.appName', 'App name is empty')
   if (d.general.appTagline.length > 80) err('general.appTagline', 'Tagline is longer than 80 characters')
