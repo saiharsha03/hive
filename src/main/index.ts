@@ -315,7 +315,7 @@ ipcMain.on('ui:load', (e, name: string) => { e.returnValue = fromApp(e) ? uiLoad
 // the title bar overlay (Windows min / max / close) follows the theme
 ipcMain.on('app:titlebar', (e, color: string, symbol: string) => {
   if (!fromApp(e)) return
-  try { BrowserWindow.fromWebContents(e.sender)?.setTitleBarOverlay({ color: String(color), symbolColor: String(symbol), height: 35 }) } catch { /* not supported */ }
+  try { BrowserWindow.fromWebContents(e.sender)?.setTitleBarOverlay({ color: String(color), symbolColor: String(symbol), height: 40 }) } catch { /* not supported */ }
 })
 ipcMain.on('ui:save', (e, name: string, value: unknown) => { if (fromApp(e)) uiSave(String(name), value) })
 
@@ -584,7 +584,7 @@ function createWindow(): void {
     icon, // window and taskbar icon (the installed app also gets it from the exe)
     // our own top bar in the UI; Windows keeps only min / max / close
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#181818', symbolColor: '#cccccc', height: 35 },
+    titleBarOverlay: { color: '#171A1D', symbolColor: '#CBD1D7', height: 40 },
     // plugins: Chromium's built-in PDF viewer for the Preview panel
     webPreferences: { preload: join(__dirname, '../preload/index.js'), plugins: true },
   })
