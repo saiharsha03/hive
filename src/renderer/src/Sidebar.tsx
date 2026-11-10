@@ -1,12 +1,12 @@
 // The threads list: live threads waiting for you or working at the top, then saved threads grouped by project
 // (or by date), pinned / snoozed / returned / closed sections, search across every thread, bulk selection.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { ThreadMenu } from './ThreadMenu'
 import type { LiveRow } from './background'
 import { clickRow, flagActions, menuTargets, visibleOrder } from './selection'
-import { PRESETS, archive, buildSections, clearSnooze, close, pin, presetTime, snooze, stateLabel, untilLabel, useThreads } from './threads'
+import { PRESETS, archive, buildSections, clearSnooze, close, pin, presetTime, snooze, stateLabel, untilLabel, useThreads, type Section } from './threads'
 import { getPref, setPref } from './prefs'
-import { Icon } from './ui'
+import { Confirm, Icon, useEscape } from './ui'
 import { useWatchers } from './useWatchers'
 import { isDependabotTab } from '../../shared/dependabotCore'
 import { nextRunLabel } from '../../shared/threadsCore'
@@ -38,12 +38,64 @@ type Props = {
   onSaved?: (list: SessionInfo[]) => void // the saved threads as just read (tabs take their titles from it)
 }
 
-// the app asks every sidebar to re-read the saved threads (new threads, new titles), at most every 2 s
-const refreshers = new Set<() => void>()
+// The saved threads are read once for every list on screen (the sidebar, the All threads popover) and handed to each.
+// The app asks for a new read when a thread is saved or renamed: the first ask is answered after a moment, more asks
+// within 2 s share one read at the end of them, so a busy desk reads at most every 2 s and never waits for quiet.
+const REFRESH_MS = 2000
+const refreshers = new Set<(list: SessionInfo[]) => void>()
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
-export const refreshThreadList = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refreshers.forEach((f) => f()), 2000) }
+let lastRefresh = 0
+const readSaved = () => { lastRefresh = Date.now(); void window.api.listSessions().then((list) => refreshers.forEach((f) => f(list))).catch(() => {}) }
+export const refreshThreadList = () => {
+  if (refreshTimer) return
+  refreshTimer = setTimeout(() => { refreshTimer = undefined; readSaved() }, Math.max(300, lastRefresh + REFRESH_MS - Date.now()))
+}
 
-export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew, footer, title = 'Threads', onTeam, onSaved }: Props) {
+// rows drawn per section until "Show more": a project with hundreds of threads does not put them all in the page
+const CAP = 50
+
+// Up / Down (Home / End) move the focus between the visible rows, in page order
+const rowArrows = (e: React.KeyboardEvent<HTMLElement>) => {
+  const keys: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, Home: -Infinity, End: Infinity }
+  const t = e.target as HTMLElement
+  if (!(e.key in keys) || e.ctrlKey || e.altKey || e.shiftKey || !t.classList.contains('th')) return
+  const rows = [...e.currentTarget.querySelectorAll<HTMLElement>('.th')]
+  const at = rows.indexOf(t)
+  const to = Math.max(0, Math.min(rows.length - 1, Number.isFinite(keys[e.key]) ? at + keys[e.key] : keys[e.key] < 0 ? 0 : rows.length - 1))
+  e.preventDefault()
+  rows[to]?.focus()
+}
+
+// The frame: it re-renders with the app (its footer is the app's), while the list inside is memoised and gets
+// functions that never change (they call the newest ones), so it re-renders only when the threads or its own state do.
+export function Sidebar(p: Props) {
+  const side = useRef<HTMLElement>(null)
+  const hover = useRef(false)
+  const latest = useRef(p)
+  latest.current = p
+  const fns = useMemo(() => ({
+    onOpen: (s: SessionInfo) => latest.current.onOpen(s),
+    onActivate: (id: string) => latest.current.onActivate(id),
+    onCloseLive: (id: string) => latest.current.onCloseLive(id),
+    onNew: () => latest.current.onNew?.(),
+    onTeam: (id: string) => latest.current.onTeam?.(id),
+    onSaved: (list: SessionInfo[]) => latest.current.onSaved?.(list),
+  }), [])
+  return (
+    <aside className="side threads" ref={side} onMouseEnter={() => { hover.current = true }} onMouseLeave={() => { hover.current = false }} onKeyDown={rowArrows} data-testid="sidebar">
+      <ThreadList activeId={p.activeId} live={p.live} title={p.title ?? 'Threads'} hasNew={!!p.onNew} side={side} hover={hover} {...fns} />
+      {p.footer}
+    </aside>
+  )
+}
+
+type ListProps = {
+  activeId: string | null; live: Live; title: string; hasNew: boolean; side: RefObject<HTMLElement | null>; hover: RefObject<boolean>
+  onOpen: (s: SessionInfo) => void; onActivate: (id: string) => void; onCloseLive: (id: string) => void; onNew: () => void; onTeam: (id: string) => void; onSaved: (list: SessionInfo[]) => void
+}
+type Retiring = { kind: 'close' | 'archive'; ids: string[]; trees: { thread: string; repo: string; branch: string; path: string }[] }
+
+const ThreadList = memo(function ThreadList({ activeId, onOpen, live, onActivate, onCloseLive, onNew, hasNew, title, onTeam, onSaved, side, hover }: ListProps) {
   const [listed, setSessions] = useState<SessionInfo[] | null>(null)
   // a watcher's thread shows under the watcher's name, not Claude's auto title
   const { watchers } = useWatchers()
@@ -71,19 +123,17 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const [groupBy, setGroupByState] = useState<GroupBy>(() => (getPref<string>('threadsGroupBy', 'project') === 'date' ? 'date' : 'project'))
   const setGroupBy = (g: GroupBy) => { setGroupByState(g); setPref('threadsGroupBy', g) }
   const anchor = useRef<string | null>(null)
-  const side = useRef<HTMLElement>(null)
-  const hover = useRef(false)
   const states = useThreads()
+  const [more, setMore] = useState<Set<string>>(new Set())
+  const [retiring, setRetiring] = useState<Retiring | null>(null)
 
-  const savedRef = useRef(onSaved)
-  savedRef.current = onSaved
   // the saved threads: at start, and again whenever the app says one changed (a turn ended, a thread renamed itself)
   useEffect(() => {
-    const load = () => { void window.api.listSessions().then((list) => { setSessions(list); savedRef.current?.(list) }) }
-    load()
-    refreshers.add(load)
-    return () => { refreshers.delete(load) }
-  }, [])
+    const take = (list: SessionInfo[]) => { setSessions(list); onSaved(list) }
+    refreshers.add(take)
+    readSaved()
+    return () => { refreshers.delete(take) }
+  }, [onSaved])
   // running teams (Lead first, then members): their threads sit in the Teams section, not in the lists below;
   // an ended team's threads go back to the lists, still marked as team threads
   const [allRosters, setRosters] = useState<Roster[]>([])
@@ -149,19 +199,25 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   // search hits can be in any thread, an older watcher run too (those are out of the list, not out of search)
   const byId = useMemo(() => new Map([...(listed ?? []), ...(sessions ?? [])].map((s) => [s.id, s])), [listed, sessions])
   const found = useMemo(() => (hits && text.length >= 2 ? hits.results.flatMap((h) => { const s = byId.get(h.sessionId); return s ? [{ s, snippet: h.snippet }] : [] }) : null), [hits, text, byId])
-  const order = useMemo(() => (found ? found.map((f) => f.s.id) : visibleOrder(rendered, open, searching)), [found, rendered, open, searching])
+  // a long section shows its first rows until "Show more" (a search shows every match)
+  const shownOf = useCallback((sec: Section<SessionInfo>) => (searching || more.has(sec.key) || sec.items.length <= CAP ? sec.items : sec.items.slice(0, CAP)), [searching, more])
+  const order = useMemo(() => (found ? found.map((f) => f.s.id) : visibleOrder(rendered.map((sec) => ({ ...sec, items: shownOf(sec) })), open, searching)), [found, rendered, open, searching, shownOf])
   const ids = useMemo(() => order.filter((id) => picked.has(id)), [order, picked])
   const orderRef = useRef(order)
   orderRef.current = order
 
   const clearPicked = () => { setPicked(new Set()); setSnoozing(false) }
+  // Escape clears the selection (after any menu or dialog above it has closed); never while typing in a field
+  useEscape((e) => {
+    if ((e.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"]')) return false
+    clearPicked()
+  }, picked.size > 0)
   useEffect(() => {
-    // Ctrl+A when focus is in the list or the mouse is over it; Escape clears. Never while typing in a field.
+    // Ctrl+A when focus is in the list or the mouse is over it. Never while typing in a field.
     const key = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null
       if (el?.closest('input, textarea, select, [contenteditable="true"]')) return
-      if (e.key === 'Escape') clearPicked()
-      else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'a' && (hover.current || side.current?.contains(document.activeElement))) {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'a' && (hover.current || side.current?.contains(document.activeElement))) {
         e.preventDefault()
         setPicked(new Set(orderRef.current))
       }
@@ -179,6 +235,15 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   }
   const selectSection = (items: SessionInfo[]) => setPicked(new Set([...ids, ...items.map((s) => s.id)]))
   const apply = (fn: (id: string) => void) => { ids.forEach(fn); clearPicked() }
+  // Closing or archiving a thread deletes the worktrees it made. When any of these threads has some, ask first and
+  // list them; with none there is nothing to lose and it goes ahead.
+  const doRetire = (kind: Retiring['kind'], targets: string[]) => { targets.forEach((id) => (kind === 'close' ? close(id, true) : archive(id, true))); clearPicked() }
+  const retire = async (kind: Retiring['kind'], targets: string[]) => {
+    const titleOf = (id: string) => byId.get(id)?.title ?? id
+    const per = await Promise.all(targets.map((id) => window.api.worktreeLinks(id).then((links) => links.map((l) => ({ thread: titleOf(id), repo: l.repo, branch: l.branch, path: l.path }))).catch(() => [])))
+    const trees = per.flat()
+    if (trees.length) setRetiring({ kind, ids: targets, trees }); else doRetire(kind, targets)
+  }
 
   const openSession = (s: SessionInfo) => { clearSnooze(s.id); onOpen(s) }
   const toggle = (key: string) => setOpen((o) => { const n = new Set(o); if (!n.delete(key)) n.add(key); return n })
@@ -215,7 +280,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   const liveRow = (r: LiveRow, who: RosterPerson | undefined = past.get(r.id) ?? (r.sessionId ? past.get(r.sessionId) : undefined)) => {
     const look = liveLook(r)
     return (
-      <div key={r.id} className={`th${r.id === activeId ? ' on' : ''}`} title={r.title} role="button" tabIndex={0} onClick={() => onActivate(r.id)} onKeyDown={(e) => { if (e.key === 'Enter') onActivate(r.id) }} data-testid="live-row" data-id={r.id}>
+      <div key={r.id} className={`th${r.id === activeId ? ' on' : ''}`} title={r.title} role="button" tabIndex={0} onClick={() => onActivate(r.id)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onActivate(r.id) } }} data-testid="live-row" data-id={r.id}>
         <Icon name={who ? roleIcon(who.role) : look.icon} className={who ? look.cls.replace(' spin', '') : look.cls} />
         <span className="t">{r.title}</span>
         <span className={`st ${look.cls.replace(' spin', '')}`}>{look.word}</span>
@@ -233,7 +298,12 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
     return (
       <div
         key={s.id} className={`th${s.id === activeId ? ' on' : ''}${picked.has(s.id) ? ' picked' : ''}`} title={s.title} role="button" tabIndex={0}
-        onClick={(e) => onRowClick(e, s)} onKeyDown={(e) => { if (e.key === 'Enter') openSession(s) }}
+        onClick={(e) => onRowClick(e, s)}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSession(s) }
+          else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); openMenu(s.id, r.left + 24, r.bottom) }
+        }}
         onContextMenu={(e) => { e.preventDefault(); openMenu(s.id, e.clientX, e.clientY) }}
         data-testid="thread-row" data-id={s.id}
       >
@@ -263,19 +333,8 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
   )
 
 
-  // Up / Down (Home / End) move the focus between the visible rows, in page order
-  const rowArrows = (e: React.KeyboardEvent<HTMLElement>) => {
-    const keys: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, Home: -Infinity, End: Infinity }
-    const t = e.target as HTMLElement
-    if (!(e.key in keys) || e.ctrlKey || e.altKey || e.shiftKey || !t.classList.contains('th')) return
-    const rows = [...e.currentTarget.querySelectorAll<HTMLElement>('.th')]
-    const at = rows.indexOf(t)
-    const to = Math.max(0, Math.min(rows.length - 1, Number.isFinite(keys[e.key]) ? at + keys[e.key] : keys[e.key] < 0 ? 0 : rows.length - 1))
-    e.preventDefault()
-    rows[to]?.focus()
-  }
   return (
-    <aside className="side threads" ref={side} onMouseEnter={() => { hover.current = true }} onMouseLeave={() => { hover.current = false }} onKeyDown={rowArrows} data-testid="sidebar">
+    <>
       <div className="sidehead">
         <span>{archiveView ? 'Archived' : title}</span>
         <span className="sidehead-acts">
@@ -283,13 +342,13 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
           <button className={groupBy === 'date' ? 'ibtn on' : 'ibtn'} title="Group by date" onClick={() => setGroupBy('date')} data-testid="threads-group-date"><Icon name="calendar" /></button>
         </span>
       </div>
-      {onNew && <button className="newt" onClick={onNew} data-testid="top-new"><Icon name="add" />New thread</button>}
+      {hasNew && <button className="newt" onClick={onNew} data-testid="top-new"><Icon name="add" />New thread</button>}
       {ids.length > 0 && (
         <div className="bulk">
           <div className="bulkbar">
             <span className="n">{ids.length} selected</span>
-            {flagActions(states, ids, 'archivedAt').map((a) => <button key={a.label} onClick={() => apply((id) => archive(id, a.on))} data-testid="bulk-archive">{a.label}</button>)}
-            {flagActions(states, ids, 'closedAt').map((a) => <button key={a.label} onClick={() => apply((id) => close(id, a.on))} data-testid="bulk-close">{a.label}</button>)}
+            {flagActions(states, ids, 'archivedAt').map((a) => <button key={a.label} onClick={() => (a.on ? void retire('archive', ids) : apply((id) => archive(id, false)))} data-testid="bulk-archive">{a.label}</button>)}
+            {flagActions(states, ids, 'closedAt').map((a) => <button key={a.label} onClick={() => (a.on ? void retire('close', ids) : apply((id) => close(id, false)))} data-testid="bulk-close">{a.label}</button>)}
             <button onClick={() => setSnoozing(!snoozing)} data-testid="bulk-snooze">Snooze<Icon name={snoozing ? 'chevron-down' : 'chevron-right'} /></button>
             {flagActions(states, ids, 'pinned').map((a) => <button key={a.label} onClick={() => apply((id) => pin(id, a.on))} data-testid="bulk-pin">{a.label}</button>)}
             <button onClick={clearPicked} data-testid="bulk-clear">Clear</button>
@@ -362,7 +421,7 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
               const folded = !open.has(key)
               return (
                 <div key={key} className="tteam" data-testid="team-group" data-id={g.roster.id}>
-                  <div className="th" title={g.roster.name} role="button" tabIndex={0} onClick={() => onTeam?.(g.roster.id)} onKeyDown={(e) => { if (e.key === 'Enter') onTeam?.(g.roster.id) }} data-testid="team-row">
+                  <div className="th" title={g.roster.name} role="button" tabIndex={0} onClick={() => onTeam(g.roster.id)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onTeam(g.roster.id) } }} data-testid="team-row">
                     <button className="tchev" aria-label={folded ? 'Show members' : 'Hide members'} onClick={(e) => { e.stopPropagation(); toggle(key) }} data-testid="team-fold"><Icon name={folded ? 'chevron-right' : 'chevron-down'} /></button>
                     <span className="t">{g.roster.name}</span>
                     <span className={`st ${TEAM_CLASS[g.word]}`}>{g.word}</span>
@@ -380,10 +439,16 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
           // a search opens every fold so no match stays hidden
           const folded = !!sec.fold && !searching && !open.has(sec.key)
           const icon = sec.key.startsWith('project:') ? 'folder' : sec.key === 'pinned' ? 'pinned' : sec.key === 'returned' ? 'bell' : 'calendar'
+          const shown = shownOf(sec)
           return (
             <div key={sec.key} data-testid={`section-${sec.key}`}>
-              {groupHead(sec.key, sec.label, sec.items.length, icon, { fold: sec.fold, folded, items: sec.items })}
-              {!folded && sec.items.map((s) => row(s, sec.sub ?? sec.key))}
+              {groupHead(sec.key, sec.label, sec.items.length, icon, { fold: sec.fold, folded, items: shown })}
+              {!folded && shown.map((s) => row(s, sec.sub ?? sec.key))}
+              {!folded && shown.length < sec.items.length && (
+                <button className="archlink" onClick={() => setMore((m) => new Set(m).add(sec.key))} data-testid={`section-more-${sec.key}`}>
+                  <Icon name="chevron-down" />{`Show ${sec.items.length - shown.length} more`}
+                </button>
+              )}
             </div>
           )
         })}
@@ -393,8 +458,19 @@ export function Sidebar({ activeId, onOpen, live, onActivate, onCloseLive, onNew
           </button>
         )}
       </div>
-      {footer}
-      {menu && <ThreadMenu ids={menu.ids} states={states} x={menu.x} y={menu.y} onClose={() => setMenu(null)} onDone={clearPicked} />}
-    </aside>
+      {menu && <ThreadMenu ids={menu.ids} states={states} x={menu.x} y={menu.y} onClose={() => setMenu(null)} onDone={clearPicked} onRetire={(kind, targets) => void retire(kind, targets)} />}
+      {retiring && (
+        <Confirm
+          title={`${retiring.kind === 'close' ? 'Close' : 'Archive'} ${retiring.ids.length === 1 ? 'this thread' : `${retiring.ids.length} threads`} and delete ${retiring.trees.length === 1 ? 'its worktree' : `${retiring.trees.length} worktrees`}?`}
+          action={`${retiring.kind === 'close' ? 'Close' : 'Archive'} and delete`} danger testid="retire-confirm"
+          onCancel={() => setRetiring(null)} onConfirm={() => { const r = retiring; setRetiring(null); doRetire(r.kind, r.ids) }}
+        >
+          <div>{retiring.kind === 'close' ? 'Closing' : 'Archiving'} a thread deletes the worktrees it made. Work in them that is not committed and pushed can be lost, and reopening the thread does not bring them back.</div>
+          <div className="confirm-list" data-testid="retire-worktrees">
+            {retiring.trees.map((t) => <div key={t.path} title={`${t.path}\nthread: ${t.thread}`}>{t.repo} on {t.branch} ({t.thread})</div>)}
+          </div>
+        </Confirm>
+      )}
+    </>
   )
-}
+})
