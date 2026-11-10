@@ -14,7 +14,7 @@ import { FileEditor } from './EditorView'
 import { ThreadPane } from './ThreadPane'
 import { useDeploy } from './useDeploy'
 import { useScripts } from './useScripts'
-import { CODE_FONTS, UI_FONTS, getAppearance, getThemes, setFonts, setLayout, setTheme, toggleLayout, useAppearance } from './appearance'
+import { CODE_FONTS, UI_FONTS, cycleTheme, getAppearance, getThemes, setFonts, setLayout, setTheme, toggleLayout, useAppearance } from './appearance'
 import { DROP_TYPES, dropMessage, dropTitle, pickDropFile, type DropChoice } from '../../shared/dropCore'
 import {
   activate, activeId, closeSession, dismissNotice, focusPaneAt, live as liveStore, moveToBackground, newBeside, newSession, nextNeedsMe, notice, notices,
@@ -74,6 +74,7 @@ export function Shell() {
     { id: 'terminal', group: 'Actions', label: 'Terminal', hint: 'Ctrl+`', run: () => toggleTerminal() },
     { id: 'rail-right', group: 'Actions', label: getAppearance().layout.railRight ? 'Rail on the left' : 'Rail on the right', run: () => toggleLayout('railRight') },
     ...getThemes().map((t): Command => ({ id: `theme:${t.id}`, group: 'Actions', label: `Theme: ${t.label}`, hint: t.description, run: () => setTheme(t.id) })),
+    { id: 'theme-next', group: 'Actions', label: 'Next theme', hint: 'Ctrl+Alt+T', run: () => { cycleTheme(1) } },
     ...UI_FONTS.map((f): Command => ({ id: `font:${f.id}`, group: 'Actions', label: `UI font: ${f.label}`, run: () => setFonts({ ui: f.id }) })),
     ...CODE_FONTS.map((f): Command => ({ id: `code-font:${f.id}`, group: 'Actions', label: `Code font: ${f.label}`, run: () => setFonts({ code: f.id }) })),
     ...(focus && focused && !focused.tool && !focused.file ? [
@@ -113,6 +114,8 @@ export function Shell() {
       const k = e.key.toLowerCase()
       const ctrl = e.ctrlKey && !e.metaKey
       if (ctrl && e.altKey && e.key === 'Escape') { e.preventDefault(); void stopEverything(); return }
+      // Ctrl+Alt+T: the next theme (Shift: the one before), at once and kept
+      if (ctrl && e.altKey && e.code === 'KeyT') { e.preventDefault(); notice(`Theme: ${cycleTheme(e.shiftKey ? -1 : 1).label}`); return }
       if (ctrl && e.altKey && /^[1-9]$/.test(k)) {
         e.preventDefault()
         void accountsList().then(async (r) => {

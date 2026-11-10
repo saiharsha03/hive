@@ -219,7 +219,7 @@ function Detail({ id, row, onOpen, onOpenThread, onGone }: { id: string; row: Wa
         <button className="dlink" title={d.prompt} onClick={() => onOpen(d.prompt)}>Prompt</button>
         <button className="dlink" onClick={() => setAsking(true)} data-testid="watcher-delete">Delete</button>
       </div>
-      {d.waitingReason && <div className="derr">Waiting: {d.waitingReason}</div>}
+      {d.waitingReason && <div className="derr dwait">Waiting: {d.waitingReason}</div>}
       {d.message && <div data-testid="watcher-message" className="derr">{d.message}</div>}
       {err && <div data-testid="watcher-detail-error" className="derr">{err}</div>}
       <ScheduleEditor id={id} d={d} onSaved={() => Promise.all([load(), reloadWatchers()])} />

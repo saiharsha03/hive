@@ -28,7 +28,7 @@
 .findbar .uline { flex: 1; font-size: 13px; }
 
 /* transcript */
-.thread { flex: 1; overflow-y: auto; min-height: 0; padding: 18px 0 12px; scrollbar-width: thin; }
+.thread { flex: 1; overflow-y: auto; min-height: 0; padding: 18px 0 12px; }
 .conv { font: var(--t-conv); color: var(--ink); }
 .msg { margin: 0 var(--pane-pad) 14px; position: relative; content-visibility: auto; contain-intrinsic-size: auto 80px; }
 .msg.you { background: var(--raised); color: var(--hi); padding: 11px 14px; margin-bottom: 16px; }
@@ -152,8 +152,8 @@
 .qn { font-style: normal; color: var(--faint); }
 .qt { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qa { display: flex; gap: 12px; }
-.qi .qa { visibility: hidden; }
-.qi:hover .qa, .qi:focus-within .qa { visibility: visible; }
+.qi .qa { display: none; }
+.qi:hover .qa, .qi:focus-within .qa { display: flex; }
 .qa .btn-link { font-size: 12px; }
 /* one primary button on screen: the focused pane's; another pane's is quiet */
 .session:not(.focused) .btn-primary, .btn-primary.idle, .btn-primary:disabled { background: var(--btn-quiet); color: var(--dim); }

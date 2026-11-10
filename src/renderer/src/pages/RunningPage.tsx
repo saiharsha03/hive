@@ -48,6 +48,21 @@ export function RunningPage() {
   return (
     <div className="page" data-testid="page-running">
       <PageHead title="Running" desc="Every subagent, shell, monitor and Codex run, in every thread" right={<Keys k="Ctrl Shift R" />} />
+      <ConfirmBar
+        testid="stop-everything-bar"
+        actions={<>
+          {held && <Btn kind="plain" onClick={resume} testid="resume-all">Resume</Btn>}
+          <Btn kind="danger" onClick={stop} testid="stop-everything">Stop everything</Btn>
+          <Keys k="Ctrl Alt Esc" />
+        </>}
+      >
+        <span>
+          Stop everything interrupts {counts.threads} thread{counts.threads === 1 ? '' : 's'}, stops {counts.tasks} task{counts.tasks === 1 ? '' : 's'} and holds every queue.{held ? ' Queues are held now; Resume lets them go again.' : ''}
+        </span>
+        <label className="scheck">
+          <input type="checkbox" checked={pause} onChange={(e) => setPause(e.target.checked)} data-testid="stop-pause-wakeups" /> Also pause wake-ups and continues
+        </label>
+      </ConfirmBar>
       <Section title="Now" note={nowNote(rows, now)} testid="running-now">
         {shown.length === 0 ? <Empty>Nothing is running.</Empty> : (
           <table className="dt">
@@ -118,22 +133,6 @@ export function RunningPage() {
           </ul>
         )}
       </Section>
-
-      <ConfirmBar
-        testid="stop-everything-bar"
-        actions={<>
-          {held && <Btn kind="plain" onClick={resume} testid="resume-all">Resume</Btn>}
-          <Btn kind="danger" onClick={stop} testid="stop-everything">Stop everything</Btn>
-          <Keys k="Ctrl Alt Esc" />
-        </>}
-      >
-        <span>
-          Stop everything interrupts {counts.threads} thread{counts.threads === 1 ? '' : 's'}, stops {counts.tasks} task{counts.tasks === 1 ? '' : 's'} and holds every queue.{held ? ' Queues are held now; Resume lets them go again.' : ''}
-        </span>
-        <label className="scheck">
-          <input type="checkbox" checked={pause} onChange={(e) => setPause(e.target.checked)} data-testid="stop-pause-wakeups" /> Also pause wake-ups and continues
-        </label>
-      </ConfirmBar>
     </div>
   )
 }

@@ -54,7 +54,8 @@ body { background: var(--bg); color: var(--ink); font: var(--t-ui); font-feature
 .kv-row { display: grid; grid-template-columns: 160px 1fr; }
 .kv-row dt { color: var(--dim); padding: 5px 0; }
 .kv-row dd { color: var(--hi); padding: 5px 0; min-width: 0; overflow-wrap: anywhere; }
-.pins { display: flex; gap: 22px; margin-top: 5px; font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; }
+.pins { display: flex; flex-wrap: wrap; gap: 2px 18px; margin-top: 6px; font-size: 12.5px; color: var(--dim); }
+.pin { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .pin-k { color: var(--faint); margin-right: 6px; }
 .confirmbar { display: flex; gap: 14px; align-items: center; margin-top: 14px; padding: 12px 16px; background: var(--raised); }
 .cb-text { flex: 1; color: var(--hi); }
@@ -106,20 +107,21 @@ body { background: var(--bg); color: var(--ink); font: var(--t-ui); font-feature
 .rail-new { margin: 4px 12px 14px; height: 32px; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; background: var(--raised); color: var(--hi); font: 550 13px var(--sans); border: 0; cursor: pointer; text-align: left; flex: none; }
 .rail-new:hover { background: var(--lift2); }
 .rail-new .keys { font-size: 11.5px; font-weight: 400; }
-.rail-list { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: 10px; scrollbar-width: thin; }
+.rail-list { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: 10px; }
 
 /* what needs you: a washed block with a bar, the count large, each item's question and its answers */
 .needs { margin: 0 12px 6px; padding: 12px 14px 6px; background: var(--signal-wash); border-left: 2px solid var(--signal); }
-.needs h2 { font: 650 20px/1.1 var(--sans); letter-spacing: -.02em; color: var(--signal); margin-bottom: 10px; }
-.needs h2 small { font: 400 12px var(--sans); letter-spacing: 0; color: var(--dim); margin-left: 8px; }
+.needs h2 { display: flex; align-items: baseline; gap: 8px; font: 650 20px/1.1 var(--sans); letter-spacing: -.02em; color: var(--signal); margin-bottom: 10px; white-space: nowrap; }
+.needs h2 small { font: 400 12px var(--sans); letter-spacing: 0; color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .needs .ask { padding: 8px 0 10px; outline-offset: 2px; }
 .needs .ask + .ask { border-top: 1px solid var(--signal-line); }
 .needs .ask-t { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; color: var(--hi); font: 550 13px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .needs .ask-t:hover { text-decoration: underline; text-decoration-color: var(--rule2); text-underline-offset: 3px; }
 .needs .ask-q { color: var(--ink); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .needs .ask.fail .ask-q { color: var(--fail); }
-.needs .ask-a { margin-top: 7px; display: flex; gap: 6px; flex-wrap: wrap; }
-.needs .ask-a button { font: 500 12px var(--sans); height: 24px; padding: 0 10px; border: 0; background: var(--btn-quiet); color: var(--hi); cursor: pointer; white-space: nowrap; }
+.needs .ask-a { margin-top: 7px; display: flex; gap: 6px; }
+.needs .ask-a button { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 500 12px var(--sans); height: 24px; padding: 0 10px; border: 0; background: var(--btn-quiet); color: var(--hi); cursor: pointer; white-space: nowrap; }
+.needs .ask-a button.plain { flex: none; }
 .needs .ask-a button:hover:not(:disabled) { background: var(--lift2); }
 .needs .ask-a button.go { background: var(--accent); color: var(--on-accent); }
 .needs .ask-a button.go:hover:not(:disabled) { filter: brightness(1.06); background: var(--accent); }
@@ -219,7 +221,7 @@ button.rail-gh:hover { color: var(--dim); }
 .itab:hover { color: var(--hi); }
 .itab.on { color: var(--hi); font-weight: 550; border-bottom-color: var(--hi); }
 .itab .n { margin-left: 4px; color: inherit; font-weight: 400; font-variant-numeric: tabular-nums; }
-.ibody { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; scrollbar-width: thin; }
+.ibody { flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
 .isec { padding: 18px 22px 4px; font-size: 12px; font-weight: 400; color: var(--faint); display: flex; justify-content: space-between; align-items: baseline; }
 .iempty { padding: 2px 22px 8px; font-size: 12px; color: var(--faint); }
 .irule { height: 1px; background: var(--rule); margin: 12px 22px 0; flex: none; }
@@ -358,3 +360,32 @@ button.rail-gh:hover { color: var(--dim); }
 @media (prefers-reduced-motion: reduce) {
   .rail-row.busy::after, .working .sweep { animation: none; background-position: 35% 0; }
 }
+
+/* Settings > Appearance: a swatch per theme, drawn from that theme's own tokens */
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; max-width: 720px; }
+.theme-sw { display: flex; flex-direction: column; gap: 6px; cursor: pointer; font-size: 12.5px; color: var(--dim); }
+.theme-sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.theme-sw .sw-art { display: flex; height: 64px; border-radius: var(--r-row); overflow: hidden; box-shadow: 0 0 0 1px var(--rule); }
+.theme-sw.on .sw-art { box-shadow: 0 0 0 2px var(--hi); }
+.theme-sw:has(input:focus-visible) .sw-art { box-shadow: 0 0 0 2px var(--focus); }
+.theme-sw.on .sw-name { color: var(--hi); font-weight: 550; }
+.sw-well { width: 38%; display: flex; flex-direction: column; gap: 5px; padding: 8px 6px; }
+.sw-well i { display: block; height: 10px; border-radius: 2px; }
+.sw-well b, .sw-pane b { display: block; height: 3px; border-radius: 2px; opacity: .8; }
+.sw-well b:last-child { width: 70%; }
+.sw-pane { flex: 1; display: flex; flex-direction: column; gap: 5px; padding: 9px 8px; }
+.sw-pane > b:first-child { width: 80%; height: 4px; }
+.sw-pane > b:nth-child(2) { width: 60%; }
+.sw-lift { margin-top: auto; height: 16px; border-radius: 3px; padding: 6px; }
+.sw-lift b { width: 50%; }
+
+/* native checkboxes and radios in the main text colour */
+input[type='checkbox'], input[type='radio'] { accent-color: var(--hi); }
+/* quiet text actions that stop or remove: dim until hovered, red stays for failed */
+.btn-link.x, .btn-link.danger { color: var(--dim); }
+.btn-link.x:hover:not(:disabled), .btn-link.danger:hover:not(:disabled) { color: var(--fail); }
+.dt td.num, .dt th { white-space: nowrap; }
+.dwait { color: var(--signal); }
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-thumb { border-radius: 5px; }
+.needs .ask-a button.go { flex: none; }

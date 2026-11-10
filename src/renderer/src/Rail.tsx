@@ -76,7 +76,7 @@ function NeedsBlock({ rows, teams, titleOf }: { rows: LiveRow[]; teams: TeamNeed
             <div className="ask-q" title={q}>{q}</div>
             <div className="ask-a">
               {one && one.options.slice(0, 2).map((o, i) => (
-                <button key={o.label} className={i === 0 ? 'go' : ''} disabled={busy === r.id} title={o.description || o.label} onClick={() => void answer(r, ask!, o.label)} data-testid={`needs-answer-${i}`}>{o.label.length > 22 ? `${o.label.slice(0, 21)}\u2026` : o.label}</button>
+                <button key={o.label} className={i === 0 ? 'go' : ''} disabled={busy === r.id} title={o.description || o.label} onClick={() => void answer(r, ask!, o.label)} data-testid={`needs-answer-${i}`}>{o.label}</button>
               ))}
               {failed && !r.kind && <button onClick={() => { clearWaiting(r.id); send(r.id, 'Try that again from where it stopped.', []) }} data-testid="needs-retry">Retry</button>}
               <button className="plain" onClick={() => activate(r.id)} data-testid="needs-open">Open</button>

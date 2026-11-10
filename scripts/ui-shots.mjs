@@ -414,6 +414,18 @@ await page.mouse.move(700, 880)
 if (await tid('drawer').isVisible().catch(() => false)) await tid('drawer-close').click()
 await shot('A-main')
 
+// QUIET=<folder>: the quiet desk's proof (main, main-clear, each page, the editor, narrow, every theme); QUIET_MAIN=1 stops after main
+if (process.env.QUIET) {
+  const Q = resolve(process.env.QUIET)
+  mkdirSync(Q, { recursive: true })
+  const q = async (name) => { await page.mouse.move(700, 892); await page.waitForTimeout(700); await page.screenshot({ path: join(Q, `${name}.png`) }); console.log('quiet', name) }
+  await q('main')
+  if (process.env.QUIET_MAIN) { await app.close(); process.exit(0) }
+  await (await import('./ui-shots-quiet.mjs')).default({ app, page, send, q, tid, assistant, text, tool, result })
+  await app.close()
+  process.exit(0)
+}
+
 // CALM=<folder>: the calm pass only: the same main view in each UI font, in the light theme, and the editor
 if (process.env.CALM) {
   const C = resolve(process.env.CALM)

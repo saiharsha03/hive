@@ -10,7 +10,7 @@ import { PhonePairing } from './PhonePairing'
 import { HooksMenu } from './HooksMenu'
 import { PluginsMenu } from './PluginsMenu'
 import { Btn, Unavailable } from './kit'
-import { getThemes, setLayout, setTheme, useAppearance, type Layout, setFonts, UI_FONTS, CODE_FONTS } from './appearance'
+import { getThemes, setLayout, setTheme, useAppearance, type Layout, setFonts, UI_FONTS, CODE_FONTS, swatchOf } from './appearance'
 import { quietHoursGet, quietHoursSet, type QuietHours } from './api/next'
 import { useStore } from './store'
 import { place } from './actions'
@@ -390,14 +390,22 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
     // are not part of the Save below
     appearance: (
       <>
-        <Row label="Theme" hint="Applies at once and is kept; it is not part of Save.">
-          <div className="set-radios" role="radiogroup" aria-label="Theme">
-            {getThemes().map((t) => (
-              <label key={t.id} className="scheck set-radio">
-                <input type="radio" name="theme" data-testid={`appearance-theme-${t.id}`} checked={app.theme === t.id} onChange={() => setTheme(t.id)} />
-                <span className="set-rl">{t.label}</span><span className="dnote">{t.description}</span>
-              </label>
-            ))}
+        <Row label="Theme" hint="Applies at once and is kept; it is not part of Save. Ctrl+Alt+T moves to the next theme, Ctrl+Alt+Shift+T back.">
+          <div className="theme-grid" role="radiogroup" aria-label="Theme">
+            {getThemes().map((t) => {
+              const c = swatchOf(t.id)
+              return (
+                <label key={t.id} className={`theme-sw${app.theme === t.id ? ' on' : ''}`} title={t.description}>
+                  <input type="radio" name="theme" data-testid={`appearance-theme-${t.id}`} checked={app.theme === t.id} onChange={() => setTheme(t.id)} />
+                  {/* drawn from the theme's own tokens: its well with the signal bar, its pane with text and a lifted block */}
+                  <span className="sw-art" style={{ background: c.bg }} aria-hidden>
+                    <span className="sw-well" style={{ background: c.side }}><i style={{ background: c.signal }} /><b style={{ background: c.dim }} /><b style={{ background: c.dim }} /></span>
+                    <span className="sw-pane"><b style={{ background: c.hi }} /><b style={{ background: c.dim }} /><span className="sw-lift" style={{ background: c.lift }}><b style={{ background: c.hi }} /></span></span>
+                  </span>
+                  <span className="sw-name">{t.label}</span>
+                </label>
+              )
+            })}
           </div>
         </Row>
         <Row label="UI font" hint="The font of everything but code. Applies at once.">
