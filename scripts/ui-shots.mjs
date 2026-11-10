@@ -1,4 +1,4 @@
-/* global window */
+/* global window, document, MutationObserver */
 // Screenshots of the built window with seeded content, for looking at the UI. Nothing is sent to Claude: the app
 // runs in test mode (HIVE_TEST_MODE=1, its own temp data folder), every chat call main would make is answered by a
 // stand-in installed through Playwright, and threads, tasks, watchers, wake-ups and usage come from the seed below.
