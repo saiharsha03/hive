@@ -34,10 +34,11 @@ Settings tab. On first run they are seeded from a local `.env` (copy `.env.examp
 | `npm run dev` | Start the app with the Vite dev server for the renderer. There is no hot reload: a reload would restart every running session, so press Ctrl+R to pick up renderer changes. |
 | `npm run build` | Bundle main, preload and renderer into `out/` with electron-vite. |
 | `npm start` | Run the built app from `out/`. |
-| `npm run typecheck` | `tsc --noEmit` over `src/`, `test/` and the configs (TypeScript 7). |
+| `npm run typecheck` | `tsc --noEmit` over `src/`, `test/`, `e2e/` and the configs (TypeScript 7). |
 | `npm run lint` | ESLint (flat config, typescript-eslint, react-hooks). |
 | `npm test` | The Vitest suite, once. `npm run test:watch` keeps it running. |
 | `npm run check` | Typecheck, lint and test in one go; run it before you push. |
+| `npm run e2e` | Build, then the Playwright end-to-end suite against the real app. It uses your Claude login: read [End-to-end tests](#end-to-end-tests) first. `npm run e2e:only` skips the build. |
 | `npm run dist` | Build the Windows NSIS installer and portable exe into `dist/`. `npm run dist:dir` builds the unpacked app only. |
 | `npm run icons` | Regenerate the app icon (SVG, PNGs and ICO in `build/`) from `scripts/make-icons.mjs`. |
 
@@ -50,10 +51,16 @@ src/
   renderer/   the React UI (index.html + src/)
   shared/     pure logic used by main and renderer: no Electron, no I/O
 test/
-  shared/     unit tests for src/shared, one file per module
+  shared/     unit tests for src/shared: a file per module, plus files named for one behaviour (watchFloor, readOnlyGaps)
   main/       tests for src/main: pure parts plus integration tests against real git, pty and Python
+  renderer/   tests for renderer logic that needs no DOM
+  relay/      tests for the phone relay
+  e2e/        tests for the end-to-end harness's own helpers (not the specs)
   support/    the electron stub, the per-file setup and helpers for real tools
   fixtures/   small, scrubbed transcript samples
+e2e/          Playwright specs that drive the built app, their harness and clean-up
+mobile/       the Android phone app
+relay/        the small relay server the phone app talks to (its own package.json)
 scripts/      icon generator and the lint helper
 docs/         architecture notes
 build/        icon sources and generated icons used by the window and the installer
@@ -81,12 +88,34 @@ files and worktrees.
 
 ## Tests
 
-- Unit tests sit next to their module's name: `src/shared/gitCore.ts` is tested by `test/shared/gitCore.test.ts`.
-- `test/support/setup.ts` runs before every test file and points Hive's state files (settings, todos, watchers,
-  `.env`, `scripts.json`) at a fresh temp folder, so tests never read or write your real `~/.claude`.
+- Unit tests usually sit next to their module's name: `src/shared/gitCore.ts` is tested by
+  `test/shared/gitCore.test.ts`. A behaviour that spans modules, or one worth finding by name, gets its own file
+  (`test/shared/watcherMark.test.ts`, `test/shared/deployLanded.test.ts`).
+- `test/support/setup.ts` runs before every test file. It points Hive's state files (settings, todos, watchers,
+  `.env`, `scripts.json`, and the data folder everything else lives in) at a fresh temp folder, so tests never read
+  or write your real `~/.claude`. It also points the OS temp folder there and deletes the lot when the file is done,
+  so a test run leaves nothing behind: make temp folders with `mkdtemp` under `os.tmpdir()` and they are cleaned up
+  for you.
 - Integration tests create their own repos and folders under the OS temp directory and skip themselves when a tool
   (git, Python, node-pty's native module) is not available.
 - Main-process modules that import `electron` get the stub in `test/support/electron.ts` through a Vitest alias.
+
+### End-to-end tests
+
+`npm run e2e` drives the built Electron app with Playwright (`e2e/*.spec.ts`). CI does not run it. Know what it does
+before you run it:
+
+- It runs in test mode (`HIVE_TEST_MODE=1`): Hive's own state files, settings and watchers live in a temp run folder,
+  and deploy, scripts, git commit / push / pull and watcher runs answer "test mode: ... is off" instead of running.
+- **It uses your Claude login.** The session specs send real turns, so they count against your usage. The run's
+  settings start every thread, background ones included, on Haiku at low effort to keep that small. Those sessions
+  load your own Claude Code settings (hooks, plugins, MCP servers) like any other.
+- Claude Code writes the transcripts of those turns to its own `~/.claude/projects/` folder. The run's teardown
+  deletes them and the run folder (only folders that carry the run's `hive-e2e` tag). `HIVE_E2E_KEEP=1` keeps both
+  to look at a failure; `HIVE_E2E_SHOTS=<folder>` keeps the screenshots somewhere of your own.
+- The deploy spec is opt-in. It runs your real `diffs.sh` (a `git fetch` in the real repos, and its message goes to
+  the clipboard), so it only runs when `HIVE_E2E_DEPLOY_ENV` names a `.env` with the repos root and the
+  `HIVE_DEPLOY_*` keys.
 
 ## Pull requests
 
@@ -103,8 +132,8 @@ Never commit secrets, a filled-in `.env`, `scripts.json`, or screenshots of real
 Bump `version` in `package.json`, move the Unreleased notes under a new version heading in the changelog, then tag:
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 The `Release` workflow builds the Windows installer and portable exe on the tag and attaches them to a GitHub
