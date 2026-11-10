@@ -3,14 +3,8 @@
 // default, mono, colour, light, hc): the Focus layout becomes Focus mode, the rest the one layout; Monochrome and
 // Colourful become Dark.
 
-export type ThemeId = 'dark' | 'light' | 'hc'
-export type ThemeInfo = { id: ThemeId; label: string; description: string }
-
-export const THEMES: ThemeInfo[] = [
-  { id: 'dark', label: 'Dark', description: 'Calm grey zones; colour only for state, git, diff and the one accent' },
-  { id: 'light', label: 'Light', description: 'The same layout and words on light zones' },
-  { id: 'hc', label: 'High contrast', description: 'Black zones, light rules and brighter state words' },
-]
+import { THEME_IDS, type ThemeId } from './themesCore'
+export { THEMES, type ThemeId, type ThemeInfo } from './themesCore'
 
 export type Layout = { rail: boolean; inspector: boolean; drawer: boolean; focus: boolean; railRight: boolean }
 
@@ -43,12 +37,13 @@ export type Appearance = { theme: ThemeId; layout: Layout; fonts: Fonts }
 
 export const DEFAULT_LAYOUT: Layout = { rail: true, inspector: true, drawer: false, focus: false, railRight: false }
 
-// a theme id from any version: the old five fold into the three
+// a theme id from any version: one of the ten as it is; the old five (default, mono, colour, light, hc) fold in,
+// and anything unknown is Quiet ('dark', the default)
 export function themeOf(v: unknown): ThemeId {
-  if (v === 'light') return 'light'
-  if (v === 'hc') return 'hc'
-  return 'dark'
+  return THEME_IDS.includes(v as ThemeId) ? v as ThemeId : 'dark'
 }
+/** the theme after (or before) this one, for the cycle shortcut */
+export const nextTheme = (id: ThemeId, step = 1): ThemeId => THEME_IDS[(THEME_IDS.indexOf(id) + step + THEME_IDS.length) % THEME_IDS.length]
 
 // what older prefs said, as the new shape (pure, for the test)
 export function migrate(prefs: { appearance?: unknown; ui?: unknown; themeByUI?: unknown }): Appearance {

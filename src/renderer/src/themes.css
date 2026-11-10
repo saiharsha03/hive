@@ -1,6 +1,5 @@
-/* Design tokens. Three themes set the same names: dark (the default), light and high contrast (data-theme on <html>).
-   The first block of each theme is the design's own set; the second maps the names older components use onto it,
-   so nothing in the app names a colour of its own. Flat zones, full-width rules, one accent, state as a coloured word. */
+/* Design tokens: the quiet desk. Zones are told apart by surface and space, one signal colour means "needs you",
+   red means failed, the primary button is the main text colour. Nothing in the app names a colour of its own. */
 
 /* Inter comes from @fontsource-variable/inter (main.tsx); the other choices ship here; Cascadia Mono and Consolas
    are Windows fonts. Settings > Appearance picks the UI font (--sans) and the code font (--mono). */
@@ -12,123 +11,56 @@
 @font-face { font-family: 'IBM Plex Mono'; font-weight: 600; font-display: swap; src: url('./assets/fonts/ibm-plex-mono-latin-600.woff2') format('woff2'); }
 @font-face { font-family: 'Geist Variable'; font-weight: 100 900; font-display: swap; src: url('./assets/fonts/geist-latin-wght.woff2') format('woff2-variations'); }
 
-:root, [data-theme='dark'] {
-  color-scheme: dark;
-  /* surfaces: flat zones separated by full-width rules, no shadows except overlays */
-  --bg: #1C1F23;        /* panes */
-  --side: #171A1D;      /* rail, inspector, title bar, status line */
-  --raised: #23272C;    /* question card, popovers, confirm bars */
-  --band: #22262B;      /* your own messages */
-  --sel: #1F2B3D;       /* selected row fill */
-  --rule: #2B3035;      /* zone and row rules */
-  --rule2: #3A4047;     /* table heads, inputs at rest, secondary buttons */
-  /* ink */
-  --hi: #F1F3F5; --ink: #CBD1D7; --dim: #8A929B; --faint: #5D656D;
-  /* one accent: the active item and the primary action only */
-  --accent: #3D8BFF; --on-accent: #FFFFFF; --link: #6AA6FF;
-  /* state words */
-  --work: #4FC1E0; --wait: #F2B33D; --fail: #F2605A; --done: #6CCB8E; --hold: #C9A86A;
-  /* git and diff */
-  --git-modified: #E5BE6A; --git-added: #6CCB8E; --git-untracked: #6CCB8E; --git-deleted: #F2605A; --git-ignored: #5D656D;
-  --diff-add-bg: rgba(108, 203, 142, .13); --diff-del-bg: rgba(242, 96, 90, .13);
-  /* syntax */
-  --sy-kw: #7FB2FF; --sy-fn: #E5D38A; --sy-str: #9ED69A; --sy-cm: #6F7881; --sy-num: #E0A87A;
-  --overlay-shadow: 0 10px 32px rgba(0, 0, 0, .45);
-  --scroll: rgba(138, 146, 155, .28);
-  --titlebar: #171A1D; --titlebar-symbol: #CBD1D7;
-  /* terminal */
-  --term-bg: #171A1D; --term-fg: #CBD1D7; --term-cursor: #CBD1D7; --term-sel: #2D4A73;
-  --ansi-black: #1C1F23; --ansi-red: #F2605A; --ansi-green: #6CCB8E; --ansi-yellow: #E5BE6A; --ansi-blue: #6AA6FF;
-  --ansi-magenta: #D59BD0; --ansi-cyan: #4FC1E0; --ansi-white: #CBD1D7; --ansi-bright-black: #5D656D; --ansi-bright-red: #FF7A73;
-  --ansi-bright-green: #8BDDA7; --ansi-bright-yellow: #F2CF85; --ansi-bright-blue: #8DBBFF; --ansi-bright-magenta: #E4B6E0;
-  --ansi-bright-cyan: #7AD3EA; --ansi-bright-white: #F1F3F5;
-  --hover: #22262B; --selin: #262B31; --fail-bg: rgba(242, 96, 90, .07); --wait-bg: rgba(242, 179, 61, .10); --work-bg: rgba(79, 193, 224, .07);
-  --scrim: rgba(0, 0, 0, .5); --overlay: rgba(0, 0, 0, .72); --drop: rgba(61, 139, 255, .16);
-  --code-bg: #262A30; --pre-bg: #171A1D;
-}
-
-[data-theme='light'] {
-  color-scheme: light;
-  --bg: #F3F4F6; --side: #ECEEF1; --raised: #FFFFFF; --band: #FFFFFF; --sel: #E4ECFA; --rule: #DCE0E5; --rule2: #C5CBD3;
-  --hi: #0F1318; --ink: #2A3038; --dim: #5D6672; --faint: #8E97A2;
-  --accent: #0A5BD3; --on-accent: #FFFFFF; --link: #0A5BD3;
-  --work: #0B7AA0; --wait: #A15F00; --fail: #C42B2B; --done: #1D7A43; --hold: #86704A;
-  --git-modified: #9A6700; --git-added: #1D7A43; --git-untracked: #1D7A43; --git-deleted: #C42B2B; --git-ignored: #8E97A2;
-  --diff-add-bg: rgba(29, 122, 67, .10); --diff-del-bg: rgba(196, 43, 43, .08);
-  --sy-kw: #1F56B5; --sy-fn: #7A4E00; --sy-str: #1D7A43; --sy-cm: #8E97A2; --sy-num: #B04A00;
-  --overlay-shadow: 0 10px 28px rgba(15, 19, 24, .16);
-  --scroll: rgba(93, 102, 114, .3);
-  --titlebar: #ECEEF1; --titlebar-symbol: #2A3038;
-  --term-bg: #ECEEF1; --term-fg: #2A3038; --term-cursor: #2A3038; --term-sel: #BFD3F5;
-  --ansi-black: #0F1318; --ansi-red: #C42B2B; --ansi-green: #1D7A43; --ansi-yellow: #9A6700; --ansi-blue: #0A5BD3;
-  --ansi-magenta: #9B3E93; --ansi-cyan: #0B7AA0; --ansi-white: #5D6672; --ansi-bright-black: #8E97A2; --ansi-bright-red: #D84040;
-  --ansi-bright-green: #22914F; --ansi-bright-yellow: #B07A00; --ansi-bright-blue: #2E73DD; --ansi-bright-magenta: #B04FA8;
-  --ansi-bright-cyan: #138DB5; --ansi-bright-white: #2A3038;
-  --hover: #E6E9ED; --selin: #E0E4EA; --fail-bg: rgba(196, 43, 43, .06); --wait-bg: rgba(161, 95, 0, .08); --work-bg: rgba(11, 122, 160, .06);
-  --scrim: rgba(15, 19, 24, .28); --overlay: rgba(15, 19, 24, .6); --drop: rgba(10, 91, 211, .12);
-  --code-bg: #E6E9ED; --pre-bg: #ECEEF1;
-}
-
-/* high contrast: black zones, light rules, brighter state words; the same names */
-[data-theme='hc'] {
-  color-scheme: dark;
-  --bg: #000000; --side: #000000; --raised: #0B0D10; --band: #101317; --sel: #0E2A52; --rule: #6B737C; --rule2: #A3ABB4;
-  --hi: #FFFFFF; --ink: #FFFFFF; --dim: #D4D9DE; --faint: #A3ABB4;
-  --accent: #4DA3FF; --on-accent: #000000; --link: #7DBBFF;
-  --work: #5FD8F5; --wait: #FFC94D; --fail: #FF7A73; --done: #7EE2A1; --hold: #E3C68A;
-  --git-modified: #F5CF73; --git-added: #7EE2A1; --git-untracked: #7EE2A1; --git-deleted: #FF7A73; --git-ignored: #A3ABB4;
-  --diff-add-bg: rgba(126, 226, 161, .22); --diff-del-bg: rgba(255, 122, 115, .24);
-  --sy-kw: #9CC4FF; --sy-fn: #F5E39A; --sy-str: #B4E8B0; --sy-cm: #A3ABB4; --sy-num: #F5BE90;
-  --overlay-shadow: none;
-  --scroll: rgba(212, 217, 222, .45);
-  --titlebar: #000000; --titlebar-symbol: #FFFFFF;
-  --term-bg: #000000; --term-fg: #FFFFFF; --term-cursor: #FFFFFF; --term-sel: #FFFFFF55;
-  --hover: #12161B; --selin: #12161B; --fail-bg: transparent; --wait-bg: transparent; --work-bg: transparent;
-  --scrim: rgba(0, 0, 0, .7); --overlay: rgba(0, 0, 0, .85); --drop: rgba(77, 163, 255, .2);
-  --code-bg: #101317; --pre-bg: #000000;
-}
+/* The colour tokens of the ten themes are written by themesCore.ts (one block per [data-theme], the same names in
+   each: surfaces bg / side / raised / lift2, rules, text hi / ink / dim / faint, the one signal, fail, git, diff, terminal,
+   radii). This file holds what is the same in every theme: type, spacing, and the older names mapped onto the set. */
 
 /* type, spacing and rules: the same in every theme */
 :root {
-  --sans: 'Inter Variable', 'Segoe UI', sans-serif;
-  --mono: 'Cascadia Mono', Consolas, monospace;
-  --t-state: 700 10.5px/1 var(--sans);
+  --t-state: 500 12px/1 var(--sans);
   --t-label: 400 11.5px/1.4 var(--sans);
   --t-ui: 400 13px/1.45 var(--sans);
-  --t-conv: 400 15px/1.62 var(--sans);
-  --t-title: 600 16px/1.3 var(--sans);
+  --t-conv: 400 14.5px/1.62 var(--sans);
+  --t-title: 650 19px/1.25 var(--sans);
   --t-page: 600 22px/1.2 var(--sans);
   --t-code: 400 12.5px/1.68 var(--mono);
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 14px; --s5: 18px; --s6: 22px; --s7: 26px;
-  --pane-pad: 22px; --row-pad: 6px 14px; --radius: 2px;
+  --pane-pad: 28px; --row-pad: 6px 14px; --radius: var(--r-row);
   --rule-w: 1px; --active-bar: 3px; --tab-top: 2px; --q-top: 2px;
 }
 
-/* the names older components use, mapped onto the design's set (one place, every theme) */
+/* the names older components use, mapped onto the set (one place, every theme). State words other than waiting and
+   failed carry no colour; --mark is the neutral "this one" (the main text), never the signal. */
 :root, [data-theme] {
-  /* calm: colour only for what needs you (WAITING amber) or has failed (red); every other state word is ink or grey,
-     told apart by weight. The blue accent marks three things only: the selected row's bar, the active tab's rule and
-     the one primary button; everything else that used to be blue uses --mark (neutral) or --link (dim). */
   --work: var(--ink); --done: var(--dim); --hold: var(--dim); --link: var(--dim); --mark: var(--hi);
   --line: var(--rule); --line2: var(--rule2); --panel: var(--side); --panel2: var(--raised); --input: transparent;
-  --sel-ink: var(--hi); --ghost: var(--faint); --accent-hover: var(--accent); --focus: var(--accent);
+  --sel-ink: var(--hi); --ghost: var(--faint); --accent-hover: var(--accent);
   --badge-bg: transparent; --badge-ink: var(--dim); --head: var(--dim); --brand: var(--hi);
   --git-renamed: var(--git-modified); --git-conflict: var(--fail); --git-dot: var(--git-modified);
   --diff-add-num: var(--diff-add-bg); --diff-del-num: var(--diff-del-bg); --diff-add-ink: var(--git-added); --diff-del-ink: var(--git-deleted);
   --diff-empty: transparent; --diff-gap: var(--hover);
-  --you-bg: var(--band); --you-edge: var(--rule2); --you-ink: var(--hi); --you-name: var(--dim);
+  --you-bg: var(--raised); --you-edge: var(--rule2); --you-ink: var(--hi); --you-name: var(--dim);
   --claude: var(--hi); --agent: var(--ink); --agent-edge: var(--rule2); --thread: var(--ink); --thread-edge: var(--rule2); --tool-verb: var(--dim);
-  --tm-read: var(--link); --tm-edit: var(--git-modified); --tm-bash: var(--work); --tm-search: var(--dim); --tm-agent: var(--link); --tm-web: var(--dim); --tm-other: var(--dim);
+  --tm-read: var(--dim); --tm-edit: var(--dim); --tm-bash: var(--dim); --tm-search: var(--dim); --tm-agent: var(--dim); --tm-web: var(--dim); --tm-other: var(--dim);
   --mk-deploy: var(--dim); --mk-pull: var(--dim); --mk-dev: var(--dim); --mk-scripts: var(--dim); --mk-todos: var(--dim); --mk-watch: var(--dim);
   --mk-git: var(--dim); --mk-files: var(--dim); --mk-agents: var(--dim); --mk-preview: var(--dim); --mk-changes: var(--dim); --mk-terminal: var(--dim);
   --ic-blue: var(--dim); --ic-cyan: var(--dim); --ic-yellow: var(--dim); --ic-orange: var(--dim); --ic-green: var(--dim);
   --ic-red: var(--dim); --ic-pink: var(--dim); --ic-teal: var(--dim); --ic-grey: var(--faint); --ic-folder: var(--dim);
-  --ultra: var(--wait); --ultra-bg: var(--wait-bg);
-  --code-ink: var(--hi); --th-bg: transparent; --check-a: var(--raised); --check-b: var(--bg); --white: #FFFFFF;
-  --shadow: rgba(0, 0, 0, .35); --switch-off: var(--rule2); --knob: var(--dim);
+  --ultra: var(--signal); --ultra-bg: var(--signal-wash);
+  --code-ink: var(--hi); --th-bg: transparent; --check-a: var(--raised); --check-b: var(--bg); --white: var(--on-accent);
+  --shadow: var(--scrim); --switch-off: var(--rule2); --knob: var(--dim);
   --sb-bg: var(--side); --sb-ink: var(--dim); --sb-brand-bg: var(--side); --sb-brand-ink: var(--hi);
+  /* the QR code must stay black on white whatever the theme */
+  --qr-bg: #FFFFFF;
 }
 
-/* high contrast: outline what other themes fill */
-[data-theme='hc'] .rail-row.on, [data-theme='hc'] .tab.on, [data-theme='hc'] .pal-row.on, [data-theme='hc'] .sm-row.on, [data-theme='hc'] .pop-row.on,
-[data-theme='hc'] .frow.sel, [data-theme='hc'] .itab.on { outline: 1px solid var(--accent); outline-offset: -1px; }
+/* the team office is an illustration with its own fixed palette (the same in every theme) */
+:root {
+  --ofc-floor: #141414; --ofc-board: #E3E1DB; --ofc-board-ink: #202020; --ofc-frame: #8F9294; --ofc-shadow: #1A1A1A; --ofc-head: #3A3A3A;
+  --ofc-ink: #1D1D1D; --ofc-ink2: #5D5D5D; --ofc-ink3: #6A6A6A; --ofc-ink4: #8A8A8A; --ofc-work: #1E64A8; --ofc-wait: #946C00; --ofc-done: #2B7A34;
+  --ofc-fail: #C0352B; --ofc-pen-blue: #2D6FB3; --ofc-pen-red: #B8352B; --ofc-sheet: #D8D3C4; --ofc-sheet-ink: #2A2A2A; --ofc-sheet-shadow: #151515;
+  --ofc-screen: #1F1F1F; --ofc-screen-idle: #4A4A4A; --ofc-label: #9A9A9A; --ofc-bubble: #EBE9E3;
+}
+
+/* high contrast (and any theme whose --edge is set): outline what other themes only lift */
+.rail-row.on, .tab.on, .pal-row.on, .sm-row.on, .pop-row.on, .frow.sel, .itab.on, .msg.you, .cbox, .needs, .askcard, .item.on { outline: 1px solid var(--edge); outline-offset: -1px; }
