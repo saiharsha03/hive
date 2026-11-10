@@ -6,6 +6,14 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Quarry inside Hive.** When the Quarry SQL app is installed (found from where it records itself, or named in
+  Settings > General; "off" turns it off), Hive gets a Quarry page with Quarry's own UI, and threads get
+  `quarry_connections`, `quarry_schema`, `quarry_query` and `quarry_explain`. Quarry enforces its own rules (one
+  statement per call, read-only reads, no writes on production or read-only connections); a write runs only after you
+  confirm that statement in the thread. Without Quarry nothing of it shows.
+
 ## [2.0.0] - 2026-11-10
 
 ### Added

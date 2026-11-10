@@ -129,6 +129,29 @@ services (`WATCHER_TOOLS` in `main/chat.ts`), and its shell commands go through 
 Tool inputs are validated with zod schemas, and the checks that matter (paths, repo names, branch names) live in
 pure modules such as `shared/worktreeCore.ts` and `main/organize.ts`.
 
+## Quarry
+
+Quarry, a separate SQL desktop app, can be used from Hive when it is installed (`main/quarry.ts`, `main/quarryCore.ts`,
+following Quarry's `docs/embedding.md`):
+
+- **Finding it.** Settings > General `quarryPath`: a path, `off`, or empty to use what Quarry records each time it
+  starts (`%APPDATA%\Quarry\install.json`, `HKCU\Software\Quarry` `InstallPath`) or a default install folder. Hive runs
+  `quarry --capabilities` and uses it only when it speaks protocol 1 with every method Hive calls. Test mode never
+  does (it would reach the user's real databases).
+- **Running it.** One `quarry serve` per Hive, started on the first call and kept: JSON-RPC 2.0 over its stdin and
+  stdout, one object per line, answers matched by id (no port, no token). A serve that dies is started again after
+  1 s, doubling to at most 30 s; quitting Hive closes its stdin, which makes it finish, close its database sessions
+  and exit (killed after 5 s otherwise). Its stderr is counted, never printed; call parameters are never logged.
+- **The page.** Quarry's UI is served from `quarry://app/` (each file from `ui.index` / `ui.asset`) into a `<webview>`
+  on the Quarry page. Main fixes that view's source, preload (`preload/quarry.ts`, which exposes
+  `window.quarryHost`), sandbox and context isolation (`will-attach-webview`), keeps it from navigating away, and
+  answers `quarry:invoke` and `quarry:saveFile` only from it: those are the user's own actions. The rail link and the
+  palette entry exist only while Quarry is usable.
+- **Thread tools.** `quarry_connections`, `quarry_schema`, `quarry_query` and `quarry_explain` call Quarry's agent
+  interface, for every thread but a watcher's. Hive adds no filter: Quarry enforces its rules itself. For a write the
+  tool asks the user to confirm that statement in the thread (a question card), and only then sets `allowWrite`, as
+  Quarry asks of its host.
+
 ## The worktree model
 
 Agents never edit a repo's main checkout. When a thread needs to change code it calls `worktree` with a repo and a
