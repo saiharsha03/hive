@@ -63,8 +63,8 @@ import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
 import { partialRestore, rewindBlock } from '../shared/rewindCore'
 import { forkPointOfFile } from './rewindFile'
-import { quarryCall, quarryLimits, quarryStatus } from './quarry'
-import { DATA_NOTE, formatConnections, formatError, formatRows, RUN_WRITE, writeQuestion } from './quarryCore'
+import { quarryLimits, quarryStatus } from './quarry'
+import { confirmByCard, quarryConnections, quarryExplain, quarryQuery, quarrySchema, type Confirm, type ToolResult } from './quarryTools'
 import { addPending, pendingDelivered, pendingIsSteer, pendingReturned, pendingSeen, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // the events the user should hear about: the phone and the desktop get the same ones
@@ -203,6 +203,7 @@ const SCHEDULE = z.object({
   weekly: z.string().optional().describe('Weekly report like "Mon 08:00", or "off"'),
 })
 const ok = (text: string) => ({ content: [{ type: 'text' as const, text }] })
+const asTool = (r: ToolResult) => (r.ok ? ok(r.text) : fail(r.text))
 const fail = (text: string) => ({ content: [{ type: 'text' as const, text }], isError: true })
 
 // ~/.claude/projects/<cwd with every non-alphanumeric as "-">/<session>.jsonl
@@ -443,7 +444,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           'quarry_connections',
           'The database connections saved in Quarry, the user\'s SQL app: id, name, host, database, and whether each is PRODUCTION or read only. Pass a connection\'s id or exact name to the other quarry_ tools.',
           {},
-          async () => { try { return ok(formatConnections(await quarryCall('agent.listConnections', {}))) } catch (e) { return fail(formatError(e)) } },
+          async () => asTool(await quarryConnections()),
         ),
         tool(
           'quarry_schema',
@@ -453,9 +454,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
             schema: z.string().optional().describe('Only this schema'),
             table: z.string().optional().describe('Only this table'),
           },
-          async ({ connection, schema, table }) => {
-            try { return ok(`${DATA_NOTE}\n${JSON.stringify(await quarryCall('agent.describeSchema', { connection, ...(schema ? { schema } : {}), ...(table ? { table } : {}) }), null, 1)}`) } catch (e) { return fail(formatError(e)) }
-          },
+          async (a) => asTool(await quarrySchema(a)),
         ),
         tool(
           'quarry_query',
@@ -469,42 +468,21 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
             timeout_ms: z.number().int().positive().optional(),
             allow_write: z.boolean().optional().describe('The statement writes: ask the user to confirm it, then run it'),
           },
-          async ({ connection, sql, max_rows, timeout_ms, allow_write }, extra) => {
-            let allowWrite = false
-            if (allow_write) {
-              if (watcher) return fail('A watcher run is unattended: nobody can confirm a write. Note it in your findings instead.')
-              const id = `quarry-write-${randomUUID()}`
-              const questions = writeQuestion(connection, sql)
-              const reason = `Question: ${questions[0].question.split('\n')[0]}`.slice(0, 200)
-              s.waitingReason = reason
-              send({ type: 'hive_ask', id, questions })
-              send({ type: 'hive_organize', action: 'waiting', reason })
-              notifyUser(`Question: ${titleOf(tabId)}`, questions[0].question.split('\n')[0], tabId)
-              const signal = (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal
-              const end = await waitForAnswer(tabId, id, questions, signal)
-              send({ type: 'hive_ask_done', id })
+          async (a, extra) => {
+            const signal = (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal
+            // the card in this thread; the thread shows as waiting for the user (and tells the phone) until it is answered
+            const confirm: Confirm = watcher ? async () => 'none' : confirmByCard(tabId, send, signal, (reason) => {
+              if (reason) { s.waitingReason = reason; notifyUser(`Question: ${titleOf(tabId)}`, reason.replace(/^Question: /, ''), tabId); return }
               if (!openAsks(tabId).length) { if (s.waitingReason?.startsWith('Question: ')) s.waitingReason = undefined; send({ type: 'hive_organize', action: 'resolved' }) }
-              if (end.kind !== 'answers' || end.answers[questions[0].question] !== RUN_WRITE) {
-                return ok(end.kind === 'chat' ? 'The user replied in the chat instead: read their next message. The write was not run.' : 'The user did not confirm the write; it was not run.')
-              }
-              allowWrite = true
-            }
-            try {
-              const r = await quarryCall<any>('agent.query', { connection, sql, ...(max_rows ? { maxRows: max_rows } : {}), ...(timeout_ms ? { timeoutMs: timeout_ms } : {}), ...(allowWrite ? { allowWrite: true } : {}) }, (timeout_ms ?? 60_000) + 30_000)
-              return ok(formatRows(r))
-            } catch (e) { return fail(formatError(e)) }
+            })
+            return asTool(await quarryQuery(a, confirm))
           },
         ),
         tool(
           'quarry_explain',
           'The query plan of ONE statement through Quarry (EXPLAIN; analyze runs it, which Quarry refuses for a write).',
           { connection: z.string(), sql: z.string(), analyze: z.boolean().optional() },
-          async ({ connection, sql, analyze }) => {
-            try {
-              const r = await quarryCall<any>('agent.explain', { connection, sql, ...(analyze ? { analyze: true } : {}) }, 90_000)
-              return ok(`${DATA_NOTE}\n${r.text ?? JSON.stringify(r.plan)}\nplanning ${r.planningMs ?? '?'} ms${r.executionMs != null ? `, execution ${r.executionMs} ms` : ''}`)
-            } catch (e) { return fail(formatError(e)) }
-          },
+          async (a) => asTool(await quarryExplain(a)),
         ),
       ] : []),
       tool(

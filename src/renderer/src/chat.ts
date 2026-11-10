@@ -106,10 +106,17 @@ export function applyEvent(s: Session, ev: any): Session {
       return { ...s, sessionId: ev.sessionId, path: ev.path, endedRun: undefined } // running again
     case 'hive_continue':
       return { ...s, continueRev: (s.continueRev ?? 0) + 1 }
-    case 'hive_ask':
-      return { ...s, asks: [...(s.asks ?? []).filter((x) => x !== ev.id), ev.id] }
+    case 'hive_ask': {
+      const asks = [...(s.asks ?? []).filter((x) => x !== ev.id), ev.id]
+      // Claude's own AskUserQuestion already has its tool row (the card draws on it); a question Hive asks itself
+      // (Quarry's write confirmation) has none, so it gets one, carrying the questions the event brought
+      const hasRow = s.items.some((it) => it.kind === 'tool' && it.id === ev.id)
+      if (hasRow || !Array.isArray(ev.questions)) return { ...s, asks }
+      return { ...s, asks, items: [...s.items, { kind: 'tool', id: ev.id, name: 'AskUserQuestion', input: { questions: ev.questions }, status: 'running' }] }
+    }
     case 'hive_ask_done':
-      return { ...s, asks: (s.asks ?? []).filter((x) => x !== ev.id) }
+      // a row Hive made for its own question ends here (Claude's ends with its tool result)
+      return { ...s, asks: (s.asks ?? []).filter((x) => x !== ev.id), items: s.items.map((it) => (it.kind === 'tool' && it.id === ev.id && String(ev.id).startsWith('quarry-') && it.status === 'running' ? { ...it, status: 'done' as const } : it)) }
     case 'hive_mode':
       return { ...s, mode: ev.mode ?? s.mode, modeError: ev.error }
     case 'hive_worktree': {
