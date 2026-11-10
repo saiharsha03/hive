@@ -6,7 +6,22 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-10
+
 ### Added
+
+- **A new window.** The left rail opens on what needs you: each waiting question with its answer buttons right
+  there, each failed thread with its reason and Retry. Below it, working and recent threads as plain one-line rows.
+  Threads open as tabs and side-by-side panes; the right inspector has Activity (a timeline of subagents, shells,
+  monitors and wake-ups with Output, Stop, Message and Open), Changes, Files and Status. Running, Scheduled,
+  Deploys, Status and usage, Watchers and teams, Workspace and Settings are pages of their own.
+- **Ten themes** in Settings > Appearance and the command palette: Quiet (the default), Graphite, Classic (the
+  earlier Hive look), Midnight, Forest, Slate, Mocha, Light, Paper and High contrast. Ctrl+Alt+T moves to the next
+  one. The editor keeps VS Code's own colours in every theme.
+- **Fonts.** Inter and Cascadia Mono by default, with a choice of UI and code font in Settings > Appearance.
+- **Phone 2.0.** A "Needs me" inbox, answering a question from its notification, Stop everything, a Scheduled
+  list with Run now, a usage guard and quiet hours. A relay already running must be updated for the notification
+  buttons (`POST /v1/send`).
 
 - **Switch account without a restart.** Quiet threads move to the new login at once, working ones when their work
   ends; the dialog says how many follow.
