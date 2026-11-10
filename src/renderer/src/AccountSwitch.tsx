@@ -44,7 +44,7 @@ export function AccountSwitch({ current, working, onClose }: { current: string |
         {saved.map((a) => (
           <div key={a.id} className="drow" data-testid="account-row">
             <span className="wlab">{a.email}</span>
-            <span className="dnote">{[a.plan, a.active ? 'signed in' : a.lastUsed ? `last used ${new Date(a.lastUsed).toLocaleDateString()}` : ''].filter(Boolean).join(' · ')}</span>
+            <span className="dnote">{[a.organization, a.plan, a.active ? 'signed in' : a.lastUsed ? `last used ${new Date(a.lastUsed).toLocaleDateString()}` : ''].filter(Boolean).join(' · ')}</span>
             {!a.active && <button className="dbtn" disabled={!!busyId} onClick={() => void switchTo(a.id, a.email)} data-testid="account-use">{busyId === a.id ? 'Switching…' : 'Switch'}</button>}
             <button className="dlink" onClick={() => forget(a.id)} title="Forget this saved login (the account itself is not touched)">Remove</button>
           </div>

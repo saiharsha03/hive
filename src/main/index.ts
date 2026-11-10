@@ -264,7 +264,7 @@ const mobileDeps = () => ({
   quietHours: (set?: QuietHours) => (set ? setQuietHours(set) : quietHours()),
   // the saved accounts and the switch between them, as the window has them (never a token)
   accounts: () => (TEST_MODE ? [] : listAccounts(realAccountPaths()).map((a) => ({
-    id: a.id, name: a.email, detail: a.plan ?? '', note: a.active ? 'Signed in' : a.lastUsed ? `Last used ${new Date(a.lastUsed).toLocaleDateString()}` : '', inUse: a.active,
+    id: a.id, name: a.organization ?? a.email, detail: a.email, note: a.plan ?? '', inUse: a.active,
   }))),
   switchAccount: async (id: string) => {
     const r = await switchToProfile(id)

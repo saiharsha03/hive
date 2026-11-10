@@ -39,7 +39,7 @@ test('saving the current login: a profile of the two keys only, and an index wit
   const prof = read(join(p.dir, `${e.id}.json`))
   assert.deepEqual(Object.keys(prof).sort(), ['claudeAiOauth', 'oauthAccount']) // no MCP tokens, no other state
   assert.doesNotMatch(readFileSync(join(p.dir, 'index.json'), 'utf8'), /at-a|rt-a/)
-  assert.deepEqual(listAccounts(p).map((x) => [x.email, x.active]), [['a@example.com', true]])
+  assert.deepEqual(listAccounts(p).map((x) => [x.email, x.organization, x.active]), [['a@example.com', 'Org', true]])
   // no login: nothing saved
   write({ mcpOAuth: mcp }, {})
   assert.equal(saveCurrent(p), null)
@@ -107,7 +107,7 @@ test('backups: the last five switches are kept; removing an account deletes only
   const a = profileId('a@example.com')
   const b = profileId('b@example.com')
   for (let i = 0; i < 8; i++) switchAccount(p, i % 2 ? b : a, 100 + i)
-  const stamps = new Set(readdirSync(join(p.dir, 'backups')).map((f) => f.split('-')[0]))
+  const stamps = new Set(readdirSync(join(p.dir, 'backup')).map((f) => f.split('-')[0]))
   assert.equal(stamps.size, BACKUPS_KEPT)
   assert.ok(!stamps.has('100') && stamps.has('107'))
   const live = readFileSync(p.credentials, 'utf8')
@@ -124,4 +124,16 @@ test('other Claude sessions: the ones Hive did not start (a terminal, an IDE) ar
   // 201, 202: Hive's threads; 203: a claude one of them started; 300: a terminal's; 301: started by that terminal session
   assert.equal(othersOf([[201, hive], [202, hive], [203, 201], [300, 50], [301, 300]], hive), 2)
   assert.equal(othersOf([], hive), 0)
+})
+
+test('a login Hive cannot switch (an API key, no tokens file) is refused before anything is touched', () => {
+  write({ claudeAiOauth: tok('a'), mcpOAuth: mcp }, { oauthAccount: acct('a@example.com') })
+  saveCurrent(p, 1)
+  // now the engine runs on an API key: no claudeAiOauth in the tokens file
+  write({ mcpOAuth: mcp }, { projects: {} })
+  const before = [readFileSync(p.credentials, 'utf8'), readFileSync(p.claudeJson, 'utf8')]
+  assert.throws(() => switchAccount(p, profileId('a@example.com')), /not signed in with a Claude account here/)
+  assert.deepEqual([readFileSync(p.credentials, 'utf8'), readFileSync(p.claudeJson, 'utf8')], before)
+  rmSync(p.credentials)
+  assert.throws(() => switchAccount(p, profileId('a@example.com')), /keeps its login elsewhere/)
 })

@@ -220,7 +220,7 @@ interface Window {
     accountCancel: () => Promise<void>
     onAccountOutput: (cb: (t: string) => void) => () => void
     onAccountSwitched: (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => () => void
-    accountsList: () => Promise<{ id: string; email: string; plan: string | null; savedAt: number; lastUsed: number | null; active: boolean }[]>
+    accountsList: () => Promise<{ id: string; email: string; organization: string | null; plan: string | null; savedAt: number; lastUsed: number | null; active: boolean }[]>
     accountsSwitch: (id: string) => Promise<{ ok: boolean; account: string | null; closed: number; waiting: number; warning?: string; needsSignIn?: boolean; error?: string }>
     accountsRemove: (id: string) => Promise<boolean>
     onAccountsChanged: (cb: () => void) => () => void

@@ -6,14 +6,14 @@
 // Tokens never leave this module: what goes anywhere else (IPC, the phone, logs) is the id, email, plan and dates.
 // Every function takes the paths, so tests run on temp folders and never on the real files.
 import { createHash } from 'node:crypto'
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { dataDir } from './testMode'
 
 export type AccountPaths = { credentials: string; claudeJson: string; dir: string }
 // what may leave the main process: never a token
-export type AccountEntry = { id: string; email: string; plan: string | null; savedAt: number; lastUsed: number | null }
+export type AccountEntry = { id: string; email: string; organization: string | null; plan: string | null; savedAt: number; lastUsed: number | null }
 export type AccountRow = AccountEntry & { active: boolean }
 type Profile = { claudeAiOauth: unknown; oauthAccount: Record<string, unknown> }
 type Index = { profiles: AccountEntry[] }
@@ -89,7 +89,8 @@ export function saveCurrent(p: AccountPaths, now = Date.now()): AccountEntry | n
   writeAtomic(profileFile(p, id), JSON.stringify(l.profile))
   const idx = readIndex(p)
   const old = idx.profiles.find((x) => x.id === id)
-  const entry: AccountEntry = { id, email: l.email, plan: planOf(l.profile), savedAt: now, lastUsed: old?.lastUsed ?? now }
+  const org = l.profile.oauthAccount.organizationName
+  const entry: AccountEntry = { id, email: l.email, organization: typeof org === 'string' && org ? org : null, plan: planOf(l.profile), savedAt: now, lastUsed: old?.lastUsed ?? now }
   writeIndex(p, { profiles: [...idx.profiles.filter((x) => x.id !== id), entry].sort((a, b) => a.email.localeCompare(b.email)) })
   return entry
 }
@@ -109,9 +110,9 @@ export function removeAccount(p: AccountPaths, id: string): boolean {
   return true
 }
 
-// the last BACKUPS_KEPT pairs of the two files as they were before a switch, in <dir>/backups
+// the last BACKUPS_KEPT pairs of the two files as they were before a switch, in <dir>/backup (to undo one by hand)
 function backup(p: AccountPaths, now: number): { credentials: string; claudeJson: string | null } {
-  const dir = join(p.dir, 'backups')
+  const dir = join(p.dir, 'backup')
   mkdirSync(dir, { recursive: true })
   const stamp = String(now)
   const credentials = join(dir, `${stamp}-credentials.json`)
@@ -125,6 +126,24 @@ function backup(p: AccountPaths, now: number): { credentials: string; claudeJson
 
 const without = (o: Record<string, unknown>, key: string) => { const { [key]: _gone, ...rest } = o; return JSON.stringify(rest) }
 
+// ~/.claude.json with only `key` set: read, change, write next to it, and rename over it only if the file is still as
+// read (size and mtime); the CLI writes this file all the time, so a write that raced with it is done again (a few
+// tries). Returns what it read (the other keys to check afterwards).
+const stampOf = (f: string) => { try { const st = statSync(f); return `${st.size}:${st.mtimeMs}` } catch { return 'none' } }
+function setKey(file: string, key: string, value: unknown, tries = 4): Record<string, unknown> {
+  for (let i = 0; i < tries; i++) {
+    const before = stampOf(file)
+    let obj: Record<string, unknown>
+    try { obj = readJson(file) } catch (e) { if (before !== 'none') throw e; obj = {} }
+    const tmp = `${file}.hive-switch`
+    writeFileSync(tmp, withKey(file, { ...obj, [key]: value }), { mode: 0o600 })
+    if (stampOf(file) !== before) { rmSync(tmp, { force: true }); continue } // changed meanwhile: read it again
+    try { renameSync(tmp, file) } catch (e) { rmSync(tmp, { force: true }); throw e }
+    return obj
+  }
+  throw new Error(`${file} kept changing while it was written (a Claude session is busy with it)`)
+}
+
 export type SwitchDone = { account: AccountEntry; changed: boolean }
 
 // Switch to a saved profile: the current login is saved first, a backup of both files is taken, then the tokens go
@@ -137,7 +156,11 @@ export function switchAccount(p: AccountPaths, id: string, now = Date.now()): Sw
   let target: Profile
   try { target = readJson(profileFile(p, id)) as unknown as Profile } catch { throw new Error(`The saved login for ${entry.email} is missing; sign in to it with the browser again (Add account).`) }
   if (!target?.claudeAiOauth || !target.oauthAccount || typeof target.oauthAccount !== 'object') throw new Error(`The saved login for ${entry.email} is incomplete; sign in to it with the browser again (Add account).`)
-  const current = live(p) // throws when the credentials file cannot be read: nothing has been touched yet
+  // a login Hive cannot switch (no tokens file, an API key or another provider, an engine that keeps them elsewhere):
+  // refused before anything is touched; Add account (the browser sign-in) still works as always
+  let current
+  try { current = live(p) } catch { throw new Error(`Cannot read ${p.credentials}: this Claude Code keeps its login elsewhere, so saved accounts cannot be switched here. Use Add account (the browser sign-in).`) }
+  if (!current.creds.claudeAiOauth) throw new Error('Claude Code is not signed in with a Claude account here (an API key or another provider): saved accounts cannot be switched. Use Add account (the browser sign-in).')
   if (current.email && current.email.toLowerCase() === entry.email.toLowerCase()) {
     saveCurrent(p, now)
     return { account: { ...entry, lastUsed: now }, changed: false }
@@ -149,8 +172,7 @@ export function switchAccount(p: AccountPaths, id: string, now = Date.now()): Sw
   writeAtomic(p.credentials, withKey(p.credentials, { ...creds, claudeAiOauth: target.claudeAiOauth }))
   let cjBefore: Record<string, unknown>
   try {
-    try { cjBefore = readJson(p.claudeJson) } catch { cjBefore = {} }
-    writeAtomic(p.claudeJson, withKey(p.claudeJson, { ...cjBefore, oauthAccount: target.oauthAccount }))
+    cjBefore = setKey(p.claudeJson, 'oauthAccount', target.oauthAccount)
   } catch (e) {
     writeAtomic(p.credentials, credsText) // the tokens go back: the two files never disagree about who is signed in
     throw new Error(`Could not switch the account (writing ${p.claudeJson} failed: ${(e as Error).message}); nothing changed.`, { cause: e })
