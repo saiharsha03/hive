@@ -287,3 +287,11 @@ test('Stop hook: a run that saved nothing (or, self-scheduled, set no next wake)
   db.close()
   assert.equal(watcherStopReason(ptab), null)
 })
+
+test('a watcher name with [ ] or a line break is refused on create and on rename', () => {
+  setup()
+  assert.throws(() => createWatcher({ name: 'Deploy [prod]', goal: 'g', schedule: { every: '1h' } }, 'test'), /cannot contain/)
+  assert.throws(() => createWatcher({ name: 'two\nlines', goal: 'g', schedule: { every: '1h' } }, 'test'), /cannot contain/)
+  const r = createWatcher({ name: 'Plain', goal: 'g', schedule: { every: 'off' } }, 'test')
+  assert.throws(() => updateWatcher(r.id, { name: 'Plain [x]' }), /cannot contain/)
+})

@@ -12,7 +12,7 @@ import { dueKind, localIso, markStarted, nextRuns, parseFindings, pickTier, type
 import { appName } from '../shared/appName'
 import {
   defaultPrompt, earliest, emptyState, foldersOf, reportsRootOf, legacyState, legacyWatcher, MAX_RUNS, normalizeSchedule, normalizeState,
-  normalizeWatcher, statusOf, wakeMessage, watcherConfig, watcherHeader, watcherId,
+  nameProblem, normalizeWatcher, statusOf, wakeMessage, watcherConfig, watcherHeader, watcherId,
   type Folders, type WatcherDetail, type WatcherFile, type WatcherInput, type WatcherState, type WatcherSummary, type WatchersList,
 } from '../shared/watchersCore'
 import { blocked, dataDir, TEST_MODE, testWeeklyPct } from './testMode'
@@ -319,7 +319,8 @@ export function setWatcherEnabled(id: string, on: boolean): string {
 
 export function createWatcher(input: WatcherInput, by: string): { id: string; message: string } {
   const name = (input.name ?? '').trim()
-  if (!name) throw new Error('A watcher needs a name')
+  const bad = nameProblem(name) // no [ ] or line breaks: the name goes into every run's header
+  if (bad) throw new Error(bad)
   const goal = (input.goal ?? '').trim()
   if (!goal && !input.prompt?.trim()) throw new Error('A watcher needs a goal (or a prompt)')
   const sch = normalizeSchedule(input.schedule ?? undefined)
@@ -349,7 +350,11 @@ export function updateWatcher(id: string, input: WatcherInput): string {
   const w = readWatcher(id)
   if (!w) throw new Error(`No watcher "${id}"`)
   const next = { ...w }
-  if (input.name !== undefined && input.name.trim()) next.name = input.name.trim()
+  if (input.name !== undefined && input.name.trim()) {
+    const bad = nameProblem(input.name)
+    if (bad) throw new Error(bad)
+    next.name = input.name.trim()
+  }
   if (input.goal !== undefined) next.goal = input.goal.trim()
   if (input.cwd !== undefined) next.cwd = input.cwd.trim()
   if (input.schedule !== undefined) {
