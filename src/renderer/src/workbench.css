@@ -184,3 +184,15 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .abar-item { height: 40px; }
 .abar-item .codicon { font-size: 22px; }
 .abar > .abar-item:first-of-type { border-top: 1px solid var(--rule); }
+
+/* ---------- the frame adapts to the window ---------- */
+/* shorter windows: smaller icons before any of them has to scroll out of view */
+@media (max-height: 1000px) { .abar-item { height: 34px; } .abar-item .codicon { font-size: 20px; } .abar-item .brand-icon { width: 19px; height: 19px; } }
+@media (max-height: 780px) { .abar-item { height: 28px; } .abar-item .codicon { font-size: 18px; } .abar-item .brand-icon { width: 17px; height: 17px; } .abar { width: 40px; } }
+@media (max-height: 620px) { .abar-item { height: 24px; } .abar-item .codicon { font-size: 16px; } .abar-item .brand-icon { width: 15px; height: 15px; } }
+/* the bottom panel never takes more than half of a short window */
+.drawer.panel { max-height: 50vh; }
+/* narrower windows: the side bar gives way first, then the right-hand panel goes, so the conversation keeps its room */
+@media (max-width: 1300px) { .side { max-width: 30vw; } .insp { width: 260px; } }
+@media (max-width: 1050px) { .insp { display: none; } .side { max-width: 36vw; } }
+@media (max-width: 760px) { .side { max-width: 46vw; } .tb { grid-template-columns: auto minmax(0, 1fr) auto; } .full-page { padding: 10px 12px 12px; } }
