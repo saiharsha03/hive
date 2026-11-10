@@ -14,8 +14,9 @@ export type { PhoneThread } from '../shared/threadsCore'
 import type { PhoneThread } from '../shared/threadsCore'
 import type { UsageRow } from '../shared/usageCore'
 import type { AskQuestion } from '../shared/askCore'
-import type { PhoneTeam, PhoneWakeup } from '../shared/phoneCore'
-export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string }
+import { guardNote, guardStep, limitedAnswer, noteActions, noteKind, phoneInbox, usageGuard, withWakes, type NoteActions, type NoteKind, type PhoneAccount, type PhoneAsk, type PhoneFail, type PhonePeek, type PhoneRunning, type PhoneTeam, type PhoneWakeup, type QuietHours } from '../shared/phoneCore'
+// seen: on your own message, whether Claude has taken it in (true) or not yet (false); absent when Hive cannot tell
+export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string; seen?: boolean }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
 type Deps = {
   threads: () => Promise<PhoneThread[]>
@@ -36,6 +37,21 @@ type Deps = {
   stopTask: (thread: string, task: string) => Promise<boolean>
   wakeups: () => PhoneWakeup[]
   cancelWakeup: (kind: string, id: string) => boolean
+  // 2.0 app. All optional: the app is told which there are (hello's "can") and hides the rest; where Hive can do the
+  // job with what is above (peek, running, stopAll) it does.
+  // a thread right now, without reading its transcript (inbox, notification buttons)
+  peek?: (id: string) => PhonePeek | null
+  // every running background task in every thread
+  running?: () => PhoneRunning[] | Promise<PhoneRunning[]>
+  // interrupt every thread and stop every background task; pauseWakeups: also hold wake-ups and loops
+  stopAll?: (pauseWakeups: boolean) => Promise<{ threads: number; tasks: number }>
+  // fire a scheduled wake-up or auto-continue now
+  runWakeNow?: (kind: string, id: string) => boolean | Promise<boolean>
+  // the account profiles and the switch between them
+  accounts?: () => PhoneAccount[] | Promise<PhoneAccount[]>
+  switchAccount?: (id: string) => Promise<string>
+  // Hive's own quiet hours: read them, or set and read them
+  quietHours?: (set?: QuietHours) => QuietHours | Promise<QuietHours>
 }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
 // nk: the app said (hello, v 2) that it opens notifications with the notification key
@@ -73,6 +89,29 @@ export function initMobile(env: Record<string, string>, d: Deps): void {
 
   if (TEST_MODE) return
   connect()
+  clearInterval(guardTimer)
+  guardTimer = setInterval(() => { void guardCheck() }, GUARD_EVERY_MS)
+  guardTimer.unref?.()
+}
+
+// The usage guard on the phone: when a plan window passes 85% (and again at 95%) the phone is told which window, how
+// full, when it fills, how many threads pause then and when they carry on. Looked at every five minutes from the
+// reading Hive already keeps; said once per step, window and reset (kept in memory: a restart may say it again).
+const GUARD_EVERY_MS = 5 * 60_000
+let guardTimer: ReturnType<typeof setInterval> | undefined
+const guardSaid = new Set<string>()
+const clockOf = (ms: number): string => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+async function guardCheck(): Promise<void> {
+  const d = deps
+  if (!d || !pairing || !connected) return
+  try {
+    const g = usageGuard((await d.usage()).rows, Date.now())
+    if (!g || guardSaid.has(guardStep(g))) return
+    guardSaid.add(guardStep(g))
+    const working = (await d.threads()).filter((t) => t.state === 'working').length
+    const n = guardNote(g, working, clockOf)
+    sendToPhone(fitNotification(n.title, n.body, '', { kind: 'guard', open: 'usage' }), true, true)
+  } catch { /* no reading now: the next look will do */ }
 }
 
 // ---- pairing ----
@@ -172,8 +211,12 @@ export function checkPhoneSeq(st: SeqState, seq: number, now: number): { run: bo
 // a notification small enough that, sealed (nonce + tag + base64), it rides in one push: FCM data is at most 4 KB and the
 // relay inlines blobs up to 3600 characters. Measured on the JSON (escaping can grow text a lot), with room for seq/at.
 const NOTIFY_JSON_MAX = 2500
-export function fitNotification(title: string, body: string, thread: string): { op: 'notify'; title: string; body: string; thread: string } {
-  const msg = { op: 'notify' as const, title: byteCap(title, 240), body: byteCap(body, 1500), thread: thread.slice(0, 120) }
+// more: its kind (the app rings through quiet hours only for a failure) and the buttons it may carry (noteActions);
+// both are small and bounded, and the text gives way to them
+// open: the screen a tap opens when it is not a thread (the usage guard opens Usage)
+export type PhoneNote = { op: 'notify'; title: string; body: string; thread: string; kind?: NoteKind | 'guard'; open?: 'usage' } & NoteActions
+export function fitNotification(title: string, body: string, thread: string, more: { kind?: NoteKind | 'guard'; open?: 'usage' } & NoteActions = {}): PhoneNote {
+  const msg: PhoneNote = { op: 'notify' as const, title: byteCap(title, 240), body: byteCap(body, 1500), thread: thread.slice(0, 120), ...more }
   const size = () => Buffer.byteLength(JSON.stringify({ ...msg, seq: 1e15, at: 1e15 }))
   while (size() > NOTIFY_JSON_MAX && msg.body) msg.body = byteCap(msg.body, Math.floor(Buffer.byteLength(msg.body) * 0.8))
   while (size() > NOTIFY_JSON_MAX && msg.title) msg.title = byteCap(msg.title, Math.floor(Buffer.byteLength(msg.title) * 0.8))
@@ -219,12 +262,75 @@ export function oncePerMid<T>(mid: unknown, run: () => Promise<T>, now = Date.no
 const MAX_FRAME = 4 * 1024 * 1024 // the relay passes at most 2 MB; anything longer is not parsed
 let staleSaid = 0
 
+// ---- what the 2.0 app asks for, from the optional deps or from the ones every Hive has ----
+// which optional requests this Hive answers; the app hides the screens and buttons for the others
+const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
+
+async function peekThread(d: Deps, id: string): Promise<PhonePeek | null> {
+  if (d.peek) return d.peek(id)
+  const t = await d.read(id) // without peek: the transcript is read for its asks (only for waiting threads and notifications)
+  return t ? { working: t.working, asks: (t.asks ?? []) as PhoneAsk[] } : null
+}
+
+// every running background task; without the dep, the tasks of the threads that are working or waiting, kept 3 s
+// (the inbox and the Running screen ask within moments of each other)
+let runningKept: { at: number; rows: PhoneRunning[] } | null = null
+async function runningNow(d: Deps, threads: PhoneThread[]): Promise<PhoneRunning[]> {
+  if (d.running) return d.running()
+  if (runningKept && Date.now() - runningKept.at < 3_000) return runningKept.rows
+  const live = threads.filter((t) => t.state !== 'idle')
+  const rows = (await Promise.all(live.map(async (t) => {
+    const r = await d.read(t.id).catch(() => null)
+    const tasks = ((r as { tasks?: { id: string; kind: string; title: string; now: string }[] } | null)?.tasks ?? [])
+    return tasks.map((x): PhoneRunning => ({ thread: t.id, threadTitle: t.title, id: x.id, kind: x.kind, title: x.title, now: x.now, state: 'working' }))
+  }))).flat()
+  runningKept = { at: Date.now(), rows }
+  return rows
+}
+
+// Stop everything: every thread that is working or waiting is interrupted and every background task stopped.
+// pauseWakeups needs the dep (Hive's own "stop everything"); without it the wake-ups stay as they are, and the answer says so.
+async function stopEverything(d: Deps, pauseWakeups: boolean): Promise<{ threads: number; tasks: number; wakeups: boolean }> {
+  if (d.stopAll) return { ...(await d.stopAll(pauseWakeups)), wakeups: pauseWakeups }
+  const threads = await d.threads()
+  runningKept = null
+  const tasks = (await runningNow(d, threads)).filter((t) => t.state === 'working' && t.id)
+  runningKept = null
+  let stopped = 0
+  for (const t of tasks) if (await d.stopTask(t.thread, t.id).catch(() => false)) stopped += 1
+  const busy = threads.filter((t) => t.state === 'working')
+  await Promise.all(busy.map((t) => d.stop(t.id).catch(() => {})))
+  return { threads: busy.length, tasks: stopped, wakeups: false }
+}
+
+// threads that failed (chat.ts says so in a notification) and were not written to since: the inbox lists them
+const fails = new Map<string, PhoneFail>()
+const FAIL_KEEP_MS = 24 * 3_600_000
+
+// The press of a notification's button, sealed with the notification key (the app was locked): stop a thread, or pick
+// a harmless choice of the thread's open question. Nothing else, whatever the message says, and no reply: when the
+// answer is not taken the phone gets a notification saying why.
+async function limitedRequest(d: Deps, m: Record<string, unknown>): Promise<void> {
+  const id = typeof m.id === 'string' ? m.id : ''
+  if (!id) return
+  if (m.op === 'stop') return void (await d.stop(id).catch(() => {}))
+  if (m.op !== 'answer') return
+  const ask = String(m.ask ?? '')
+  const took = limitedAnswer(await peekThread(d, id).catch(() => null), ask, String(m.label ?? ''))
+  const refused = 'refused' in took ? took.refused : d.answer(id, ask, took.answers) ? '' : 'That question is no longer open'
+  if (refused) sendToPhone(fitNotification('Not answered', `${refused}. Open Hive to answer.`, id), true, true)
+}
+
 async function onMessage(raw: string): Promise<void> {
   if (!pairing || !deps || raw.length > MAX_FRAME) return
   let frame: { blob?: string }
   try { frame = JSON.parse(raw) } catch { return }
   if (!frame.blob) return
-  const m = open(Buffer.from(pairing.key, 'base64'), pairing.pair, 'p2d', frame.blob)
+  const key = Buffer.from(pairing.key, 'base64')
+  // limited: sealed with the notification key, which the app can use without the fingerprint (a notification's button)
+  const full = open(key, pairing.pair, 'p2d', frame.blob)
+  const m = full ?? (pairing.nk ? open(notifyKey(key), pairing.pair, 'n2d', frame.blob) : null)
+  const limited = !full
   if (!m || typeof m.seq !== 'number') return // not from the paired phone
   // the phone's seq is its clock in ms, kept from going back on the phone; the phone gives up after 20 s, so a request
   // older than 2 minutes was held back (see checkPhoneSeq)
@@ -234,6 +340,7 @@ async function onMessage(raw: string): Promise<void> {
   pairing.floor = c.next.floor
   if (!c.run) { // a replay, held back, or the phone clock off: dropped silently (a future-dated one is remembered)
     if (changed) store()
+    if (limited) return // a button press gets no reply
     // said once per such request (a replay of it is remembered, so silent)
     if (c.future) sendToPhone({ re: m.rid, error: 'The phone clock is ahead of the computer by more than 2 minutes. Fix the clock and try again.' })
     // a stale one is answered too, so the app does not wait 20 s for nothing; at most once in 30 s, and nothing is kept
@@ -246,19 +353,53 @@ async function onMessage(raw: string): Promise<void> {
   }
   pairing.seqIn = c.next.seqIn
   if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
+  if (limited) return void (await limitedRequest(deps, m).catch(() => {}))
   const id = typeof m.id === 'string' ? m.id : ''
   const reply = (body: Record<string, unknown>) => sendToPhone({ re: m.rid, ...body })
   try {
     switch (m.op) {
-      case 'threads': return reply({ threads: await deps.threads(), folders: deps.folders() })
+      // ---- the 2.0 app ----
+      case 'inbox': {
+        const d = deps
+        const threads = await d.threads()
+        const waiting = threads.filter((t) => t.state === 'waiting')
+        const asks = Object.fromEntries(await Promise.all(waiting.map(async (t) => [t.id, (await peekThread(d, t.id).catch(() => null))?.asks ?? []] as const)))
+        const now = Date.now()
+        for (const [k, f] of fails) if (now - f.at > FAIL_KEEP_MS) fails.delete(k)
+        const wake = d.wakeups()
+        const box = phoneInbox(threads, asks, [...fails.values()], wake, now)
+        return reply({ ...box, counts: { needs: box.needs.length, threads: threads.length, working: threads.filter((t) => t.state === 'working').length, running: (await runningNow(d, threads)).length, scheduled: wake.length } })
+      }
+      case 'running': return reply({ running: await runningNow(deps, await deps.threads()) })
+      case 'stopAll': return reply({ ok: 'stopped', ...(await stopEverything(deps, m.wakeups === true)) })
+      case 'dismiss': fails.delete(id); return reply({ ok: 'dismissed' })
+      case 'runWake': {
+        if (!deps.runWakeNow) return reply({ error: 'unknown request runWake' })
+        return (await deps.runWakeNow(String(m.kind ?? ''), id)) ? reply({ ok: 'started' }) : reply({ error: 'That wake-up is not scheduled' })
+      }
+      case 'accounts': {
+        if (!deps.accounts) return reply({ error: 'unknown request accounts' })
+        return reply({ accounts: await deps.accounts() })
+      }
+      case 'switchAccount': {
+        if (!deps.switchAccount) return reply({ error: 'unknown request switchAccount' })
+        return reply({ ok: await deps.switchAccount(id) })
+      }
+      case 'quiet': {
+        if (!deps.quietHours) return reply({ error: 'unknown request quiet' })
+        const q = m.set as Partial<QuietHours> | undefined
+        const ok = q && typeof q.on === 'boolean' && /^\d\d:\d\d$/.test(String(q.from)) && /^\d\d:\d\d$/.test(String(q.to))
+        return reply({ quiet: await deps.quietHours(ok ? { on: q.on as boolean, from: String(q.from), to: String(q.to) } : undefined) })
+      }
+      case 'threads': return reply({ threads: withWakes(await deps.threads(), deps.wakeups()), folders: deps.folders() })
       case 'thread': return reply({ thread: await deps.read(id) })
       case 'usage': return reply({ usage: await deps.usage() })
       case 'answer': return deps.answer(id, String(m.ask ?? ''), m.answers) ? reply({ ok: 'answered' }) : reply({ error: 'That question is no longer open' })
       // the app's first request after it connects; v 2 and up opens notifications with the notification key
       case 'hello':
         if (typeof m.v === 'number' && m.v >= 2 && !pairing.nk) { pairing.nk = true; store() }
-        return reply({ ok: 'hello', v: 2 })
-      case 'send': { const d = deps; return reply({ ok: await oncePerMid(m.mid, () => d.send(id, String(m.text ?? ''))) }) }
+        return reply({ ok: 'hello', v: 3, can: can(deps) })
+      case 'send': { const d = deps; fails.delete(id); return reply({ ok: await oncePerMid(m.mid, () => d.send(id, String(m.text ?? ''))) }) }
       case 'new': {
         const d = deps
         const r = await oncePerMid(m.mid, () => d.start(String(m.folder ?? ''), String(m.text ?? '')))
@@ -285,6 +426,14 @@ export function notifyPhone(title: string, body: string, thread?: string): strin
   if (TEST_MODE) return blocked('phone notifications')
   if (!pairing) return 'No phone is paired with Hive (Settings > General > Phone app).'
   if (!connected) return 'Hive is not connected to the relay right now, so the phone was not notified.'
-  sendToPhone(fitNotification(title, body, thread ?? ''), true, true)
+  const kind = noteKind(title)
+  const id = thread ?? ''
+  if (kind === 'fail' && id) fails.set(id, { thread: id, title: title.replace(/^Failed:\s*/, ''), note: body, at: Date.now() })
+  else if (id) fails.delete(id) // it went on (a question, a finish): no longer a failure to look at
+  const d = deps
+  // the buttons (a question's choices, Stop) need the thread's state now; only an app with the notification key can
+  // press them, and a notification is never held back for them
+  if (!d || !id || !pairing.nk) sendToPhone(fitNotification(title, body, id, { kind }), true, true)
+  else void peekThread(d, id).catch(() => null).then((p) => sendToPhone(fitNotification(title, body, id, { kind, ...noteActions(p) }), true, true))
   return 'Sent to the phone.'
 }

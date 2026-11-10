@@ -84,6 +84,16 @@ test('relay: pair, forward sealed blobs both ways, offline notice, wrong token r
     assert.equal(saved[pair].phone, sha(phone)) // token hashes only, never the tokens
     assert.ok(!readFileSync(state, 'utf8').includes(phone))
 
+    // a notification's button: one blob posted by the phone (no socket) reaches the computer, with the phone's token only
+    const post = (token: string, body: object) => fetch(`${base}/v1/send`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    assert.equal((await post('wrong', { pair, blob: 'z' })).status, 401)
+    assert.equal((await post(desk, { pair, blob: 'z' })).status, 401)
+    assert.equal((await post(phone, { pair })).status, 400)
+    const sent = await post(phone, { pair, blob: seal(key, pair, 'n2d', { op: 'stop', id: 't1', seq: 2 }) })
+    assert.deepEqual([sent.status, await sent.json()], [200, { ok: true, delivered: true }])
+    await wait(150)
+    assert.deepEqual(open(key, pair, 'n2d', d.got.at(-1).blob), { op: 'stop', id: 't1', seq: 2 })
+
     // a second connection for the same side replaces the first, which is closed with 4000
     const again = await client('phone', pair, phone)
     assert.equal(await p.closed, 4000)
@@ -106,6 +116,7 @@ test('relay: pair, forward sealed blobs both ways, offline notice, wrong token r
     await wait(150)
     assert.deepEqual(p2.got.at(-1), { desk: 'offline' })
     assert.equal(p2.got.filter((f) => f.desk === 'offline').length, 2)
+    assert.deepEqual(await (await post(phone, { pair, blob: 'z' })).json(), { ok: true, delivered: false }) // and a posted one says so
 
     // unpairing (Hive, with the admin token) closes both sides with 4401 and the tokens stop working
     const d2 = await client('desk', pair, desk)

@@ -176,3 +176,13 @@ object Vault {
         next
     }
 }
+
+// What the user chose on this phone (nothing secret): quiet hours, and whether notifications carry answer buttons.
+object Settings {
+    private fun prefs(ctx: Context): SharedPreferences = ctx.getSharedPreferences("hive-settings", Context.MODE_PRIVATE)
+
+    fun quiet(ctx: Context): Quiet = prefs(ctx).let { Quiet(it.getBoolean("quietOn", false), it.getString("quietFrom", null) ?: "22:00", it.getString("quietTo", null) ?: "07:00") }
+    fun setQuiet(ctx: Context, q: Quiet) { prefs(ctx).edit().putBoolean("quietOn", q.on).putString("quietFrom", q.from).putString("quietTo", q.to).apply() }
+    fun buttons(ctx: Context): Boolean = prefs(ctx).getBoolean("buttons", true)
+    fun setButtons(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean("buttons", on).apply() }
+}
