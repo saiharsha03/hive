@@ -381,6 +381,14 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
         <Row label="Close idle threads after" hint="Minutes. An idle thread's Claude process (and its MCP servers) closes; the tab stays and the next message resumes it. Never while anything still runs. 0 = never." problems={of('general.idleCloseMinutes')}>
           <input className="sin num" data-testid="settings-idle-close" type="number" min={0} value={g.idleCloseMinutes} onChange={(e) => setGeneral({ idleCloseMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
         </Row>
+        <Row label="Advisor model" hint="Claude Code's server-side advisor for threads started after saving: an alias or a full model id. Empty = off. A thread can pick its own." problems={of('general.advisorModel')}>
+          <input className="sin" data-testid="settings-advisor" value={g.advisorModel} spellCheck={false} placeholder="(off)" onChange={(e) => setGeneral({ advisorModel: e.target.value })} />
+        </Row>
+        <Row label="Workflows" hint="Claude Code's Workflows feature (the Workflow tool) for threads started after saving. Default = what your plan has." problems={of('general.workflows')}>
+          <select className="sin" data-testid="settings-workflows" value={g.workflows} onChange={(e) => setGeneral({ workflows: e.target.value as General['workflows'] })}>
+            <option value="">(Claude Code's default)</option><option value="on">On</option><option value="off">Off</option>
+          </select>
+        </Row>
         <Row label="Team memory in briefs" hint="KB of each role memory file (the newest entries) a teammate's brief carries; the file keeps everything." problems={of('general.teamMemoryKb')}>
           <input className="sin num" type="number" min={0} value={g.teamMemoryKb} onChange={(e) => setGeneral({ teamMemoryKb: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
         </Row>

@@ -48,6 +48,7 @@ export type ThreadStatusView = {
   cwd: string | null
   transcript: string | null
   memoryDir: string | null
+  advisor?: string | null // the advisor model the thread runs with; null = none
   context: { total: number; max: number } | null
   cache: { lastReplyAt: number | null; ttlMs: number } | null
   compactions: number

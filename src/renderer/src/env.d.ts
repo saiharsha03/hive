@@ -266,6 +266,7 @@ interface Window {
     // per-thread status: model / effort switches, the lists the session offers, stopping background work
     chatSetModel: (tabId: string, model: string) => Promise<void>
     chatSetEffort: (tabId: string, level: string) => Promise<void>
+    chatSetAdvisor: (tabId: string, model: string) => Promise<void>
     chatCommands: (tabId?: string) => Promise<import('../../shared/composerCore').Command[]>
     chatModels: (tabId?: string) => Promise<{ value: string; displayName: string; description: string }[]>
     chatMcp: (tabId?: string) => Promise<McpServerRow[]>

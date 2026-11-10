@@ -315,6 +315,8 @@ contextBridge.exposeInMainWorld('api', {
   // per-thread status (liveStatus.ts)
   chatSetModel: (tabId: string, model: string) => ipcRenderer.invoke('chat:setModel', tabId, model),
   chatSetEffort: (tabId: string, level: string) => ipcRenderer.invoke('chat:setEffort', tabId, level),
+  // the thread's own advisor model ('' = none), live; the tab hears hive_advisor { model: string | null }
+  chatSetAdvisor: (tabId: string, model: string) => ipcRenderer.invoke('chat:setAdvisor', tabId, model),
   chatCommands: (tabId?: string) => ipcRenderer.invoke('chat:commands', tabId),
   chatModels: (tabId?: string) => ipcRenderer.invoke('chat:models', tabId),
   chatMcp: (tabId?: string) => ipcRenderer.invoke('chat:mcp', tabId),

@@ -58,6 +58,8 @@ type Tab = {
   model?: string // picked in Hive; also passed when the process restarts
   effort?: string // picked in Hive (null-ish = the user's default)
   reported?: string // the level the Stop hook last reported outside an ultrathink turn
+  advisor?: string // picked in Hive for this thread ('' = none); also passed when the process restarts
+  advisorNow?: string | null // what the running process has (the pick, else Settings > General), for /status
   boost?: { prev: string | undefined; left: number } // ultrathink: what to go back to, after how many turn ends
 }
 const tabs = new Map<string, Tab>()
@@ -69,16 +71,23 @@ const tab = (id: string): Tab => {
 
 // what every Hive session adds to its query options. unattended: a background, team or watcher thread (the output
 // styles above go off too); memoryDir: the auto-memory folder it shares (chat.ts), both in the flag-settings layer
-export function sessionOptions(tabId: string, send: Send, o: { unattended?: boolean; memoryDir?: string | null } = {}): Partial<Options> {
+// flags: Settings > General's Claude Code settings (settings.sessionFlags: advisor model, Workflows); a thread's own
+// advisor pick wins over the default one
+export function sessionOptions(tabId: string, send: Send, o: { unattended?: boolean; memoryDir?: string | null; flags?: { advisorModel?: string; enableWorkflows?: boolean } } = {}): Partial<Options> {
   const t = tab(tabId)
   t.send = send
   t.boost = undefined
+  const { advisorModel: dflt, ...flags } = o.flags ?? {}
+  const advisor = t.advisor !== undefined ? t.advisor : dflt ?? ''
+  t.advisorNow = advisor || null
   return {
     // plugin hook output (security warnings on edits) reaches the stream only with this on
     includeHookEvents: true,
     settings: {
       enabledPlugins: hiveOffPlugins(o.unattended ? [...HIVE_OFF_PLUGINS, ...UNATTENDED_OFF_PLUGINS] : HIVE_OFF_PLUGINS),
       ...(o.memoryDir ? { autoMemoryDirectory: o.memoryDir } : {}),
+      ...flags,
+      ...(advisor ? { advisorModel: advisor } : {}),
     },
     ...(t.model ? { model: t.model } : {}),
     ...(t.effort ? { effort: t.effort as Options['effort'] } : {}),
@@ -222,6 +231,17 @@ export async function setEffort(tabId: string, q: Query | undefined, level: stri
   t.send({ type: 'hive_effort', level })
 }
 
+// a thread's advisor model, switched live ('' = none: Hive's flag goes, so the user's own settings apply again)
+export async function setAdvisor(tabId: string, q: Query | undefined, model: string): Promise<void> {
+  const t = tab(tabId)
+  const m = model.trim()
+  if (q) await q.applyFlagSettings({ advisorModel: m || null })
+  t.advisor = m
+  t.advisorNow = m || null
+  t.send({ type: 'hive_advisor', model: m || null })
+}
+export const advisorNow = (tabId: string): string | null => tabs.get(tabId)?.advisorNow ?? null
+
 export function forgetTab(tabId: string): void {
   const t = tabs.get(tabId)
   if (!t) return
@@ -241,6 +261,8 @@ const ask = (deps: Deps, tabId: unknown) => deps.liveQuery(String(tabId ?? '')) 
 export function registerStatusIpc(handle: Handle, deps: Deps): void {
   handle('chat:setModel', (_e, tabId: string, model: string) => setModel(String(tabId), deps.liveQuery(String(tabId)), String(model)))
   handle('chat:setEffort', (_e, tabId: string, level: string) => setEffort(String(tabId), deps.liveQuery(String(tabId)), String(level)))
+  // a thread's advisor model ('' = none), live; a thread with no process gets it when it starts
+  handle('chat:setAdvisor', (_e, tabId: string, model: string) => setAdvisor(String(tabId), deps.liveQuery(String(tabId)), String(model ?? '')))
   // every command the engine reports, plus the interactive CLI's own ones it leaves out (threadCore.menuCommands)
   handle('chat:commands', async (_e, tabId?: string) => menuCommands(await ask(deps, tabId).supportedCommands()))
   handle('chat:models', (_e, tabId?: string) => ask(deps, tabId).supportedModels())

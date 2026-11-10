@@ -102,3 +102,7 @@ export function menuCommands(engine: MenuCommand[]): MenuCommand[] {
   const extra = CLI_ONLY.filter(([n]) => !names.has(n)).map(([name, description]): MenuCommand => ({ name, description, builtin: true, terminal: true }))
   return [...engine, ...extra].map((c) => (c.name === 'status' || c.name === 'usage' ? { ...c, view: c.name } : c))
 }
+
+// tools Hive lets through when the engine asks it (canUseTool: auto mode can hand a call over) instead of answering
+// "no permission prompt": the Workflow tool, for every thread but a watcher's (read-only)
+export const permitWithoutPrompt = (tool: string, watcher: boolean): boolean => !watcher && tool === 'Workflow'

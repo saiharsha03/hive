@@ -4,7 +4,7 @@ import { clock, dur } from '../kit'
 
 // ---- Running ----
 export type TaskLike = {
-  id: string; kind: string; title: string; status: 'running' | 'completed' | 'failed' | 'stopped'
+  id: string; kind: string; title: string; name?: string; status: 'running' | 'completed' | 'failed' | 'stopped'
   startedAt: number; endedAt?: number; now?: string; lastTool?: string; summary?: string; error?: string; durationMs?: number
 }
 export type RunRow<T extends TaskLike = TaskLike> = { tabId: string; thread: string; task: T }
@@ -19,6 +19,9 @@ export function kindLabel(kind: string): string {
     default: return kind ? kind.replace(/^local_/, '').replace(/^./, (c) => c.toUpperCase()) : 'Task'
   }
 }
+
+// the What column: a workflow's script name leads ("spec: Review the auth change"); the Kind column says Workflow
+export const whatOf = (t: TaskLike): string => (/workflow/.test(t.kind) && t.name ? (t.title && t.title !== t.name ? `${t.name}: ${t.title}` : t.name) : t.title)
 
 const HOUR = 3_600_000
 // running first (oldest start first, so the long ones lead), then finished within the last hour, newest first

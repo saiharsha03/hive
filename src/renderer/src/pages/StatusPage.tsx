@@ -147,6 +147,7 @@ export function StatusPage() {
   if (model) rows.push(['Model', <span key="m">{modelLabel(model)} <span className="stp-mono stp-dim">{model}</span></span>])
   if (effort) rows.push(['Effort', effort])
   if (view?.permissionMode) rows.push(['Permission mode', view.permissionMode])
+  if (view && 'advisor' in view) rows.push(['Advisor', view.advisor ? <span key="a" className="stp-mono">{view.advisor}</span> : 'off'])
   if (view?.outputStyle) rows.push(['Output style', view.outputStyle])
   if (view?.cwd ?? focusMeta?.cwd) rows.push(['Working folder', <span key="c" className="stp-mono">{view?.cwd ?? focusMeta?.cwd}</span>])
   if (view?.memoryDir) rows.push(['Memory', <span key="d"><span className="stp-mono">{view.memoryDir}</span>{view.memoryFiles ? ` (${view.memoryFiles.length} files)` : ''}</span>])
