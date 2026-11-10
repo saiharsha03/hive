@@ -195,6 +195,11 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
   const setGroupBy = (g: GroupBy) => { setGroupByState(g); setPref('threadsGroupBy', g) }
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (key: string) => setOpen((o) => { const n = new Set(o); if (!n.delete(key)) n.add(key); return n })
+  // every group in the list (Pinned, Watchers, Today, Yesterday, This week, ...) folds from its heading, and stays the
+  // way it was left; one that was never touched starts open, except those that start folded (Dependabot, the old ones)
+  const [folds, setFolds] = useState<Record<string, boolean>>(() => getPref<Record<string, boolean>>('threads.folds', {}))
+  const isFolded = useCallback((sec: { key: string; fold?: boolean }) => folds[sec.key] ?? !!sec.fold, [folds])
+  const flipFold = (sec: { key: string; fold?: boolean }) => setFolds((f) => { const n = { ...f, [sec.key]: !(f[sec.key] ?? !!sec.fold) }; setPref('threads.folds', n); return n })
   const [more, setMore] = useState<Set<string>>(new Set())
   const [archiveView, setArchiveView] = useState(false)
   const [menu, setMenu] = useState<{ ids: string[]; x: number; y: number } | null>(null)
@@ -231,7 +236,7 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
   const sections = useMemo(() => buildSections(savedRows, states, now, '', archiveView, groupBy, watcherIds, dependabotIds), [savedRows, states, now, archiveView, groupBy, watcherIds, dependabotIds])
   const archived = useMemo(() => (sessions ?? []).filter((s) => states[s.id]?.archivedAt).length, [sessions, states])
   const shownOf = useCallback((sec: Section<SessionInfo>) => (more.has(sec.key) || sec.items.length <= CAP ? sec.items : sec.items.slice(0, CAP)), [more])
-  const order = useMemo(() => sections.flatMap((sec) => (sec.fold && !open.has(sec.key) ? [] : shownOf(sec).map((s) => s.id))), [sections, open, shownOf])
+  const order = useMemo(() => sections.flatMap((sec) => (isFolded(sec) ? [] : shownOf(sec).map((s) => s.id))), [sections, isFolded, shownOf])
   const ids = useMemo(() => order.filter((id) => picked.has(id)), [order, picked])
   const byId = useMemo(() => new Map((sessions ?? []).map((s) => [s.id, s])), [sessions])
 
@@ -394,12 +399,13 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
           {!sessions && <div className="rail-sub">Reading threads</div>}
           {teamsIdle.map(teamBlock)}
           {recentSecs.map((sec) => {
-            const folded = !!sec.fold && !open.has(sec.key)
+            const folded = isFolded(sec)
             const items = shownOf(sec)
-            const sub = sec.key === 'watchers' || sec.key === 'pinned' ? null : sec.label
             return (
               <div key={sec.key} data-testid={`section-${sec.key}`}>
-                {sec.fold ? head(sec.key, sec.label, sec.items.length, '', { folded }) : sub && <div className="rail-sub"><span>{sub}</span><span>{sec.items.length}</span></div>}
+                <button className="rail-gh rail-fold-h" onClick={() => flipFold(sec)} aria-expanded={!folded} data-testid="section-fold">
+                  <span><i className={`codicon codicon-chevron-${folded ? 'right' : 'down'}`} aria-hidden />{sec.label || (sec.key === 'pinned' ? 'Pinned' : sec.key === 'watchers' ? 'Watchers' : sec.key)}</span><span className="n">{sec.items.length}</span>
+                </button>
                 {!folded && items.map((s) => savedRow(s, sec.sub ?? sec.key, past.get(s.id)))}
                 {!folded && items.length < sec.items.length && <button className="rail-more" onClick={() => setMore((m) => new Set(m).add(sec.key))} data-testid={`section-more-${sec.key}`}>Show {sec.items.length - items.length} more</button>}
               </div>
