@@ -90,6 +90,15 @@ contextBridge.exposeInMainWorld('api', {
   chatInterrupt: (tabId: string) => ipcRenderer.invoke('chat:interrupt', tabId),
   chatContinueAt: (id: string): Promise<number | null> => ipcRenderer.invoke('chat:continueAt', id),
   chatCancelContinue: (id: string): Promise<boolean> => ipcRenderer.invoke('chat:cancelContinue', id),
+  // every pending scheduled wake-up (schedule_wakeup) and automatic continue (usage limit), and cancelling one:
+  // kind 'wake' with the wake-up's id, or 'continue' with the continue's key
+  wakeupsList: () => ipcRenderer.invoke('wakeups:list'),
+  wakeupsCancel: (kind: 'wake' | 'continue', id: string | number): Promise<boolean> => ipcRenderer.invoke('wakeups:cancel', kind, String(id)),
+  onWakeupsChanged: (cb: () => void) => {
+    const fn = () => cb()
+    ipcRenderer.on('wakeups:changed', fn)
+    return () => ipcRenderer.removeListener('wakeups:changed', fn)
+  },
   chatAnswer: (tabId: string, id: string, answers: Record<string, string>): Promise<boolean> => ipcRenderer.invoke('chat:answer', tabId, id, answers),
   chatBackground: (tabId: string, toolUseId?: string) => ipcRenderer.invoke('chat:background', tabId, toolUseId),
   chatClose: (tabId: string) => ipcRenderer.invoke('chat:close', tabId),

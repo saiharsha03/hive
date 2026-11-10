@@ -72,3 +72,18 @@ test('bad input is refused', () => {
   expect(() => w.addWakeup({ sessionId: 's', title: 'T', at: new Date(T0), prompt: 'p', everyMinutes: 1 })).toThrow(/at least 5/)
   expect(w.formatWakeups([])).toBe('No pending wake-ups.')
 })
+
+test('the window hears every change: added, cancelled, fired', async () => {
+  let changes = 0
+  w.onWakeupsChanged(() => { changes++ })
+  const a = w.addWakeup({ sessionId: 's9', title: 'T', at: new Date(T0), prompt: 'one' })
+  const b = w.addWakeup({ sessionId: 's9', title: 'T', at: new Date(T0 + 60 * min), prompt: 'two' })
+  expect(changes).toBe(2)
+  expect(w.cancelWakeup(b.id)).toBe(true) // the user, from the desktop: any session's
+  expect(w.cancelWakeup(b.id)).toBe(false) // already cancelled: no change
+  expect(changes).toBe(3)
+  expect(await w.tick(T0 + 1000)).toBe(1)
+  expect(changes).toBe(4)
+  expect(w.listWakeups().map((r) => r.id)).not.toContain(a.id)
+  w.onWakeupsChanged(() => {})
+})

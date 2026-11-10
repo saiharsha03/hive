@@ -10,7 +10,7 @@ import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { configureChat, liveQuery, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
-import { cancelWakeup, initThreadWakeups, listWakeups, tick as wakeupsTick } from './threadWakeups'
+import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, tick as wakeupsTick } from './threadWakeups'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
 import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
@@ -245,6 +245,18 @@ const mobileDeps = () => ({
   cancelWakeup: (kind: string, id: string) => (kind === 'wake' ? /^\d+$/.test(id) && cancelWakeup(Number(id)) : kind === 'continue' ? cancelContinue(id) : false),
 })
 initMobile(appConfig.env, mobileDeps())
+// Wake-ups and automatic continues, for the window's list: every pending one, cancel one, and a nudge on any change
+const wakeupsChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('wakeups:changed') }
+onWakeupsChanged(wakeupsChanged)
+handle('wakeups:list', () => ({
+  wakeups: listWakeups().map((r) => ({ id: r.id, sessionId: r.session_id, title: r.title, wakeAt: r.wake_at, prompt: r.prompt, everyMinutes: r.every_minutes, firedAt: r.fired_at })),
+  continues: listContinues(),
+}))
+handle('wakeups:cancel', (_e, kind: string, id: string) => {
+  const k = String(kind)
+  const v = String(id)
+  return k === 'wake' ? /^\d+$/.test(v) && cancelWakeup(Number(v)) : k === 'continue' ? cancelContinue(v) : false
+})
 // threads that hit the usage limit continue by themselves after the reset (saved across restarts)
 initAutoContinue({
   fire: async (w, prompt) => {
@@ -253,7 +265,10 @@ initAutoContinue({
     return true
   },
   // to the tab it started in and to a tab reopened under the session id (after a restart)
-  changed: (w, at) => { for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) for (const id of new Set([w.tabId, w.key])) win.webContents.send('chat:event', id, { type: 'hive_continue', at, key: w.key }) },
+  changed: (w, at) => {
+    for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) for (const id of new Set([w.tabId, w.key])) win.webContents.send('chat:event', id, { type: 'hive_continue', at, key: w.key })
+    wakeupsChanged()
+  },
 })
 
 // every consumer picks up saved settings without a restart (running dev services keep theirs until restarted)

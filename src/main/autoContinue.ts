@@ -79,4 +79,4 @@ export function cancelContinue(id: string): boolean {
 
 export const continueAt = (id: string): number | null => wakes.find((x) => x.key === id || x.tabId === id)?.at ?? null
 // every thread waiting for a usage-limit reset (the phone app's Wake-ups screen)
-export const listContinues = (): { key: string; title: string; at: number }[] => wakes.map((w) => ({ key: w.key, title: w.title, at: w.at }))
+export const listContinues = (): { key: string; tabId: string; title: string; at: number }[] => wakes.map((w) => ({ key: w.key, tabId: w.tabId, title: w.title, at: w.at }))
