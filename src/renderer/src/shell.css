@@ -18,6 +18,14 @@ body { background: var(--bg); color: var(--ink); font: var(--t-ui); font-feature
 .app .composer .slashmenu, .app .composer .mention, .app .log, .app .conv pre, .app .btw, .ovl .modal, .app .insight, .app .md-insight { border-radius: var(--r-block) !important; }
 .app .askcard, .app .needs { border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important; }
 .app .cbox { border-radius: var(--r-comp) !important; }
+/* pages, menus and dialogs: rows and small controls 6 px, cards, menus and dialogs 8 px */
+.app .dbtn, .app .ibtn, .app .sin, .app .ws-page input[type='text'], .app .ws-page input:not([type]), .app .ws-page textarea, .app .ws-page select,
+.app .wt-page select, .app .set-page select, .app .set-page input:not([type]), .app .set-page input[type='text'], .app .dd-search, .app .tpick input,
+.app .gcommit textarea, .app .ginput, .app .search, .app .tv-say input, .app .dsel, .app .wsel, .app .nt-row, .app .td, .app .wrow, .app .hk, .app .ap-row,
+.app .snav button, .app .frow, .app .fr, .app .tmenu button, .app .dropask button, .app .watch-row, .app .grow td:first-child, .app .tv-pick,
+.app .dt tbody tr:hover td:first-child, .app .dt tr.on td:first-child, .app .page-tabs .btn, .app .acct-row, .app .td-seg button, .app .ofc-cm { border-radius: var(--r-row) !important; }
+.app .dt tbody tr:hover td:last-child, .app .dt tr.on td:last-child { border-top-right-radius: var(--r-row) !important; border-bottom-right-radius: var(--r-row) !important; }
+.app .pop, .ovl .pop, .app .tmenu, .app .dropask, .app .notice, .app .modal, .app .smodal, .app .confirm-list, .app .dmsg, .app .dout, .app .stp-card, .app .dep-stg, .app .scard, .app .td-undo, .app .ofc-chat, .app .sfoot, .app .dd-card { border-radius: var(--r-block) !important; }
 .app .conv code { border-radius: 3px !important; }
 
 /* ---------- kit ---------- */
