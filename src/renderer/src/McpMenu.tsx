@@ -1,32 +1,24 @@
 // Dropdown under the "MCP servers" button: every MCP server the active tab's session sees (or, with no running
 // session, the idle status process), with its status and how many tools it gives.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const ORDER: Record<string, number> = { failed: 0, 'needs-auth': 1, pending: 2, connected: 3, disabled: 4 }
 const WORD: Record<string, string> = { connected: 'connected', failed: 'failed', 'needs-auth': 'needs sign-in', pending: 'connecting', disabled: 'off' }
 
-export function McpMenu({ tabId, onClose }: { tabId: string | null | undefined; onClose: () => void }) {
+export function McpMenu({ tabId }: { tabId: string | null | undefined }) {
   const [servers, setServers] = useState<McpServerRow[] | null>(null)
   const [error, setError] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.api.chatMcp(tabId ?? undefined).then(setServers).catch((e) => setError(String(e?.message ?? e)))
   }, [tabId])
 
-  useEffect(() => {
-    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose() }
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    setTimeout(() => document.addEventListener('mousedown', down))
-    document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
-  }, [onClose])
 
   const rows = (servers ?? []).slice().sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || a.name.localeCompare(b.name))
   const connected = rows.filter((s) => s.status === 'connected').length
 
   return (
-    <div data-testid="mcp-menu" className="dropdown wide" ref={ref}>
+    <div data-testid="mcp-menu" className="dropdown wide">
       <div className="dd-head">
         <span>MCP servers</span>
         <span className="dd-count">{servers ? `${connected} of ${rows.length} connected` : ''}</span>

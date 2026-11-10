@@ -7,7 +7,7 @@ test('goal: synthetic replies from the SDK log', () => {
   assert.deepEqual(parseGoalReply('Goal set: the file x exists and contains the word done'), { kind: 'set', condition: 'the file x exists and contains the word done' })
   assert.deepEqual(parseGoalReply('Goal cleared: the file x exists'), { kind: 'cleared', condition: 'the file x exists' })
   assert.deepEqual(parseGoalReply('No goal set. Usage: `/goal <condition>`'), { kind: 'none' })
-  assert.deepEqual(parseGoalReply('Goal active: the file x (y) exists (not yet evaluated)'), { kind: 'active', condition: 'the file x (y) exists', note: 'not yet evaluated' })
+  assert.deepEqual(parseGoalReply('Goal active: the file x (y) exists (not yet evaluated)'), { kind: 'active', condition: 'the file x (y) exists', note: 'not yet evaluated', full: 'the file x (y) exists (not yet evaluated)' })
   assert.deepEqual(parseGoalReply('Goal active: plain'), { kind: 'active', condition: 'plain', note: undefined })
   assert.equal(parseGoalReply('Goal set — creating the file now.'), null) // Claude's own words, not the reply
 })

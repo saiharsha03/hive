@@ -66,7 +66,8 @@ export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStat
       return { ...st, goal: goalReduce(st.goal, { t: 'active_goal', value: ev.value ?? null }) }
     case 'command_lifecycle':
       if (ev.state === 'started' && ev.wakeup_source === 'schedule_wakeup') return { ...st, wakeRunning: ev.command_uuid ?? 'wake', nextWake: null }
-      if (ev.state !== 'started' && st.wakeRunning && ev.command_uuid === st.wakeRunning) return { ...st, wakeRunning: null }
+      // the wake-up ended: its own uuid, or, when the start came without one ('wake'), any command ending
+      if (ev.state !== 'started' && st.wakeRunning && (ev.command_uuid === st.wakeRunning || st.wakeRunning === 'wake')) return { ...st, wakeRunning: null }
       return st
     case 'conversation_reset':
       return { ...st, goal: null }
@@ -79,11 +80,12 @@ export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStat
   return st
 }
 
-// claude-opus-5-5 -> Opus 5.5; anything else as given
+// claude-opus-5-5 -> Opus 5.5, claude-opus-4-20250514 -> Opus 4 (a date is not a minor version); anything else as given
 export function modelLabel(id?: string | null): string {
   if (!id) return ''
-  const m = id.match(/claude-([a-z]+)-(\d+)-(\d+)/)
-  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}.${m[3]}` : id
+  const m = id.match(/claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/)
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? `.${m[3]}` : ''}` : id
 }
 
-export const EFFORTS = ['low', 'medium', 'high', 'max'] as const
+// the effort levels, lowest first: the one list for the thread's picker and the Settings default (settingsCore.ts)
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const

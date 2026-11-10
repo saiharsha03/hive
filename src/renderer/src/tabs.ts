@@ -1,9 +1,6 @@
 // Pure logic for the tab bar's right-click menu.
 // The tab context menu's close actions. Returns the tab ids to close and which tab becomes active afterwards:
 // the current one if it stays, else the right-clicked tab if it stays, else the nearest survivor, else none.
-// ids of the tabs on the bar: backgrounded sessions stay out
-export const visibleIds = (all: { id: string; background?: boolean }[]): string[] => all.filter((s) => !s.background).map((s) => s.id)
-
 export type TabCloseAction = 'close' | 'others' | 'right' | 'left' | 'all'
 export function tabsToClose(ids: string[], target: string, action: TabCloseAction): string[] {
   const i = ids.indexOf(target)

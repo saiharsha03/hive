@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { elapsed, type ScriptRun } from '../../shared/scriptsCore'
 import type { LiveRow } from './background'
 
-export const scriptRows = (runs: ScriptRun[]): LiveRow[] => runs.filter((r) => r.phase === 'running').map((r) => ({
+const scriptRows = (runs: ScriptRun[]): LiveRow[] => runs.filter((r) => r.phase === 'running').map((r) => ({
   id: `script:${r.name}`, kind: 'script', title: `${r.name}: ${r.label}`, state: 'working', note: `running ${elapsed(Date.now() - r.startedAt)}`, since: 0,
 }))
 

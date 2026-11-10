@@ -5,9 +5,10 @@
 import { parseTime } from './dependabotCore'
 import { appName } from './appName'
 import {
-  DAYS, DEFAULT_TIERS, localIso, parseEvery, parseTiers, parseWeekly,
+  atLeastMin, DAYS, DEFAULT_TIERS, localIso, MIN_EVERY_TEXT, parseEvery, parseTiers, parseWeekly, tooShort,
   type Finding, type NextRuns, type RunKind, type Tier, type WatchConfig, type WatchState,
 } from './watchCore'
+import { headerName, WATCHER_MARK } from './readOnlyCore'
 
 // the schedule as written in watcher.json: every = "adaptive" (weekly usage tiers), "60m" / "2h" / "1d", "off", or
 // "self" (the watcher plans its own wake-ups in its schedule table; daily / weekly are not used)
@@ -35,6 +36,10 @@ export const DEFAULT_SCHEDULE: Schedule = { every: 'adaptive', tiers: DEFAULT_TI
 export const emptyState = (): WatcherState => ({ since: null, last: { sweep: null, daily: null, weekly: null }, tabId: null, sessionId: null, promptSent: null, runs: [] })
 export const MAX_RUNS = 200
 
+// a watcher's name goes into the one-line "[... watcher run: <name>]" header: no brackets, no line break
+export const nameProblem = (name: string): string | null =>
+  !name.trim() ? 'A watcher needs a name' : /[[\]\r\n]/.test(name) ? 'A watcher name cannot contain [ ] or a line break' : name.trim().length > 80 ? 'A watcher name is at most 80 characters' : null
+
 // the folder name: lowercase words joined by "-", unique among the taken ones ("watch", "watch-2", ...)
 export function watcherId(name: string, taken: Iterable<string>): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'watcher'
@@ -53,13 +58,19 @@ export function normalizeSchedule(v: unknown): { schedule: Schedule; problems: s
     if (every.toLowerCase() === 'adaptive') s.every = 'adaptive'
     else if (every.toLowerCase() === 'self') s.every = 'self'
     else if (parseEvery(every) === undefined) problems.push(`every: ${every} is not like 60m, 2h, 1d, off, adaptive or self`)
-    else s.every = every
+    else {
+      s.every = every // kept as written even when too short: a file on disk is then read with the floor, a save is refused
+      if (tooShort(parseEvery(every))) problems.push(`every: ${every} is shorter than ${MIN_EVERY_TEXT}, the shortest interval`)
+    }
   }
   if (s.every !== 'adaptive') delete s.tiers
   if (o.tiers !== undefined && String(o.tiers).trim()) {
     const t = parseTiers(String(o.tiers))
-    if (!t.tiers) problems.push(`tiers: ${t.problem}`)
-    else if (s.every === 'adaptive') s.tiers = String(o.tiers).trim()
+    if (!t.tiers) {
+      problems.push(`tiers: ${t.problem}`)
+      // only too short: the table is kept as written (watcherConfig reads it with the floor), not replaced by the default
+      if (s.every === 'adaptive' && parseTiers(String(o.tiers), true).tiers) s.tiers = String(o.tiers).trim()
+    } else if (s.every === 'adaptive') s.tiers = String(o.tiers).trim()
   }
   const daily = String(o.daily ?? '').trim()
   if (daily && daily !== 'off') { if (parseTime(daily)) s.daily = daily; else problems.push(`daily: ${daily} is not HH:MM`) }
@@ -109,8 +120,9 @@ export function watcherConfig(dir: string, w: WatcherFile): WatchConfig {
     dir,
     prompt: isAbs(w.prompt) ? w.prompt : joinP(dir, w.prompt),
     cwd: w.cwd,
-    everyMs: adaptive ? null : parseEvery(w.schedule.every) ?? null,
-    tiers: adaptive ? parseTiers(w.schedule.tiers || DEFAULT_TIERS).tiers ?? parseTiers(DEFAULT_TIERS).tiers : null,
+    // a schedule saved before the floor existed ("1m") runs at the floor
+    everyMs: adaptive ? null : atLeastMin(parseEvery(w.schedule.every) ?? null),
+    tiers: adaptive ? parseTiers(w.schedule.tiers || DEFAULT_TIERS, true).tiers ?? parseTiers(DEFAULT_TIERS).tiers : null,
     daily: w.schedule.daily && parseTime(w.schedule.daily) ? w.schedule.daily : null,
     weekly: w.schedule.weekly ? parseWeekly(w.schedule.weekly) : null,
   }
@@ -166,7 +178,7 @@ export function watcherHeader(a: {
 }): string {
   const { name, kind, now, lastRun, s, f, promptFile, prompt, fresh } = a
   return [
-    `[${appName()} watcher run: ${name}]`,
+    `${WATCHER_MARK} [${headerName(appName())} watcher run: ${headerName(name)}]`,
     `Run kind: ${kind}${kind === 'weekly' ? ' (also stands in for today\'s daily report)' : ''}`,
     `Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localIso(now)} (local time; what is worth checking can depend on the day and hour)`,
     `Last run: ${lastRun ? `${lastRun.kind} started ${stamp(lastRun.startedAt)}${lastRun.endedAt ? `, ended ${stamp(lastRun.endedAt)}` : ''}${lastRun.error ? ` (${lastRun.error})` : ''}` : 'none, this is the first run'}`,
@@ -195,7 +207,7 @@ export function watcherHeader(a: {
 export function wakeMessage(a: { name: string; now: Date; due: { id: number; wake_at: string; purpose: string | null }[]; table: string; fallbackHours: number; promptFile: string; prompt: string | null; startup?: { lastSeen: number | null } }): string {
   const { name, now, due, table, fallbackHours, promptFile, prompt, startup } = a
   return [
-    `[${appName()} wake-up: ${name}] Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localIso(now)}.`,
+    `${WATCHER_MARK} [${headerName(appName())} wake-up: ${headerName(name)}] Now: ${now.toLocaleDateString('en-US', { weekday: 'long' })} ${localIso(now)}.`,
     ...(startup ? [`${appName()} just started${startup.lastSeen ? `; it was last running at ${localIso(new Date(startup.lastSeen))}` : ''}. Catch up on anything you missed while it was closed.`] : []),
     due.length
       ? `You scheduled this in ${table}: ${due.map((r) => `#${r.id} at ${r.wake_at}${r.purpose ? ` (${r.purpose})` : ''}`).join('; ')}. ${appName()} marked ${due.length > 1 ? 'them' : 'it'} woken.`
@@ -342,9 +354,11 @@ export function checkDraft(d: ScheduleDraft): { errors: DraftError[]; schedule: 
       else if (n <= prev) err(`tier-${i}-below`, `Tier ${i + 1}: thresholds must rise (${n} is not above ${prev})`)
       if (Number.isFinite(n)) prev = Math.max(prev, n)
       if (!t.every.trim() || parseEvery(t.every) === undefined) err(`tier-${i}-every`, `Tier ${i + 1}: interval like 30m, 1h, 6h, 1d or off`)
+      else if (tooShort(parseEvery(t.every))) err(`tier-${i}-every`, `Tier ${i + 1}: the shortest interval is ${MIN_EVERY_TEXT}`)
     })
   }
   if (d.mode === 'fixed' && !parseEvery(d.every)) err('every', 'Interval like 30m, 1h, 6h or 1d')
+  else if (d.mode === 'fixed' && tooShort(parseEvery(d.every))) err('every', `The shortest interval is ${MIN_EVERY_TEXT}`)
   const daily = d.daily.trim()
   if (daily && !parseTime(daily)) err('daily', 'Daily report time is HH:MM (00:00 to 23:59)')
   const day = d.weeklyDay.trim().toLowerCase(), time = d.weeklyTime.trim()

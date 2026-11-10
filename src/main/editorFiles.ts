@@ -21,7 +21,14 @@ export async function editorMtime(path: string): Promise<number | null> {
   try { return (await stat(local(path))).mtimeMs } catch { return null }
 }
 
-export async function editorWrite(path: string, text: string): Promise<number> {
+// expected: the mtime the editor last saw. When the file on disk has another one (Claude or git changed it since),
+// nothing is written and the save fails, so an edit made elsewhere is never overwritten without the user choosing to.
+export const CHANGED_ON_DISK = 'changed on disk'
+export async function editorWrite(path: string, text: string, expected?: number | null): Promise<number> {
+  if (typeof expected === 'number') {
+    const now = await editorMtime(path)
+    if (now !== null && now !== expected) throw new Error(`${path} ${CHANGED_ON_DISK} since it was opened`)
+  }
   await writeFile(local(path), text, 'utf8')
   return (await stat(path)).mtimeMs
 }

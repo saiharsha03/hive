@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { groupTeams, isAppPage, pastTeamPeople, rosterOf, runningRosters, teamThreadIds, teamWindowOf, teamWindowSearch } from '../../src/shared/teamSidebarCore'
+import { groupTeams, isAppPage, pastTeamPeople, rosterOf, teamThreadIds, teamWindowOf, teamWindowSearch } from '../../src/shared/teamSidebarCore'
 import type { Team } from '../../src/shared/teamCore'
 
 const team = (over: Partial<Team> = {}): Team => ({
@@ -13,6 +13,9 @@ const team = (over: Partial<Team> = {}): Team => ({
   ],
   ...over,
 })
+
+// what the sidebar does with the rosters main sends: only the running teams
+const runningRosters = (teams: Team[]) => teams.filter((t) => !t.endedAt).map(rosterOf)
 
 test('running teams only; the Owner is not a member; ids and session ids are hidden from the normal lists', () => {
   const rs = runningRosters([team(), team({ id: 't2', endedAt: 5 })])

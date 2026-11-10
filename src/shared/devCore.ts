@@ -16,7 +16,11 @@ export function parseEnvFile(text: string): Record<string, string> {
     if (!m) continue
     let v = m[2]
     const q = v[0]
-    if ((q === '"' || q === "'") && v.length > 1 && v.endsWith(q)) v = v.slice(1, -1)
+    // a quoted value ends at its closing quote; only a comment may follow it (KEY="a b" # note). Unquoted, a " #"
+    // starts a comment, as in dotenv: a value that needs one is quoted
+    const end = q === '"' || q === "'" ? v.indexOf(q, 1) : -1
+    if (end > 0 && /^\s*(#.*)?$/.test(v.slice(end + 1))) v = v.slice(1, end)
+    else if (end > 0 && v.endsWith(q)) v = v.slice(1, -1)
     else v = v.replace(/\s+#.*$/, '').trim()
     out[m[1]] = v
   }
@@ -56,7 +60,9 @@ export function parseDevConfig(env: Record<string, string>): { config: DevConfig
   const problems: string[] = []
   const root = (env.HIVE_REPOS_ROOT ?? '').trim()
   if (!root) return { config: null, problems: ['HIVE_REPOS_ROOT is not set'] }
-  const wt = (env.HIVE_WORKTREES_DIR ?? '.hive-worktrees').trim()
+  // '' (the field cleared in Settings) is the default too: resolved against the root it would be the root itself,
+  // and every worktree would land inside a main checkout
+  const wt = (env.HIVE_WORKTREES_DIR ?? '').trim() || '.hive-worktrees'
   const services: SvcDef[] = []
   for (const key of list(env.HIVE_SERVICES)) {
     const p = `HIVE_SVC_${keyOf(key)}_`
@@ -143,9 +149,6 @@ export function planPull(f: RepoFacts): PullPlan {
     dry: f.behind === 0 ? `would switch ${cur} to ${f.defaultBranch} (already up to date)` : `would ${onDefault ? '' : `switch ${cur} to ${f.defaultBranch} and `}pull ${n(f.behind)}`,
   }
 }
-
-export const resultTone = (r: string): 'ok' | 'dim' | 'warn' | 'bad' =>
-  r.startsWith('updated') ? 'ok' : r.startsWith('failed') ? 'bad' : r.startsWith('skipped') ? 'warn' : 'dim'
 
 // ---------- ports ----------
 

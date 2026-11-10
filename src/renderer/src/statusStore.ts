@@ -31,8 +31,8 @@ function patch(tabId: string, fn: (s: ThreadStatus) => ThreadStatus) {
   notify()
 }
 
-// drop finished items from the background-work list
-export const clearFinished = (tabId: string) => patch(tabId, (s) => ({ ...s, tasks: s.tasks.filter((t) => t.status === 'running') }))
+// the tab was closed: its status goes with it
+export function forgetStatus(tabId: string) { if (store.delete(tabId)) notify() }
 // hide a met goal
 export const dismissGoal = (tabId: string) => patch(tabId, (s) => ({ ...s, goal: null }))
 

@@ -8,9 +8,10 @@ import { parseDependabotConfig, parseTime } from './dependabotCore'
 import { parseDeployConfig } from './deployCore'
 import { parseDevConfig } from './devCore'
 import { parseScriptsConfig } from './scriptsCore'
-import { pickTier, type Tier } from './watchCore'
+import { EFFORTS } from './statusCore'
 
-export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+// one list for the Settings default and the thread's own picker (statusCore.ts)
+export { EFFORTS }
 export type Effort = (typeof EFFORTS)[number]
 // '' = the default; ui / theme '' = the built-in look (the Appearance pickers fill them); appName / appTagline = what the app calls itself
 // desktopNotify: a Windows toast + taskbar flash when a thread needs you and Hive is not focused; on by default
@@ -48,8 +49,14 @@ export type SettingsView = Draft & {
   weekly: { pct: number | null; error: string } | null // the 7-day limit right now, for the live tier line (only when asked)
 }
 
+// A key whose value is a credential. Anywhere in the name: TOKEN (not TOKENS: MAX_OUTPUT_TOKENS is a limit), SECRET,
+// PASSWORD, API key, ACCESS_KEY, CREDENTIAL, PRIVATE. As the last word only, so a service or suite named "auth" or
+// "key" keeps its HIVE_SVC_AUTH_* settings: PASS, PWD, PAT, DSN, AUTH, COOKIE, KEY, KEY_ID, WEBHOOK(_URL), and the
+// connection URLs that carry a password (DATABASE_URL, REDIS_URL, ...). A *_FILE / *_PATH / *_DIR names a place.
+const SECRET_ANYWHERE = /TOKEN(?!S)|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_KEY|CREDENTIAL|PRIVATE/i
+const SECRET_LAST = /(^|_)(PASS|PWD|PAT|DSN|AUTH|COOKIE|KEY|KEY_ID|WEBHOOK|WEBHOOK_URL|(DATABASE|DB|REDIS|MONGO|MONGODB|POSTGRES|MYSQL|AMQP|BROKER)_UR[LI])$/i
 export const isSecretKey = (k: string) =>
-  /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL|PRIVATE/i.test(k) && !/_(FILE|PATH|DIR)$/i.test(k)
+  (SECRET_ANYWHERE.test(k) || SECRET_LAST.test(k)) && !/_(FILE|PATH|DIR)$/i.test(k)
 
 const nonSecret = (env: Record<string, string>) => Object.fromEntries(Object.entries(env).filter(([k]) => !isSecretKey(k)))
 
@@ -118,6 +125,8 @@ export function sectionOf(k: string): Section {
 
 // error = cannot be used, the save is refused; warn = saved, but worth a look (a path that does not exist yet...)
 export type Problem = { key: string; level: 'error' | 'warn'; message: string }
+// characters a name shown inside "[...]" headers cannot hold (the app name, a watcher's name)
+export const BAD_NAME = /[[\]\r\n]/
 export const REPO_RE = /^[\w.-]+\/[\w.-]+$/
 export const ID_RE = /^[\w-]+$/
 export const envKey = (k: string) => k.toUpperCase().replace(/[^A-Z0-9]/g, '_')
@@ -183,6 +192,8 @@ export function validateSettings(d: { env: Record<string, string>; scripts: unkn
   if (cap && !(Number.isInteger(Number(cap)) && Number(cap) > 0)) err('HIVE_DEPENDABOT_MAX_REVIEWS', `${cap} is not a whole number above 0`)
   if (d.general.appName.length > 40) err('general.appName', 'App name is longer than 40 characters')
   if (!d.general.appName.trim()) err('general.appName', 'App name is empty')
+  // the name goes into bracketed one-line headers (watcher runs, wake-ups): brackets or a line break would cut them
+  if (BAD_NAME.test(d.general.appName)) err('general.appName', 'App name cannot contain [ ] or a line break')
   if (d.general.appTagline.length > 80) err('general.appTagline', 'Tagline is longer than 80 characters')
   if (d.general.ui && !ID_RE.test(d.general.ui)) err('general.ui', `${d.general.ui} is not a UI id`)
   if (d.general.theme && !ID_RE.test(d.general.theme)) err('general.theme', `${d.general.theme} is not a theme id`)
@@ -191,25 +202,7 @@ export function validateSettings(d: { env: Record<string, string>; scripts: unkn
   return out
 }
 
-// ---- for the panel: lists, the tier table and the live tier line ----
+// ---- for the panel: lists ----
 
 export const splitList = (v: string | undefined) => items(v)
 export const joinList = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean).join(',')
-
-// the tier table as rows the panel edits; text it cannot split comes back as one row so nothing is lost
-export type TierRow = { below: string; every: string }
-export function tierRows(v: string): TierRow[] {
-  return items(v).map((p) => { const i = p.indexOf(':'); return i < 0 ? { below: p, every: '' } : { below: p.slice(0, i).replace('%', '').trim(), every: p.slice(i + 1).trim() } })
-}
-export const formatTiers = (rows: TierRow[]) => rows.filter((r) => r.below.trim() || r.every.trim()).map((r) => `${r.below.trim()}:${r.every.trim()}`).join(',')
-
-export const everyText = (ms: number | null) =>
-  ms === null ? 'off' : ms % 86_400_000 === 0 ? `${ms / 86_400_000}d` : ms % 3_600_000 === 0 ? `${ms / 3_600_000}h` : ms % 60_000 === 0 ? `${ms / 60_000}m` : `${Math.round(ms / 1000)}s`
-
-// "Sweeps every 1h (weekly limit 34%)", for these tiers at this weekly use; null tiers = a broken table
-export function sweepLine(tiers: Tier[] | null, pct: number | null): string {
-  if (!tiers) return 'Fix the tier table to see the current tier'
-  const p = pickTier(tiers, pct)
-  const what = p.everyMs === null ? 'No sweeps' : `Sweeps every ${everyText(p.everyMs)}`
-  return `${what} (weekly limit ${pct === null ? 'unreadable, so the slowest tier' : `${Math.round(pct)}%`})`
-}

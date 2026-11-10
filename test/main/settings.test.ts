@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  effectiveEnv, emptyGeneral, envForSave, formatTiers, isSecretKey, normalizeSettings, sectionOf, seedSettings, sweepLine, tierRows, validateSettings, type Settings,
+  effectiveEnv, emptyGeneral, envForSave, isSecretKey, normalizeSettings, sectionOf, seedSettings, validateSettings, type Settings,
 } from '../../src/shared/settingsCore'
 import { DEFAULT_TIERS, parseTiers, pickTier } from '../../src/shared/watchCore'
 import { loadSettings, saveSettings, threadDefaults } from '../../src/main/settings'
@@ -49,9 +49,9 @@ test('the store wins, the .env is the fallback, secrets only from the .env', () 
 })
 
 test('saving: dropped .env keys become empty, secrets and bad names never saved', () => {
-  const out = envForSave({ HIVE_REPOS_ROOT: 'D:/r', NEW_KEY: 'x', HIVE_X_TOKEN: 't', 'bad key': 'y' }, DOT)
+  const out = envForSave({ HIVE_REPOS_ROOT: 'D:/r', NEW_FLAG: 'x', HIVE_X_TOKEN: 't', 'bad key': 'y' }, DOT)
   assert.equal(out.HIVE_REPOS_ROOT, 'D:/r')
-  assert.equal(out.NEW_KEY, 'x')
+  assert.equal(out.NEW_FLAG, 'x')
   assert.equal(out.HIVE_WATCH_DIR, '')
   assert.ok(!('HIVE_X_TOKEN' in out) && !('HIVE_TRACKER_TOKEN' in out) && !('bad key' in out))
   const n = normalizeSettings({ env: { A: 'a', B: 3, HIVE_TRACKER_TOKEN: 'x' }, scripts: 'no', general: { effort: 'huge', model: ' m ' } })!
@@ -152,20 +152,6 @@ test('tier parsing and picking: default table, boundaries, unreadable usage', ()
   assert.match(parseTiers('0:1h').problem, /between 1 and 100/)
   assert.match(parseTiers('50:soon').problem, /not like/)
   assert.equal(parseTiers('').tiers, null)
-})
-
-test('panel tier rows round-trip and the live line', () => {
-  const rows = tierRows(DEFAULT_TIERS)
-  assert.deepEqual(rows[0], { below: '50', every: '1h' })
-  assert.equal(formatTiers(rows), DEFAULT_TIERS)
-  assert.equal(formatTiers([...rows, { below: '', every: '' }]), DEFAULT_TIERS) // an empty new row is ignored
-  assert.deepEqual(tierRows('50%:1h,junk'), [{ below: '50', every: '1h' }, { below: 'junk', every: '' }]) // nothing lost
-  const t = parseTiers(DEFAULT_TIERS).tiers!
-  assert.equal(sweepLine(t, 34), 'Sweeps every 1h (weekly limit 34%)')
-  assert.equal(sweepLine(t, 65.4), 'Sweeps every 6h (weekly limit 65%)')
-  assert.equal(sweepLine(t, null), 'Sweeps every 1d (weekly limit unreadable, so the slowest tier)')
-  assert.equal(sweepLine(parseTiers('50:1h,100:off').tiers!, 80), 'No sweeps (weekly limit 80%)')
-  assert.match(sweepLine(null, 10), /Fix the tier table/)
 })
 
 test('seeding from env: credentials stay out, defaults for the app name and tagline', () => {

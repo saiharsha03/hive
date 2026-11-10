@@ -12,6 +12,22 @@ val firebaseDir = File(System.getenv("HIVE_FIREBASE_DIR") ?: rootDir.resolve("..
 val ownServices = firebaseDir.resolve("google-services.json")
 if (ownServices.exists()) ownServices.copyTo(projectDir.resolve("google-services.json"), overwrite = true)
 
+// A release build is signed with your own keystore, never the debug key (its password is public, so anyone with that
+// file could sign an update that replaces the app). Name it in ~/.gradle/gradle.properties or the environment, never
+// in the repo:
+//   HIVE_KEYSTORE            path to the keystore (.jks or .keystore)
+//   HIVE_KEYSTORE_PASSWORD   its password
+//   HIVE_KEY_ALIAS           the key in it
+//   HIVE_KEY_PASSWORD        that key's password (default: the keystore's)
+// One is made with: keytool -genkeypair -v -keystore hive-release.jks -alias hive -keyalg RSA -keysize 4096 -validity 10000
+// A debug build (./gradlew assembleDebug) needs none of this.
+fun setting(name: String): String? = ((findProperty(name) as String?) ?: System.getenv(name))?.trim()?.takeIf { it.isNotEmpty() }
+val releaseStore = setting("HIVE_KEYSTORE")
+val releaseStorePassword = setting("HIVE_KEYSTORE_PASSWORD")
+val releaseAlias = setting("HIVE_KEY_ALIAS")
+val releaseKeyPassword = setting("HIVE_KEY_PASSWORD") ?: releaseStorePassword
+val releaseSigning = releaseStore != null && releaseStorePassword != null && releaseAlias != null
+
 android {
     namespace = "dev.hive.mobile"
     compileSdk = 35
@@ -23,11 +39,32 @@ android {
         versionName = "1.1"
     }
     buildFeatures { compose = true }
+    signingConfigs {
+        if (releaseSigning) create("release") {
+            storeFile = file(releaseStore!!)
+            storePassword = releaseStorePassword
+            keyAlias = releaseAlias
+            keyPassword = releaseKeyPassword
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug") // a personal app, side-loaded: the debug key is enough
+            signingConfig = signingConfigs.findByName("release") // none without the settings above: the build stops below
         }
+    }
+}
+
+// no release APK or bundle without a release key: stop with the reason instead of producing an unsigned or debug-signed one
+gradle.taskGraph.whenReady {
+    val release = allTasks.any { it.project == project && it.name.contains("Release") && Regex("^(assemble|bundle|package|install|sign)").containsMatchIn(it.name) }
+    if (release) {
+        if (!releaseSigning) throw GradleException(
+            "A release build of the Hive app needs your own signing key. Set HIVE_KEYSTORE, HIVE_KEYSTORE_PASSWORD and HIVE_KEY_ALIAS " +
+                "(and HIVE_KEY_PASSWORD if it differs) in ~/.gradle/gradle.properties or the environment; see mobile/app/build.gradle.kts. " +
+                "The debug key is never used for a release. For a build to try on your own phone: ./gradlew assembleDebug",
+        )
+        if (!file(releaseStore!!).isFile) throw GradleException("HIVE_KEYSTORE points to ${file(releaseStore)}, which is not a file.")
     }
 }
 
@@ -45,4 +82,8 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.30.0")
+
+    // unit tests of the sealed link (Link.kt) on the JVM; org.json there is the real one, not Android's empty stub
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

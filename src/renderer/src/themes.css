@@ -132,7 +132,7 @@
 }
 
 /* ---- meaning without colour ---- */
-[data-theme='mono'] .s-fail, [data-theme='mono'] .tsk-status.failed, [data-theme='mono'] .cx-status.error { text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
+[data-theme='mono'] .s-fail, [data-theme='mono'] .tsk-status.failed { text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
 [data-theme='mono'] .s-wait { font-weight: 700; }
 [data-theme='mono'] .s-done { opacity: .75; }
 [data-theme='mono'] .frow.g-deleted .fname, [data-theme='mono'] .fr.g-deleted .fname { text-decoration: line-through; }

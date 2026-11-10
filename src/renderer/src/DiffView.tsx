@@ -10,7 +10,7 @@ const KEY = 'diffMode'
 let mode: DiffMode = getPref<string>(KEY, 'split') === 'unified' ? 'unified' : 'split'
 const subs = new Set<(m: DiffMode) => void>()
 
-export function useDiffMode(): [DiffMode, (m: DiffMode) => void] {
+function useDiffMode(): [DiffMode, (m: DiffMode) => void] {
   const [m, setM] = useState(mode)
   useEffect(() => { subs.add(setM); return () => { subs.delete(setM) } }, [])
   return [m, (next) => { mode = next; setPref(KEY, next); subs.forEach((f) => f(next)) }]

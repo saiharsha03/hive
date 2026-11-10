@@ -5,27 +5,41 @@ export const STAGGER_MS = 3 * 60_000 // threads wake a few minutes apart, not al
 // key: the Claude session id; since: when it was scheduled; kind: the limit that stopped it (rate_limit_event's type)
 export type Wake = { key: string; tabId: string; cwd: string; title: string; at: number; since?: number; kind?: string }
 
-// The reset time from the limit message, when the rate-limit event gave none: "...|1730000000" (unix seconds) or
-// "resets 3pm" / "resets 3:30 pm" (the next such local time). null = no time in it.
+// The reset time from the limit message, when the rate-limit event gave none: "...|1730000000" (unix seconds),
+// "resets 3pm" / "resets 3:30 pm" (the next such local time), or with a date, as the weekly limit says it:
+// "resets Nov 12, 3pm" / "resets Nov 12 at 3pm" (the next such date). null = no time in it.
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 export function resetFromText(text: string, now: number): number | null {
   const unix = text.match(/\|(\d{10})\b/)
   if (unix) return Number(unix[1]) * 1000
-  const m = text.match(/resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b(?:\s*\(([A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+|UTC)\))?/i)
+  const m = text.match(/resets?\s+(?:on\s+)?(?:([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+)?(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b(?:\s*\(([A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+|UTC)\))?/i)
   if (!m) return null
-  let h = Number(m[1]) % 12
-  if (m[3].toLowerCase() === 'pm') h += 12
-  const min = Number(m[2] ?? 0)
+  let h = Number(m[3]) % 12
+  if (m[5].toLowerCase() === 'pm') h += 12
+  const min = Number(m[4] ?? 0)
+  // a date in the message: that day, this year or (when it has passed) the next
+  const month = m[1] ? MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) : -1
+  if (m[1] && month < 0) return null // "resets Monday 3pm": not a date this reads
+  const day = m[1] ? Number(m[2]) : 0
   // the time is in the zone the message names ("resets 3pm (America/Chicago)"), else this computer's
-  const zone = m[4] && validZone(m[4]) ? m[4] : null
+  const zone = m[6] && validZone(m[6]) ? m[6] : null
   if (!zone) {
     const d = new Date(now)
+    if (m[1]) {
+      for (const y of [d.getFullYear(), d.getFullYear() + 1]) {
+        const at = new Date(y, month, day, h, min, 0, 0)
+        if (at.getMonth() === month && at.getTime() > now) return at.getTime()
+      }
+      return null
+    }
     d.setHours(h, min, 0, 0)
     if (d.getTime() <= now) d.setDate(d.getDate() + 1)
     return d.getTime()
   }
   const today = wall(now, zone)
-  for (const add of [0, 1]) {
-    const guess = Date.UTC(today.y, today.mo, today.d + add, h, min)
+  const days: [number, number, number][] = m[1] ? [[today.y, month, day], [today.y + 1, month, day]] : [[today.y, today.mo, today.d], [today.y, today.mo, today.d + 1]]
+  for (const [y, mo, d] of days) {
+    const guess = Date.UTC(y, mo, d, h, min)
     // the instant whose wall clock in that zone reads h:min: try the zone's offset on both sides of a DST change and
     // keep those that land on h:min; a time that happens twice (fall back) takes the later one, so a continue is never
     // early; a time that never happens (spring forward) takes the later candidate, just after the change

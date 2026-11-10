@@ -140,8 +140,7 @@ function attach(ws, pair, role) {
     // a notification is pushed too: an open-looking phone socket can be half dead for a minute (Doze, lost Wi-Fi);
     // the app shows each message once (it keeps the seq numbers it has seen)
     if (role === 'desk' && m.push) void push(pair, m.blob)
-    else if (peer?.readyState === 1) { /* delivered */ }
-    else if (role === 'phone') sendJson(ws, { desk: 'offline' })
+    else if (role === 'phone' && peer?.readyState !== 1) sendJson(ws, { desk: 'offline' })
   })
   ws.on('close', () => {
     if (room.get(role) !== ws) return

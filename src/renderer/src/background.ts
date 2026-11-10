@@ -1,5 +1,6 @@
 // Background sessions: pure logic for what a live session is doing (working / waiting for the user) and the sidebar rows built from it.
 import { applyEvent, toolLine, type Session } from './chat'
+import { isWatcherTab } from '../../shared/readOnlyCore'
 
 export type LiveState = 'working' | 'waiting' | null
 // kind 'deploy' / 'dev' / 'script' are the Deploy wizard's, Dev stack's and Scripts' items (not Claude sessions)
@@ -31,7 +32,7 @@ export function onSessionEvent(s: Session, ev: any, activeId: string | null, now
   const last = next.items.at(-1)
   if (last?.kind === 'error') return { ...next, waitingReason: `Failed: ${firstLine(last.text)}`, waitingSince: now }
   // a Watch run only waits for the user when it says so (organize_thread waiting), not every time a scheduled run ends
-  if (s.id.startsWith('watch-')) return next
+  if (isWatcherTab(s.id)) return next
   const reply = [...next.items].reverse().find((i) => i.kind === 'assistant')
   const line = reply?.kind === 'assistant' ? firstLine(reply.text) : ''
   return { ...next, waitingReason: line ? `Finished: ${line}` : 'Finished', waitingSince: now }

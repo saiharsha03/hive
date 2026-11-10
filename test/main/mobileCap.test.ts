@@ -29,7 +29,10 @@ test('phone requests: run once, in order, while fresh; others dropped; future-da
   assert.equal(send(now - 1000).run, false) // the same request again
   assert.equal(send(now - 1500).run, false) // an older one
   assert.equal(send(now - 500).run, true)
-  assert.equal(checkPhoneSeq({ seqIn: 0 }, now - 3 * 60_000, now).run, false) // held back three minutes
+  // held back three minutes (or the phone clock behind): not run, and flagged so the app is told why
+  assert.deepEqual([checkPhoneSeq({ seqIn: 0 }, now - 3 * 60_000, now).run, checkPhoneSeq({ seqIn: 0 }, now - 3 * 60_000, now).stale], [false, true])
+  assert.equal(checkPhoneSeq({ seqIn: now }, now - 3 * 60_000, now).stale, undefined) // a replay of one that ran stays silent
+  assert.equal(checkPhoneSeq({ seqIn: 0 }, now - 60_000, now).stale, undefined) // a minute late still runs
   assert.equal(checkPhoneSeq({ seqIn: now }, now - 10, now).run, false) // an older record's high-water mark holds
   // phone clock an hour ahead: refused, the phone told once, and remembered for when it would look fresh
   const f = send(now + hour)
@@ -47,4 +50,23 @@ test('phone requests: run once, in order, while fresh; others dropped; future-da
   assert.equal(edge.next.floor, now)
   // once the clock passes them, requests run again
   assert.equal(send(now + 2 * hour, now + 2 * hour).run, true)
+})
+
+test('a send or new thread tried again with the same mid runs once and gets the first answer', async () => {
+  const { oncePerMid } = await import('../../src/main/mobile')
+  let runs = 0
+  const run = async () => { runs += 1; return `sent ${runs}` }
+  const first = oncePerMid('m-1', run)
+  assert.equal(await oncePerMid('m-1', run), 'sent 1') // the retry while the first is still running
+  assert.equal(await first, 'sent 1')
+  assert.equal(await oncePerMid('m-1', run), 'sent 1') // and after it finished
+  assert.equal(runs, 1)
+  assert.equal(await oncePerMid('m-2', run), 'sent 2') // another message
+  assert.equal(await oncePerMid(undefined, run), 'sent 3') // an older app sends no mid: every request runs
+  assert.equal(await oncePerMid(undefined, run), 'sent 4')
+  // one that failed did not run, so the retry runs it
+  await assert.rejects(oncePerMid('m-3', async () => { throw new Error('The Hive window is not open') }))
+  assert.equal(await oncePerMid('m-3', run), 'sent 5')
+  // forgotten after ten minutes
+  assert.equal(await oncePerMid('m-1', run, Date.now() + 11 * 60_000), 'sent 6')
 })

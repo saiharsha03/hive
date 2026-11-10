@@ -2,9 +2,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { PRESETS, archive, clearSnooze, close, pin, presetTime, snooze, type ThreadMap } from './threads'
 import { flagActions } from './selection'
+import { useEscape, useMenuKeys } from './ui'
 
-// ids: the threads the menu acts on (one row, or the whole selection); onDone runs after an action
-type Props = { ids: string[]; states: ThreadMap; x: number; y: number; onClose: () => void; onDone: () => void }
+// ids: the threads the menu acts on (one row, or the whole selection); onDone runs after an action;
+// onRetire: close or archive them (the list asks first when that would delete worktrees)
+type Props = { ids: string[]; states: ThreadMap; x: number; y: number; onClose: () => void; onDone: () => void; onRetire: (kind: 'close' | 'archive', ids: string[]) => void }
 
 // value for a datetime-local input: local time, no seconds
 const local = (t: number) => {
@@ -12,7 +14,7 @@ const local = (t: number) => {
   return d.toISOString().slice(0, 16)
 }
 
-export function ThreadMenu({ ids, states, x, y, onClose, onDone }: Props) {
+export function ThreadMenu({ ids, states, x, y, onClose, onDone, onRetire }: Props) {
   const many = ids.length > 1
   const of = (label: string) => (many ? `${label} ${ids.length} threads` : label)
   const each = (fn: (id: string) => void) => ids.forEach(fn)
@@ -28,13 +30,15 @@ export function ThreadMenu({ ids, states, x, y, onClose, onDone }: Props) {
     if (r) setPos({ left: Math.max(4, Math.min(x, innerWidth - r.width - 4)), top: Math.max(4, Math.min(y, innerHeight - r.height - 4)) })
   }, [x, y, snoozing, picking])
 
+  const shut = useRef(onClose)
+  shut.current = onClose
+  useEscape(() => shut.current())
+  const keys = useMenuKeys(ref)
   useEffect(() => {
-    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose() }
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) shut.current() }
     document.addEventListener('mousedown', down)
-    document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
-  }, [onClose])
+    return () => document.removeEventListener('mousedown', down)
+  }, [])
 
   const act = (fn: () => void) => () => { fn(); onDone(); onClose() }
   const setPick = () => {
@@ -43,7 +47,7 @@ export function ThreadMenu({ ids, states, x, y, onClose, onDone }: Props) {
   }
 
   return (
-    <div data-testid="thread-menu" className="tmenu" ref={ref} style={pos} onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
+    <div data-testid="thread-menu" className="tmenu" role="menu" ref={ref} style={pos} onKeyDown={keys} onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
       {flagActions(states, ids, 'pinned').map((a) => <button data-testid="threadmenu-button-1" key={a.label} onClick={act(() => each((id) => pin(id, a.on)))}>{of(a.label)}</button>)}
       <button data-testid="threadmenu-button-2" onClick={() => setSnoozing(!snoozing)}>{of('Snooze')}<span className="chev" style={{ transform: snoozing ? 'rotate(90deg)' : undefined }}>›</span></button>
       {snoozing && (
@@ -58,8 +62,8 @@ export function ThreadMenu({ ids, states, x, y, onClose, onDone }: Props) {
         </div>
       )}
       {ids.some((id) => (states[id]?.snoozedUntil ?? 0) > Date.now()) && <button data-testid="threadmenu-button-7" onClick={act(() => each(clearSnooze))}>{of('Cancel snooze')}</button>}
-      {flagActions(states, ids, 'closedAt').map((a) => <button data-testid="threadmenu-button-8" key={a.label} onClick={act(() => each((id) => close(id, a.on)))}>{of(a.label)}</button>)}
-      {flagActions(states, ids, 'archivedAt').map((a) => <button data-testid="threadmenu-button-9" key={a.label} onClick={act(() => each((id) => archive(id, a.on)))}>{of(a.label)}</button>)}
+      {flagActions(states, ids, 'closedAt').map((a) => <button data-testid="threadmenu-button-8" key={a.label} onClick={a.on ? () => { onRetire('close', ids); onClose() } : act(() => each((id) => close(id, false)))}>{of(a.label)}</button>)}
+      {flagActions(states, ids, 'archivedAt').map((a) => <button data-testid="threadmenu-button-9" key={a.label} onClick={a.on ? () => { onRetire('archive', ids); onClose() } : act(() => each((id) => archive(id, false)))}>{of(a.label)}</button>)}
     </div>
   )
 }
