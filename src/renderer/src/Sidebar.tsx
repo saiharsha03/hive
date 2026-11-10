@@ -465,7 +465,7 @@ const ThreadList = memo(function ThreadList({ activeId, onOpen, live, onActivate
           action={`${retiring.kind === 'close' ? 'Close' : 'Archive'} and delete`} danger testid="retire-confirm"
           onCancel={() => setRetiring(null)} onConfirm={() => { const r = retiring; setRetiring(null); doRetire(r.kind, r.ids) }}
         >
-          <div>{retiring.kind === 'close' ? 'Closing' : 'Archiving'} a thread deletes the worktrees it made. Work in them that is not committed and pushed can be lost, and reopening the thread does not bring them back.</div>
+          <div>{retiring.kind === 'close' ? 'Closing' : 'Archiving'} a thread deletes the worktrees it made. Uncommitted changes in them are first saved as a "WIP: auto-saved when thread closed" commit on their branch, and the branch is kept (nothing is pushed). Only files git ignores (build output, the copied .env files) are deleted with the folder. If that commit fails (a hook), the worktree is kept as it is.</div>
           <div className="confirm-list" data-testid="retire-worktrees">
             {retiring.trees.map((t) => <div key={t.path} title={`${t.path}\nthread: ${t.thread}`}>{t.repo} on {t.branch} ({t.thread})</div>)}
           </div>
