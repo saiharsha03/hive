@@ -1220,9 +1220,11 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   const boost = boostForMessage(tabId, s.q, msg.text, msg.mode === 'queue')
   const interrupt = !!msg.interrupt && msg.mode === 'queue' && cur.turns.isBusy() // decided before the message goes in
   // in the order sent: a message after an ultrathink one waits for it instead of overtaking it. An interrupt does not
-  // wait for its own effort change (it takes its place in the queue now), only for sends made before it
-  sends.run(tabId, go, boost && !interrupt ? boost : null)
-  if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
+  // wait for its own effort change, only for sends made before it; the turn is stopped once it has its place in the queue
+  sends.run(tabId, () => {
+    go()
+    if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
+  }, boost && !interrupt ? boost : null)
 }
 
 // a transcript whose thread is working now: search leaves it until the turn ends
