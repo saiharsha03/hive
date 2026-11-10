@@ -15,8 +15,8 @@ test('old layouts and themes fold into the one layout and three themes without a
   // junk in any field is ignored, never thrown on
   assert.deepEqual(migrate({ ui: 42, themeByUI: 'nope' }), { theme: 'dark', layout: DEFAULT_LAYOUT, fonts: DEFAULT_FONTS })
   assert.deepEqual(migrate({ appearance: { theme: 'light', layout: { rail: false, drawer: 'yes', bogus: true } } }), { theme: 'light', layout: { ...DEFAULT_LAYOUT, rail: false }, fonts: DEFAULT_FONTS })
-  // a saved font choice is kept; an unknown one falls back to Inter and Cascadia Mono
-  assert.deepEqual(migrate({ appearance: { theme: 'dark', fonts: { ui: 'plex', code: 'nope' } } }).fonts, { ui: 'plex', code: 'cascadia' })
+  // a saved font choice is kept; an unknown one falls back to the default
+  assert.deepEqual(migrate({ appearance: { theme: 'dark', fonts: { ui: 'plex', code: 'nope' } } }).fonts, { ui: 'plex', code: DEFAULT_FONTS.code })
   for (const t of ['default', 'mono', 'colour', undefined, null]) assert.equal(themeOf(t), 'dark')
 })
 

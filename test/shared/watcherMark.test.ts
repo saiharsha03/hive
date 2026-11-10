@@ -1,3 +1,4 @@
+import { PRODUCT } from '../../src/shared/edition'
 // A watcher's session is known by a fixed mark at the start of its first message, whatever the app or the watcher
 // is called; transcripts written before the mark (the "[<app> watcher run: <name>]" header alone) are still known.
 import { afterEach, describe, expect, it } from 'vitest'

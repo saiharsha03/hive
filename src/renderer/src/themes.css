@@ -32,7 +32,7 @@
 /* the names older components use, mapped onto the set (one place, every theme). State words other than waiting and
    failed carry no colour; --mark is the neutral "this one" (the main text), never the signal. */
 :root, [data-theme] {
-  --work: var(--accent); --done: var(--git-added); --hold: var(--dim); --link: var(--accent); --mark: var(--accent);
+  --work: var(--accent-text); --done: var(--git-added); --hold: var(--dim); --link: var(--accent-text); --mark: var(--accent-text);
   --line: var(--rule); --line2: var(--rule2); --panel: var(--side); --panel2: var(--raised); --input: transparent;
   --sel-ink: var(--hi); --ghost: var(--faint); --accent-hover: var(--accent);
   --badge-bg: transparent; --badge-ink: var(--dim); --head: var(--dim); --brand: var(--hi);

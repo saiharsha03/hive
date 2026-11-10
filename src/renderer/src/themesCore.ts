@@ -9,6 +9,7 @@ export type ThemeInfo = { id: ThemeId; label: string; description: string }
 type Seeds = {
   bg: string; side: string; lift: string; hi: string; dim: string
   accent: string // the theme's own colour: the selected tab, links, the primary button, what is running
+  fill?: string // the accent where it is a fill or a line (primary button, selected tab and icon): given as it is, with white on it
   signal: string | null // null: no accent, "needs you" is the main text on a lifted block
   red: string
   light?: boolean; square?: boolean; hc?: boolean
@@ -16,7 +17,7 @@ type Seeds = {
 }
 
 const SEEDS: Record<ThemeId, Seeds & { label: string; description: string }> = {
-  dark: { label: 'Quiet', description: 'Charcoal with a blue accent, honey for what needs you', accent: '#5FA8F5', bg: '#16171A', side: '#111214', lift: '#1E2024', hi: '#ECEAE5', dim: '#8B8983', signal: '#E9B44C', red: '#E2574C', lift2: '#26282D' },
+  dark: { label: 'Quiet', description: 'Charcoal with the code editor blue, honey for what needs you', accent: '#3794FF', fill: '#0078D4', bg: '#16171A', side: '#111214', lift: '#1E2024', hi: '#ECEAE5', dim: '#8B8983', signal: '#E9B44C', red: '#E2574C', lift2: '#26282D' },
   graphite: { label: 'Graphite', description: 'Grey and white with a steel blue accent', accent: '#7FB2E5', bg: '#18191B', side: '#121314', lift: '#222326', hi: '#F0F0EE', dim: '#8E8E8A', signal: null, red: '#E2574C' },
   classic: { label: 'Classic', description: 'The pre-rebuild Hive: VS Code Dark Modern, square corners', accent: '#4DA3FF', bg: '#1F1F1F', side: '#181818', lift: '#2A2D2E', hi: '#CCCCCC', dim: '#9D9D9D', signal: '#3794FF', red: '#F14C4C', square: true, ink: '#CCCCCC' },
   midnight: { label: 'Midnight', description: 'Deep navy, a blue accent and an ice signal', accent: '#5B9DFF', bg: '#0F1420', side: '#0B0F18', lift: '#18202F', hi: '#E6EAF2', dim: '#8792A6', signal: '#8FC7FF', red: '#F0625A' },
@@ -83,7 +84,7 @@ function derive(s: Seeds): Record<string, string> {
     wait: signal, 'wait-bg': s.signal ? alpha(signal, L ? 0.1 : 0.07) : s.lift,
     fail: red, 'fail-bg': alpha(red, L ? 0.07 : 0.08),
     // the primary button is the main text colour; quiet buttons a faint fill of it
-    accent, 'on-accent': L ? '#FFFFFF' : s.bg, 'accent-wash': alpha(accent, L ? 0.1 : 0.14), 'btn-quiet': alpha(hi, L ? 0.07 : 0.09), 'pick-bg': alpha(accent, L ? 0.1 : 0.14),
+    accent: s.fill ?? accent, 'on-accent': s.fill || L ? '#FFFFFF' : s.bg, 'accent-text': accent, 'accent-wash': alpha(accent, L ? 0.1 : 0.14), 'btn-quiet': alpha(hi, L ? 0.07 : 0.09), 'pick-bg': alpha(accent, L ? 0.1 : 0.14),
     focus: s.hc ? signal : accent, 'focus-w': s.hc ? '2px' : '1px', edge: s.hc ? rule2 : 'transparent',
     'brand-bar': accent,
     // git and diff
