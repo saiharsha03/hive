@@ -9,7 +9,7 @@ import { langOf, monacoLanguageOf } from '../../shared/editorCore'
 import { kindOf, Preview } from './Preview'
 import { MdBody } from './MdBody'
 
-type Doc = { model: monaco.editor.ITextModel; savedVersion: number; mtime: number; sync: monaco.IDisposable; viewState: monaco.editor.ICodeEditorViewState | null }
+type Doc = { model: monaco.editor.ITextModel; savedVersion: number; mtime: number; sync: monaco.IDisposable; viewState: monaco.editor.ICodeEditorViewState | null; dirty: boolean }
 
 export const FILE_TAB = 'file:'
 export const fileTabId = (path: string) => `${FILE_TAB}${path}`
@@ -24,9 +24,12 @@ const renderable = (p: string) => kindOf(p) === 'html' || /\.(md|markdown)$/i.te
 let opener: (path: string) => void = () => {}
 export const setFileOpener = (f: (path: string) => void) => { opener = f }
 const reveals = new Map<string, { line: number; column: number }>()
+// the editor showing a file, told when a place in it is asked for (no polling)
+const revealers = new Map<string, () => void>()
 export function openInEditor(path: string, line?: number, column = 1): void {
   if (line) reveals.set(path, { line, column })
   opener(path)
+  revealers.get(path)?.()
 }
 
 // ---- models, and which files have unsaved edits (the tab bar shows a dot) ----
@@ -43,8 +46,9 @@ async function load(path: string): Promise<Doc> {
   const { text, mtime } = await window.api.editorRead(path)
   const uri = monaco.Uri.file(path)
   const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(text, monacoLanguageOf(path), uri)
-  const doc: Doc = { model, savedVersion: model.getAlternativeVersionId(), mtime, sync: attach(model), viewState: null }
-  model.onDidChangeContent(() => dirtyChanged())
+  const doc: Doc = { model, savedVersion: model.getAlternativeVersionId(), mtime, sync: attach(model), viewState: null, dirty: false }
+  // tabs re-render when the unsaved state flips, not on every keystroke
+  model.onDidChangeContent(() => { const now = model.getAlternativeVersionId() !== doc.savedVersion; if (now !== doc.dirty) { doc.dirty = now; dirtyChanged() } })
   docs.set(path, doc)
   dirtyChanged() // tabs showing it re-render (a Markdown tab that opened rendered gets its text)
   return doc
@@ -77,16 +81,26 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
   const media = shownOnly(path)
   const showing = media || (rendered && renderable(path))
 
-  const save = async () => {
+  // true when the file was written. A file changed on disk since it was read is not overwritten: the bar asks
+  // (force = "Keep mine"). A failed save leaves the edits in the editor.
+  const save = async (force = false): Promise<boolean> => {
     const d = docs.get(path)
-    if (!d) return
+    if (!d) return false
     try {
-      d.mtime = await window.api.editorWrite(path, d.model.getValue())
+      d.mtime = await window.api.editorWrite(path, d.model.getValue(), force ? null : d.mtime)
       d.savedVersion = d.model.getAlternativeVersionId()
+      d.dirty = false
       saved(d.model)
       setChanged(false)
+      setError('')
       dirtyChanged()
-    } catch (e) { setError(String((e as Error)?.message ?? e)) }
+      return true
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+      if (/changed on disk/.test(msg)) setChanged(true)
+      else setError(msg)
+      return false
+    }
   }
   const saveRef = useRef(save)
   saveRef.current = save
@@ -110,6 +124,7 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
       e.setModel(d.model)
       if (d.viewState) e.restoreViewState(d.viewState)
       e.focus()
+      revealRef.current()
     }, (err) => setError(String(err?.message ?? err)))
     return () => {
       alive = false
@@ -119,18 +134,22 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
     }
   }, [path, media])
 
-  // go where a definition or a search result asked
+  // go where a definition or a search result asked: when asked, and once the file has loaded
+  const reveal = () => {
+    const r = reveals.get(path)
+    const e = ed.current
+    if (!r || !e?.getModel()) return
+    reveals.delete(path)
+    e.setPosition({ lineNumber: r.line, column: r.column })
+    e.revealLineInCenter(r.line)
+    e.focus()
+  }
+  const revealRef = useRef(reveal)
+  revealRef.current = reveal
   useEffect(() => {
-    const t = setInterval(() => {
-      const r = reveals.get(path)
-      const e = ed.current
-      if (!r || !e?.getModel()) return
-      reveals.delete(path)
-      e.setPosition({ lineNumber: r.line, column: r.column })
-      e.revealLineInCenter(r.line)
-      e.focus()
-    }, 100)
-    return () => clearInterval(t)
+    const f = () => revealRef.current()
+    revealers.set(path, f)
+    return () => { if (revealers.get(path) === f) revealers.delete(path) }
   }, [path])
 
   // something else changed the file (Claude, git): reload it when it has no unsaved edits, else ask
@@ -145,9 +164,12 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
       const { text, mtime } = await window.api.editorRead(path)
       d.model.pushEditOperations([], [{ range: d.model.getFullModelRange(), text }], () => null)
       d.savedVersion = d.model.getAlternativeVersionId()
+      d.dirty = false
       d.mtime = mtime
       dirtyChanged()
     }
+    // a tab that was hidden did not watch the file: look at once when it shows again
+    void check()
     const t = setInterval(() => void check(), 2000)
     window.addEventListener('focus', check)
     return () => { clearInterval(t); window.removeEventListener('focus', check) }
@@ -159,6 +181,7 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
     const { text, mtime } = await window.api.editorRead(path)
     d.model.pushEditOperations([], [{ range: d.model.getFullModelRange(), text }], () => null)
     d.savedVersion = d.model.getAlternativeVersionId()
+    d.dirty = false
     d.mtime = mtime
     setChanged(false)
     dirtyChanged()
@@ -183,7 +206,7 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
       {closing && (
         <div className="ed-bar" data-testid="editor-unsaved">
           {base(path)} has unsaved changes.
-          <button className="dlink" onClick={() => void save().then(() => { discard(path); onClosed() })}>Save</button>
+          <button className="dlink" onClick={() => void save().then((ok) => { if (ok) { discard(path); onClosed() } })}>Save</button>
           <button className="dlink" onClick={() => { discard(path); onClosed() }} data-testid="editor-discard">Discard</button>
           <button className="dlink" onClick={() => { closeRequests.delete(path); dirtyChanged() }}>Cancel</button>
         </div>
@@ -192,7 +215,7 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
         <div className="ed-bar" data-testid="editor-changed">
           {base(path)} changed on disk while you edited it.
           <button className="dlink" onClick={() => void reloadFromDisk()}>Reload theirs</button>
-          <button className="dlink" onClick={() => void save()}>Keep mine (save)</button>
+          <button className="dlink" onClick={() => void save(true)}>Keep mine (save)</button>
         </div>
       )}
       {error && <div className="derr ed-err" data-testid="editor-error">{error}</div>}

@@ -30,7 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   setPlugin: (key: string, on: boolean) => ipcRenderer.invoke('plugins:set', key, on),
   editorRead: (path: string) => ipcRenderer.invoke('editor:read', path),
   editorMtime: (path: string) => ipcRenderer.invoke('editor:mtime', path),
-  editorWrite: (path: string, text: string) => ipcRenderer.invoke('editor:write', path, text),
+  editorWrite: (path: string, text: string, expected?: number | null) => ipcRenderer.invoke('editor:write', path, text, expected),
   openInVsCode: (path: string, line: number) => ipcRenderer.invoke('editor:vscode', path, line),
   lspOpen: (file: string, text: string) => ipcRenderer.invoke('lsp:open', file, text),
   lspChange: (file: string, text: string, version: number) => ipcRenderer.invoke('lsp:change', file, text, version),

@@ -94,7 +94,7 @@ interface Window {
     setPlugin: (key: string, on: boolean) => Promise<void>
     editorRead: (path: string) => Promise<{ text: string; mtime: number }>
     editorMtime: (path: string) => Promise<number | null>
-    editorWrite: (path: string, text: string) => Promise<number>
+    editorWrite: (path: string, text: string, expected?: number | null) => Promise<number>
     openInVsCode: (path: string, line: number) => Promise<void>
     lspOpen: (file: string, text: string) => Promise<boolean>
     lspChange: (file: string, text: string, version: number) => Promise<void>
