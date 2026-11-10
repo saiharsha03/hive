@@ -176,13 +176,13 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   const thinking = ultra || st.ultrathink
   return (
     <>
-      <button ref={mref} className="dd" onClick={openModels} title={err || 'Model for this thread'} data-testid="model-picker">
-        <Icon name="sparkle" className="mk-model" /><span>{st.model ? modelLabel(st.model) : 'Model'}</span><Icon name="chevron-down" className="sm" />
+      <button ref={mref} className="pick" onClick={openModels} title={err || 'Model for this thread'} aria-haspopup="listbox" data-testid="model-picker">
+        <i>Model</i>{st.model ? modelLabel(st.model) : 'default'}
       </button>
-      <button ref={eref} className={thinking ? 'dd ultra' : 'dd'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} data-testid="effort-picker">
-        <Icon name="lightbulb" /><span>Effort: {st.effort ?? 'default'}{thinking ? ' (ultrathink)' : ''}</span><Icon name="chevron-down" className="sm" />
+      <button ref={eref} className={thinking ? 'pick ultra' : 'pick'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} aria-haspopup="listbox" data-testid="effort-picker">
+        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? 'default'}
       </button>
-      {(err || st.effortError) && <span className="tst-err" title={err || st.effortError}>switch failed</span>}
+      {(err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>}
       {open === 'model' && (
         <PickList anchor={anchorOf(mref.current)} value={st.model} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
           items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName }))]}

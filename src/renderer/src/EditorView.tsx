@@ -16,6 +16,58 @@ export const fileTabId = (path: string) => `${FILE_TAB}${path}`
 export const fileOfTab = (id: string) => (id.startsWith(FILE_TAB) ? id.slice(FILE_TAB.length) : null)
 const base = (p: string) => p.split(/[\\/]/).pop() ?? p
 const SERVER: Record<string, string> = { python: 'Pyright', typescript: 'TypeScript', vue: 'Vue' }
+
+// Monaco's colours from the window's tokens, so the editor sits in the same zones as everything else
+function hiveTheme(): string {
+  const cs = getComputedStyle(document.documentElement)
+  const v = (n: string, d: string) => { const x = cs.getPropertyValue(n).trim(); return /^#[0-9a-f]{6}$/i.test(x) ? x : d }
+  const fg = (n: string, d: string) => v(n, d).slice(1)
+  const t = document.documentElement.dataset.theme
+  monaco.editor.defineTheme('hive', {
+    base: t === 'light' ? 'vs' : t === 'hc' ? 'hc-black' : 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'keyword', foreground: fg('--sy-kw', '#7FB2FF') }, { token: 'string', foreground: fg('--sy-str', '#9ED69A') },
+      { token: 'comment', foreground: fg('--sy-cm', '#6F7881'), fontStyle: 'italic' }, { token: 'number', foreground: fg('--sy-num', '#E0A87A') },
+      { token: 'type', foreground: fg('--sy-fn', '#E5D38A') }, { token: 'function', foreground: fg('--sy-fn', '#E5D38A') },
+    ],
+    colors: {
+      'editor.background': v('--bg', '#1C1F23'), 'editor.foreground': v('--ink', '#CBD1D7'), 'editorGutter.background': v('--bg', '#1C1F23'),
+      'minimap.background': v('--bg', '#1C1F23'), 'editorLineNumber.foreground': v('--faint', '#5D656D'), 'editorLineNumber.activeForeground': v('--dim', '#8A929B'),
+      'editor.lineHighlightBackground': v('--band', '#22262B'), 'editor.lineHighlightBorder': v('--band', '#22262B'), 'editor.selectionBackground': v('--term-sel', '#2D4A73'),
+      'editorWidget.background': v('--raised', '#23272C'), 'editorWidget.border': v('--rule2', '#3A4047'), 'editorHoverWidget.background': v('--raised', '#23272C'),
+      'editorHoverWidget.border': v('--rule2', '#3A4047'), 'editorSuggestWidget.background': v('--raised', '#23272C'), 'editorSuggestWidget.border': v('--rule2', '#3A4047'),
+      'editorWarning.foreground': v('--wait', '#F2B33D'), 'editorError.foreground': v('--fail', '#F2605A'), 'editorIndentGuide.background1': v('--rule', '#2B3035'),
+      'scrollbarSlider.background': '#8A929B33', 'editorOverviewRuler.border': v('--rule', '#2B3035'),
+    },
+  })
+  return 'hive'
+}
+
+// the problems in one file, from its model's markers (the language server's diagnostics)
+function useProblems(path: string, ready: boolean): monaco.editor.IMarker[] {
+  const [list, setList] = useState<monaco.editor.IMarker[]>([])
+  useEffect(() => {
+    const read = () => {
+      const m = docs.get(path)?.model
+      setList(m ? monaco.editor.getModelMarkers({ resource: m.uri }).filter((x) => x.severity >= monaco.MarkerSeverity.Warning).sort((a, b) => b.severity - a.severity || a.startLineNumber - b.startLineNumber) : [])
+    }
+    read()
+    const off = monaco.editor.onDidChangeMarkers(read)
+    return () => off.dispose()
+  }, [path, ready])
+  return list
+}
+// the file's place in its repo: ledger-api > billing > invoice.py
+function useCrumbs(path: string): string[] {
+  const [crumbs, setCrumbs] = useState<string[]>(() => path.split(/[\\/]/).slice(-3))
+  useEffect(() => {
+    let alive = true
+    window.api.gitLocate(path).then((at) => { if (alive && at) setCrumbs([at.name, ...at.path.split('/')]) }).catch(() => {})
+    return () => { alive = false }
+  }, [path])
+  return crumbs
+}
 // images, PDFs and media are shown, not edited; Markdown and HTML can be shown rendered too
 const shownOnly = (p: string) => !['text', 'html'].includes(kindOf(p))
 const renderable = (p: string) => kindOf(p) === 'html' || /\.(md|markdown)$/i.test(p)
@@ -70,6 +122,17 @@ function discard(path: string) {
   dirtyChanged()
 }
 
+const problemCount = (ps: monaco.editor.IMarker[]) => {
+  const e = ps.filter((p) => p.severity === monaco.MarkerSeverity.Error).length
+  const w = ps.length - e
+  return [e ? `${e} error${e === 1 ? '' : 's'}` : '', w ? `${w} warning${w === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')
+}
+// "Ask Claude to fix": the file's problems go into the message box of the thread last on screen
+let askFix: (path: string, text: string) => void = () => {}
+export const setAskFix = (f: (path: string, text: string) => void) => { askFix = f }
+const askToFix = (path: string, ps: monaco.editor.IMarker[]) =>
+  askFix(path, `Fix the problems in ${path}:\n${ps.slice(0, 10).map((p) => `- line ${p.startLineNumber}: ${p.message.split('\n')[0]}`).join('\n')}`)
+
 export function FileEditor({ path, onClosed }: { path: string; onClosed: () => void }) {
   useDirtyVersion()
   const host = useRef<HTMLDivElement>(null)
@@ -78,7 +141,10 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
   const [rendered, setRendered] = useState(() => renderable(path))
   const [changed, setChanged] = useState(false) // edited here and changed on disk
   const [error, setError] = useState('')
+  const [ready, setReady] = useState(false)
   const media = shownOnly(path)
+  const crumbs = useCrumbs(path)
+  const problems = useProblems(path, ready)
   const showing = media || (rendered && renderable(path))
 
   // true when the file was written. A file changed on disk since it was read is not overwritten: the bar asks
@@ -110,18 +176,20 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
     if (media || !host.current) return
     const light = () => document.documentElement.dataset.theme === 'light'
     const e = monaco.editor.create(host.current, {
-      automaticLayout: true, theme: light() ? 'vs' : 'vs-dark', fontSize: 13, minimap: { enabled: true }, scrollBeyondLastLine: false,
+      automaticLayout: true, theme: hiveTheme(), fontSize: 12.5, lineHeight: 21, minimap: { enabled: true }, scrollBeyondLastLine: false,
       fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || undefined, model: null, fixedOverflowWidgets: true,
     })
     ed.current = e
     e.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void saveRef.current())
     registerLanguageFeatures((file, line, column) => openInEditor(file, line, column))
-    const theme = new MutationObserver(() => monaco.editor.setTheme(light() ? 'vs' : 'vs-dark'))
+    void light
+    const theme = new MutationObserver(() => requestAnimationFrame(() => monaco.editor.setTheme(hiveTheme())))
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     let alive = true
     load(path).then((d) => {
       if (!alive) return
       e.setModel(d.model)
+      setReady(true)
       if (d.viewState) e.restoreViewState(d.viewState)
       e.focus()
       revealRef.current()
@@ -191,8 +259,8 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
   const closing = closeRequests.has(path)
   return (
     <section className="tool editor" data-testid="editor-view" data-path={path}>
-      <div className="ed-tabs">
-        <span className="ed-path dnote" title={path}>{path}</span>
+      <div className="ed-tabs ed-crumb">
+        <span className="ed-path" title={path}>{crumbs.map((c, i) => <span key={i}>{i > 0 && <b> &gt; </b>}{c}</span>)}</span>
         <span className="dspace" />
         {renderable(path) && (
           <span className="seg ed-seg" role="group" aria-label="View">
@@ -200,7 +268,7 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
             <button className={rendered ? '' : 'on'} aria-pressed={!rendered} onClick={() => setRendered(false)} data-testid="editor-code">Code</button>
           </span>
         )}
-        {!media && !(rendered && renderable(path)) && <span className="dnote ed-lang">{lang ? `${SERVER[lang]} language server` : monacoLanguageOf(path)}</span>}
+        {!media && !(rendered && renderable(path)) && <span className={lang ? 'ed-lang lsp' : 'ed-lang'}>{lang ? `${SERVER[lang]}${ready ? ' ready' : ''}` : monacoLanguageOf(path)}</span>}
         {!media && <button className="dlink" onClick={() => void window.api.openInVsCode(path, ed.current?.getPosition()?.lineNumber ?? 1)} data-testid="editor-vscode">Open in VS Code</button>}
       </div>
       {closing && (
@@ -221,6 +289,16 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
       {error && <div className="derr ed-err" data-testid="editor-error">{error}</div>}
       {showing && <div className="ed-shown">{/\.(md|markdown)$/i.test(path) ? <div className="nt-preview md"><MdBody text={docs.get(path)?.model.getValue() ?? ''} copy={false} /></div> : <Preview key={path} path={path} onClose={onClosed} />}</div>}
       {!media && <div ref={host} className="ed-host" style={showing ? { display: 'none' } : undefined} data-testid="editor-host" />}
+      {!media && !showing && (
+        <div className="ed-problems" data-testid="editor-problems">
+          <span className="pk">Problems</span>
+          {problems.length ? <>
+            <span className={problems[0].severity === monaco.MarkerSeverity.Error ? 'pe' : 'pw'}>{problemCount(problems)}</span>
+            <button className="pl" onClick={() => { ed.current?.setPosition({ lineNumber: problems[0].startLineNumber, column: problems[0].startColumn }); ed.current?.revealLineInCenter(problems[0].startLineNumber); ed.current?.focus() }} title={problems[0].message}>Line {problems[0].startLineNumber}: {problems[0].message.split('\n')[0]}</button>
+            <button className="pr" onClick={() => askToFix(path, problems)} data-testid="editor-ask-fix">Ask Claude to fix</button>
+          </> : <span className="pn">None</span>}
+        </div>
+      )}
     </section>
   )
 }
