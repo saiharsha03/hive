@@ -259,13 +259,16 @@ function startRun(id: string, w: WatcherFile, c: WatchConfig, s: WatcherState, k
   // every run is a fresh thread: a long-lived one re-read its whole history each run (that was most of the cost), while
   // what carries over lives in the memory folder, db, findings and the last run's final reply in the header. A thread
   // still open here (waiting on the user, or a user's own turn in it) is closed first.
+  const closedTab = s.tabId
   if (s.tabId || s.sessionId) {
     const st = s.tabId ? deps.threadState(s.tabId) : null
     if (st?.working) return '' // never cut a turn short; the next tick tries again
     if (s.tabId) closeRun(s.tabId)
     s = { ...s, tabId: null, sessionId: null, promptSent: null }
   }
-  const tabId = `watcher-${id}-${now.getTime()}`
+  // the id carries the start time; a run started in the same millisecond as the one just closed must not reuse its id
+  const stamped = `watcher-${id}-${now.getTime()}`
+  const tabId = stamped === closedTab ? `${stamped}-2` : stamped
   // the full header and instructions every time; a wake also says which scheduled tasks are due, since they are marked
   // woken below and would otherwise never reach the new thread
   const wakeText = wake ? wakeMessage({ name: w.name, now, due: wake.due, table: scheduleFile(c.dir), fallbackHours: FALLBACK_MS / 3_600_000, promptFile: c.prompt, prompt: null, startup: wake.startup }) : ''

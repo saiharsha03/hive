@@ -16,6 +16,10 @@ All notable changes to Hive are documented here. The format follows
   statement per call, read-only reads, no writes on production or read-only connections); a write runs only after you
   confirm that statement in the thread. Without Quarry nothing of it shows.
 
+### Fixed
+
+- A watcher run started in the same millisecond as the run it replaces no longer reuses that run's thread.
+
 ## [2.0.0] - 2026-11-10
 
 ### Added
