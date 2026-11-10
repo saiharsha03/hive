@@ -319,14 +319,13 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     if (it.kind === 'user') {
       if (it.queue?.pending) return
       out.push(
-        <div key={key} className={`msg you${it.steer ? ' steer' : ''}`} data-testid="msg-user">
+        <div key={key} className={`msg you${it.steer ? ' steer' : ''}`} title={it.steer && it.during ? `Steered while Claude was on: ${it.during}` : undefined} data-testid="msg-user">
           {/* seen: Claude took the message in (at once for a normal send, at its next step for a steered one) */}
           {it.seen ? <span className="seen sw sw-done" title="Claude has read this message" data-testid="msg-seen">SEEN BY CLAUDE</span>
             : it.steer && it.uuid && session.busy && <span className="seen sw sw-wait" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">NOT READ YET</span>}
           {it.failed && <span className="seen sw sw-fail" title={it.failed} data-testid="msg-failed">NOT SENT</span>}
           {it.images.length > 0 && <div className="imgs">{it.images.map((src, j) => <button key={j} className="thumb" onClick={() => st.open(src)} data-testid="chat-image"><img src={src} alt="" /></button>)}</div>}
           {it.text && <div className="body">{it.text}</div>}
-          {it.steer && it.during && <div className="msg-note">Steered while Claude was on: {it.during}</div>}
           {it.failed && <div className="msg-note s-fail">Not sent: {it.failed}</div>}
           {it.uuid && session.sessionId && !session.busy && !it.steer && (
             <button className="rewindb" onClick={() => startRewind(it, i)} title="Go back to before this message: put back the files Claude changed since, and edit the message" data-testid="msg-rewind">Rewind</button>
