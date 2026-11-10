@@ -242,6 +242,13 @@ export function App() {
   const [allowFail, setAllowFail] = useState<string | null>(null)
   useEffect(() => { void window.api.allowStatus().then(setAllow); return window.api.onAllowStatus(setAllow) }, [])
   const allowOn = !!allow?.changed && !allow.running
+  // every pending scheduled wake-up and automatic continue, for the palette's list (Cancel from there)
+  const [wakes, setWakes] = useState<Awaited<ReturnType<typeof window.api.wakeupsList>> | null>(null)
+  useEffect(() => {
+    const load = () => void window.api.wakeupsList().then(setWakes).catch(() => {})
+    load()
+    return window.api.onWakeupsChanged(load)
+  }, [])
   // known: every address the command already allowed (home and office both count); a failed read is not a change
   const knownList = (allow?.known ?? []).map((k) => `${k.ip}${k.trusted ? '' : ' (expired)'}`).join(', ')
   const allowTitle = !allow ? '' : allow.running ? 'Allowing your IP…'
@@ -807,6 +814,9 @@ export function App() {
     { id: 'tool:plugins', group: 'Tools', label: 'Plugins', icon: 'extensions', run: () => openTool('plugins') },
     { id: 'tool:settings', group: 'Tools', label: 'Settings', hint: 'Ctrl+,', icon: 'settings-gear', run: () => setModal('settings') },
     { id: 'tool:update', group: 'Tools', label: 'Check for updates', icon: 'cloud-download', run: () => void window.api.updateCheck().then(() => window.api.updateState()).then((u) => notice(u ? `Hive ${u.version} is ${u.kind === 'ready' ? 'downloaded: restart from the status bar' : 'available: see the status bar'}` : 'No newer Hive release (or the download is still running)')).catch(() => {}) },
+    // pending wake-ups and automatic continues: picking one cancels it
+    ...(wakes?.wakeups ?? []).map((w) => ({ id: `wake:${w.id}`, group: 'Wake-ups', label: `Cancel wake-up #${w.id}: ${w.title || 'thread'}`, hint: `${new Date(w.wakeAt).toLocaleString()}${w.everyMinutes ? `, every ${w.everyMinutes} min` : ''}: ${w.prompt.split('\n')[0].slice(0, 80)}`, icon: 'bell', run: () => void window.api.wakeupsCancel('wake', w.id).then((ok) => notice(ok ? `Wake-up #${w.id} cancelled` : `Wake-up #${w.id} was no longer pending`)).catch(() => {}) })),
+    ...(wakes?.continues ?? []).map((c) => ({ id: `continue:${c.key}`, group: 'Wake-ups', label: `Cancel automatic continue: ${c.title || 'thread'}`, hint: `continues ${new Date(c.at).toLocaleString()} after the usage limit resets`, icon: 'bell', run: () => void window.api.wakeupsCancel('continue', c.key).then((ok) => notice(ok ? 'Automatic continue cancelled' : 'It was no longer pending')).catch(() => {}) })),
     // an allowed address whose rule is gone on the other side: forget it, so Allow my IP offers it again
     ...(allow?.known ?? []).map((k) => ({ id: `allow:forget:${k.ip}`, group: 'Tools', label: `Allow my IP: forget ${k.ip}`, hint: `allowed ${new Date(k.at).toLocaleDateString()}`, icon: 'shield', run: () => void window.api.allowForget(k.ip).then(setAllow).catch(() => {}) })),
     { id: 'tool:watchers-popover', group: 'Tools', label: 'Watchers: switch on or off', icon: 'eye', mk: 'mk-watch', run: () => setPop({ kind: 'watchers', anchor: centre() }) },
