@@ -123,6 +123,7 @@ contextBridge.exposeInMainWorld('api', {
   chatReset: () => ipcRenderer.invoke('chat:reset'),
   previewUrl: (path: string) => ipcRenderer.invoke('preview:url', path),
   chatMode: () => ipcRenderer.invoke('chat:mode'),
+  chatSetMode: (tabId: string, mode: string) => ipcRenderer.invoke('chat:setMode', tabId, mode),
   chatContext: (tabId: string) => ipcRenderer.invoke('chat:context', tabId),
   watchersList: () => ipcRenderer.invoke('watchers:list'),
   watcherDetail: (id: string) => ipcRenderer.invoke('watchers:detail', id),

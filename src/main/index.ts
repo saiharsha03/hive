@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, watch, writ
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
-import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
+import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, setThreadMode, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { busyTranscript, configureChat, liveQuery, resumeEverything, runningEverywhere, stopEverything, stoppedQueues, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, pauseWakeups, runWakeupNow, tick as wakeupsTick, wakeupsPaused } from './threadWakeups'
@@ -492,6 +492,7 @@ handle('chat:reset', (e) => {
   setTimeout(() => resendPending(e.sender), 1000)
 })
 handle('chat:mode', () => PERMISSION_MODE)
+handle('chat:setMode', (e, tabId: string, mode: string) => setThreadMode(String(tabId), String(mode), e.sender))
 handle('chat:context', (_e, tabId: string) => contextUsage(tabId))
 // Watchers: the list, one watcher's detail, and the same actions the agent tools have
 handle('watchers:list', () => listWatchersView())

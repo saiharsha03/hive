@@ -6,13 +6,14 @@ import { typeInTerminal } from './terminal'
 import { cliLine, cliOnlyCommand } from '../shared/cliCommandCore'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { appendFile } from 'node:fs/promises'
+import { appendFile, rm } from 'node:fs/promises'
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { runCodex } from './codex'
 import { claudeExecutable } from './engine'
+import { TEST_MODE } from './testMode'
 import { ORGANIZE_ACTIONS, checkOrganize, localNow } from './organize'
 import { searchInSession, searchSessions, sessionMeta } from './search'
 import { formatChunks, formatSessions } from './searchCore'
@@ -35,7 +36,7 @@ import { notifyPhone } from './mobile'
 import { notifyDesktop } from './desktopNotify'
 import { autoBackground } from '../shared/autoBackgroundCore'
 import { realLimits } from '../shared/usageCore'
-import { parseQuestions } from '../shared/askCore'
+import { parseQuestions, type AskQuestion } from '../shared/askCore'
 import { cancelAsks, openAsks, replyInChat, waitForAnswer } from './asks'
 import { cancelContinue, limitBack, scheduleContinue } from './autoContinue'
 import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWakeups'
@@ -1038,7 +1039,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       perTaskStopAffordance: true,
       // a one-line "what it is doing now" for each running subagent every ~30s, shown on its row in the thread status
       agentProgressSummaries: true,
-      permissionMode: modeFor(background, PERMISSION_MODE),
+      permissionMode: userModes.get(tabId) ?? modeFor(background, PERMISSION_MODE),
       // always set, so a session that started in auto can still switch to bypass when it comes to the foreground
       allowDangerouslySkipPermissions: true,
       // Settings > General: model, effort and Claude in Chrome for threads started from now on ('' = Claude Code's
@@ -1054,7 +1055,27 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         // a workflow (the Workflow tool) is the agent's own way of running work: Hive never stands in its way, in auto
         // mode either (the classifier may hand the call here); a watcher's stays under its read-only rules below
         if (permitWithoutPrompt(name, watcher)) return { behavior: 'allow', updatedInput: input }
-        if (name !== 'AskUserQuestion') return { behavior: 'deny', message: `${appName()} has no permission prompt for ${name}` }
+        if (name !== 'AskUserQuestion') {
+          if (watcher) return { behavior: 'deny', message: 'This is an unattended watcher run: nobody is there to allow this.' }
+          if (allowedTools.get(tabId)?.has(name)) return { behavior: 'allow', updatedInput: input }
+          const ask: AskQuestion[] = [{ question: `Allow ${name}? ${toolSummary(name, input)}`, header: 'Permission', multiSelect: false, options: [
+            { label: 'Allow', description: 'Run it this once' },
+            { label: 'Allow for this thread', description: `Do not ask again for ${name} in this thread` },
+            { label: 'Deny', description: 'Claude is told you said no' },
+          ] }]
+          const why = `Permission: ${name}`
+          s.waitingReason = why
+          send({ type: 'hive_ask', id: toolUseID, questions: ask })
+          send({ type: 'hive_organize', action: 'waiting', reason: why })
+          notifyUser(`Permission: ${titleOf(tabId)}`, ask[0].question, tabId)
+          const got = await waitForAnswer(tabId, toolUseID, ask, signal)
+          send({ type: 'hive_ask_done', id: toolUseID })
+          if (!openAsks(tabId).length) { if (s.waitingReason === why) s.waitingReason = undefined; send({ type: 'hive_organize', action: 'resolved' }) }
+          const picked = got.kind === 'answers' ? JSON.stringify(got.answers) : ''
+          if (picked.includes('Allow for this thread')) { allowedTools.set(tabId, (allowedTools.get(tabId) ?? new Set()).add(name)); return { behavior: 'allow', updatedInput: input } }
+          if (picked.includes('"Allow"') || /:\s*"Allow"/.test(picked)) return { behavior: 'allow', updatedInput: input }
+          return { behavior: 'deny', message: got.kind === 'chat' ? 'The user replied in the chat instead of allowing this: read their next message.' : got.kind === 'answers' ? 'The user denied this.' : 'The permission request was dismissed (the turn was stopped).' }
+        }
         if (watcher) return { behavior: 'deny', message: 'This is an unattended watcher run: nobody is there to answer. Decide yourself and note the open question in your findings.' }
         const questions = parseQuestions(input)
         if (!questions) return { behavior: 'deny', message: 'AskUserQuestion needs 1-4 questions, each with a question and labelled options' }
@@ -1226,6 +1247,9 @@ function syncMode(s: Live, send: (event: unknown) => void) {
   s.modeChain = s.modeChain.then(async () => {
     // not initialized yet: the init message calls this again with the mode the process started in
     if (s.mode === null) return
+    // a mode picked by hand for this thread stays, in the background too
+    const tab = [...live].find(([, v]) => v === s)?.[0]
+    if (tab && userModes.has(tab)) { send({ type: 'hive_mode', mode: s.mode }); return }
     const want = modeSwitch(s.mode, s.background, PERMISSION_MODE)
     if (!want) { send({ type: 'hive_mode', mode: s.mode }); return }
     try {
@@ -1236,6 +1260,34 @@ function syncMode(s: Live, send: (event: unknown) => void) {
       send({ type: 'hive_mode', mode: s.mode, error: `Could not switch to ${want}: ${e?.message ?? e}` })
     }
   })
+}
+
+// The permission mode picked for a thread in its message box (bypass, auto, accept edits, ask, plan). A live thread
+// switches at once; one with no process starts in it with its next message. It stays until another is picked.
+export const THREAD_MODES = ['bypassPermissions', 'auto', 'acceptEdits', 'default', 'plan'] as const
+const userModes = new Map<string, (typeof THREAD_MODES)[number]>()
+export function setThreadMode(tabId: string, mode: string, web: WebContents): void {
+  if (!(THREAD_MODES as readonly string[]).includes(mode)) throw new Error(`Unknown mode: ${mode}`)
+  const want = mode as (typeof THREAD_MODES)[number]
+  userModes.set(tabId, want)
+  const s = live.get(tabId)
+  const send = (ev: unknown) => { if (!web.isDestroyed()) web.send('chat:event', tabId, ev) }
+  if (!s || s.mode === null) { send({ type: 'hive_mode', mode: want }); return }
+  s.modeChain = s.modeChain.then(async () => {
+    try {
+      await s.q.setPermissionMode(want)
+      s.mode = want
+      send({ type: 'hive_mode', mode: want })
+    } catch (e: any) {
+      send({ type: 'hive_mode', mode: s.mode, error: `Could not switch to ${want}: ${e?.message ?? e}` })
+    }
+  })
+}
+// tools a person said "allow for this thread" to, per tab
+const allowedTools = new Map<string, Set<string>>()
+const toolSummary = (name: string, input: any): string => {
+  const v = name === 'Bash' || name === 'PowerShell' ? input?.command : input?.file_path ?? input?.path ?? input?.url ?? input?.pattern
+  return String(typeof v === 'string' && v ? v : JSON.stringify(input ?? {})).replace(/\s+/g, ' ').slice(0, 220)
 }
 
 // the tab moved to the background (true) or back on screen (false); with no live process there is nothing to switch,
@@ -1252,8 +1304,52 @@ export function setBackground(tabId: string, background: boolean, web: WebConten
 // background: the tab is not on screen (or Hive started it on its own), so a new process starts in auto mode
 export type Outgoing = { uuid?: string; title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
 
+// ---- the thread's name, from a small second call ----
+// After your fifth message in a thread, one short Haiku call (no tools, nothing of the thread's own context) reads what
+// you said so far and names the thread in 3 to 6 words. It runs once per thread; the name is stored like /rename.
+const TITLE_AFTER = 5
+const saidBy = new Map<string, string[]>() // tab -> what the user said (short), until the name is made
+const named = new Set<string>()
+async function nameThread(tabId: string, cwd: string, web: WebContents): Promise<void> {
+  const said = saidBy.get(tabId) ?? []
+  saidBy.delete(tabId)
+  if (TEST_MODE || !said.length) return
+  const q = query({
+    prompt: `Name this conversation in 3 to 6 words: what the user is working on, plain words, no quotes, no full stop. Answer with the name only.\n\nWhat the user said, in order:\n${said.map((t, i) => `${i + 1}. ${t}`).join('\n')}`,
+    options: {
+      cwd, pathToClaudeCodeExecutable: claudeExecutable(), settingSources: [], model: 'haiku', maxTurns: 1,
+      systemPrompt: 'You name conversations. You answer with a short name and nothing else.',
+      canUseTool: async () => ({ behavior: 'deny' as const, message: 'Naming a thread uses no tools.' }),
+    },
+  })
+  let text = ''
+  let own = ''
+  try {
+    for await (const m of q) {
+      if (m.type === 'assistant') for (const b of (m.message.content as any[])) if (b.type === 'text') text += b.text
+      if (m.type === 'result') { own = m.session_id; break }
+    }
+  } catch { /* no name this time */ } finally {
+    q.close()
+    if (own) await rm(transcriptPath(cwd, own), { force: true }).catch(() => {})
+  }
+  const t = text.replace(/\s+/g, ' ').replace(/^["'`]+|["'`.]+$/g, '').trim().slice(0, 80)
+  const s = live.get(tabId)
+  if (!t || t.split(' ').length > 10 || !s?.sessionId) return
+  await appendFile(transcriptPath(cwd, s.sessionId), JSON.stringify({ type: 'custom-title', customTitle: t, sessionId: s.sessionId }) + '\n').catch(() => {})
+  tabTitles.set(tabId, t)
+  setThreadTitle(tabId, t)
+  if (!web.isDestroyed()) web.send('chat:event', tabId, { type: 'hive_title', title: t })
+}
+
 export function sendMessage(tabId: string, cwd: string, resume: string | undefined, msg: Outgoing, web: WebContents): void {
   if (holdForRewind(tabId, resume, () => sendMessage(tabId, cwd, resume, msg, web))) return
+  if (msg.text && !named.has(tabId)) {
+    const said = saidBy.get(tabId) ?? []
+    said.push(msg.text.replace(/\s+/g, ' ').slice(0, 400))
+    saidBy.set(tabId, said)
+    if (said.length >= TITLE_AFTER) { named.add(tabId); void nameThread(tabId, cwd, web).catch(() => {}) }
+  }
   if (msg.title) { tabTitles.set(tabId, msg.title); setThreadTitle(tabId, msg.title) }
   let s = live.get(tabId)
   if (!s) live.set(tabId, (s = start({ tabId, cwd, resume, web, background: !!msg.background })))

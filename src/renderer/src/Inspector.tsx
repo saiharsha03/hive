@@ -48,25 +48,24 @@ export function useInspected(): SessionMeta | undefined {
 export const Inspector = memo(function Inspector() {
   const s = useInspected()
   const stored = useStore(inspectorTab, (t) => t)
-  const tab: ITab = stored === 'files' ? 'activity' : stored // Files lives in the side bar now
+  const tab: ITab = stored === 'files' || stored === 'status' ? 'activity' : stored // Files lives in the side bar; the status block heads Activity
   const setTab = (t: ITab) => { inspectorTab.set(t); setPref('inspector.tab', t) }
   const st = useThreadStatus(s?.id)
   const running = st.tasks.filter((t) => t.status === 'running').length
   return (
     <aside className="insp" data-testid="inspector" aria-label="Inspector">
       <div className="itabs" role="tablist">
-        {(['activity', 'changes', 'gate', 'status'] as ITab[]).map((t) => (
+        {(['activity', 'changes', 'gate'] as ITab[]).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`itab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)} data-testid={`insp-${t}`}>
-            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : t === 'gate' ? 'PR gate' : 'Status'}
+            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : 'PR gate'}
             {t === 'activity' && running > 0 && <span className="n">{running}</span>}
           </button>
         ))}
       </div>
       <div className="ibody">
-        {tab === 'activity' && <Activity s={s} />}
+        {tab === 'activity' && <>{s && <MiniStatus s={s} />}<Activity s={s} /></>}
         {tab === 'changes' && (s ? <Changes id={s.id} /> : <div className="iempty">Open a thread to see its changes.</div>)}
         {tab === 'gate' && (s ? <GateView s={s} /> : <div className="iempty">Open a thread to see its PR gate.</div>)}
-        {tab === 'status' && (s ? <MiniStatus s={s} /> : <div className="iempty">Open a thread to see its status.</div>)}
       </div>
     </aside>
   )

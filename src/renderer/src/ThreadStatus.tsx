@@ -6,6 +6,7 @@ import { advisorChecked, advisorItems, advisorModelOf, advisorWord, isAdvisorVal
 import { describeCron, nextRun, untilText } from '../../shared/cronCore'
 import { EFFORTS, modelLabel } from '../../shared/statusCore'
 import { createStore, useStore } from './store'
+import { getPref, setPref } from './prefs'
 import { kindLabel, type Task } from '../../shared/taskCore'
 import { dismissGoal, setPicked, useThreadStatus } from './statusStore'
 import { Icon, Popover, anchorOf, type Anchor } from './ui'
@@ -189,6 +190,13 @@ const DEFAULT_PICK = 'default:'
 export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean }) {
   const st = useThreadStatus(tabId)
   const dfl = useStore(defaults, (d) => d)
+  // what a thread really ran on, remembered for the next new thread's label
+  const [seen, setSeen] = useState(() => getPref<{ model: string; effort: string }>('default.seen', { model: '', effort: '' }))
+  useEffect(() => {
+    if (!st.model) return
+    const now = { model: st.model, effort: st.effort ?? seen.effort }
+    if (now.model !== seen.model || now.effort !== seen.effort) { setSeen(now); setPref('default.seen', now) }
+  }, [st.model, st.effort])
   const [models, setModels] = useState<{ value: string; displayName: string }[] | null>(null)
   const [open, setOpen] = useState<'model' | 'effort' | 'advisor' | null>(null)
   const [err, setErr] = useState('')
@@ -223,17 +231,17 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   return (
     <>
       <button ref={mref} className="pick" onClick={openModels} title={err || 'Model for this thread'} aria-haspopup="listbox" data-testid="model-picker">
-        <i>Model</i>{st.model ? modelLabel(st.model) : dfl.model ? nameOf(dfl.model) : 'default'}
+        <i>Model</i>{st.model ? modelLabel(st.model) : dfl.own.model ? nameOf(dfl.own.model) : seen.model ? modelLabel(seen.model) : 'default'}
       </button>
       <button ref={eref} className={thinking ? 'pick ultra' : 'pick'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} aria-haspopup="listbox" data-testid="effort-picker">
-        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? (dfl.effort || 'default')}
+        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? (dfl.own.effort || seen.effort || 'default')}
       </button>
       <button ref={aref} className="pick" onClick={openAdvisor} title="The advisor for this thread: a second model Claude can ask for advice" aria-haspopup="listbox" data-testid="advisor-picker">
         <i>Advisor</i>{word ? word.replace(/^advisor /, 'advisor ') : 'advisor off'}
       </button>
       {(err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>}
       {open === 'model' && (
-        <PickList anchor={anchorOf(mref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.model : isAdvisorValue(v) ? v === advisorOn : v === st.model)} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
+        <PickList anchor={anchorOf(mref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.own.model : isAdvisorValue(v) ? v === advisorOn : v === st.model)} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
           items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName })),
             ...(models ?? []).filter((m) => m.value !== 'default').map((m) => ({ value: DEFAULT_PICK + m.value, label: m.displayName, group: 'Default for new threads' }))]}
           onPick={(v) => { if (v.startsWith(DEFAULT_PICK)) { setErr(''); void saveDefault({ model: v.slice(DEFAULT_PICK.length) }).catch((x) => setErr(String(x?.message ?? x))); return } if (isAdvisorValue(v)) { pickAdvisor(v); return } const was = st.model; setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => { setPicked(tabId, { model: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
@@ -244,9 +252,36 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
           onPick={(v) => pickAdvisor(v)} />
       )}
       {open === 'effort' && (
-        <PickList anchor={anchorOf(eref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.effort : v === st.effort)} testid="effort-list" onClose={() => setOpen(null)}
+        <PickList anchor={anchorOf(eref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.own.effort : v === st.effort)} testid="effort-list" onClose={() => setOpen(null)}
           items={[...levels.map((l) => ({ value: l, label: l })), ...EFFORTS.map((l) => ({ value: DEFAULT_PICK + l, label: l, group: 'Default for new threads' }))]}
           onPick={(v) => { if (v.startsWith(DEFAULT_PICK)) { setErr(''); void saveDefault({ effort: v.slice(DEFAULT_PICK.length) }).catch((x) => setErr(String(x?.message ?? x))); return } const was = st.effort; setErr(''); setPicked(tabId, { effort: v }); window.api.chatSetEffort(tabId, v).catch((x) => { setPicked(tabId, { effort: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
+      )}
+    </>
+  )
+}
+
+// the permission mode picker for the message box: bypass, auto, accept edits, ask before tools, plan
+const MODE_ROWS: { value: string; label: string; note: string }[] = [
+  { value: 'bypassPermissions', label: 'Bypass permissions', note: 'runs everything without asking' },
+  { value: 'auto', label: 'Auto', note: 'a classifier decides what is safe to run' },
+  { value: 'acceptEdits', label: 'Accept edits', note: 'file edits run; commands ask first' },
+  { value: 'default', label: 'Ask before tools', note: 'asks before edits and commands' },
+  { value: 'plan', label: 'Plan', note: 'reads and plans; nothing is changed' },
+]
+export function ModePicker({ tabId, mode, error }: { tabId: string; mode: string; error?: string }) {
+  const [open, setOpen] = useState(false)
+  const [err, setErr] = useState('')
+  const ref = useRef<HTMLButtonElement>(null)
+  const row = MODE_ROWS.find((m) => m.value === mode)
+  return (
+    <>
+      <button ref={ref} className={mode === 'bypassPermissions' ? 'pick warn' : 'pick'} onClick={() => setOpen(!open)} title={error || err || 'Permission mode of this thread: click to change it'} aria-haspopup="listbox" data-testid="mode-picker">
+        <i>Mode</i>{(row?.label ?? mode).toLowerCase()}{error || err ? ', switch failed' : ''}
+      </button>
+      {open && (
+        <PickList anchor={anchorOf(ref.current)} value={mode} testid="mode-list" onClose={() => setOpen(false)}
+          items={MODE_ROWS.map((m) => ({ value: m.value, label: m.label, note: m.note }))}
+          onPick={(v) => { setErr(''); window.api.chatSetMode(tabId, v).catch((x) => setErr(String(x?.message ?? x))) }} />
       )}
     </>
   )

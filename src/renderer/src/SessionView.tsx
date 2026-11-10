@@ -15,7 +15,7 @@ import { modeLabel } from '../../shared/modeCore'
 import type { ClipOffer } from '../../shared/clipboardCore'
 import { clearOffer, textHash, useClipboardOn, useClipOffer } from './clipboardOffer'
 import { CopyButton, MdBody } from './MdBody'
-import { ModelEffort } from './ThreadStatus'
+import { ModelEffort, ModePicker } from './ThreadStatus'
 import { dismissGoal, useThreadStatus } from './statusStore'
 import { SummaryRow, WarningRow } from './ChatRows'
 import { useSlashMenu } from './SlashMenu'
@@ -786,7 +786,7 @@ export function SessionView(p: Props) {
         </div>
         <div className="crow">
           <ModelEffort tabId={session.id} ultra={ultra} />
-          <span className={shownMode === 'bypassPermissions' ? 'pick warn' : 'pick'} title={session.modeError ?? 'Permission mode of this thread'} data-testid="mode-picker"><i>Mode</i>{modeLabel(shownMode).replace(/ mode$/i, '').toLowerCase()}{session.modeError ? ', switch failed' : ''}</span>
+          <ModePicker tabId={session.id} mode={shownMode} error={session.modeError} />
           {ultra && <span className="pick ultra" data-testid="ultra-note">ultrathink: max effort for this turn</span>}
           <Btn kind="link" onClick={() => fileInput.current?.click()} testid="composer-attach" title="Attach files or images">Attach</Btn>
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />
