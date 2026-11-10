@@ -7,27 +7,30 @@ export class Hive {
 
   id = (t: string): Locator => this.page.getByTestId(t)
 
-  // ---- top bar ----
+  // ---- title bar ----
   brand = () => this.id('brand')
-  topModel = () => this.id('top-model')
-  // panels live in regions now (Default UI): the threads list is the left side bar, tools open from the Tools menu
-  // into the bottom panel, the right side, a popover or a modal. Calling open() again for the same panel is harmless.
+  // the focused thread's model and effort, as its composer's labelled pickers show them
+  topModel = () => this.id('model-picker')
+  // The rail lists threads; pages (Running, Scheduled, Deploys, Status and usage, Watchers and teams, Workspace,
+  // Settings) open as tabs from its foot; the inspector holds the focused thread's Files and Changes. Calling open()
+  // again for the same panel is harmless.
   async open(panel: 'sessions' | 'files' | 'deploy' | 'git' | 'scripts' | 'watch' | 'mcp' | 'todos' | 'notes' | 'settings'): Promise<void> {
     if (panel === 'sessions') {
-      if (!(await this.sidebar().isVisible())) await this.id('toggle-left').click()
+      if (!(await this.sidebar().isVisible())) await this.page.keyboard.press('Control+BracketLeft')
       return
     }
-    if (panel === 'settings') {
-      if (!(await this.id('settings').isVisible())) await this.id('titlebar-settings').click()
+    if (panel === 'files') {
+      if (!(await this.id('file-tree').isVisible())) await this.id('insp-files').click()
       return
     }
-    const view = panel === 'watch' ? 'watchers' : panel
-    const shown: Record<string, string> = { files: 'file-tree', deploy: 'deploy-panel', git: 'git-panel', scripts: 'scripts-panel', watchers: 'watchers-panel', mcp: 'mcp-menu', todos: 'todos-panel', notes: 'notes-panel' }
-    if (await this.id(shown[view]).first().isVisible()) return
-    // views with a top-bar button open from it; the rest from the Tools menu
-    if (['files', 'git', 'todos', 'notes', 'scripts', 'deploy'].includes(view)) { await this.id(`top-view-${view}`).click(); return }
-    await this.id('menu-tools').click()
-    await this.id(`menu-tools-${view}`).click()
+    const workspace: Record<string, string> = { git: 'git', scripts: 'scripts', todos: 'todos', notes: 'notes' }
+    if (panel in workspace) {
+      await this.id('rail-view-workspace').click()
+      await this.id(`ws-tab-${workspace[panel]}`).click()
+      return
+    }
+    const page: Record<string, string> = { deploy: 'deploys', watch: 'watchers', mcp: 'status', settings: 'settings' }
+    await this.id(`rail-view-${page[panel]}`).click()
   }
 
   // ---- sessions ----
@@ -85,7 +88,12 @@ export class Hive {
     await this.effortPicker().click()
     await this.id(`effort-list-${level}`).click()
   }
-  sendMode = (m: 'steer' | 'queue' | 'interrupt') => this.id(`send-mode-${m}`)
+  // while Claude works: Enter steers, Tab queues, Ctrl+Shift+Enter stops the turn and sends at once
+  async sendAs(mode: 'steer' | 'queue' | 'interrupt', text: string): Promise<void> {
+    await this.composer().fill(text)
+    await this.composer().press(mode === 'steer' ? 'Enter' : mode === 'queue' ? 'Tab' : 'Control+Shift+Enter')
+  }
+  queueBox = () => this.id('queue-box')
 
   // ---- sidebar threads ----
   sidebar = () => this.id('sidebar')

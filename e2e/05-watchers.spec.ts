@@ -152,7 +152,7 @@ test.describe.serial('watchers', () => {
     await l.page.waitForTimeout(65_000)
     expect(runsOf(id)).toHaveLength(0)
     expect(runsOf(schedId)).toHaveLength(0)
-    await expect(h.id('live-working')).toHaveCount(0)
+    await expect(h.id('live-row').filter({ hasText: name })).toHaveCount(0)
     await expect(h.id('watcher-row').filter({ hasText: name })).not.toContainText('running')
     await shot(l.page, 'watchers-nothing-ran')
   })

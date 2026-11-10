@@ -95,37 +95,34 @@ test.describe.serial('session', () => {
   test('steer and queue work', async () => {
     await h.send('Use the Bash tool to run exactly this command: sleep 20. After it finishes, reply with the word done.')
     await expect(h.working()).toBeVisible({ timeout: 60_000 })
-    // default mode while busy: steer
-    await h.sendMode('steer').click()
-    await h.send('steer note: also add the word banana to your reply')
-    await expect(h.userMsgs().filter({ hasText: 'steered while Claude worked' })).toHaveCount(1)
-    await h.sendMode('queue').click()
-    await h.send('queued note: reply with the word later')
-    await expect(h.userMsgs().filter({ hasText: 'queued, sends when Claude finishes' })).toHaveCount(1)
+    // Enter steers the running turn; Claude marks it seen at its next step
+    await h.sendAs('steer', 'steer note: also add the word banana to your reply')
+    await expect(h.userMsgs().filter({ hasText: 'steer note' }).getByTestId('msg-seen')).toHaveCount(1, { timeout: 120_000 })
+    // Tab queues it for after the turn: it waits in the queue box, numbered
+    await h.sendAs('queue', 'queued note: reply with the word later')
+    await expect(h.queueBox()).toContainText('queued note')
     await shot(l.page, 'session-steer-queue')
     // the queued message goes in once the first turn ends, then that turn ends too
-    await expect(h.userMsgs().filter({ hasText: 'queued, sends when Claude finishes' })).toHaveCount(0, { timeout: 180_000 })
+    await expect(h.queueBox()).toHaveCount(0, { timeout: 180_000 })
+    await expect(h.userMsgs().filter({ hasText: 'queued note' })).toHaveCount(1)
     await h.waitIdle(180_000)
-    await h.sendMode('steer').click().catch(() => {}) // back to the default for later runs (only shown while busy)
   })
 
   test('interrupt stops the running turn and sends at once', async () => {
     await h.send('Use the Bash tool to run exactly this command: sleep 90. After it finishes, reply with the word done.')
     await expect(h.working()).toBeVisible({ timeout: 60_000 })
     await expect(h.id('chat-stop')).toBeVisible()
-    await h.sendMode('interrupt').click()
     const t0 = Date.now()
-    await h.send('interrupt note: forget the sleep and reply with only the word pivot')
-    await expect(h.userMsgs().filter({ hasText: 'interrupting Claude, sends next' })).toHaveCount(1)
+    await h.sendAs('interrupt', 'interrupt note: forget the sleep and reply with only the word pivot')
+    await expect(h.queueBox()).toContainText('interrupting Claude, sends next')
     // handed over as soon as the stopped turn ends, long before the 90 s sleep would have
-    await expect(h.userMsgs().filter({ hasText: 'interrupting Claude, sends next' })).toHaveCount(0, { timeout: 60_000 })
+    await expect(h.queueBox()).toHaveCount(0, { timeout: 60_000 })
     await h.waitIdle(120_000)
     expect(Date.now() - t0).toBeLessThan(85_000)
     await expect(h.replies().last()).toContainText(/pivot/i)
-    await h.sendMode('steer').click().catch(() => {})
   })
 
-  test('the MCP servers menu lists servers', async () => {
+  test('the Status and usage page lists the MCP servers', async () => {
     await h.open('mcp')
     await expect(h.id('mcp-server').first()).toBeVisible({ timeout: 60_000 })
     await expect(h.id('mcp-server').filter({ hasText: 'hive' })).toHaveCount(1)
