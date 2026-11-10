@@ -36,7 +36,7 @@ export type Action =
   | { t: 'pick'; suite: Suite; groups: Groups }
   | { t: 'diffs'; diffs: RepoDiff[]; changelog: string; output: string; root: string; at: number; local?: boolean }
   | { t: 'refresh'; diffs: RepoDiff[]; changelog: string; output: string; root: string } // diffs.sh is back
-  | { t: 'error'; error: string }
+  | { t: 'error'; error: string; from?: 'refresh' | 'watch' } // from: what failed, when the caller knows (the diffs.sh refresh behind the local view, a re-watch)
   | { t: 'next' } // "I have team approval"
   | { t: 'yes'; at: number }
   | { t: 'stop' }
@@ -98,7 +98,13 @@ export function step(w: Wizard, a: Action): { state: Wizard; effect?: Effect } {
     case 'error':
       // diffs.sh failing behind the local view: keep the local view, say why it was not refreshed
       if (w.phase === 'review') return { state: { ...w, note: '', error: a.error } }
-      return { state: { ...w, phase: w.phase === 'loading' && w.steps.length === 0 ? 'pick' : 'failed', error: a.error } }
+      // a re-watch that could not start (Retry on a stuck step, no watch id yet): stuck again, so Retry is still there
+      if (w.phase === 'watching' && !w.watchId && a.from !== 'refresh') return { state: { ...w, phase: 'stuck', note: a.error } }
+      // loading diffs failed: back to the picker, or (entering prod) a failure Retry can ask about again
+      if (w.phase === 'loading' && a.from !== 'refresh') return { state: { ...w, phase: w.steps.length === 0 ? 'pick' : 'failed', error: a.error } }
+      // anything else is a late answer (the diffs.sh refresh failing after Next / Yes): a deploy that is running or
+      // being watched is never marked failed by it, or its deployEnd would be dropped and Retry would push again
+      return { state: w }
     case 'refresh':
       // only while still reviewing staging; once a deploy started, the plan is not swapped underneath it
       if (w.phase !== 'review' || w.toProd) return { state: w }
@@ -176,4 +182,9 @@ export type SummaryLine = { repo: string; env: Target; sha: string; status: Step
 export const summary = (w: Wizard): SummaryLine[] =>
   w.steps.filter((s) => s.status === 'landed' || s.status === 'confirmed' || s.status === 'pushed').map((s) => ({ repo: s.repo, env: s.env, sha: (s.sha ?? '').slice(0, 7), status: s.status, ms: s.startedAt && s.endedAt ? s.endedAt - s.startedAt : null }))
 
-export const fmtDuration = (ms: number | null) => (ms === null ? '' : ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`)
+// rounded to whole seconds first, so 119.6 s is "2m 0s" and never "1m 60s"
+export const fmtDuration = (ms: number | null) => {
+  if (ms === null) return ''
+  const s = Math.round(ms / 1000)
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+}
