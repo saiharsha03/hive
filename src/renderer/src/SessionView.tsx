@@ -3,6 +3,7 @@
 // model and effort pickers, steer / queue). Scroll position is kept per thread, so switching UI or thread keeps it.
 import { getPref, setPref } from './prefs'
 import { saveDraft, savedDrafts } from './restore'
+import { StatusCard } from './StatusCard'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -334,6 +335,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
   }
   // /btw answers, shown above the message box until dismissed (never part of the conversation)
   const [btws, setBtws] = useState<{ q: string; a: string | null }[]>([])
+  // /status and /usage: Hive's own live cards (the engine's are terminal-only)
+  const [card, setCard] = useState<'status' | 'usage' | null>(null)
   const askBtw = (question: string) => {
     setBtws((b) => [...b, { q: question, a: null }])
     void window.api.askBtw(session.cwd ?? '', session.sessionId ?? null, question)
@@ -490,6 +493,8 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
     if (!draft.trim() && !images.length) return
     const btw = draft.trim().match(/^\/btw\s+([\s\S]+)/)
     if (btw) { askBtw(btw[1]); setDraft(''); return }
+    const view = draft.trim().match(/^\/(status|usage|cost|stats)$/)
+    if (view && !images.length) { setCard(view[1] === 'status' ? 'status' : 'usage'); setDraft(''); return }
     onSend(draft.trim(), images, m)
     setDraft('')
     setImages([])
@@ -714,6 +719,7 @@ export function SessionView({ session, mode, focused, onFocus, onSend, onDequeue
 
       <AgentsDock tabId={session.id} items={session.items} busy={session.busy} onSend={onSend} onPromote={onPromote} onDequeue={onDequeue} />
 
+      {card && <StatusCard kind={card} tabId={session.id} cwd={session.cwd} sessionId={session.sessionId} onClose={() => setCard(null)} />}
       {btws.map((b, i) => (
         <div key={i} className="btw" data-testid="btw-answer">
           <div className="btw-q"><span className="btw-tag">btw</span>{b.q}<button className="x" aria-label="Dismiss" onClick={() => setBtws((all) => all.filter((_, j) => j !== i))} data-testid="btw-dismiss">×</button></div>
