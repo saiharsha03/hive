@@ -115,8 +115,10 @@ export function Shell() {
   // a new build is on disk but a thread is working, so the page was not reloaded by itself
   useEffect(() => {
     const say = () => notice('A new build is ready. Ctrl+R loads it; threads that are working stop.')
+    const tell = (e: Event) => notice(String((e as CustomEvent).detail ?? ''))
     window.addEventListener('hive:build', say)
-    return () => window.removeEventListener('hive:build', say)
+    window.addEventListener('hive:say-notice', tell)
+    return () => { window.removeEventListener('hive:build', say); window.removeEventListener('hive:say-notice', tell) }
   }, [])
 
   // ---- keyboard ----

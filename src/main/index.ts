@@ -521,6 +521,47 @@ handle('worktree:cleanup', (_e, thread: string) => cleanupThread(String(thread))
 handle('worktree:move', (_e, from: string, to: string) => moveThreadLinks(String(from), String(to)))
 // the page (re)loaded: no tab is showing any live session any more, so stop them all. The main window's page is ready
 // for threads from now on; messages left unsent when Hive last closed go out once, after its first reset
+// ---- carrying on after Hive closed mid-work ----
+// The threads that are working are written down every few seconds. A thread still in that list when Hive starts was
+// cut off (Hive was quit, crashed, or the computer went down): it gets one message from Hive telling it so, and it
+// carries on. Watcher and Dependabot runs are left to their own schedules. At most RESUME_MAX threads, and only from a
+// list written in the last day.
+const RESUME_PROMPT = `[From ${appName()}, not from the user] ${appName()} was closed while you were working, so your last turn was cut off. Carry on from where you stopped. Anything that was running in the background then (a shell, a subagent, a monitor) is gone: start it again if you still need it.`
+const RESUME_MAX = 6
+const workingFile = () => join(dataDir(), 'hive-working.json')
+type WorkingRow = { id: string; title: string }
+let wroteWorking = ''
+function noteWorking(): void {
+  if (TEST_MODE || !resumedOnce) return // never before the last list has been read
+  const rows: WorkingRow[] = liveThreads().filter((t) => t.busy && t.sessionId && !t.tabId.startsWith('dependabot-') && !watcherTabFor(t.sessionId)).map((t) => ({ id: t.sessionId!, title: t.title }))
+  const text = JSON.stringify({ at: Date.now(), threads: rows })
+  if (JSON.stringify(rows) === wroteWorking) return
+  wroteWorking = JSON.stringify(rows)
+  try { writeFileSync(workingFile(), text) } catch { /* next time */ }
+}
+let resumedOnce = false
+async function resumeCutOff(): Promise<void> {
+  if (resumedOnce) return
+  let rows: WorkingRow[] = []
+  try {
+    const j = JSON.parse(readFileSync(workingFile(), 'utf8')) as { at?: number; threads?: WorkingRow[] }
+    if (typeof j.at === 'number' && Date.now() - j.at < 24 * 3_600_000 && Array.isArray(j.threads)) rows = j.threads.filter((r) => typeof r?.id === 'string').slice(0, RESUME_MAX)
+  } catch { /* nothing was working */ }
+  resumedOnce = true
+  try { writeFileSync(workingFile(), JSON.stringify({ at: Date.now(), threads: [] })) } catch { /* it is rewritten soon */ }
+  if (TEST_MODE || !rows.length) return
+  const done: string[] = []
+  for (const r of rows) {
+    try { await sendTo(r.id, RESUME_PROMPT, false); done.push(r.title) } catch { /* that thread is gone */ }
+  }
+  if (!done.length) return
+  const said = done.length === 1 ? `"${done[0]}" was cut off when ${appName()} closed. It has been told to carry on.` : `${done.length} threads were cut off when ${appName()} closed. They have been told to carry on: ${done.join(', ')}.`
+  const w = mainWeb()
+  if (w) void w.executeJavaScript(`window.dispatchEvent(new CustomEvent('hive:say-notice', { detail: ${JSON.stringify(said)} }))`).catch(() => {})
+  try { notifyPhone('Carried on after a restart', said) } catch { /* no phone */ }
+}
+setInterval(noteWorking, 5000)
+
 let resent = false
 handle('chat:reset', (e) => {
   killAllTerminals()
@@ -530,6 +571,8 @@ handle('chat:reset', (e) => {
   if (resent) return
   resent = true
   setTimeout(() => resendPending(e.sender), 1000)
+  // after what was typed but not delivered has gone back in: the threads that were cut off mid-work carry on
+  setTimeout(() => void resumeCutOff(), 4000)
 })
 handle('chat:mode', () => PERMISSION_MODE)
 handle('chat:setMode', (e, tabId: string, mode: string) => setThreadMode(String(tabId), String(mode), e.sender))
