@@ -117,3 +117,11 @@ test('backups: the last five switches are kept; removing an account deletes only
   assert.deepEqual(listAccounts(p).map((x) => x.email), ['b@example.com'])
   assert.equal(removeAccount(p, a), false)
 })
+
+test('other Claude sessions: the ones Hive did not start (a terminal, an IDE) are counted for the warning', async () => {
+  const { othersOf } = await import('../../src/main/accounts')
+  const hive = 100
+  // 201, 202: Hive's threads; 203: a claude one of them started; 300: a terminal's; 301: started by that terminal session
+  assert.equal(othersOf([[201, hive], [202, hive], [203, 201], [300, 50], [301, 300]], hive), 2)
+  assert.equal(othersOf([], hive), 0)
+})

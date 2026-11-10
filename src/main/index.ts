@@ -25,6 +25,7 @@ import { dependabotSummary, initDependabot, setDependabotEnabled } from './depen
 import { allowStatus, forgetAllowed, initAllowlist, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
 import { cancelSwitch, switchAccount } from './account'
+import { listAccounts, otherClaudeProcesses, realAccountPaths, removeAccount, saveCurrent, switchAccount as switchProfile } from './accounts'
 import { askBtw } from './btw'
 import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
 import { editorMtime, editorRead, editorWrite, vsCodeUrl } from './editorFiles'
@@ -48,7 +49,7 @@ import { cancelContinue, continueAt, continueNow, initAutoContinue, listContinue
 import { readTodos } from './teamTodos'
 import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue, setStatus, watchTodos, type Todo, type TodoStatus } from './todos'
 import { sessionStats } from './sessionStats'
-import { closeStatus, getStatus, restartStatus, setLiveUsage, weeklyUsage } from './status'
+import { checkLogin, closeStatus, getStatus, restartStatus, setLiveUsage, weeklyUsage } from './status'
 import { loadConfig, readDotEnv } from './devConfig'
 import { loadSettings, saveSettings, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
@@ -61,7 +62,7 @@ import * as dev from './devStack'
 import { killAllTerminals, killTerminal, openTerminal, resizeTerminal, setTerminalSink, writeTerminal } from './terminal'
 import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
-import { dataDir, TEST_MODE } from './testMode'
+import { blocked, dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
 import { isAppPage, rosterOf, teamWindowSearch } from '../shared/teamSidebarCore'
 import { keyAction, phoneFolder, readyGate } from './windowCore'
@@ -261,6 +262,15 @@ const mobileDeps = () => ({
   stopAll: (pause: boolean) => stopAll(pause),
   runWakeNow: (kind: string, id: string) => runWakeNow(kind, id),
   quietHours: (set?: QuietHours) => (set ? setQuietHours(set) : quietHours()),
+  // the saved accounts and the switch between them, as the window has them (never a token)
+  accounts: () => (TEST_MODE ? [] : listAccounts(realAccountPaths()).map((a) => ({
+    id: a.id, name: a.email, detail: a.plan ?? '', note: a.active ? 'Signed in' : a.lastUsed ? `Last used ${new Date(a.lastUsed).toLocaleDateString()}` : '', inUse: a.active,
+  }))),
+  switchAccount: async (id: string) => {
+    const r = await switchToProfile(id)
+    if (!r.ok) throw new Error(r.error ?? 'The switch did not finish')
+    return `Switched to ${r.account}${r.waiting ? `; ${r.waiting} thread${r.waiting > 1 ? 's' : ''} move when they finish` : ''}${r.warning ? `. ${r.warning}` : ''}`
+  },
   cancelWakeup: (kind: string, id: string) => (kind === 'wake' ? /^\d+$/.test(id) && cancelWakeup(Number(id)) : kind === 'continue' ? cancelContinue(id) : false),
 })
 initMobile(appConfig.env, mobileDeps())
@@ -522,18 +532,51 @@ handle('update:apply', () => { if (updateState()?.kind === 'ready') quitting = t
 // a newer Claude Code engine (new models arrive with it) and `claude update`
 handle('engine:latest', () => latestEngine())
 handle('engine:update', () => updateEngine())
-// Switch account: the engine's browser sign-in. Nothing restarts: the status process starts again on the new login, every
-// quiet thread closes its process (tab and session stay; the next message resumes it on the new login) and a busy one
-// does the same when its work ends. The window hears account:switched
-handle('account:switch', async (e, email: string) => {
-  const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
-  if (!r.ok) return r
+// Accounts. Nothing restarts when the login changes: the status process starts again on the new login, every quiet
+// thread closes its process (tab and session stay; the next message resumes it on the new login) and a busy one does
+// the same when its work ends. The window hears account:switched and accounts:changed.
+const accountsChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('accounts:changed') }
+async function movedToNewLogin(): Promise<{ account: string | null; closed: number; waiting: number }> {
   restartStatus()
   const { closed, waiting } = recycleThreads()
   const account = await getStatus().then((st) => st.account).catch(() => null)
   for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('account:switched', { account, closed, waiting })
+  accountsChanged()
+  return { account, closed, waiting }
+}
+const keepProfile = () => { if (!TEST_MODE) { try { saveCurrent(realAccountPaths()) } catch (e) { console.warn('accounts: could not save the current login:', (e as Error).message) } } }
+// Add account: the engine's browser sign-in; the login before it and the new one are both kept as profiles
+handle('account:switch', async (e, email: string) => {
+  keepProfile() // the account signed in now keeps its newest tokens
+  const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
+  if (!r.ok) return r
+  keepProfile()
+  await movedToNewLogin()
   return r
 })
+// the saved accounts: id, email, plan, when saved and last used, and which one is signed in (never a token)
+handle('accounts:list', () => (TEST_MODE ? [] : listAccounts(realAccountPaths())))
+// switch to a saved account without the browser; a login that no longer works says so (sign in again with Add account)
+type ProfileSwitch = { ok: boolean; account: string | null; closed: number; waiting: number; warning?: string; needsSignIn?: boolean; error?: string }
+async function switchToProfile(id: string): Promise<ProfileSwitch> {
+  if (TEST_MODE) return { ok: false, account: null, closed: 0, waiting: 0, error: blocked('switching the Claude account') }
+  const others = await otherClaudeProcesses().catch(() => 0)
+  const warning = others ? `${others} other Claude session${others > 1 ? 's are' : ' is'} running (a terminal or an IDE): ${others > 1 ? 'they keep' : 'it keeps'} the old login until restarted, and may write it back. Close ${others > 1 ? 'them' : 'it'} for a clean switch.` : undefined
+  let done
+  try { done = switchProfile(realAccountPaths(), String(id)) } catch (e) {
+    return { ok: false, account: null, closed: 0, waiting: 0, ...(warning ? { warning } : {}), error: (e as Error).message }
+  }
+  if (!done.changed) return { ok: true, account: done.account.email, closed: 0, waiting: 0, ...(warning ? { warning } : {}) }
+  const moved = await movedToNewLogin()
+  const login = await checkLogin()
+  return {
+    ok: login.ok, account: done.account.email, closed: moved.closed, waiting: moved.waiting, ...(warning ? { warning } : {}),
+    ...(login.ok ? {} : { needsSignIn: true, error: `The saved login for ${done.account.email} no longer works (${login.error}). Sign in to it again with Add account.` }),
+  }
+}
+handle('accounts:switch', (_e, id: string) => switchToProfile(String(id ?? '')))
+// forget a saved account (its profile only; the engine's own login is left as it is)
+handle('accounts:remove', (_e, id: string) => { const ok = !TEST_MODE && removeAccount(realAccountPaths(), String(id ?? '')); if (ok) accountsChanged(); return ok })
 handle('account:cancel', () => cancelSwitch())
 // Git panel: plain git on the repos and worktrees Hive lists; the page names a folder from that list, never a command
 handle('git:list', () => gitPanel.gitList())
@@ -741,6 +784,8 @@ app.whenReady().then(() => {
   // split the window from the taskbar shortcut it was started from (a second icon)
   if (app.isPackaged) app.setAppUserModelId('io.github.saiharsha03.hive')
   initDesktopNotify(() => mainWin, (id) => { showWindow(); if (id) mainWeb()?.send('hive:activate', id) })
+  // the account signed in now is kept as a profile (its newest tokens), so it can be switched back to later
+  keepProfile()
   handleScheme()
   createWindow()
   makeTray()

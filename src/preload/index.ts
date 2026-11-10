@@ -240,6 +240,15 @@ contextBridge.exposeInMainWorld('api', {
   },
   accountSwitch: (email: string) => ipcRenderer.invoke('account:switch', email),
   accountCancel: () => ipcRenderer.invoke('account:cancel'),
+  // saved accounts (never a token): list, switch without the browser, forget one, and a nudge when they change
+  accountsList: () => ipcRenderer.invoke('accounts:list'),
+  accountsSwitch: (id: string) => ipcRenderer.invoke('accounts:switch', id),
+  accountsRemove: (id: string): Promise<boolean> => ipcRenderer.invoke('accounts:remove', id),
+  onAccountsChanged: (cb: () => void) => {
+    const fn = () => cb()
+    ipcRenderer.on('accounts:changed', fn)
+    return () => ipcRenderer.removeListener('accounts:changed', fn)
+  },
   // after a successful switch: the new login, how many threads moved at once and how many follow when their work ends
   onAccountSwitched: (cb: (s: { account: string | null; closed: number; waiting: number }) => void) => {
     const fn = (_e: unknown, s: { account: string | null; closed: number; waiting: number }) => cb(s)

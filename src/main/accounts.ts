@@ -173,3 +173,25 @@ export function switchAccount(p: AccountPaths, id: string, now = Date.now()): Sw
   writeIndex(p, { profiles: idx.profiles.map((x) => (x.id === id ? next : x)) })
   return { account: next, changed: true }
 }
+
+// Claude processes that are not Hive's own (a terminal session, an IDE): they keep the old login and may write their
+// copy of ~/.claude.json back, so a switch warns about them. Hive's own threads and its status process are its children.
+export async function otherClaudeProcesses(ownPid = process.pid): Promise<number> {
+  const { execFile } = await import('node:child_process')
+  const run = (cmd: string, args: string[]) => new Promise<string>((res) => execFile(cmd, args, { timeout: 10_000, windowsHide: true }, (_e, out) => res(String(out ?? ''))))
+  const rows = process.platform === 'win32'
+    ? (await run('powershell.exe', ['-NoProfile', '-Command', "Get-CimInstance Win32_Process -Filter \"Name='claude.exe'\" | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId)\" }"])).split(/\r?\n/)
+    : (await run('ps', ['-A', '-o', 'pid=,ppid=,comm='])).split('\n').filter((l) => /(^|\/)claude$/.test(l.trim().split(/\s+/)[2] ?? ''))
+  const pairs = rows.map((l) => l.trim().split(/\s+/).map(Number)).filter(([pid, ppid]) => Number.isFinite(pid) && Number.isFinite(ppid)) as [number, number][]
+  return othersOf(pairs, ownPid)
+}
+
+// of these claude processes ([pid, parent pid]), how many are not Hive's: started by Hive, or by one of its own
+export function othersOf(pairs: [number, number][], ownPid: number): number {
+  const ours = new Set<number>()
+  for (let changed = true; changed;) {
+    changed = false
+    for (const [pid, ppid] of pairs) if (!ours.has(pid) && (ppid === ownPid || ours.has(ppid))) { ours.add(pid); changed = true }
+  }
+  return pairs.filter(([pid]) => !ours.has(pid)).length
+}
