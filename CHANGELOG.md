@@ -6,6 +6,8 @@ All notable changes to Hive are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-10
+
 ### Added
 
 - **Quarry inside Hive.** When the Quarry SQL app is installed (found from where it records itself, or named in
