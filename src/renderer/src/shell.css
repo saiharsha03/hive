@@ -364,8 +364,8 @@ button.rail-gh:hover { color: var(--dim); }
 
 /* Settings > Appearance: a swatch per theme, drawn from that theme's own tokens */
 .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; max-width: 720px; }
-.theme-sw { display: flex; flex-direction: column; gap: 6px; cursor: pointer; font-size: 12.5px; color: var(--dim); }
-.theme-sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.theme-sw { position: relative; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font-size: 12.5px; color: var(--dim); }
+.theme-sw input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
 .theme-sw .sw-art { display: flex; height: 64px; border-radius: var(--r-row); overflow: hidden; box-shadow: 0 0 0 1px var(--rule); }
 .theme-sw.on .sw-art { box-shadow: 0 0 0 2px var(--hi); }
 .theme-sw:has(input:focus-visible) .sw-art { box-shadow: 0 0 0 2px var(--focus); }

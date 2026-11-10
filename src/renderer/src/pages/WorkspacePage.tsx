@@ -12,7 +12,7 @@ import { useDev } from '../useDev'
 import { useScripts } from '../useScripts'
 import { useTodos } from '../useTodos'
 import { getPref, setPref } from '../prefs'
-import { notice, openPage, openSession, openStackLog, setPreview, showDiff, talkAbout } from '../actions'
+import { notice, openPage, openSession, openStackLog, setPreview, showDiffBeside, talkAbout } from '../actions'
 import { pickSettingsSection } from '../SettingsPanel'
 import { splitList } from '../../../shared/settingsCore'
 import './workspace.css'
@@ -176,7 +176,7 @@ export function WorkspacePage() {
       {tab === 'pull' && <PullTab />}
       {tab === 'stacks' && <StacksTab />}
       {tab === 'scripts' && <ScriptsTab />}
-      {tab === 'git' && <GitPanel onDiff={showDiff} />}
+      {tab === 'git' && <GitPanel onDiff={showDiffBeside} />}
       {tab === 'todos' && <TodosTab />}
       {tab === 'notes' && <NotesPanel />}
       {tab === 'dependabot' && <DependabotTab />}

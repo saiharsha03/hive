@@ -102,7 +102,7 @@ function CommandField({ src, open, setOpen, focusN }: { src: PaletteSources; ope
             return (
               <div key={`${c.group}:${c.id}:${i}`}>
                 {headNow && <div className="pal-group">{headNow}</div>}
-                <button className={i === sel ? 'pal-row on' : 'pal-row'} role="option" aria-selected={i === sel} tabIndex={-1} onMouseEnter={() => setSel(i)} onClick={() => run(c)} data-testid={`palette-${c.id}`}>
+                <button className={i === sel ? 'pal-row on' : 'pal-row'} role="option" aria-selected={i === sel} tabIndex={-1} onMouseMove={() => setSel(i)} onClick={() => run(c)} data-testid={`palette-${c.id}`}>
                   <span className="pal-label">{c.label}</span>
                   {c.hint && <span className="pal-hint">{c.hint}</span>}
                 </button>

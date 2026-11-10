@@ -131,7 +131,9 @@ async function scan(full: boolean): Promise<SessionInfo[]> {
   if (Date.now() - lastFull > FULL_MS) full = true
   const todo = new Set<string>()
   const folders = new Set<string>()
-  for (const dir of await readdir(root(), { withFileTypes: true })) {
+  // no projects folder yet (a fresh install, a test data folder): no sessions, not an error the list waits on forever
+  const dirs = await readdir(root(), { withFileTypes: true }).catch((e: NodeJS.ErrnoException) => { if (e.code === 'ENOENT') return []; throw e })
+  for (const dir of dirs) {
     if (!dir.isDirectory()) continue
     const folder = join(root(), dir.name)
     folders.add(folder)

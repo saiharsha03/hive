@@ -63,6 +63,27 @@ export function makeWorkspace(): void {
 // Claude in Chrome and no desktop toasts. env stays empty so the launch's .env is what counts, scripts null so the
 // run's scripts.json is.
 export const TEST_GENERAL = { shell: '', model: 'haiku', effort: 'low', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: false, desktopNotify: false }
+// Test mode lists sessions only from HIVE_PROJECTS_DIR (never the real ~/.claude/projects), so the run seeds a few
+// small invented transcripts there for the thread list specs (pin, snooze, close, archive). Seeded once per run.
+export const PROJECTS = join(RUN, 'projects')
+const SEEDED = ['Tidy the demo readme', 'Rename the greet helper', 'Count words in tracked.txt', 'Explain the second file', 'Draft release notes for demo']
+// their folder is a made-up path outside the temp folder: the list hides sessions whose folder is under Temp
+const SEEDED_CWD = resolve('/e2e-seeded/demo')
+export function seedProjects(): void {
+  const folder = join(PROJECTS, SEEDED_CWD.replace(/[^A-Za-z0-9]/g, '-'))
+  mkdirSync(folder, { recursive: true })
+  SEEDED.forEach((title, i) => {
+    const file = join(folder, `00000000-0000-4000-8000-00000000000${i}.jsonl`)
+    if (existsSync(file)) return
+    const at = (m: number) => new Date(Date.now() - (i * 60 + m) * 60_000).toISOString()
+    const user = { type: 'user', cwd: SEEDED_CWD, entrypoint: 'cli', sessionId: `seed-${i}`, timestamp: at(2), message: { role: 'user', content: title } }
+    const reply = { type: 'assistant', cwd: SEEDED_CWD, sessionId: `seed-${i}`, timestamp: at(1), message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } }
+    writeFileSync(file, `${JSON.stringify(user)}
+${JSON.stringify(reply)}
+`)
+  })
+}
+
 export function seedSettings(data: string): void {
   const file = join(data, 'hive-settings.json')
   if (!existsSync(file)) writeFileSync(file, JSON.stringify({ version: 1, env: {}, scripts: null, general: TEST_GENERAL }, null, 2) + '\n')
@@ -89,6 +110,7 @@ export async function launch(opts: { envFile?: string; data?: string } = {}): Pr
   const data = opts.data ?? DATA
   mkdirSync(data, { recursive: true })
   seedSettings(data)
+  seedProjects()
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   delete env.ELECTRON_RUN_AS_NODE
@@ -98,6 +120,7 @@ export async function launch(opts: { envFile?: string; data?: string } = {}): Pr
     HIVE_DATA_DIR: data,
     HIVE_ENV_FILE: opts.envFile ?? join(RUN, 'workspace.env'),
     HIVE_SCRIPTS_FILE: join(RUN, 'scripts.json'),
+    HIVE_PROJECTS_DIR: PROJECTS,
   })
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const executablePath = require(join(ROOT, 'node_modules', 'electron')) as unknown as string

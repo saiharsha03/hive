@@ -118,7 +118,7 @@ test.describe('panels', () => {
     await expect(editor).toBeVisible()
     const tab = h.id('tab').filter({ hasText: 'app.py' })
     await expect(tab).toHaveCount(1)
-    await expect(editor).toContainText('Pyright language server')
+    await expect(editor).toContainText('Pyright ready', { timeout: 60_000 })
     // the deliberate type error gets a squiggle from Pyright
     await expect(editor.locator('.squiggly-error')).not.toHaveCount(0, { timeout: 60_000 })
     // hover on greet shows its signature

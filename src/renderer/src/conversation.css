@@ -12,8 +12,8 @@
 .phead-t h1 { font: var(--t-title); letter-spacing: -.018em; color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .phead-sub { color: var(--dim); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .phead-sub b { color: var(--ink); font-weight: 500; }
-.phead-acts { display: flex; gap: 14px; position: absolute; right: var(--pane-pad); top: 26px; padding-left: 16px; background: var(--bg); box-shadow: -12px 0 12px var(--bg); opacity: 0; pointer-events: none; transition: opacity .12s; }
-.phead:hover .phead-acts, .phead:focus-within .phead-acts { opacity: 1; pointer-events: auto; }
+.phead-acts { display: flex; gap: 14px; position: absolute; right: var(--pane-pad); top: 26px; padding-left: 16px; background: var(--bg); box-shadow: -12px 0 12px var(--bg); opacity: 0; transition: opacity .12s; }
+.phead:hover .phead-acts, .phead:focus-within .phead-acts { opacity: 1; }
 .phead-acts .btn-link { font-size: 12.5px; }
 .phead-menu { position: absolute; right: var(--pane-pad); top: 50px; z-index: 30; background: var(--raised); box-shadow: var(--overlay-shadow); display: flex; flex-direction: column; padding: 6px; min-width: 210px; outline: 1px solid var(--edge); }
 .phead-menu .btn-link { text-align: left; padding: 6px 10px; color: var(--ink); font-size: 13px; }
@@ -233,3 +233,6 @@ button.pick:hover { color: var(--hi); }
 .ed-problems .pl { background: none; border: 0; color: var(--ink); font: inherit; cursor: pointer; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-align: left; padding: 0; }
 .ed-problems .pr { margin-left: auto; background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 0; }
 .ed-problems .pr:hover { color: var(--hi); }
+/* a message's Copy sits inside its own box: a message is paint-contained (content-visibility), so anything outside
+   it is clipped and cannot be clicked */
+.msg .mdcopy.msgcopy { top: 0; right: 0; }

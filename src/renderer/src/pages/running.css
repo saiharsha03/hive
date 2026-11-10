@@ -34,3 +34,4 @@
 [data-testid='stop-everything-bar'] .scheck { margin-left: 14px; white-space: nowrap; color: var(--dim); }
 /* an event whose label does not fit is a tick, so it never covers its neighbour's words */
 .sch-ev:empty { width: 2px; padding: 0; background: var(--dim); z-index: 0; }
+.page .dt td.out { max-width: 0; width: 100%; }

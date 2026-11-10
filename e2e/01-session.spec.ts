@@ -41,7 +41,7 @@ test.describe.serial('session', () => {
 
   test('the effort picker works and the ultrathink highlight appears', async () => {
     await h.pickEffort('low')
-    await expect(h.topModel()).toContainText('low')
+    await expect(h.effortPicker()).toContainText('low')
     await h.type('please ultrathink about nothing')
     await expect(h.id('ultra-mirror').locator('mark')).toHaveText(/ultrathink/i)
     await expect(h.id('ultra-note')).toBeVisible()
@@ -127,7 +127,10 @@ test.describe.serial('session', () => {
     await expect(h.id('mcp-server').first()).toBeVisible({ timeout: 60_000 })
     await expect(h.id('mcp-server').filter({ hasText: 'hive' })).toHaveCount(1)
     await shot(l.page, 'session-mcp')
-    await l.page.keyboard.press('Escape')
+    // the page is a tab now (it was a popover that Esc closed): close its tab, so the thread is back in the pane
+    await h.id('tab-close-tool:status').click()
+    await expect(h.id('page-status')).toHaveCount(0)
+    await expect(h.composer()).toBeVisible()
   })
 
   // (the sidebar list hides sessions under the temp folder, where test threads run, so only the tab is checked)

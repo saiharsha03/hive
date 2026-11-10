@@ -1,6 +1,6 @@
 // The "/" menu of the message box: everything the session can run (built-ins, skills, plugin and custom
 // commands) with descriptions; Up / Down to move, Enter or Tab to insert, Esc to close.
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { commandGroup, filterCommands, insertCommand, slashQuery, type Command } from '../../shared/composerCore'
 
 // /btw is Hive's own (the engine's is terminal-only): a side question that stays out of the conversation
@@ -26,6 +26,13 @@ export function useSlashMenu(tabId: string, draft: string, setDraft: (s: string)
   useEffect(() => { listRef.current?.querySelector('.sm-row.on')?.scrollIntoView({ block: 'nearest' }) }, [sel])
 
   const pick = (c: Command) => setDraft(insertCommand(c))
+  // hovering picks a row only when the pointer really moves: a menu opening under a resting pointer keeps the first row
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+  const hover = (i: number, e: MouseEvent) => {
+    const at = { x: e.clientX, y: e.clientY }
+    if (pointer.current && (pointer.current.x !== at.x || pointer.current.y !== at.y)) setSel(i)
+    pointer.current = at
+  }
 
   // true when the key was the menu's; an exact "/name" already typed still sends on Enter
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
@@ -36,6 +43,10 @@ export function useSlashMenu(tabId: string, draft: string, setDraft: (s: string)
     if ((e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.ctrlKey) || e.key === 'Tab') {
       const c = list[Math.min(sel, list.length - 1)]
       if (e.key === 'Enter' && draft === `/${c.name}`) return false
+      // a typed command no listed name matches (only some description mentions the word) is sent as typed on Enter,
+      // so "/context" never turns into a skill that happens to say "context"
+      const named = (x: Command) => [x.name, ...(x.aliases ?? [])].some((n) => n.toLowerCase().includes((q ?? '').toLowerCase()))
+      if (e.key === 'Enter' && !list.some(named)) return false
       e.preventDefault()
       pick(c)
       return true
@@ -48,7 +59,7 @@ export function useSlashMenu(tabId: string, draft: string, setDraft: (s: string)
       {cmds === null && <div className="sm-hint">Loading commands…</div>}
       {list.map((c, i) => (
         <div data-testid="slash-item" key={`${c.name}:${i}`} role="option" aria-selected={i === sel} className={i === sel ? 'sm-row on' : 'sm-row'}
-          onMouseDown={(e) => { e.preventDefault(); pick(c) }} onMouseEnter={() => setSel(i)}>
+          onMouseDown={(e) => { e.preventDefault(); pick(c) }} onMouseMove={(e) => hover(i, e)}>
           <span className="sm-name">/{c.name}{c.argumentHint ? <span className="sm-arg"> {c.argumentHint}</span> : null}</span>
           <span className="sm-desc">{c.description}</span>
           <span className="sm-group">{commandGroup(c)}</span>

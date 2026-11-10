@@ -29,8 +29,10 @@ export async function runPull(setBusy?: (b: boolean) => void) {
     const rows = await window.api.pullRun(false)
     const n = (p: string) => rows.filter((r) => r.result.startsWith(p)).length
     const failed = rows.filter((r) => r.result.startsWith('failed'))
+    // anything that is neither updated nor up to date (skipped, refused in test mode) is said as it is, never counted as fine
+    const other = rows.filter((r) => !/^(updated|already up to date|failed)/.test(r.result))
     if (failed.length) notice(`Pull latest failed for ${failed.map((r) => r.repo).join(', ')}: ${failed[0].result}`)
-    else notice(`Pull latest: ${n('updated')} updated, ${n('skipped')} skipped, ${rows.length - n('updated') - n('skipped')} already up to date`)
+    else notice([`Pull latest: ${n('updated')} updated, ${n('already up to date')} already up to date`, ...other.slice(0, 3).map((r) => `${r.repo}: ${r.result}`), ...(other.length > 3 ? [`${other.length - 3} more skipped`] : [])].join('; '))
   } catch (e) {
     notice(`Pull latest failed: ${(e as Error)?.message ?? e}`)
   } finally { pulling = false; setBusy?.(false) }

@@ -46,6 +46,7 @@ export function Shell() {
   const metas = useSessionMetas()
   const focus = useStore(panesStore, focusedTab)
   const focused = metas.find((s) => s.id === focus)
+  const onScreen = useStore(panesStore, (p) => p.panes.map((x) => x.active ?? '').filter(Boolean).join(' ')).split(' ').filter(Boolean)
   const [paletteN, setPaletteN] = useState(0)
   const [accountsOpen, setAccountsOpen] = useState(false)
   const deploy = useDeploy()
@@ -195,8 +196,9 @@ export function Shell() {
   )
   const currentPage = focused?.tool ?? null
   const showRail = layout.rail && !layout.focus
-  // pages take the whole centre; threads, files and a diff keep the inspector
-  const showInsp = layout.inspector && !layout.focus && (!focused?.tool || focused.tool === 'diff')
+  // pages take the whole centre; threads, files and a diff keep the inspector. It follows what is on screen, not which
+  // pane has the focus, so clicking from one pane into another never moves the layout under the pointer
+  const showInsp = layout.inspector && !layout.focus && (onScreen.length === 0 || onScreen.some((id) => { const m = metas.find((x) => x.id === id); return !m?.tool || m.tool === 'diff' }))
 
   return (
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>

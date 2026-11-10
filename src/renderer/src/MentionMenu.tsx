@@ -54,7 +54,7 @@ export function useMentionMenu(cwd: string, draft: string, caret: number, box: R
         const cut = p.lastIndexOf('/')
         return (
           <div data-testid="mention-item" key={p} role="option" aria-selected={i === sel} className={i === sel ? 'sm-row on' : 'sm-row'}
-            onMouseDown={(e) => { e.preventDefault(); pick(p) }} onMouseEnter={() => setSel(i)}>
+            onMouseDown={(e) => { e.preventDefault(); pick(p) }} onMouseMove={() => setSel(i)}>
             <Icon name="file" />
             <span className="sm-name">{p.slice(cut + 1)}</span>
             <span className="sm-desc">{cut >= 0 ? p.slice(0, cut) : ''}</span>

@@ -55,6 +55,24 @@ export function showDiff(d: DiffSpec | null) {
   diffSpec.set(d)
   if (d) openPage('diff')
 }
+// from a page that must stay in view (Workspace > Git: the commit message, Commit and Push sit there), the diff opens beside it
+export function showDiffBeside(d: DiffSpec | null) {
+  diffSpec.set(d)
+  if (!d) return
+  const id = 'tool:diff'
+  // what the page's pane shows now (adding the diff's tab may land it in this pane first)
+  const shown = panes.get().panes.find((x) => x.id === panes.get().focus)?.active ?? null
+  if (!getSessions().some((s) => s.id === id)) setSessions((all) => [...all, { id, tool: 'diff', title: PAGE_LABEL.diff, items: [], streaming: '', busy: false, loaded: true, background: false }])
+  // the page keeps the focus throughout, so it stays in view and its commit message keeps its place
+  panes.set((p) => {
+    const holder = p.panes.find((x) => x.tabs.includes(id))
+    if (holder && holder.id !== p.focus) return holder.active === id ? p : { ...p, panes: p.panes.map((x) => (x.id === holder.id ? { ...x, active: id } : x)) }
+    // not open, or open behind the page itself: take it out of this pane and open it in a pane beside
+    const rest = holder ? { ...p, panes: p.panes.map((x) => { if (x.id !== holder.id) return x; const tabs = x.tabs.filter((t) => t !== id); return { ...x, tabs, active: x.active === id ? (shown && tabs.includes(shown) ? shown : tabs.at(-1) ?? null) : x.active } }) } : p
+    const added = addPaneFor(rest, id, p.focus)
+    return added ? { ...added, focus: p.focus } : activateIn(p, id)
+  })
+}
 
 // ---- inspector: which tab it shows (Activity, Changes, Files, Status) ----
 export type InspectorTab = 'activity' | 'changes' | 'files' | 'status'
