@@ -25,7 +25,7 @@ import { agentStack, ensureWorktree, logs as devLogs, releaseThread, setThreadTi
 import { linkThread, moveThreadLinks } from './threadWorktrees'
 import { appName } from '../shared/appName'
 import { modeFor, modeSwitch } from '../shared/modeCore'
-import { idleCloseMs, sessionFlags, threadDefaults } from './settings'
+import { idleCloseMs, idleSweepMs, sessionFlags, threadDefaults } from './settings'
 import { advisorNow, boostForMessage, forgetTab, observe, sessionOptions, userMemoryDir } from './liveStatus'
 import { busyWith, idleToClose, messageParts, permitWithoutPrompt, retireStep, sharedMemoryDir, threadClass, type Activity } from './threadCore'
 import { readOnlyOptions } from './readOnly'
@@ -1449,7 +1449,7 @@ setInterval(() => {
     if (s.recycle) { if (!busyWith(a).length) retire(s, 'account') }
     else if (idleToClose(a, Date.now() - s.lastActiveAt, limit)) retire(s, 'idle')
   }
-}, 60_000).unref()
+}, idleSweepMs()).unref()
 
 // Signed in to another account: every thread whose process is quiet closes it now (its tab and session stay, the next
 // message resumes it on the new login); the others close theirs when their work ends. Watcher runs end by themselves.

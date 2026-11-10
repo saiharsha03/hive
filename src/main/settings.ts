@@ -48,16 +48,35 @@ export function threadDefaults(kind: ThreadKind = 'main', test = TEST_MODE): { m
 
 // Settings > General as Claude Code settings for a new thread (the flag-settings layer, liveStatus.sessionOptions):
 // the advisor model ('' = none) and the Workflows switch ('' = Claude Code's own default). Test mode adds no advisor
-// (it costs usage) and leaves Workflows to the default
-export function sessionFlags(test = TEST_MODE): { advisorModel?: string; enableWorkflows?: boolean } {
+// (it costs usage) and leaves Workflows to the default, unless the run names its own: HIVE_TEST_ADVISOR (a model) and
+// HIVE_TEST_WORKFLOWS (on / off), read in test mode only (the e2e that reads the settings back from the live process)
+export function sessionFlags(test = TEST_MODE, env: Record<string, string | undefined> = process.env): { advisorModel?: string; enableWorkflows?: boolean } {
+  if (test) {
+    const advisor = (env.HIVE_TEST_ADVISOR ?? '').trim()
+    const workflows = env.HIVE_TEST_WORKFLOWS
+    return {
+      ...(advisor ? { advisorModel: advisor } : {}),
+      ...(workflows === 'on' || workflows === 'off' ? { enableWorkflows: workflows === 'on' } : {}),
+    }
+  }
   const g = current?.general
   return {
-    ...(!test && g?.advisorModel ? { advisorModel: g.advisorModel } : {}),
-    ...(!test && g?.workflows ? { enableWorkflows: g.workflows === 'on' } : {}),
+    ...(g?.advisorModel ? { advisorModel: g.advisorModel } : {}),
+    ...(g?.workflows ? { enableWorkflows: g.workflows === 'on' } : {}),
   }
 }
 
-// an idle thread's process closes after this long (Settings > General, minutes); 0 = never
-export const idleCloseMs = (): number => (current?.general.idleCloseMinutes ?? DEFAULT_IDLE_CLOSE_MINUTES) * 60_000
+// an idle thread's process closes after this long (Settings > General, minutes); 0 = never. Test mode only:
+// HIVE_TEST_IDLE_CLOSE_MS gives the limit in milliseconds (the e2e that closes an idle thread and resumes it)
+export function idleCloseMs(test = TEST_MODE, env: Record<string, string | undefined> = process.env): number {
+  const ms = test ? Number(env.HIVE_TEST_IDLE_CLOSE_MS ?? '') : NaN
+  if (Number.isFinite(ms) && ms > 0) return ms
+  return (current?.general.idleCloseMinutes ?? DEFAULT_IDLE_CLOSE_MINUTES) * 60_000
+}
+// how often idle threads are looked for: every minute, or as often as the test limit above when a run sets one
+export function idleSweepMs(test = TEST_MODE, env: Record<string, string | undefined> = process.env): number {
+  const ms = test ? Number(env.HIVE_TEST_IDLE_CLOSE_MS ?? '') : NaN
+  return Number.isFinite(ms) && ms > 0 ? Math.max(250, Math.min(60_000, Math.round(ms / 4))) : 60_000
+}
 // how much of each role memory file goes into a teammate's brief (the newest entries)
 export const teamMemoryBytes = (): number => (current?.general.teamMemoryKb ?? DEFAULT_TEAM_MEMORY_KB) * 1024

@@ -153,3 +153,34 @@ export async function close(l: Launched | undefined): Promise<void> {
     try { execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'pipe' }) } catch { proc.kill() }
   }
 }
+
+// ---- the live Claude process, read from the main process (test mode's own probe, src/main/index.ts) ----
+type Probe = { facts: (tabId: string) => { sessionId: string | null } | null; settings: (tabId: string) => Promise<unknown> | null }
+// the thread's live process as main sees it: null once it has none
+export const liveFacts = (l: Launched, tabId: string): Promise<{ sessionId: string | null } | null> =>
+  l.app.evaluate((_e, id) => (globalThis as unknown as { __hiveTest: Probe }).__hiveTest.facts(id), tabId)
+// what the running Claude process answers to get_settings: the merged settings and each source's own
+export type LiveSettings = { effective: Record<string, unknown>; sources: { source: string; settings: Record<string, unknown> }[]; applied?: Record<string, unknown> }
+export const liveSettings = (l: Launched, tabId: string): Promise<LiveSettings | null> =>
+  l.app.evaluate(async (_e, id) => (await (globalThis as unknown as { __hiveTest: Probe }).__hiveTest.settings(id)) as LiveSettings | null, tabId)
+export const selectedTab = async (page: Page): Promise<string> =>
+  (await page.locator('[data-testid="tab"][aria-selected="true"]').getAttribute('data-id'))!
+
+// A thread's Claude Code processes, by pid: every process under the app's own whose program is claude and that was
+// started as a thread (replay-user-messages is on every thread's command line and on no other Claude process Hive
+// starts, such as the one behind the model list). Asked of the operating system, so it shows whether a process
+// really ended, whatever Hive believes.
+export function threadPids(l: Launched): number[] {
+  const root = l.app.process().pid!
+  const rows: { pid: number; ppid: number; cmd: string }[] = process.platform === 'win32'
+    ? (JSON.parse(execFileSync('powershell', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress'], { stdio: 'pipe', maxBuffer: 256 * 1024 * 1024 }).toString()) as { ProcessId: number; ParentProcessId: number; Name: string | null; CommandLine: string | null }[])
+        .map((p) => ({ pid: p.ProcessId, ppid: p.ParentProcessId, cmd: `${p.Name ?? ''} ${p.CommandLine ?? ''}` }))
+    : execFileSync('ps', ['-eo', 'pid=,ppid=,args='], { stdio: 'pipe', maxBuffer: 256 * 1024 * 1024 }).toString().split('\n').map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter((m) => !!m)
+        .map((m) => ({ pid: Number(m![1]), ppid: Number(m![2]), cmd: m![3] }))
+  const under = new Set<number>([root])
+  for (let grew = true; grew;) {
+    grew = false
+    for (const p of rows) if (under.has(p.ppid) && !under.has(p.pid)) { under.add(p.pid); grew = true }
+  }
+  return rows.filter((p) => under.has(p.pid) && p.pid !== root && /^\S*claude(\.exe)?\s/i.test(p.cmd) && p.cmd.includes('replay-user-messages')).map((p) => p.pid).sort((a, b) => a - b)
+}

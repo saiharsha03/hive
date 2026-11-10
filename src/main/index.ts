@@ -72,6 +72,15 @@ import { keyAction, phoneFolder, readyGate } from './windowCore'
 
 // test mode: Electron's own storage (search index, sessions cache, page storage) lives in the test data folder
 if (TEST_MODE) app.setPath('userData', join(dataDir(), 'userData'))
+// test mode only: what the e2e specs read straight from the main process (e2e/10-idle-close, e2e/11-live-settings).
+// facts: a thread's live process (null once it has none); settings: the running Claude process's own answer to the
+// get_settings control request (the SDK sends it with Query.getSettings, which its types do not list)
+if (TEST_MODE) {
+  (globalThis as unknown as { __hiveTest: unknown }).__hiveTest = {
+    facts: (tabId: string) => threadFacts(tabId),
+    settings: (tabId: string) => (liveQuery(tabId) as unknown as { getSettings?: () => Promise<unknown> } | undefined)?.getSettings?.() ?? null,
+  }
+}
 
 registerScheme()
 
