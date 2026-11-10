@@ -99,6 +99,8 @@ contextBridge.exposeInMainWorld('api', {
   wakeupsPause: (on: boolean): Promise<boolean> => ipcRenderer.invoke('wakeups:pause', on),
   // stop every working thread and background task; pause: also hold wake-ups and automatic continues
   stopAll: (pause?: boolean): Promise<{ threads: number; tasks: number }> => ipcRenderer.invoke('hive:stopAll', !!pause),
+  // undo Stop everything: the held queues go again and paused wake-ups resume
+  resumeAll: (): Promise<{ queues: number; wakeups: boolean }> => ipcRenderer.invoke('hive:resumeAll'),
   // the quiet hours Hive shares with the phone app
   quietGet: (): Promise<{ on: boolean; from: string; to: string }> => ipcRenderer.invoke('quiet:get'),
   quietSet: (q: { on: boolean; from: string; to: string }): Promise<{ on: boolean; from: string; to: string }> => ipcRenderer.invoke('quiet:set', q),

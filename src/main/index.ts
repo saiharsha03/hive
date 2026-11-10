@@ -8,7 +8,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
-import { busyTranscript, configureChat, liveQuery, runningEverywhere, stopEverything, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
+import { busyTranscript, configureChat, liveQuery, resumeEverything, runningEverywhere, stopEverything, stoppedQueues, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
 import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, pauseWakeups, runWakeupNow, tick as wakeupsTick, wakeupsPaused } from './threadWakeups'
 import { quietHours, setQuietHours } from './quietHours'
@@ -293,12 +293,15 @@ async function runWakeNow(kind: string, id: string): Promise<boolean> {
   return false
 }
 handle('hive:stopAll', (_e, pause?: boolean) => stopAll(!!pause))
+// after Stop everything: the held queues go again and paused wake-ups are resumed (what came due fires once)
+handle('hive:resumeAll', () => { const queues = resumeEverything(); const wasPaused = wakeupsPaused(); if (wasPaused) pauseWakeups(false); wakeupsChanged(); return { queues, wakeups: wasPaused } })
 handle('wakeups:runNow', (_e, kind: string, id: string) => runWakeNow(String(kind), String(id)))
 handle('wakeups:pause', (_e, on: boolean) => { pauseWakeups(!!on); return wakeupsPaused() })
 handle('quiet:get', () => quietHours())
 handle('quiet:set', (_e, q: unknown) => setQuietHours(q))
 handle('wakeups:list', () => ({
   paused: wakeupsPaused(),
+  held: stoppedQueues(), // queues Stop everything holds
   wakeups: listWakeups().map((r) => ({ id: r.id, sessionId: r.session_id, title: r.title, wakeAt: r.wake_at, prompt: r.prompt, everyMinutes: r.every_minutes, firedAt: r.fired_at })),
   continues: listContinues(),
 }))

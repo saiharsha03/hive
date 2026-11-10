@@ -226,6 +226,7 @@ interface Window {
     onAccountsChanged: (cb: () => void) => () => void
     wakeupsList: () => Promise<{
       paused: boolean
+      held: number
       wakeups: { id: number; sessionId: string; title: string; wakeAt: string; prompt: string; everyMinutes: number | null; firedAt: string | null }[]
       continues: { key: string; tabId: string; title: string; at: number }[]
     }>
@@ -233,6 +234,7 @@ interface Window {
     wakeupsRunNow: (kind: 'wake' | 'continue', id: string | number) => Promise<boolean>
     wakeupsPause: (on: boolean) => Promise<boolean>
     stopAll: (pause?: boolean) => Promise<{ threads: number; tasks: number }>
+    resumeAll: () => Promise<{ queues: number; wakeups: boolean }>
     quietGet: () => Promise<{ on: boolean; from: string; to: string }>
     quietSet: (q: { on: boolean; from: string; to: string }) => Promise<{ on: boolean; from: string; to: string }>
     onWakeupsChanged: (cb: () => void) => () => void
