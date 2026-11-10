@@ -5,6 +5,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { advisorChecked, advisorItems, advisorModelOf, advisorWord, isAdvisorValue } from '../../shared/advisorCore'
 import { describeCron, nextRun, untilText } from '../../shared/cronCore'
 import { EFFORTS, modelLabel } from '../../shared/statusCore'
+import { createStore, useStore } from './store'
 import { kindLabel, type Task } from '../../shared/taskCore'
 import { dismissGoal, setPicked, useThreadStatus } from './statusStore'
 import { Icon, Popover, anchorOf, type Anchor } from './ui'
@@ -167,9 +168,27 @@ function PickList({ anchor, items, value, isOn, onPick, onClose, testid, loading
 let advisorDefault = ''
 const readAdvisorDefault = () => window.api.settingsGet().then((s) => { advisorDefault = s.general.advisorModel ?? ''; return advisorDefault }).catch(() => advisorDefault)
 
+// What a thread with no model or effort of its own runs on (this app's defaults, else Claude Code's), kept for every
+// message box; saving a default (from the pickers' Default group) writes Settings > General.
+type Defaults = { model: string; effort: string; own: { model: string; effort: string } }
+const defaults = createStore<Defaults>({ model: '', effort: '', own: { model: '', effort: '' } })
+const loadDefaults = () => void window.api.defaultsGet().then((d) => defaults.set(d)).catch(() => {})
+loadDefaults()
+async function saveDefault(patch: { model?: string; effort?: string }) {
+  const v = await window.api.settingsGet()
+  const general = { ...v.general, ...(patch.model !== undefined ? { model: patch.model } : {}), ...(patch.effort !== undefined ? { effort: patch.effort as typeof v.general.effort } : {}) }
+  const r = await window.api.settingsSave({ env: v.env, scripts: v.scripts, general })
+  if (!r.ok) throw new Error(r.problems.map((p) => p.message).join('; ') || 'Could not save the default')
+  loadDefaults()
+}
+// a model alias ("fable") or id, as a name
+const nameOf = (m: string) => { const l = modelLabel(m); return l === m && /^[a-z]+$/.test(m) ? m[0].toUpperCase() + m.slice(1) : l }
+const DEFAULT_PICK = 'default:'
+
 // model and effort pickers for the message box: a button each, the list in a popover
 export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean }) {
   const st = useThreadStatus(tabId)
+  const dfl = useStore(defaults, (d) => d)
   const [models, setModels] = useState<{ value: string; displayName: string }[] | null>(null)
   const [open, setOpen] = useState<'model' | 'effort' | null>(null)
   const [err, setErr] = useState('')
@@ -198,23 +217,24 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   return (
     <>
       <button ref={mref} className="pick" onClick={openModels} title={err || 'Model for this thread'} aria-haspopup="listbox" data-testid="model-picker">
-        <i>Model</i>{st.model ? modelLabel(st.model) : 'default'}
+        <i>Model</i>{st.model ? modelLabel(st.model) : dfl.model ? nameOf(dfl.model) : 'default'}
       </button>
       <button ref={eref} className={thinking ? 'pick ultra' : 'pick'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} aria-haspopup="listbox" data-testid="effort-picker">
-        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? 'default'}
+        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? (dfl.effort || 'default')}
       </button>
       {word && <span className="pick" title="The advisor model for this thread (change it in the model menu)" data-testid="advisor-word">{word}</span>}
       {(err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>}
       {open === 'model' && (
-        <PickList anchor={anchorOf(mref.current)} isOn={(v) => (isAdvisorValue(v) ? v === advisorOn : v === st.model)} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
+        <PickList anchor={anchorOf(mref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.model : isAdvisorValue(v) ? v === advisorOn : v === st.model)} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
           items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName })),
-            ...(models ? advisorItems(models, dflt, modelLabel).map((a) => ({ ...a, group: 'Advisor' })) : [])]}
-          onPick={(v) => { if (isAdvisorValue(v)) { pickAdvisor(v); return } const was = st.model; setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => { setPicked(tabId, { model: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
+            ...(models ? advisorItems(models, dflt, modelLabel).map((a) => ({ ...a, group: 'Advisor' })) : []),
+            ...(models ?? []).filter((m) => m.value !== 'default').map((m) => ({ value: DEFAULT_PICK + m.value, label: m.displayName, group: 'Default for new threads' }))]}
+          onPick={(v) => { if (v.startsWith(DEFAULT_PICK)) { setErr(''); void saveDefault({ model: v.slice(DEFAULT_PICK.length) }).catch((x) => setErr(String(x?.message ?? x))); return } if (isAdvisorValue(v)) { pickAdvisor(v); return } const was = st.model; setErr(''); setPicked(tabId, { model: v }); window.api.chatSetModel(tabId, v).catch((x) => { setPicked(tabId, { model: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
       )}
       {open === 'effort' && (
-        <PickList anchor={anchorOf(eref.current)} value={st.effort} testid="effort-list" onClose={() => setOpen(null)}
-          items={levels.map((l) => ({ value: l, label: l }))}
-          onPick={(v) => { const was = st.effort; setErr(''); setPicked(tabId, { effort: v }); window.api.chatSetEffort(tabId, v).catch((x) => { setPicked(tabId, { effort: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
+        <PickList anchor={anchorOf(eref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.effort : v === st.effort)} testid="effort-list" onClose={() => setOpen(null)}
+          items={[...levels.map((l) => ({ value: l, label: l })), ...EFFORTS.map((l) => ({ value: DEFAULT_PICK + l, label: l, group: 'Default for new threads' }))]}
+          onPick={(v) => { if (v.startsWith(DEFAULT_PICK)) { setErr(''); void saveDefault({ effort: v.slice(DEFAULT_PICK.length) }).catch((x) => setErr(String(x?.message ?? x))); return } const was = st.effort; setErr(''); setPicked(tabId, { effort: v }); window.api.chatSetEffort(tabId, v).catch((x) => { setPicked(tabId, { effort: was ?? undefined }); setErr(String(x?.message ?? x)) }) }} />
       )}
     </>
   )

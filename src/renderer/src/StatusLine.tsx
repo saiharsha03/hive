@@ -117,6 +117,28 @@ function AllowPop({ allow, onClose }: { allow: AllowStatus; onClose: () => void 
   )
 }
 
+// Claude Code and the SDK: the versions in use, and what is happening with a newer one. Click reads again now.
+function VersionsLine() {
+  const [v, setV] = useState<import('../../main/versions').Versions | null>(null)
+  useEffect(() => {
+    void window.api.versionsGet().then(setV).catch(() => {})
+    return window.api.onVersions(setV)
+  }, [])
+  if (!v || (!v.claude.version && !v.sdk.version)) return null
+  const newer = (a: string | null, b: string | null) => !!a && !!b && a !== b && a.localeCompare(b, undefined, { numeric: true }) > 0
+  const claude = v.claude.state === 'updating' ? ', updating' : v.claude.state === 'failed' ? ', update failed' : newer(v.claude.latest, v.claude.version) ? `, ${v.claude.latest} available` : ''
+  const sdk = v.sdk.state === 'updating' ? ', updating' : v.sdk.state === 'failed' ? ', update failed' : v.sdk.waiting ? `, restart for ${v.sdk.waiting}` : newer(v.sdk.latest, v.sdk.version) ? `, ${v.sdk.latest} available` : ''
+  const said = (w: string) => (w ? 'warm' : '')
+  const check = () => void window.api.versionsCheck().then(setV).catch(() => {})
+  const title = 'The installed Claude Code and the Agent SDK this app runs threads with. Newer versions are installed by themselves; a new SDK is used from the next start. Click to check now'
+  return (
+    <>
+      {v.claude.version && <button className={said(claude)} onClick={check} title={title} data-testid="status-claude-version">Claude Code {v.claude.version}{claude}</button>}
+      {v.sdk.version && <button className={said(sdk)} onClick={check} title={title} data-testid="status-sdk-version">SDK {v.sdk.version}{sdk}</button>}
+    </>
+  )
+}
+
 export function StatusLine() {
   const metas = useSessionMetas()
   const focus = useStore(panesStore, focusedTab)
@@ -155,13 +177,16 @@ export function StatusLine() {
   }, [f?.id, f?.busy])
   const branch = f ? (f.worktrees?.at(-1)?.branch ?? (f.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? '') : ''
   const seven = status?.seven
+  const five = status?.five
   const ipWord = !allow ? '' : allow.running ? 'Allowing this address' : allow.changed ? 'New address, not allowed' : allow.ip ? 'Address allowed' : allow.unreadable ? 'Address not read' : 'Allow my IP'
   return (
     <footer className="sline" data-testid="status-bar">
       {branch && <b className="branch" data-testid="status-branch">{branch}</b>}
       {ctx && <span data-testid="status-context">Context {fmtTokens(ctx.total)}{ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}{ctx.max ? <Meter pct={(ctx.total / ctx.max) * 100} /> : null}</span>}
+      {five?.pct != null && <button className={five.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title="Status and usage" data-testid="status-five">5-hour {Math.round(five.pct)}%<Meter pct={five.pct} /></button>}
       {seven?.pct != null && <button className={seven.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title="Status and usage" data-testid="status-seven">7-day {Math.round(seven.pct)}%<Meter pct={seven.pct} /></button>}
       <span className="r" />
+      <VersionsLine />
       {allow?.configured && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `This computer's address: ${allow.ip}. Click for Allow my IP` : allow.error || 'Allow my IP'} data-testid="status-allow">{ipWord}</button>}
       {phone?.configured && <button onClick={() => openPage('settings')} title={phone.connected ? 'The phone app is connected' : 'Pairing and the relay are in Settings'} data-testid="status-phone">{phone.paired ? 'Phone paired' : 'Phone not paired'}</button>}
       {quiet?.on && <button onClick={() => openPage('settings')} title={`Quiet hours ${quiet.from} to ${quiet.to}: notifications stay silent`} data-testid="status-quiet">{inQuiet(quiet.from, quiet.to) ? `Quiet until ${quiet.to}` : `Quiet from ${quiet.from}`}</button>}

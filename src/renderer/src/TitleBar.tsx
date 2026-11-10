@@ -9,7 +9,6 @@ import { matchRank } from '../../shared/paletteRank'
 import { filterCommands, type Command as EngineCommand } from '../../shared/composerCore'
 import { openSession } from './actions'
 import { AccountSwitcher, useAccountSummary } from './AccountSwitcher'
-import { WARN_PCT } from './kit'
 
 export type Command = { id: string; group: 'Threads' | 'Files' | 'Views' | 'Actions' | 'Claude commands' | 'Your skills' | 'Notes'; label: string; hint?: string; run: () => void }
 
@@ -117,11 +116,9 @@ function CommandField({ src, open, setOpen, focusN }: { src: PaletteSources; ope
 
 function AccountButton({ open, setOpen }: { open: boolean; setOpen: (b: boolean) => void }) {
   const a = useAccountSummary()
-  const pct = (n: number | null | undefined) => (n == null ? '' : `${Math.round(n)}%`)
   return (
     <>
       <button className={`tb-acct${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title="Accounts (Ctrl+Alt+1..3 switches)" data-testid="account-button">
-        {a.five != null && <i className={`lim${a.five > WARN_PCT ? ' warm' : ''}`}>5-hour {pct(a.five)}</i>}
         <b>{a.label || 'Account'}</b>
       </button>
       {open && <AccountSwitcher onClose={() => setOpen(false)} />}

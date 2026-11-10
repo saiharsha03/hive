@@ -41,6 +41,7 @@ import { loadHistory, loadRecentHistory } from './history'
 import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { checkForUpdates, applyUpdate, startUpdater, updateState } from './updater'
 import { latestEngine, updateEngine } from './engine'
+import { checkVersions, startVersions, versions } from './versions'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
 import { configureQuarry, e2eQuarry, onQuarryChange, quarryCall, quarryStatus, stopQuarry } from './quarry'
 import { confirmByCard, quarryConnections, quarryExplain, quarryQuery, quarrySchema } from './quarryTools'
@@ -566,6 +567,17 @@ handle('update:apply', () => { if (updateState()?.kind === 'ready') quitting = t
 // a newer Claude Code engine (new models arrive with it) and `claude update`
 handle('engine:latest', () => latestEngine())
 handle('engine:update', () => updateEngine())
+// the installed Claude Code and the SDK: their versions, what is newest, and (check) a read now that installs what is newer
+handle('versions:get', () => versions())
+handle('versions:check', () => checkVersions())
+// what a thread started with no model or effort of its own runs on: this app's defaults (Settings > General), else Claude
+// Code's own (~/.claude/settings.json)
+handle('defaults:get', () => {
+  let claude: { model?: unknown; effortLevel?: unknown } = {}
+  try { claude = JSON.parse(readFileSync(join(homedir(), '.claude', 'settings.json'), 'utf8')) } catch { /* none */ }
+  const str = (v: unknown) => (typeof v === 'string' ? v : '')
+  return { model: settings.general.model || str(claude.model), effort: settings.general.effort || str(claude.effortLevel), own: { model: settings.general.model, effort: settings.general.effort } }
+})
 // Accounts. Nothing restarts when the login changes: the status process starts again on the new login, every quiet
 // thread closes its process (tab and session stay; the next message resumes it on the new login) and a busy one does
 // the same when its work ends. The window hears account:switched and accounts:changed.
@@ -952,6 +964,7 @@ app.whenReady().then(() => {
   createWindow()
   makeTray()
   startSearch()
+  startVersions((v) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('versions:changed', v) })
   startUpdater((st) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('update:state', st) })
 })
 app.on('window-all-closed', () => {

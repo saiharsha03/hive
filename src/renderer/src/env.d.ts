@@ -211,6 +211,10 @@ interface Window {
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowForget: (address: string) => Promise<import('../../shared/allowCore').AllowStatus>
     allowMark: () => Promise<import('../../shared/allowCore').AllowStatus>
+    versionsGet: () => Promise<import('../../main/versions').Versions>
+    versionsCheck: () => Promise<import('../../main/versions').Versions>
+    onVersions: (cb: (v: import('../../main/versions').Versions) => void) => () => void
+    defaultsGet: () => Promise<{ model: string; effort: string; own: { model: string; effort: string } }>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
     codexRun: (task: string, folder: string, edits: boolean) => Promise<{ ok: boolean; answer: string }>
     codexStop: () => Promise<boolean>

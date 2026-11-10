@@ -245,6 +245,14 @@ contextBridge.exposeInMainWorld('api', {
   updateApply: () => ipcRenderer.invoke('update:apply'),
   engineLatest: () => ipcRenderer.invoke('engine:latest'),
   engineUpdate: () => ipcRenderer.invoke('engine:update'),
+  versionsGet: () => ipcRenderer.invoke('versions:get'),
+  versionsCheck: () => ipcRenderer.invoke('versions:check'),
+  onVersions: (cb: (v: unknown) => void) => {
+    const fn = (_e: unknown, v: unknown) => cb(v)
+    ipcRenderer.on('versions:changed', fn)
+    return () => ipcRenderer.removeListener('versions:changed', fn)
+  },
+  defaultsGet: () => ipcRenderer.invoke('defaults:get'),
   onUpdateState: (cb: (s: unknown) => void) => {
     const fn = (_e: unknown, s: unknown) => cb(s)
     ipcRenderer.on('update:state', fn)
