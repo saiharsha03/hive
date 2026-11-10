@@ -152,6 +152,8 @@ function InlineDiff({ hunks, label, onOpen }: { hunks: Hunk[]; label: string; on
 function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<Item, { kind: 'tool' }>; status: string; bg?: string; cwd?: string; onDiff: (spec: import('./DiffPanel').DiffSpec) => void; onBackground: (id: string) => void }) {
   const [open, setOpen] = useState(status === 'error' && !!it.output)
   const out = useRef<HTMLDivElement>(null)
+  // a row that fails while on screen opens on its error lines
+  useEffect(() => { if (status === 'error' && it.output) setOpen(true) }, [status, it.output])
   const v = toolVerb(it.name)
   const file = FILE_TOOLS.includes(it.name) && it.status !== 'error' && typeof it.input?.file_path === 'string' ? it.input.file_path as string : null
   const hunks = file ? hunksOf(it) : null

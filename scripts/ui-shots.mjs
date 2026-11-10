@@ -298,6 +298,7 @@ const events = [
   ['t-ship', assistant(tool('q1', 'AskUserQuestion', { questions: [{ question: 'Promote ledger-web 4.18 to prod?', header: 'Deploy', multiSelect: false, options: [
     { label: 'Promote now', description: 'The freeze is advisory for web.' }, { label: 'Wait for the freeze, then promote at 14:00 by itself', description: '' }, { label: 'Show me the 14 commits first', description: '' }] }] }))],
   ['t-ship', { type: 'hive_ask', id: 'q1' }],
+  ['t-ship', { type: 'assistant', message: { model: '<synthetic>', content: [{ type: 'text', text: 'Goal set: prod serves 4.18 and the landed check passes' }] } }],
   ['t-ship', { type: 'result', subtype: 'success' }],
 
   // the watcher found something
@@ -531,6 +532,42 @@ await page.keyboard.press('Control+Backquote')
 await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(980, 720))
 await page.waitForTimeout(600)
 await shot('A-narrow')
+await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1440, 900))
+await page.waitForTimeout(500)
+
+// the conversation's details: a failed row opens on its error, an edit row on its diff, the / menu, Find
+await page.locator('[data-testid="tab"][data-id="t-invoice"]').click()
+await send([
+  ['chat:event', 't-invoice', assistant(tool('bx', 'Bash', { command: 'npm run lint', description: 'Lint the billing app' }))],
+  ['chat:event', 't-invoice', result('bx', ['> lint', '> eslint billing', '', 'billing/invoice.py', '  12:5  error  Unexpected any  no-explicit-any', '', '1 problem (1 error, 0 warnings)'].join(String.fromCharCode(10)), { error: true })],
+])
+await page.waitForTimeout(500)
+await page.locator('[data-testid="chat-t-invoice"] [data-testid="chat-diff-row"]').first().click()
+await page.waitForTimeout(400)
+await page.locator('[data-testid="chat-t-invoice"] .thread').evaluate((el) => { el.scrollTop = el.scrollHeight })
+await shot('X-tool-rows')
+const box2 = page.locator('[data-testid="chat-t-invoice"] [data-testid="composer"]')
+await box2.fill('/')
+await page.waitForTimeout(700)
+await shot('X-slash-menu')
+await box2.fill('')
+await box2.click()
+await page.keyboard.press('Control+KeyF')
+await page.keyboard.type('retry')
+await page.waitForTimeout(500)
+await shot('X-find')
+await page.keyboard.press('Escape')
+
+// four panes: two more threads opened beside from the rail (Space)
+for (const id of ['t-sync', 't-node']) {
+  await page.locator(`[data-testid="live-row"][data-id="${id}"]`).focus()
+  await page.keyboard.press('Space')
+  await page.waitForTimeout(300)
+}
+await page.locator('[data-testid="live-row"][data-id="t-ship"]').focus().catch(() => {})
+await page.keyboard.press('Space')
+await page.waitForTimeout(600)
+await shot('X-four-panes')
 
 await app.close()
 console.log('done', OUT)
