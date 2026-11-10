@@ -22,7 +22,8 @@ function parseField(src: string, [lo, hi]: [number, number]): Field | null {
     if (a < lo || b > hi || a > b) return null
     for (let v = a; v <= b; v += step) set.add(v)
   }
-  return { any: src === '*', set }
+  // "any" as cron's own star flag: a field that starts with "*" ("*", "*/2") does not restrict the day on its own
+  return { any: src.startsWith('*'), set }
 }
 
 export type Cron = { minute: Field; hour: Field; dom: Field; month: Field; dow: Field }
@@ -37,14 +38,12 @@ export function parseCron(expr: string): Cron | null {
   return { minute, hour, dom, month, dow }
 }
 
-// standard cron: when both day fields are restricted, either one matching is enough
+// standard cron: when both day fields are restricted, either one matching is enough; when one starts with "*"
+// ("*" or a step such as "*/2") both must match ("0 0 */2 * 1" is every Monday that falls on an odd day)
 function dayMatches(c: Cron, d: Date): boolean {
   const dom = c.dom.set.has(d.getDate())
   const dow = c.dow.set.has(d.getDay())
-  if (c.dom.any && c.dow.any) return true
-  if (c.dom.any) return dow
-  if (c.dow.any) return dom
-  return dom || dow
+  return c.dom.any || c.dow.any ? dom && dow : dom || dow
 }
 
 // the first minute strictly after `from` that the expression matches, in local time; null if invalid or never
@@ -67,10 +66,14 @@ export function nextRun(expr: string, from: Date): Date | null {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const only = (f: Field) => (f.set.size === 1 ? [...f.set][0] : null)
-// "*/5" style: every n starting at 0 over the whole range
-const everyN = (src: string) => src.match(/^\*\/(\d+)$/)?.[1]
+// "*/5" style: every n starting at 0 over the whole range. Only a step that divides the range (60 minutes, 24 hours)
+// is an even "every n": "*/90" minutes fires at :00 only, "*/7" restarts at each hour
+const everyN = (src: string, range: number) => {
+  const n = Number(src.match(/^\*\/(\d+)$/)?.[1])
+  return n > 0 && n < range && range % n === 0 ? n : null
+}
 
-// a short label: "every minute", "every 5m", "every 2h", "hourly at :15", "daily at 9:00", else the expression
+// a short label: "every minute", "every 5m", "every 2h", "every 2h at :05", "hourly at :15", "daily at 9:00", else the expression
 export function describeCron(expr: string): string {
   const parts = expr.trim().split(/\s+/)
   const c = parseCron(expr)
@@ -79,14 +82,14 @@ export function describeCron(expr: string): string {
   const daily = dom === '*' && mo === '*' && dow === '*'
   if (daily && ho === '*') {
     if (mi === '*' || mi === '*/1') return 'every minute'
-    const n = everyN(mi)
+    const n = everyN(mi, 60)
     if (n) return `every ${n}m`
     const m = only(c.minute)
     if (m !== null) return `hourly at :${pad(m)}`
   }
   if (daily && only(c.minute) !== null) {
-    const n = everyN(ho)
-    if (n) return `every ${n}h`
+    const n = everyN(ho, 24)
+    if (n) return only(c.minute) === 0 ? `every ${n}h` : `every ${n}h at :${pad(only(c.minute)!)}`
     const h = only(c.hour)
     if (h !== null) return `daily at ${h}:${pad(only(c.minute)!)}`
   }

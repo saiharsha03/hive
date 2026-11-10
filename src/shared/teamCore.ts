@@ -20,7 +20,8 @@ export type TeamView = { team: Team; states: Record<string, MemberStatus>; log: 
 // short, readable id part: "Builder my-api" -> "builder-my-api"
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'mate'
 
-const RESERVED = new Set(['lead', 'owner', 'all', 'you', 'user'])
+// names targetsOf reads as someone else ("everyone" posts to all, so a teammate named that could never be reached)
+const RESERVED = new Set(['lead', 'owner', 'all', 'everyone', 'you', 'user'])
 export const nameTaken = (team: Team, name: string) => {
   const n = name.trim().toLowerCase()
   return !n || RESERVED.has(n) || team.members.some((m) => m.name.toLowerCase() === n)

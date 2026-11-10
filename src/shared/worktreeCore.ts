@@ -60,7 +60,10 @@ export const WIP_MESSAGE = 'WIP: auto-saved when thread closed'
 
 // `git status --porcelain` output: is there anything to save? Hive's own copies (untracked root .env files and the
 // node_modules link) do not count, and they are never committed.
-const COPY = /^\?\? "?(\.env[^/"]*|node_modules\/?)"?$/
+// A dotenv file name: ".env", ".env.local", ".env.development.local". Not ".envrc" or ".environment-notes.md": a file
+// that only starts with ".env" is somebody's work, and counting it as a copy deleted it with the worktree.
+export const isDotenvName = (name: string) => /^\.env(\.[A-Za-z0-9_-]+)*$/.test(name)
+const COPY = /^\?\? "?(\.env(?:\.[A-Za-z0-9_-]+)*|node_modules\/?)"?$/
 const lines = (porcelain: string) => porcelain.replace(/\r/g, '').split('\n').filter(Boolean)
 export const hasWork = (porcelain: string): boolean => lines(porcelain).some((l) => !COPY.test(l))
 // the untracked root .env files Hive copied in: unstaged again after `git add -A`, so a WIP commit never holds them
@@ -86,7 +89,6 @@ export function addLink(map: LinkMap, thread: string, link: WorktreeLink): LinkM
   return { ...map, [thread]: [...rest, link] }
 }
 
-// drop the links whose worktree is gone; a thread with none left leaves the map
 // a handoff: the new thread takes over the old one's worktrees, so closing the old one no longer deletes them
 export function moveLinks(map: LinkMap, from: string, to: string): LinkMap {
   const moving = map[from] ?? []
@@ -95,6 +97,7 @@ export function moveLinks(map: LinkMap, from: string, to: string): LinkMap {
   return moving.reduce((m, l) => addLink(m, to, l), rest as LinkMap)
 }
 
+// drop the links whose worktree is gone; a thread with none left leaves the map
 export function dropLinks(map: LinkMap, thread: string, paths: string[]): LinkMap {
   const left = (map[thread] ?? []).filter((l) => !paths.some((p) => samePath(p, l.path)))
   const { [thread]: _old, ...rest } = map
