@@ -35,10 +35,18 @@ android {
         applicationId = "dev.hive.mobile"
         minSdk = 29
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.1"
+        versionCode = 6
+        versionName = "2.0"
     }
     buildFeatures { compose = true }
+    // the screenshot tests draw the real screens on the JVM (Robolectric), so they need the app's resources (fonts)
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            // Roborazzi writes the pictures only when told to record
+            all { it.systemProperty("roborazzi.test.record", "true") }
+        }
+    }
     signingConfigs {
         if (releaseSigning) create("release") {
             storeFile = file(releaseStore!!)
@@ -86,4 +94,10 @@ dependencies {
     // unit tests of the sealed link (Link.kt) on the JVM; org.json there is the real one, not Android's empty stub
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    // every screen drawn to a PNG without a device (ScreensTest): Robolectric runs Compose, Roborazzi captures it
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.40.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.40.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
