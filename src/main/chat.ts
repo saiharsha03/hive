@@ -133,7 +133,7 @@ const append = () => [
   'Teams: when the user asks for a team (several threads working on one job together), mcp__hive__start_team starts one, with you as its Lead or (lead "new") as its Owner with a separate Lead thread; team_post, team_note, team_status, add_teammate and end_team run it. A message starting "[Team" is a post from a teammate. mcp__hive__list_roles shows the role library (each role carries its own instructions and a memory kept across teams); a Lead picks how many of each role the job needs.',
   'A message starting "[To subagent" is the user talking to one of your subagents: pass the text on with SendMessage to that agent, word for word, then carry on with what you were doing.',
   `A message starting "[From thread" was sent by another ${appName()} thread, not the user; your final reply is what that thread gets back when it waits for you.`,
-  'Watchers are scheduled background threads, each with its own long-lived thread, memory folder and SQLite db: mcp__hive__create_watcher, list_watchers, update_watcher, enable_watcher, disable_watcher, run_watcher_now and delete_watcher manage them.',
+  'Watchers are scheduled background agents, each with its own memory folder and SQLite db; every run is a fresh thread: mcp__hive__create_watcher, list_watchers, update_watcher, enable_watcher, disable_watcher, run_watcher_now and delete_watcher manage them.',
 ].join(' ')
 
 // the tab's current title, sent with every message, for "in use by <thread>" in the dev stack
@@ -517,9 +517,10 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       tool(
         'create_watcher',
-        'Create a watcher: a scheduled background thread that keeps running for a goal. It gets a folder under ~/.claude/hive/watchers/<id>/ '
-          + '(watcher.json, prompt.md, memory/ with its own SQLite db, reports/, findings.jsonl) and ONE long-lived thread; every scheduled run is a new turn in that thread. '
-          + 'Without prompt, prompt.md is written from the goal. It is enabled and its thread starts at once. Shown in the Watchers view.',
+        'Create a watcher: a scheduled background agent that keeps working on a goal. It gets a folder under ~/.claude/hive/watchers/<id>/ '
+          + '(watcher.json, prompt.md, memory/ with its own SQLite db, reports/, findings.jsonl). Every scheduled run is a fresh background thread, closed when the run ends; '
+          + 'what carries over is what the run saved in that folder and its final reply, which the next run is shown. '
+          + 'Without prompt, prompt.md is written from the goal. It is enabled and its first run starts at once. Shown in the Watchers view.',
         {
           name: z.string().describe('Short name, e.g. "Deploy health"'),
           goal: z.string().describe('What it watches for and why, in plain words: goals, not procedures'),
@@ -530,7 +531,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async ({ name, goal, prompt, schedule, cwd: dir }) => {
           try {
             const r = createWatcher({ name, goal, prompt, schedule, cwd: dir }, `claude (${titleOf(tabId)})`)
-            return ok(`Created watcher "${r.id}"${r.message ? `; first run: ${r.message}` : '; its thread started its first run'}.`)
+            return ok(`Created watcher "${r.id}"${r.message ? `; first run: ${r.message}` : '; its first run started'}.`)
           } catch (e: any) {
             return fail(`create_watcher failed: ${e?.message ?? e}`)
           }
@@ -540,7 +541,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         async () => ok(await formatWatchers())),
       tool(
         'update_watcher',
-        'Change a watcher: name, goal, prompt (replaces its prompt file; its thread gets the new text with its next run), schedule (merged into the current one), cwd, or enabled.',
+        'Change a watcher: name, goal, prompt (replaces its prompt file; the next run gets the new text), schedule (merged into the current one), cwd, or enabled.',
         {
           id: z.string(),
           name: z.string().optional(),
@@ -554,17 +555,17 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           try { const m = updateWatcher(id, rest); return m ? fail(m) : ok(`Watcher "${id}" updated.`) } catch (e: any) { return fail(`update_watcher failed: ${e?.message ?? e}`) }
         },
       ),
-      tool('enable_watcher', 'Turn a watcher on: a fresh thread starts with its next run (at once for an interval schedule).', { id: z.string() },
+      tool('enable_watcher', 'Turn a watcher on: its next run starts a fresh thread (at once for an interval schedule).', { id: z.string() },
         async ({ id }) => { const m = setWatcherEnabled(id, true); return m ? fail(m) : ok(`Watcher "${id}" is on.`) }),
-      tool('disable_watcher', "Turn a watcher off: its thread's session ends (the conversation stays openable) and nothing runs until it is enabled.", { id: z.string() },
+      tool('disable_watcher', "Turn a watcher off: a run still open is closed (its conversation stays openable) and nothing runs until it is enabled.", { id: z.string() },
         async ({ id }) => { const m = setWatcherEnabled(id, false); return m ? fail(m) : ok(`Watcher "${id}" is off.`) }),
       tool(
         'run_watcher_now',
-        'Start one run of a watcher now, as a new turn in its thread (not while its previous turn still works).',
+        'Start one run of a watcher now, in a fresh thread (not while its previous run still works).',
         { id: z.string(), kind: z.enum(['sweep', 'daily', 'weekly']).optional().describe('Default sweep') },
         async ({ id, kind }) => { const m = runWatcherNow(id, kind ?? 'sweep'); return m ? fail(m) : ok(`Watcher "${id}" is running.`) },
       ),
-      tool('delete_watcher', 'Delete a watcher (soft): its thread ends and its folder moves to ~/.claude/hive/watchers/_deleted/.', { id: z.string() },
+      tool('delete_watcher', 'Delete a watcher (soft): a run still open is closed and its folder moves to ~/.claude/hive/watchers/_deleted/.', { id: z.string() },
         async ({ id }) => { try { return ok(`Watcher "${id}" deleted; its folder is now ${deleteWatcher(id)}`) } catch (e: any) { return fail(`delete_watcher failed: ${e?.message ?? e}`) } }),
       tool(
         'agent_status',
