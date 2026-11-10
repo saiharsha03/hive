@@ -6,7 +6,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { open, seal } from './mobileLink'
+import { notifyKey, open, seal } from './mobileLink'
 import { writeFileSafe } from './safeWrite'
 import { blocked, dataDir, TEST_MODE } from './testMode'
 
@@ -23,7 +23,8 @@ type Deps = {
   read: (id: string) => Promise<{ title: string; items: PhoneItem[]; working: boolean; asks?: { id: string; questions: AskQuestion[] }[] } | null>
   answer: (id: string, ask: string, answers: unknown) => boolean
   send: (id: string, text: string) => Promise<string>
-  start: (folder: string, text: string) => Promise<string>
+  // { id }: the new thread's id, so the app can open it (a plain string is the older 'started')
+  start: (folder: string, text: string) => Promise<string | { id: string }>
   stop: (id: string) => Promise<void>
   folders: () => string[]
   usage: () => Promise<{ plan: string | null; rows: UsageRow[] }>
@@ -37,7 +38,8 @@ type Deps = {
   cancelWakeup: (kind: string, id: string) => boolean
 }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
-type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; future?: number[]; floor?: number }
+// nk: the app said (hello, v 2) that it opens notifications with the notification key
+type Pairing = { relay: string; pair: string; deskToken: string; key: string; seqOut: number; seqIn: number; future?: number[]; floor?: number; nk?: boolean }
 
 const file = () => join(dataDir(), 'hive-mobile.json')
 let relay = ''
@@ -48,6 +50,10 @@ let ws: WebSocket | null = null
 let connected = false
 let error = ''
 let retry: ReturnType<typeof setTimeout> | undefined
+// the desk token goes in the Authorization header, never in the address (a proxy logs addresses). Only a runtime whose
+// WebSocket cannot send headers falls back to ?token= (see connect)
+let headerAuth = true
+type HeaderSocket = new (url: string, init: { headers: Record<string, string> }) => WebSocket
 
 const load = (): Pairing | null => { try { return JSON.parse(readFileSync(file(), 'utf8')) } catch { return null } }
 const store = () => writeFileSafe(file(), JSON.stringify(pairing ?? {}))
@@ -84,6 +90,7 @@ export async function pairPhone(): Promise<{ qr: string }> {
   if (!r.ok) throw new Error(`The relay refused the pairing (${r.status}). Check the relay address and admin token.`)
   if (pairing) await unpairRemote(pairing).catch(() => {}) // one phone at a time
   pairing = { relay: httpOf(relay), pair, deskToken, key, seqOut: 0, seqIn: 0 }
+  ran.clear()
   store()
   connect()
   // the phone's copy: everything it needs, shown only on this screen as a QR code
@@ -110,13 +117,20 @@ function connect(): void {
   if (!pairing) { deps?.changed(); return }
   const p = pairing
   try {
-    const sock = new WebSocket(`${wsOf(p.relay)}/v1/ws?pair=${p.pair}&role=desk&token=${encodeURIComponent(p.deskToken)}`)
+    const url = `${wsOf(p.relay)}/v1/ws?pair=${p.pair}&role=desk`
+    const byHeader = headerAuth
+    const sock = byHeader
+      ? new (WebSocket as unknown as HeaderSocket)(url, { headers: { authorization: `Bearer ${p.deskToken}` } })
+      : new WebSocket(`${url}&token=${encodeURIComponent(p.deskToken)}`)
     ws = sock
-    sock.onopen = () => { connected = true; error = ''; deps?.changed() }
+    let opened = false
+    sock.onopen = () => { opened = true; connected = true; error = ''; deps?.changed() }
     sock.onmessage = (e) => { void onMessage(String(e.data)) }
     sock.onclose = (e) => {
       if (ws !== sock) return
       connected = false
+      // refused before it opened although the relay answers: this runtime's WebSocket may have dropped the header
+      if (byHeader && !opened) void fetch(`${p.relay}/healthz`, { signal: AbortSignal.timeout(10_000) }).then((r) => { if (r.ok) headerAuth = false }).catch(() => {})
       error = e.code === 4401 ? 'The relay says this phone is no longer paired' : ''
       deps?.changed()
       if (e.code !== 4401 && pairing) retry = setTimeout(connect, 15_000) // the relay restarted, the network dropped: try again
@@ -140,7 +154,7 @@ const FRESH_MS = 120_000
 // full raises floor instead: nothing at or below it ever runs (it stops mattering once the clock passes it).
 const FUTURE_KEEP = 50
 export type SeqState = { seqIn: number; refused?: number[]; floor?: number }
-export function checkPhoneSeq(st: SeqState, seq: number, now: number): { run: boolean; future?: boolean; next: Required<SeqState> } {
+export function checkPhoneSeq(st: SeqState, seq: number, now: number): { run: boolean; future?: boolean; stale?: boolean; next: Required<SeqState> } {
   // an entry that expires raises the floor, so a refused request can never run after it leaves the list
   const all = st.refused ?? []
   const refused = all.filter((s) => s > now - FRESH_MS)
@@ -150,7 +164,9 @@ export function checkPhoneSeq(st: SeqState, seq: number, now: number): { run: bo
     if (refused.length >= FUTURE_KEEP) return { run: false, future: true, next: { ...next, floor: seq } }
     return { run: false, future: true, next: { ...next, refused: [...refused, seq] } }
   }
-  if (refused.length >= FUTURE_KEEP || Math.abs(now - seq) > FRESH_MS) return { run: false, next }
+  if (refused.length >= FUTURE_KEEP) return { run: false, next }
+  // new to Hive but older than the window: the phone clock is behind, or the relay held it back
+  if (now - seq > FRESH_MS) return { run: false, stale: true, next }
   return { run: true, next: { ...next, seqIn: seq } }
 }
 // a notification small enough that, sealed (nonce + tag + base64), it rides in one push: FCM data is at most 4 KB and the
@@ -171,16 +187,40 @@ export function byteCap(s: string, n: number): string {
   return `${out}…`
 }
 
-function sendToPhone(msg: Record<string, unknown>, push = false): void {
+// note: a notification. An app that said it has the notification key gets it sealed with that key (it opens it from a
+// push while locked); an older app gets it under the pairing key as before. at: this computer's clock, so the app can
+// tell a delayed notification and a phone clock that is off.
+function sendToPhone(msg: Record<string, unknown>, push = false, note = false): void {
   if (!pairing || !ws || ws.readyState !== WebSocket.OPEN) return
   pairing.seqOut += 1
-  const blob = seal(Buffer.from(pairing.key, 'base64'), pairing.pair, 'd2p', { ...msg, seq: pairing.seqOut, at: Date.now() })
+  const key = Buffer.from(pairing.key, 'base64')
+  const own = note && !!pairing.nk
+  const blob = seal(own ? notifyKey(key) : key, pairing.pair, own ? 'd2n' : 'd2p', { ...msg, seq: pairing.seqOut, at: Date.now() })
   store()
   ws.send(JSON.stringify({ blob, push }))
 }
 
+// A send or a new thread the app tries again after its 20 s wait ran out carries the same mid: it runs once, and the
+// second try gets the first one's answer. Kept in memory for ten minutes (the app only retries while it is open).
+const RAN_KEEP_MS = 10 * 60_000
+const ran = new Map<string, { at: number; result: Promise<unknown> }>()
+export function oncePerMid<T>(mid: unknown, run: () => Promise<T>, now = Date.now()): Promise<T> {
+  if (typeof mid !== 'string' || !mid || mid.length > 64) return run() // an older app sends none
+  for (const [k, v] of ran) if (now - v.at > RAN_KEEP_MS) ran.delete(k)
+  const had = ran.get(mid)
+  if (had) return had.result as Promise<T>
+  const result = run()
+  ran.set(mid, { at: now, result })
+  result.catch(() => ran.delete(mid)) // one that failed did not run: it may be tried again
+  if (ran.size > 50) ran.delete(ran.keys().next().value as string)
+  return result
+}
+
+const MAX_FRAME = 4 * 1024 * 1024 // the relay passes at most 2 MB; anything longer is not parsed
+let staleSaid = 0
+
 async function onMessage(raw: string): Promise<void> {
-  if (!pairing || !deps) return
+  if (!pairing || !deps || raw.length > MAX_FRAME) return
   let frame: { blob?: string }
   try { frame = JSON.parse(raw) } catch { return }
   if (!frame.blob) return
@@ -196,6 +236,12 @@ async function onMessage(raw: string): Promise<void> {
     if (changed) store()
     // said once per such request (a replay of it is remembered, so silent)
     if (c.future) sendToPhone({ re: m.rid, error: 'The phone clock is ahead of the computer by more than 2 minutes. Fix the clock and try again.' })
+    // a stale one is answered too, so the app does not wait 20 s for nothing; at most once in 30 s, and nothing is kept
+    // (the relay can replay old requests as often as it likes)
+    else if (c.stale && Date.now() - staleSaid > 30_000) {
+      staleSaid = Date.now()
+      sendToPhone({ re: m.rid, error: 'This request reached the computer more than 2 minutes after the phone sent it, so it was not run. If it keeps happening, the phone clock is behind: fix it and try again.' })
+    }
     return
   }
   pairing.seqIn = c.next.seqIn
@@ -208,8 +254,18 @@ async function onMessage(raw: string): Promise<void> {
       case 'thread': return reply({ thread: await deps.read(id) })
       case 'usage': return reply({ usage: await deps.usage() })
       case 'answer': return deps.answer(id, String(m.ask ?? ''), m.answers) ? reply({ ok: 'answered' }) : reply({ error: 'That question is no longer open' })
-      case 'send': return reply({ ok: await deps.send(id, String(m.text ?? '')) })
-      case 'new': return reply({ ok: await deps.start(String(m.folder ?? ''), String(m.text ?? '')) })
+      // the app's first request after it connects; v 2 and up opens notifications with the notification key
+      case 'hello':
+        if (typeof m.v === 'number' && m.v >= 2 && !pairing.nk) { pairing.nk = true; store() }
+        return reply({ ok: 'hello', v: 2 })
+      case 'send': { const d = deps; return reply({ ok: await oncePerMid(m.mid, () => d.send(id, String(m.text ?? ''))) }) }
+      case 'new': {
+        const d = deps
+        const r = await oncePerMid(m.mid, () => d.start(String(m.folder ?? ''), String(m.text ?? '')))
+        return reply(typeof r === 'string' ? { ok: r } : { ok: 'started', thread: r.id })
+      }
+      // "Unpair this phone" in the app: answered first, then the pairing is dropped here and on the relay
+      case 'unpair': reply({ ok: 'unpaired' }); return void (await unpairPhone())
       case 'stop': await deps.stop(id); return reply({ ok: 'stopped' })
       case 'teams': return reply({ teams: deps.teams() })
       case 'teamPause': return reply({ ok: await deps.teamPause(id) })
@@ -229,6 +285,6 @@ export function notifyPhone(title: string, body: string, thread?: string): strin
   if (TEST_MODE) return blocked('phone notifications')
   if (!pairing) return 'No phone is paired with Hive (Settings > General > Phone app).'
   if (!connected) return 'Hive is not connected to the relay right now, so the phone was not notified.'
-  sendToPhone(fitNotification(title, body, thread ?? ''), true)
+  sendToPhone(fitNotification(title, body, thread ?? ''), true, true)
   return 'Sent to the phone.'
 }
