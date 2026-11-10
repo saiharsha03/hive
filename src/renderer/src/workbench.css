@@ -121,3 +121,8 @@ body.side-drag { cursor: col-resize; user-select: none; }
 button.rail-gh:hover { color: var(--hi); }
 /* a section's name reads as a title, the way the explorer's does: sentence case, strong */
 .side-head { text-transform: none; letter-spacing: 0; font: 600 13px var(--sans); color: var(--hi); }
+
+/* hide the side bar from its own heading */
+.side-head { justify-content: space-between; padding-right: 10px; }
+.side-hide { background: none; border: 0; color: var(--dim); cursor: pointer; width: 22px; height: 22px; display: grid; place-items: center; }
+.side-hide:hover { color: var(--hi); background: var(--raised); }

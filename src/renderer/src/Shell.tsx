@@ -144,7 +144,7 @@ export function Shell() {
       if (!ctrl) return
       if (!e.shiftKey && !e.altKey && k === 'k') { e.preventDefault(); setPaletteN((n) => n + 1) }
       else if (!e.shiftKey && e.key === '.') { e.preventDefault(); nextNeedsMe() }
-      else if (!e.shiftKey && e.key === '[') { e.preventDefault(); toggleLayout('rail') }
+      else if (!e.shiftKey && (e.key === '[' || (k === 'b' && !e.altKey && !inTermOrEditor()))) { e.preventDefault(); toggleLayout('rail') }
       else if (!e.shiftKey && e.key === ']') { e.preventDefault(); toggleLayout('inspector') }
       else if (!e.shiftKey && !e.altKey && e.code === 'Backquote') { e.preventDefault(); toggleTerminal() }
       else if (!e.shiftKey && e.key === ',') { e.preventDefault(); openPage('settings') }

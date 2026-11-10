@@ -96,7 +96,7 @@ export function SideBar({ currentPage }: { currentPage: ToolTab | null }) {
   const title = labelOf(view)
   return (
     <aside className="side" style={{ width }} data-testid="side-bar" data-view={view} aria-label={title}>
-      <div className="side-head">{title}</div>
+      <div className="side-head"><span>{title}</span><button className="side-hide" onClick={() => setLayout({ rail: false })} title="Hide the side bar (Ctrl+B). Its icon brings it back" aria-label="Hide the side bar" data-testid="side-hide"><i className="codicon codicon-chevron-left" aria-hidden /></button></div>
       <div className={`side-body side-${view}`}>
         <Boundary key={view} name={title}>
           {view === 'files' ? <FilesView /> : view === 'threads' ? <Rail currentPage={currentPage} /> : <div className="ws-page side-pad"><GitPanel onDiff={showDiffBeside} /></div>}
