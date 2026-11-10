@@ -21,11 +21,12 @@ export type Effort = (typeof EFFORTS)[number]
 // idleCloseMinutes: an idle thread's Claude process closes after this long (the next message resumes it); 0 = never
 // teamMemoryKb: how much of each role memory file (the newest entries) goes into a teammate's brief
 // advisorModel: the model of Claude Code's server-side advisor tool for new threads (an alias or a full id; '' = off)
+// quarryPath: the Quarry exe ('' = find the installed one, 'off' = no Quarry in Hive)
 // workflows: Claude Code's Workflows feature for new threads: 'on', 'off', or '' = Claude Code's own default (by plan)
 export type General = {
   shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean; desktopNotify: boolean
   bgModel: string; bgEffort: Effort | ''; teamModel: string; teamEffort: Effort | ''; idleCloseMinutes: number; teamMemoryKb: number
-  advisorModel: string; workflows: '' | 'on' | 'off'
+  advisorModel: string; workflows: '' | 'on' | 'off'; quarryPath: string
 }
 export const DEFAULT_IDLE_CLOSE_MINUTES = 30
 export const DEFAULT_TEAM_MEMORY_KB = 6
@@ -40,7 +41,7 @@ export type Settings = {
 export const emptyGeneral = (): General => ({
   shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true, desktopNotify: true,
   bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: DEFAULT_IDLE_CLOSE_MINUTES, teamMemoryKb: DEFAULT_TEAM_MEMORY_KB,
-  advisorModel: '', workflows: '',
+  advisorModel: '', workflows: '', quarryPath: '',
 })
 
 // what the panel edits and gets back
@@ -101,6 +102,7 @@ export function normalizeSettings(v: unknown): Settings | null {
       teamMemoryKb: count(g.teamMemoryKb, DEFAULT_TEAM_MEMORY_KB, 1024),
       advisorModel: str(g.advisorModel),
       workflows: g.workflows === 'on' || g.workflows === 'off' ? g.workflows : '',
+      quarryPath: str(g.quarryPath),
     },
   }
 }

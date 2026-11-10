@@ -266,6 +266,8 @@ interface Window {
     // per-thread status: model / effort switches, the lists the session offers, stopping background work
     chatSetModel: (tabId: string, model: string) => Promise<void>
     chatSetEffort: (tabId: string, level: string) => Promise<void>
+    quarryStatus: () => Promise<{ available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }>
+    onQuarryChanged: (cb: (s: { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }) => void) => () => void
     chatSetAdvisor: (tabId: string, model: string) => Promise<void>
     chatCommands: (tabId?: string) => Promise<import('../../shared/composerCore').Command[]>
     chatModels: (tabId?: string) => Promise<{ value: string; displayName: string; description: string }[]>

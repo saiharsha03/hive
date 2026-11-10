@@ -315,6 +315,13 @@ contextBridge.exposeInMainWorld('api', {
   // per-thread status (liveStatus.ts)
   chatSetModel: (tabId: string, model: string) => ipcRenderer.invoke('chat:setModel', tabId, model),
   chatSetEffort: (tabId: string, level: string) => ipcRenderer.invoke('chat:setEffort', tabId, level),
+  // Quarry, the SQL app: whether it is installed and usable here (the Quarry page and rail link exist only then)
+  quarryStatus: (): Promise<{ available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }> => ipcRenderer.invoke('quarry:status'),
+  onQuarryChanged: (cb: (s: { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }) => void) => {
+    const fn = (_e: unknown, s: { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }) => cb(s)
+    ipcRenderer.on('quarry:changed', fn)
+    return () => ipcRenderer.removeListener('quarry:changed', fn)
+  },
   // the thread's own advisor model ('' = none), live; the tab hears hive_advisor { model: string | null }
   chatSetAdvisor: (tabId: string, model: string) => ipcRenderer.invoke('chat:setAdvisor', tabId, model),
   chatCommands: (tabId?: string) => ipcRenderer.invoke('chat:commands', tabId),

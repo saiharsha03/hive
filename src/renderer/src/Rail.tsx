@@ -22,6 +22,7 @@ import { buildAnswers, parseQuestions } from '../../shared/askCore'
 import { focusedTab } from './panes'
 import { age, clock, State, type Tone } from './kit'
 import { PAGE_LABEL, type ToolTab } from './chat'
+import { useQuarry } from './pages/QuarryPage'
 
 // at rest a row shows its state word only when it needs you or failed
 const loud = (t: Tone) => t === 'wait' || t === 'fail'
@@ -126,12 +127,13 @@ export function Rail({ currentPage }: { currentPage: ToolTab | null }) {
   const live = useStore(liveStore, (l) => l)
   const scr = useStore(panes, onScreen, shallowEq)
   const shown = useMemo(() => new Set(scr.shown.split(' ').filter(Boolean)), [scr.shown])
+  const quarry = useQuarry() // the Quarry link only when Quarry is installed and usable
   return (
     <aside className="rail" data-testid="sidebar" aria-label="Threads">
       <button className="rail-new" onClick={() => newSession()} data-testid="top-new"><span>New thread</span><span className="keys">Ctrl N</span></button>
       <RailList live={live} focus={scr.focus} shown={shown} />
       <nav className="rail-views" aria-label="Views">
-        {(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings'] as ToolTab[]).map((v) => (
+        {(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', ...(quarry?.available ? ['quarry'] : []), 'settings'] as ToolTab[]).map((v) => (
           <button key={v} className={`rail-view${currentPage === v ? ' on' : ''}`} onClick={(e) => (e.shiftKey ? openPageBeside(v) : openPage(v))} title={`${PAGE_LABEL[v]}. Shift+click opens it beside the current pane`} data-testid={`rail-view-${v}`}>
             {VIEW_NAME[v] ?? PAGE_LABEL[v]}{v === 'running' && live.working.length > 0 ? ` ${live.working.length}` : ''}
           </button>

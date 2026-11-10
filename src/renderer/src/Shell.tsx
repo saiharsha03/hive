@@ -24,6 +24,7 @@ import { PAGE_LABEL, PAGE_KEYS, type ToolTab } from './chat'
 import { panes as panesStore, setSessions, useSessionMetas, useStore } from './store'
 import { focusedTab, activate as activateIn } from './panes'
 import { RunningPage } from './pages/RunningPage'
+import { QuarryPage, useQuarry } from './pages/QuarryPage'
 import { ScheduledPage } from './pages/ScheduledPage'
 import { DeploysPage } from './pages/DeploysPage'
 import { StatusPage } from './pages/StatusPage'
@@ -54,6 +55,7 @@ export function Shell() {
   const live = useStore(liveStore, (l) => l)
   const pv = useStore(preview, (p) => p)
   const toasts = useStore(notices, (n) => n)
+  const quarry = useQuarry() // Quarry's page only when it is installed and usable
 
   // the deploy wizard's and the scripts' rows join the threads in Needs you / Working
   useEffect(() => { setExtraRows([...(deploy.liveRow ? [deploy.liveRow] : []), ...scripts.liveRows]) }, [deploy.liveRow, scripts.liveRows])
@@ -62,7 +64,7 @@ export function Shell() {
   const commands: Command[] = useMemo(() => [
     ...[...live.waiting, ...live.working].map((r): Command => ({ id: `live:${r.id}`, group: 'Threads', label: r.title, hint: r.state === 'working' ? 'working' : 'needs you', run: () => activate(r.id) })),
     ...metas.filter((s) => !s.tool && !s.file && ![...live.waiting, ...live.working].some((r) => r.id === s.id)).map((s): Command => ({ id: `open:${s.sessionId ?? s.id}`, group: 'Threads', label: s.title, hint: 'open', run: () => activate(s.id) })),
-    ...(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings'] as ToolTab[]).map((v): Command => ({ id: `view:${v}`, group: 'Views', label: PAGE_LABEL[v], hint: PAGE_KEYS[v]?.replace(/ /g, '+'), run: () => openPage(v) })),
+    ...(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings', ...(quarry?.available ? ['quarry'] : [])] as ToolTab[]).map((v): Command => ({ id: `view:${v}`, group: 'Views', label: PAGE_LABEL[v], hint: PAGE_KEYS[v]?.replace(/ /g, '+'), run: () => openPage(v) })),
     { id: 'new', group: 'Actions', label: 'New thread', hint: 'Ctrl+N', run: () => newSession() },
     { id: 'new-beside', group: 'Actions', label: 'New thread beside', hint: 'Ctrl+\\', run: () => newBeside() },
     { id: 'next-needs', group: 'Actions', label: 'Next thread that needs me', hint: 'Ctrl+.', run: () => nextNeedsMe() },
@@ -84,7 +86,7 @@ export function Shell() {
       { id: 'export', group: 'Actions' as const, label: 'Export this thread as Markdown', run: () => window.dispatchEvent(new CustomEvent('hive:export', { detail: focus })) },
     ] : []),
     { id: 'update', group: 'Actions', label: 'Check for Hive updates', run: () => void window.api.updateCheck().then(() => window.api.updateState()).then((u) => notice(u ? `Hive ${u.version} is ${u.kind === 'ready' ? 'downloaded: restart from the status line' : 'available'}` : 'No newer Hive release')).catch(() => {}) },
-  ], [live, metas, focus, focused])
+  ], [live, metas, focus, focused, quarry?.available])
   const src: PaletteSources = useMemo(() => ({
     commands,
     files: async (q) => {
@@ -240,6 +242,7 @@ function PageFor({ page, deploy, onAccounts }: { page: ToolTab; deploy: ReturnTy
     case 'workspace': return <WorkspacePage />
     case 'settings': return <SettingsPage onAccounts={onAccounts} />
     case 'diff': return <DiffPage />
+    case 'quarry': return <QuarryPage />
   }
 }
 

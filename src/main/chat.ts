@@ -63,6 +63,8 @@ import { noteSession, setPaused } from './teams'
 import { addKnowledge, addMember, appendLog, createTeam, endTeam, getTeam, ownedTeams, readLog, teamChanged, teamOf } from './teams'
 import { partialRestore, rewindBlock } from '../shared/rewindCore'
 import { forkPointOfFile } from './rewindFile'
+import { quarryCall, quarryLimits, quarryStatus } from './quarry'
+import { DATA_NOTE, formatConnections, formatError, formatRows, RUN_WRITE, writeQuestion } from './quarryCore'
 import { addPending, pendingDelivered, pendingIsSteer, pendingReturned, pendingSeen, pendingSession, steersDelivered, threadClosed } from './pending'
 
 // the events the user should hear about: the phone and the desktop get the same ones
@@ -135,6 +137,7 @@ const append = () => [
   'Teams: when the user asks for a team (several threads working on one job together), mcp__hive__start_team starts one, with you as its Lead or (lead "new") as its Owner with a separate Lead thread; team_post, team_note, team_status, add_teammate and end_team run it. A message starting "[Team" is a post from a teammate. mcp__hive__list_roles shows the role library (each role carries its own instructions and a memory kept across teams); a Lead picks how many of each role the job needs.',
   'A message starting "[To subagent" is the user talking to one of your subagents: pass the text on with SendMessage to that agent, word for word, then carry on with what you were doing.',
   `A message starting "[From thread" was sent by another ${appName()} thread, not the user; your final reply is what that thread gets back when it waits for you.`,
+  ...(quarryStatus().available ? ["The user's SQL app Quarry is connected: mcp__hive__quarry_connections, quarry_schema, quarry_query and quarry_explain reach the databases saved in it (one statement per call; reads are read-only; for a write set allow_write and the user is asked to confirm it)."] : []),
   'Watchers are scheduled background agents, each with its own memory folder and SQLite db; every run is a fresh thread: mcp__hive__create_watcher, list_watchers, update_watcher, enable_watcher, disable_watcher, run_watcher_now and delete_watcher manage them.',
 ].join(' ')
 
@@ -432,6 +435,78 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         { id: z.number().int().describe('Wake-up id') },
         async ({ id }) => (s.sessionId && cancelWakeup(id, s.sessionId) ? ok(`Wake-up #${id} cancelled.`) : fail(`No pending wake-up #${id} for this thread.`)),
       ),
+      // Quarry (the user's SQL app), when it is installed: its agent interface. Quarry enforces its own rules (one
+      // statement per call, reads in a read-only transaction, no writes on production or read-only connections); a
+      // write runs only with allowWrite, which Hive sets after the user said yes to that statement in this thread
+      ...(quarryStatus().available ? [
+        tool(
+          'quarry_connections',
+          'The database connections saved in Quarry, the user\'s SQL app: id, name, host, database, and whether each is PRODUCTION or read only. Pass a connection\'s id or exact name to the other quarry_ tools.',
+          {},
+          async () => { try { return ok(formatConnections(await quarryCall('agent.listConnections', {}))) } catch (e) { return fail(formatError(e)) } },
+        ),
+        tool(
+          'quarry_schema',
+          'A connection\'s schema through Quarry. Without schema or table: every table with its kind, estimated rows and column count. With schema and/or table (case-insensitive): columns, types, keys, indexes and foreign keys.',
+          {
+            connection: z.string().describe('Connection id or exact name (quarry_connections)'),
+            schema: z.string().optional().describe('Only this schema'),
+            table: z.string().optional().describe('Only this table'),
+          },
+          async ({ connection, schema, table }) => {
+            try { return ok(`${DATA_NOTE}\n${JSON.stringify(await quarryCall('agent.describeSchema', { connection, ...(schema ? { schema } : {}), ...(table ? { table } : {}) }), null, 1)}`) } catch (e) { return fail(formatError(e)) }
+          },
+        ),
+        tool(
+          'quarry_query',
+          'Run ONE SQL statement through Quarry and get the rows (values as Postgres text; NULL as NULL). A read runs in a read-only transaction that is rolled back. '
+            + 'For a write (INSERT, UPDATE, DELETE, DDL, ...) set allow_write: the user is asked in this thread to confirm that exact statement first, and Quarry still refuses writes on PRODUCTION and read-only connections. '
+            + `max_rows defaults to ${quarryLimits().defaultRows ?? 200} (at most ${quarryLimits().maxRows ?? 1000}); timeout_ms to ${quarryLimits().defaultTimeoutMs ?? 15000} (at most ${quarryLimits().maxTimeoutMs ?? 60000}).`,
+          {
+            connection: z.string().describe('Connection id or exact name (quarry_connections)'),
+            sql: z.string().describe('One SQL statement'),
+            max_rows: z.number().int().positive().optional(),
+            timeout_ms: z.number().int().positive().optional(),
+            allow_write: z.boolean().optional().describe('The statement writes: ask the user to confirm it, then run it'),
+          },
+          async ({ connection, sql, max_rows, timeout_ms, allow_write }, extra) => {
+            let allowWrite = false
+            if (allow_write) {
+              if (watcher) return fail('A watcher run is unattended: nobody can confirm a write. Note it in your findings instead.')
+              const id = `quarry-write-${randomUUID()}`
+              const questions = writeQuestion(connection, sql)
+              const reason = `Question: ${questions[0].question.split('\n')[0]}`.slice(0, 200)
+              s.waitingReason = reason
+              send({ type: 'hive_ask', id, questions })
+              send({ type: 'hive_organize', action: 'waiting', reason })
+              notifyUser(`Question: ${titleOf(tabId)}`, questions[0].question.split('\n')[0], tabId)
+              const signal = (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal
+              const end = await waitForAnswer(tabId, id, questions, signal)
+              send({ type: 'hive_ask_done', id })
+              if (!openAsks(tabId).length) { if (s.waitingReason?.startsWith('Question: ')) s.waitingReason = undefined; send({ type: 'hive_organize', action: 'resolved' }) }
+              if (end.kind !== 'answers' || end.answers[questions[0].question] !== RUN_WRITE) {
+                return ok(end.kind === 'chat' ? 'The user replied in the chat instead: read their next message. The write was not run.' : 'The user did not confirm the write; it was not run.')
+              }
+              allowWrite = true
+            }
+            try {
+              const r = await quarryCall<any>('agent.query', { connection, sql, ...(max_rows ? { maxRows: max_rows } : {}), ...(timeout_ms ? { timeoutMs: timeout_ms } : {}), ...(allowWrite ? { allowWrite: true } : {}) }, (timeout_ms ?? 60_000) + 30_000)
+              return ok(formatRows(r))
+            } catch (e) { return fail(formatError(e)) }
+          },
+        ),
+        tool(
+          'quarry_explain',
+          'The query plan of ONE statement through Quarry (EXPLAIN; analyze runs it, which Quarry refuses for a write).',
+          { connection: z.string(), sql: z.string(), analyze: z.boolean().optional() },
+          async ({ connection, sql, analyze }) => {
+            try {
+              const r = await quarryCall<any>('agent.explain', { connection, sql, ...(analyze ? { analyze: true } : {}) }, 90_000)
+              return ok(`${DATA_NOTE}\n${r.text ?? JSON.stringify(r.plan)}\nplanning ${r.planningMs ?? '?'} ms${r.executionMs != null ? `, execution ${r.executionMs} ms` : ''}`)
+            } catch (e) { return fail(formatError(e)) }
+          },
+        ),
+      ] : []),
       tool(
         'worktree',
         'Create (or reuse) a git worktree of one of the user\'s repos for this thread and return its folder and branch. Do all code changes for that repo in the returned folder. '

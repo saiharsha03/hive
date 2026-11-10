@@ -389,6 +389,9 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
             <option value="">(Claude Code's default)</option><option value="on">On</option><option value="off">Off</option>
           </select>
         </Row>
+        <Row label="Quarry" hint="The Quarry SQL app's exe. Empty = find the installed Quarry; off = no Quarry in Hive. When one is found, Hive gets a Quarry page and threads get its quarry_ tools." problems={of('general.quarryPath')}>
+          <input className="sin wide" data-testid="settings-quarry" value={g.quarryPath} spellCheck={false} placeholder="(find the installed Quarry)" onChange={(e) => setGeneral({ quarryPath: e.target.value })} />
+        </Row>
         <Row label="Team memory in briefs" hint="KB of each role memory file (the newest entries) a teammate's brief carries; the file keeps everything." problems={of('general.teamMemoryKb')}>
           <input className="sin num" type="number" min={0} value={g.teamMemoryKb} onChange={(e) => setGeneral({ teamMemoryKb: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
         </Row>

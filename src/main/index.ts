@@ -1,5 +1,5 @@
 // Electron main process. The Agent SDK runs here.
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, shell, Tray } from 'electron'
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
 import { randomUUID } from 'node:crypto'
@@ -42,6 +42,8 @@ import { listHooks, listPlugins, setHook, setPlugin } from './hooks'
 import { checkForUpdates, applyUpdate, startUpdater, updateState } from './updater'
 import { latestEngine, updateEngine } from './engine'
 import { handleScheme, openExternal, previewUrl, readText, registerScheme, SCHEME } from './preview'
+import { configureQuarry, onQuarryChange, quarryCall, quarryStatus, stopQuarry } from './quarry'
+import { QuarryError, uiRequest } from './quarryCore'
 import { saveSearchNow, searchSessions, searchStatus, setSearchBusy, startSearch, syncSearch } from './search'
 import { listSessions } from './sessions'
 import { answerAsk, openAsks } from './asks'
@@ -338,6 +340,7 @@ function applySettings() {
   initAllowlist(appConfig.env, allowChanged)
   setWatcherPosts(appConfig.env)
   configureChat(appConfig.env, chatRoots())
+  void configureQuarry(settings.general.quarryPath)
   initMobile(appConfig.env, mobileDeps())
 }
 const draftOf = (d: unknown): Draft => {
@@ -715,6 +718,56 @@ function resendPending(web: Electron.WebContents): void {
   }
 }
 
+// ---- Quarry (quarry.ts): its UI in a <webview> on the Quarry page, its agent interface as thread tools ----
+// The page's view is the only thing that may call Quarry's UI methods (quarry:invoke): these are the user's own
+// actions, as in the Quarry window. Every other caller gets "Not allowed".
+const QUARRY_UI = 'quarry://app/'
+const QUARRY_PRELOAD = () => join(__dirname, '../preload/quarry.js')
+const quarryViews = new Set<number>()
+const quarryChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('quarry:changed', quarryStatus()) }
+onQuarryChange(quarryChanged)
+// the UI's own calls run as long as the user's query does (Quarry has its own statement timeout and Cancel)
+const UI_CALL_MS = 60 * 60_000
+const apiErrorOf = (e: unknown) => (e instanceof QuarryError && e.data ? e.data : { code: 'internal', message: (e as Error)?.message ?? String(e), sqlstate: null, detail: null, hint: null, position: null })
+ipcMain.handle('quarry:invoke', (e, method: string, params: unknown) => {
+  if (!quarryViews.has(e.sender.id) || !e.sender.getURL().startsWith(QUARRY_UI)) throw new Error('Not allowed')
+  return quarryCall(String(method), params && typeof params === 'object' ? params : {}, UI_CALL_MS).then((value) => ({ ok: true, value }), (err) => ({ ok: false, error: apiErrorOf(err) }))
+})
+ipcMain.handle('quarry:saveFile', async (e, name: string) => {
+  if (!quarryViews.has(e.sender.id) || !mainWin) throw new Error('Not allowed')
+  const r = await dialog.showSaveDialog(mainWin, { defaultPath: String(name || 'export.csv'), filters: [{ name: 'CSV', extensions: ['csv'] }] })
+  return r.canceled || !r.filePath ? null : r.filePath
+})
+handle('quarry:status', () => quarryStatus())
+// quarry://app/...: the UI's files, from the serve process (ui.index, ui.asset); anything else is not found
+function handleQuarryScheme(): void {
+  protocol.handle('quarry', async (req) => {
+    const r = uiRequest(req.url)
+    if (!r || !quarryStatus().available) return new Response('Not found', { status: 404 })
+    try {
+      const a = await quarryCall<{ mime: string; base64: string }>(r.method, r.method === 'ui.asset' ? { path: r.path } : undefined, 30_000)
+      return new Response(Buffer.from(a.base64, 'base64'), { headers: { 'content-type': a.mime } })
+    } catch { return new Response('Not found', { status: 404 }) }
+  })
+}
+// a <webview> in the app's page: only the Quarry UI, with the Quarry preload and nothing else; it never navigates away
+function guardWebviews(web: Electron.WebContents): void {
+  web.on('will-attach-webview', (e, prefs, params) => {
+    if (!String(params.src ?? '').startsWith(QUARRY_UI) || !quarryStatus().available) { e.preventDefault(); return }
+    delete (prefs as { preloadURL?: string }).preloadURL
+    prefs.preload = QUARRY_PRELOAD()
+    prefs.nodeIntegration = false
+    prefs.contextIsolation = true
+    prefs.sandbox = true
+  })
+  web.on('did-attach-webview', (_e, wc) => {
+    quarryViews.add(wc.id)
+    wc.on('destroyed', () => quarryViews.delete(wc.id))
+    wc.on('will-navigate', (ev, url) => { if (!url.startsWith(QUARRY_UI)) { ev.preventDefault(); openInBrowser(url) } })
+    wc.setWindowOpenHandler(({ url }) => { openInBrowser(url); return { action: 'deny' } })
+  })
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     title: windowTitle(),
@@ -726,7 +779,8 @@ function createWindow(): void {
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#171A1D', symbolColor: '#CBD1D7', height: 40 },
     // plugins: Chromium's built-in PDF viewer for the Preview panel
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), plugins: true },
+    // webviewTag: the Quarry page's view only (guardWebviews: its source, preload and settings are fixed in main)
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), plugins: true, webviewTag: true },
   })
   mainWin = win
   win.on('closed', () => { if (mainWin === win) mainWin = null })
@@ -734,6 +788,7 @@ function createWindow(): void {
   watchClipboard(win)
   // the window only ever shows the app; links in chat replies go to the browser instead
   guardWindow(web)
+  guardWebviews(web)
   // the app menu is removed (own top bar), which also removed its shortcuts: dev tools, Quit, and reload only in dev
   web.on('before-input-event', (e, input) => {
     const act = keyAction(input, !!DEV_URL)
@@ -774,7 +829,7 @@ function makeTray(): void {
   ]))
   tray.on('click', showWindow)
 }
-app.on('before-quit', () => { quitting = true; saveSearchNow() })
+app.on('before-quit', () => { quitting = true; saveSearchNow(); stopQuarry() })
 
 // one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one
 if (!TEST_MODE && !app.requestSingleInstanceLock()) app.quit()
@@ -791,6 +846,8 @@ app.whenReady().then(() => {
   // the account signed in now is kept as a profile (its newest tokens), so it can be switched back to later
   keepProfile()
   handleScheme()
+  handleQuarryScheme()
+  void configureQuarry(settings.general.quarryPath)
   createWindow()
   makeTray()
   startSearch()
@@ -798,6 +855,7 @@ app.whenReady().then(() => {
 })
 app.on('window-all-closed', () => {
   saveSearchNow()
+  stopQuarry()
   closeStatus()
   stopLanguageServers()
   closeAll()

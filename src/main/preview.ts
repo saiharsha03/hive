@@ -33,6 +33,8 @@ const tokens = new Map<string, string>() // folder -> token
 export function registerScheme(): void {
   protocol.registerSchemesAsPrivileged([
     { scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+    // Quarry's UI, served from the quarry serve process (quarryCore.uiRequest; index.ts quarry wiring)
+    { scheme: 'quarry', privileges: { standard: true, secure: true, supportFetchAPI: true } },
   ])
 }
 
