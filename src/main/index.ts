@@ -65,6 +65,7 @@ import * as dev from './devStack'
 import { killAllTerminals, killTerminal, openTerminal, resizeTerminal, setTerminalSink, writeTerminal } from './terminal'
 import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
+import { runCodex } from './codex'
 import { APP_ID, NEXT, PRODUCT } from '../shared/edition'
 import { blocked, dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
@@ -542,6 +543,18 @@ handle('pull:run', (_e, dry: boolean) => {
 })
 handle('allow:status', () => allowStatus())
 handle('allow:run', () => runAllowlist())
+// Codex from the side bar: one `codex exec` run in a folder; its activity lines go to the page as they come
+let codexProc: import('node:child_process').ChildProcess | null = null
+handle('codex:run', async (e, task: unknown, folder: unknown, edits: unknown) => {
+  if (TEST_MODE) return { ok: false, answer: blocked('Codex') }
+  if (codexProc) return { ok: false, answer: 'Codex is already running a task.' }
+  const dir = typeof folder === 'string' && folder && existsSync(folder) ? folder : appConfig.config?.root || homedir()
+  const web = e.sender
+  try {
+    return await runCodex({ task: String(task ?? ''), folder: dir, allowEdits: edits === true, onLine: (l) => { if (!web.isDestroyed()) web.send('codex:line', l) } }, (p) => { codexProc = p })
+  } finally { codexProc = null }
+})
+handle('codex:stop', () => { codexProc?.kill(); return true })
 // forget an allowed address, so it can be allowed again (its rule expired or was removed on the other side)
 handle('allow:forget', (_e, address: string) => forgetAllowed(String(address ?? '')))
 // updates from GitHub Releases (packaged builds only)

@@ -13,19 +13,19 @@ export type UiFont = 'inter' | 'segoe' | 'plex' | 'geist' | 'system'
 export type CodeFont = 'cascadia' | 'consolas' | 'plex-mono' | 'system'
 export const UI_FONTS: { id: UiFont; label: string; stack: string }[] = [
   { id: 'inter', label: 'Inter', stack: "'Inter Variable', 'Segoe UI', sans-serif" },
-  { id: 'segoe', label: 'Segoe UI Variable', stack: "'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', sans-serif" },
+  { id: 'segoe', label: 'Segoe UI', stack: "'Segoe WPC', 'Segoe UI', sans-serif" },
   { id: 'plex', label: 'IBM Plex Sans', stack: "'IBM Plex Sans', 'Segoe UI', sans-serif" },
   { id: 'geist', label: 'Geist', stack: "'Geist Variable', 'Segoe UI', sans-serif" },
   { id: 'system', label: 'System', stack: "system-ui, 'Segoe UI', sans-serif" },
 ]
 export const CODE_FONTS: { id: CodeFont; label: string; stack: string }[] = [
   { id: 'cascadia', label: 'Cascadia Mono', stack: "'Cascadia Mono', Consolas, monospace" },
-  { id: 'consolas', label: 'Consolas', stack: "Consolas, 'Cascadia Mono', monospace" },
+  { id: 'consolas', label: 'Consolas', stack: "Consolas, 'Courier New', monospace" },
   { id: 'plex-mono', label: 'IBM Plex Mono', stack: "'IBM Plex Mono', Consolas, monospace" },
   { id: 'system', label: 'System monospace', stack: "ui-monospace, Consolas, monospace" },
 ]
 export type Fonts = { ui: UiFont; code: CodeFont }
-export const DEFAULT_FONTS: Fonts = { ui: 'inter', code: 'cascadia' }
+export const DEFAULT_FONTS: Fonts = { ui: 'segoe', code: 'consolas' }
 const fontsOf = (v: unknown): Fonts => {
   const f = (v && typeof v === 'object' ? v : {}) as Partial<Fonts>
   return { ui: UI_FONTS.some((x) => x.id === f.ui) ? f.ui! : DEFAULT_FONTS.ui, code: CODE_FONTS.some((x) => x.id === f.code) ? f.code! : DEFAULT_FONTS.code }

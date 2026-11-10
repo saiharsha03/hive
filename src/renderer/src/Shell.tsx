@@ -210,7 +210,7 @@ export function Shell() {
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onWindowDrop}>
       <TitleBar src={src} paletteN={paletteN} accountsOpen={accountsOpen} setAccountsOpen={setAccountsOpen} />
       <div className={`body${layout.railRight ? ' rail-right' : ''}`}>
-        {!layout.focus && <ActivityBar onAccounts={() => setAccountsOpen(true)} />}
+        {!layout.focus && <ActivityBar onAccounts={() => setAccountsOpen(true)} currentPage={currentPage} />}
         {showRail && <SideBar currentPage={currentPage} deploy={deploy} />}
         <div className="centre">
           <TabRow />

@@ -20,10 +20,10 @@
   --t-state: 500 12px/1 var(--sans);
   --t-label: 400 11.5px/1.4 var(--sans);
   --t-ui: 400 13px/1.45 var(--sans);
-  --t-conv: 400 14.5px/1.62 var(--sans);
+  --t-conv: 400 13px/1.55 var(--sans);
   --t-title: 650 19px/1.25 var(--sans);
   --t-page: 600 22px/1.2 var(--sans);
-  --t-code: 400 12.5px/1.68 var(--mono);
+  --t-code: 400 13px/1.5 var(--mono);
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 14px; --s5: 18px; --s6: 22px; --s7: 26px;
   --pane-pad: 28px; --row-pad: 6px 14px; --radius: var(--r-row);
   --rule-w: 1px; --active-bar: 3px; --tab-top: 2px; --q-top: 2px;

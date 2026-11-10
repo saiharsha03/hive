@@ -231,6 +231,13 @@ contextBridge.exposeInMainWorld('api', {
   pullRun: (dry: boolean) => ipcRenderer.invoke('pull:run', dry),
   allowStatus: () => ipcRenderer.invoke('allow:status'),
   allowRun: () => ipcRenderer.invoke('allow:run'),
+  codexRun: (task: string, folder: string, edits: boolean) => ipcRenderer.invoke('codex:run', task, folder, edits),
+  codexStop: () => ipcRenderer.invoke('codex:stop'),
+  onCodexLine: (cb: (line: string) => void) => {
+    const fn = (_e: unknown, l: string) => cb(l)
+    ipcRenderer.on('codex:line', fn)
+    return () => ipcRenderer.removeListener('codex:line', fn)
+  },
   allowForget: (address: string) => ipcRenderer.invoke('allow:forget', address),
   updateState: () => ipcRenderer.invoke('update:state'),
   updateCheck: () => ipcRenderer.invoke('update:check'),

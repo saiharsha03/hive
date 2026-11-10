@@ -211,6 +211,9 @@ interface Window {
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowForget: (address: string) => Promise<import('../../shared/allowCore').AllowStatus>
     allowRun: () => Promise<import('../../shared/allowCore').AllowRun>
+    codexRun: (task: string, folder: string, edits: boolean) => Promise<{ ok: boolean; answer: string }>
+    codexStop: () => Promise<boolean>
+    onCodexLine: (cb: (line: string) => void) => () => void
     updateState: () => Promise<import('../../shared/versionCore').UpdateState | null>
     updateCheck: () => Promise<void>
     updateApply: () => Promise<void>

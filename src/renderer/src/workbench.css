@@ -47,3 +47,23 @@ body.side-drag { cursor: col-resize; user-select: none; }
 .allow-run .ar-ok { color: var(--ok, var(--hi)); font-weight: 600; }
 .allow-run .ar-fail { color: var(--fail); font-weight: 600; }
 .panes > .pane-empty > pre.ar-out { max-width: min(900px, 100%); width: 100%; margin-top: 14px; padding: 12px 14px; text-align: left; font: 12.5px/1.5 var(--mono); color: var(--ink); background: var(--side); border: 1px solid var(--rule); white-space: pre-wrap; overflow: auto; max-height: 60vh; user-select: text; }
+
+/* brand marks in the icon bar sit like the other icons */
+.abar-item .brand-icon { display: block; }
+
+/* ---------- Codex ---------- */
+.codex-side { display: flex; flex-direction: column; gap: 10px; }
+.cx-task { width: 100%; resize: vertical; min-height: 90px; padding: 8px 10px; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); font: var(--t-ui); outline: 0; }
+.cx-task:focus { border-color: var(--accent); }
+.cx-row { display: flex; align-items: center; gap: 10px; }
+.cx-gap { flex: 1; }
+.cx-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); cursor: pointer; }
+.cx-note { font-size: 12px; color: var(--faint); overflow-wrap: anywhere; }
+.cx-last { font-size: 12.5px; color: var(--dim); overflow-wrap: anywhere; }
+.cx-work { color: var(--signal); font-weight: 600; } .cx-ok { color: var(--hi); font-weight: 600; } .cx-fail { color: var(--fail); font-weight: 600; }
+.panes > .pane-empty.cx-pane { justify-content: flex-start; align-items: stretch; text-align: left; padding: 22px 28px; overflow: auto; }
+.panes > .pane-empty.cx-pane > div { max-width: 900px; width: 100%; margin: 0 auto; }
+.cx-out { display: flex; flex-direction: column; gap: 12px; color: var(--ink); user-select: text; }
+.cx-asked { padding: 10px 12px; background: var(--side); border: 1px solid var(--rule); white-space: pre-wrap; }
+.cx-lines { padding: 10px 12px; font: var(--t-code); color: var(--dim); background: var(--side); border: 1px solid var(--rule); white-space: pre-wrap; max-height: 40vh; overflow: auto; margin: 0; }
+.cx-answer { font: var(--t-conv); }

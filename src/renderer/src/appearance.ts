@@ -8,7 +8,7 @@
 import { useSyncExternalStore } from 'react'
 import { getPref, setPref } from './prefs'
 
-import { THEMES, codeFontStack, migrate, nextTheme, uiFontStack, type Appearance, type Fonts, type Layout, type ThemeId, type ThemeInfo } from './layoutCore'
+import { DEFAULT_FONTS, THEMES, codeFontStack, migrate, nextTheme, uiFontStack, type Appearance, type Fonts, type Layout, type ThemeId, type ThemeInfo } from './layoutCore'
 import { THEME_TOKENS, themeCss } from './themesCore'
 export { migrate, themeOf, UI_FONTS, CODE_FONTS, type Appearance, type Fonts, type Layout, type ThemeId, type ThemeInfo } from './layoutCore'
 export { swatchOf, isLightTheme } from './themesCore'
@@ -20,6 +20,8 @@ sheet.textContent = themeCss()
 document.head.prepend(sheet)
 
 let state: Appearance = migrate({ appearance: getPref<unknown>('appearance', undefined), ui: getPref<unknown>('ui', undefined), themeByUI: getPref<unknown>('themeByUI', undefined) })
+// once: the fonts become the code editor's own (Segoe UI and Consolas); a later choice in Settings is kept
+if (!getPref<boolean>('fonts.editor', false)) { state = { ...state, fonts: DEFAULT_FONTS }; setPref('appearance', state); setPref('fonts.editor', true) }
 const listeners = new Set<() => void>()
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
 

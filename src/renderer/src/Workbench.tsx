@@ -6,11 +6,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createStore, useStore } from './store'
 import { getPref, setPref } from './prefs'
 import { setLayout, useAppearance } from './appearance'
-import { live as liveStore, newSession, openFileTab, openPage, showDiffBeside, talkAbout } from './actions'
+import { live as liveStore, newSession, openStackLog, openFileTab, openPage, showDiffBeside, talkAbout } from './actions'
 import { Rail } from './Rail'
 import { Files, useInspected } from './Inspector'
 import { GitPanel } from './GitPanel'
 import { NotesPanel } from './NotesPanel'
+import { DevPanel } from './DevPanel'
+import { useDev } from './useDev'
+import { useQuarry } from './pages/QuarryPage'
 import { TodoPanel } from './TodoPanel'
 import { useTodos } from './useTodos'
 import { AllowBody, allowOut, runAllow, useAllow } from './StatusLine'
@@ -18,14 +21,18 @@ import { DeploysPage } from './pages/DeploysPage'
 import type { useDeploy } from './useDeploy'
 import type { ToolTab } from './chat'
 import { Boundary, Btn } from './kit'
+import { BrandIcon } from './brandIcons'
+import { codex, CodexOutput, CodexSide } from './CodexView'
 import './pages/workspace.css'
 import './workbench.css'
 
-export type SideView = 'files' | 'threads' | 'git' | 'allow' | 'deploy' | 'notes' | 'todo'
-const VIEWS: { id: SideView; label: string; icon: string }[] = [
+export type SideView = 'files' | 'threads' | 'codex' | 'git' | 'env' | 'allow' | 'deploy' | 'notes' | 'todo'
+const VIEWS: { id: SideView; label: string; icon: string; brand?: 'claude' | 'openai' }[] = [
   { id: 'files', label: 'Files', icon: 'files' },
-  { id: 'threads', label: 'Threads', icon: 'comment-discussion' },
+  { id: 'threads', label: 'Threads', icon: 'comment-discussion', brand: 'claude' },
+  { id: 'codex', label: 'Codex', icon: 'hubot', brand: 'openai' },
   { id: 'git', label: 'Git', icon: 'source-control' },
+  { id: 'env', label: 'Environments', icon: 'server-environment' },
   { id: 'allow', label: 'Allow IP', icon: 'shield' },
   { id: 'deploy', label: 'Deploy', icon: 'rocket' },
   { id: 'notes', label: 'Notes', icon: 'note' },
@@ -37,7 +44,8 @@ export const sideView = createStore<SideView>((() => { const v = getPref<unknown
 /** show a view in the side bar (and the side bar itself when it is hidden) */
 export function showSide(v: SideView) { sideView.set(v); setPref('side.view', v); setLayout({ rail: true, focus: false }) }
 
-export function ActivityBar({ onAccounts }: { onAccounts: () => void }) {
+export function ActivityBar({ onAccounts, currentPage }: { onAccounts: () => void; currentPage: ToolTab | null }) {
+  const quarry = useQuarry() // the Quarry icon only when Quarry is installed and usable
   const { layout } = useAppearance()
   const view = useStore(sideView, (v) => v)
   const waiting = useStore(liveStore, (l) => l.waiting.length)
@@ -50,10 +58,13 @@ export function ActivityBar({ onAccounts }: { onAccounts: () => void }) {
     <nav className="abar" aria-label="Views" data-testid="activity-bar">
       {VIEWS.map((v) => (
         <button key={v.id} className={`abar-item${open && view === v.id ? ' on' : ''}`} onClick={() => pick(v.id)} title={v.label} aria-label={v.label} aria-pressed={open && view === v.id} data-testid={`abar-${v.id}`}>
-          <i className={`codicon codicon-${v.icon}`} aria-hidden />
+          {v.brand ? <BrandIcon name={v.brand} size={22} /> : <i className={`codicon codicon-${v.icon}`} aria-hidden />}
           {mark(v.id) && <span className="abar-mark">{mark(v.id)}</span>}
         </button>
       ))}
+      {quarry?.available && (
+        <button className={`abar-item${currentPage === 'quarry' ? ' on' : ''}`} onClick={() => openPage('quarry')} title="Quarry: opens beside your threads" aria-label="Quarry" data-testid="abar-quarry"><i className="codicon codicon-database" aria-hidden /></button>
+      )}
       <span className="abar-gap" />
       <button className="abar-item" onClick={onAccounts} title="Accounts" aria-label="Accounts" data-testid="abar-accounts"><i className="codicon codicon-account" aria-hidden /></button>
       <button className="abar-item" onClick={() => openPage('settings')} title="Settings (Ctrl+,)" aria-label="Settings" data-testid="abar-settings"><i className="codicon codicon-settings-gear" aria-hidden /></button>
@@ -89,7 +100,9 @@ function SideViewBody({ view, currentPage, deploy }: { view: SideView; currentPa
   switch (view) {
     case 'files': return <FilesView />
     case 'threads': return <Rail currentPage={currentPage} />
+    case 'codex': return <CodexSide />
     case 'git': return <div className="ws-page side-pad"><GitPanel onDiff={showDiffBeside} /></div>
+    case 'env': return <EnvView />
     case 'allow': return <AllowView />
     case 'deploy': return <DeploysPage deploy={deploy} />
     case 'notes': return <div className="ws-page side-pad"><NotesPanel /></div>
@@ -100,6 +113,12 @@ function SideViewBody({ view, currentPage, deploy }: { view: SideView; currentPa
 function FilesView() {
   const s = useInspected()
   return <Files s={s} onOpenFile={openFileTab} />
+}
+
+// the dev stacks: each environment's services, the branch each runs from, Start and Shut down
+function EnvView() {
+  const { state, setState } = useDev()
+  return <div className="ws-page side-pad" data-testid="side-env"><DevPanel state={state} setState={setState} onLogs={openStackLog} /></div>
 }
 
 function AllowView() {
@@ -124,6 +143,8 @@ type Start = { title: string; text: string; action: string; run: () => void; tes
 const STARTS: Record<SideView, Start> = {
   threads: { title: 'No thread open', text: 'Start one, or pick one from Threads.', action: 'New thread', run: () => newSession(), testid: 'welcome-new' },
   files: { title: 'No file open', text: 'Pick a file from Files and it opens here. The command field finds a file by name.', action: 'Find a file', run: () => {}, testid: 'welcome-files' },
+  codex: { title: 'Codex', text: 'Give Codex a task in the side bar. What it does and its answer show here.', action: 'Write a task', run: () => inSide('codex', 'codex-task', 'focus'), testid: 'welcome-codex' },
+  env: { title: 'No environment logs open', text: 'Start a stack in Environments. Its services and their logs show in the panel below.', action: 'Open Environments', run: () => showSide('env'), testid: 'welcome-env' },
   git: { title: 'Nothing to compare yet', text: 'Pick a repo in Git, then a changed file, and its diff opens here.', action: 'Open Git', run: () => showSide('git'), testid: 'welcome-git' },
   allow: { title: 'Allow my IP', text: "Runs your allowlist command for the address this computer has now.", action: 'Allow now', run: () => void runAllow(), testid: 'welcome-allow' },
   deploy: { title: 'No deploy running', text: 'Pick what ships and where. Your deploy scripts do the work.', action: 'Start a deploy', run: () => openPage('deploys'), testid: 'welcome-deploy' },
@@ -135,6 +156,8 @@ export function Welcome({ onPalette }: { onPalette: () => void }) {
   const view = useStore(sideView, (v) => v)
   const s = STARTS[view]
   const out = useStore(allowOut, (o) => o)
+  const asked = useStore(codex, (c) => !!c.task)
+  if (view === 'codex' && asked) return <div className="pane-empty cx-pane" data-testid="welcome" data-view={view}><CodexOutput /></div>
   // Allow IP: the command's own output, under the button, from the last run in this window
   if (view === 'allow' && (out.running || out.at)) return (
     <div className="pane-empty allow-run" data-testid="welcome" data-view={view}>
