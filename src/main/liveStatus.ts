@@ -11,6 +11,7 @@ import { goalMarks } from '../shared/goalCore'
 import { hasUltrathink } from '../shared/composerCore'
 import { idle } from './status'
 import { menuCommands } from './threadCore'
+import { EFFORTS } from '../shared/settingsCore'
 
 type Send = (event: unknown) => void
 
@@ -211,7 +212,9 @@ export async function setModel(tabId: string, q: Query | undefined, model: strin
   t.send({ type: 'hive_model', model })
 }
 
+// any level the pickers offer (low, medium, high, xhigh, max); anything else is refused before it reaches the engine
 export async function setEffort(tabId: string, q: Query | undefined, level: string): Promise<void> {
+  if (!(EFFORTS as readonly string[]).includes(level)) throw new Error(`${level} is not an effort level`)
   const t = tab(tabId)
   t.boost = undefined // a level picked by hand wins over an ultrathink turn
   if (q) await q.applyFlagSettings({ effortLevel: level as any })
