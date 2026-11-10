@@ -121,6 +121,8 @@ test('store file: first run seeds and saves; afterwards the store wins; a broken
   assert.deepEqual(threadDefaults('background'), { model: 'haiku', effort: 'low', extraArgs: { chrome: null } })
   assert.deepEqual(threadDefaults('team'), { model: 'opus', effort: 'medium', extraArgs: { chrome: null } })
   assert.deepEqual(threadDefaults('main'), { model: 'opus', effort: 'high', extraArgs: { chrome: null } })
+  // test mode: Haiku at low effort and no Chrome, whatever the settings say
+  for (const k of ['main', 'team', 'background'] as const) assert.deepEqual(threadDefaults(k, true), { model: 'haiku', effort: 'low' })
   saveSettings(again)
   // no .env at all: the store alone still configures Hive
   const envFile = process.env.HIVE_ENV_FILE

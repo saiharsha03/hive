@@ -6,16 +6,16 @@
 // when something changed, at most every SAVE_MS.
 import { app } from 'electron'
 import { open, readdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { isWatcherTranscript } from '../shared/readOnlyCore'
+import { projectsRoot } from './testMode'
 import { REVIEW_HEAD } from '../shared/dependabotCore'
 
 export type SessionInfo = { id: string; title: string; project: string; cwd: string; updated: number; started: number; path: string; entrypoint: string; watcherRun?: boolean; dependabot?: boolean } // watcherRun: a watcher run's thread (its header is the first message); dependabot: a Dependabot review thread
 type CacheEntry = SessionInfo & { size: number; mtime?: number; v?: number } // v: parser version; bump to re-read every file
 
-// HIVE_PROJECTS_DIR: another projects folder (tests)
-const root = () => process.env.HIVE_PROJECTS_DIR || join(homedir(), '.claude', 'projects')
+// HIVE_PROJECTS_DIR: another projects folder (tests, the e2e harness); test mode never lists the real one (testMode.ts)
+const root = () => projectsRoot()
 const CHUNK = 32 * 1024
 const cacheFile = () => join(app.getPath('userData'), 'sessions-cache.json')
 

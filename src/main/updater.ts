@@ -4,6 +4,7 @@
 import { app, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { isNewer, type UpdateState } from '../shared/versionCore'
+import { TEST_MODE } from './testMode'
 
 const RELEASES = 'https://api.github.com/repos/saiharsha03/hive/releases/latest'
 const EVERY_MS = 6 * 60 * 60_000
@@ -24,8 +25,9 @@ async function checkPortable(): Promise<void> {
   if (r.tag_name && isNewer(r.tag_name, app.getVersion())) set({ kind: 'available', version: r.tag_name.replace(/^v/i, ''), url })
 }
 
+// never in test mode: an e2e run asks GitHub for nothing
 export async function checkForUpdates(): Promise<void> {
-  if (!app.isPackaged) return
+  if (!app.isPackaged || TEST_MODE) return
   try {
     if (portable()) await checkPortable()
     else await autoUpdater.checkForUpdates()
@@ -36,7 +38,7 @@ export async function checkForUpdates(): Promise<void> {
 
 export function startUpdater(onChange: (s: UpdateState) => void): void {
   notify = onChange
-  if (!app.isPackaged) return
+  if (!app.isPackaged || TEST_MODE) return
   if (!portable()) {
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true

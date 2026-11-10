@@ -63,3 +63,8 @@ test('a grown transcript is indexed from the last indexed byte: new words found,
   assert.equal((await search.searchInSession('zebracorn', 'idx', 10))!.chunks.length, 0)
   assert.equal((await search.searchInSession('axolotl', 'idx', 10))!.chunks.length, 1)
 })
+
+test('the projects folder: HIVE_PROJECTS_DIR when set (the e2e harness seeds it)', async () => {
+  const { projectsRoot } = await import('../../src/main/testMode')
+  assert.equal(projectsRoot(), root)
+})

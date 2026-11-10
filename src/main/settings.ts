@@ -1,7 +1,7 @@
 // The one settings store, ~/.claude/hive-settings.json (HIVE_SETTINGS_FILE overrides, for tests). Atomic writes like
 // uiStore. Seeded on first run from the .env and scripts.json; afterwards it wins and they are only fallbacks.
 import { existsSync, readFileSync } from 'node:fs'
-import { dataDir } from './testMode'
+import { dataDir, TEST_MODE, TEST_MODEL } from './testMode'
 import { writeFileSafe } from './safeWrite'
 import { join } from 'node:path'
 import { DEFAULT_IDLE_CLOSE_MINUTES, DEFAULT_TEAM_MEMORY_KB, normalizeSettings, seedSettings, type Effort, type Settings } from '../shared/settingsCore'
@@ -37,7 +37,9 @@ export const currentSettings = (): Settings | null => current
 // Settings > General, as query options for a new thread of this class: the background model and effort for watcher
 // runs, Dependabot reviews and /btw, the team ones for teammates; an empty one falls back to the main default
 export type ThreadKind = 'main' | 'team' | 'background'
-export function threadDefaults(kind: ThreadKind = 'main'): { model?: string; effort?: Effort; extraArgs?: Record<string, string | null> } {
+// Test mode (the e2e harness): every thread on TEST_MODEL at low effort and without Chrome, whatever the settings say
+export function threadDefaults(kind: ThreadKind = 'main', test = TEST_MODE): { model?: string; effort?: Effort; extraArgs?: Record<string, string | null> } {
+  if (test) return { model: TEST_MODEL, effort: 'low' }
   const g = current?.general
   const model = (kind === 'background' && g?.bgModel) || (kind === 'team' && g?.teamModel) || g?.model
   const effort = (kind === 'background' && g?.bgEffort) || (kind === 'team' && g?.teamEffort) || g?.effort

@@ -10,6 +10,14 @@ export const TEST_MODE = process.env.HIVE_TEST_MODE === '1'
 export const dataDir = (): string =>
   process.env.HIVE_DATA_DIR || (TEST_MODE ? join(tmpdir(), 'hive-test-data') : join(homedir(), '.claude'))
 
+// the Claude Code projects folder Hive lists sessions from: HIVE_PROJECTS_DIR (the e2e harness seeds fake transcripts
+// there); in test mode without it a folder under the test data, never the real ~/.claude/projects
+export const projectsRoot = (): string =>
+  process.env.HIVE_PROJECTS_DIR || (TEST_MODE ? join(dataDir(), 'projects') : join(homedir(), '.claude', 'projects'))
+
+// test mode keeps e2e runs cheap: every thread runs on this model at low effort, without Claude in Chrome
+export const TEST_MODEL = 'haiku'
+
 // what a blocked action says instead of running
 export const blocked = (what: string): string => `test mode: ${what} is off (HIVE_TEST_MODE=1)`
 
