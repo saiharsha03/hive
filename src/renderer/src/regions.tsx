@@ -89,7 +89,7 @@ export function Dock({ items, current, onPick, badges, extra }: { items: ViewId[
 
 // thread tabs grouped by state: waiting, working, failed, done, then the rest
 type StripGroup = { key: string; label: string; cls: string; items: Session[] }
-export function stripGroups(sessions: Session[]): StripGroup[] {
+function stripGroups(sessions: Session[]): StripGroup[] {
   const g: StripGroup[] = [
     { key: 'waiting', label: 'WAITING', cls: 's-wait', items: [] },
     { key: 'working', label: 'WORKING', cls: 's-work', items: [] },

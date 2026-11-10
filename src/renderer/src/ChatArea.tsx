@@ -68,7 +68,7 @@ function PaneView({ pane, sessions, focused, tabs, canSplit, render, onActivate,
   return (
     <div className={`pane${focused ? ' focused' : ''}${solo ? ' solo' : ''}`} onMouseDown={() => onFocusPane(pane.id)} data-testid="chat-pane">
       {tabs !== 'none' && (
-        <div className="tabs ptabs" onDragOver={(e) => { if (e.dataTransfer.types.includes(TAB_MIME)) e.preventDefault() }} onDrop={(e) => dropOnTab(e, pane.tabs.length)}>
+        <div className="tabs ptabs" role="tablist" onDragOver={(e) => { if (e.dataTransfer.types.includes(TAB_MIME)) e.preventDefault() }} onDrop={(e) => dropOnTab(e, pane.tabs.length)}>
           {(tabs === 'full' ? pane.tabs : pane.active ? [pane.active] : []).map((id, i) => {
             const s = byId.get(id)
             if (!s) return null
@@ -78,6 +78,13 @@ function PaneView({ pane, sessions, focused, tabs, canSplit, render, onActivate,
                 onDragStart={(e) => { e.dataTransfer.setData(TAB_MIME, id); e.dataTransfer.effectAllowed = 'move' }}
                 onDragOver={(e) => { if (e.dataTransfer.types.includes(TAB_MIME)) e.preventDefault() }}
                 onDrop={(e) => dropOnTab(e, i)}
+                role="tab" tabIndex={0} aria-selected={id === pane.active}
+                onKeyDown={(e) => {
+                  // the tab itself has the focus (not its close button): Enter / Space show it, the menu key opens its menu
+                  if (e.target !== e.currentTarget) return
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(id) }
+                  else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); onTabMenu(id, r.left, r.bottom) }
+                }}
                 onClick={() => onActivate(id)} onAuxClick={(e) => { if (e.button === 1) onClose(id) }}
                 onContextMenu={(e) => { e.preventDefault(); onTabMenu(id, e.clientX, e.clientY) }} title={`${s.title} (drag to move or split)`}
                 data-testid="tab" data-id={id}>

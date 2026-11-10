@@ -1,6 +1,7 @@
 // Right-click menu for a tab, like Chrome's. Closes on an outside click or Escape.
 import { useEffect, useRef, useState } from 'react'
 import { tabsToClose, type TabCloseAction } from './tabs'
+import { useEscape, useMenuKeys } from './ui'
 
 const ITEMS: { action: TabCloseAction; label: string }[] = [
   { action: 'close', label: 'Close' },
@@ -21,16 +22,18 @@ export function TabMenu({ ids, target, x, y, onPick, onBackground, onClose }: Pr
     if (r) setPos({ left: Math.max(4, Math.min(x, innerWidth - r.width - 4)), top: Math.max(4, Math.min(y, innerHeight - r.height - 4)) })
   }, [x, y])
 
+  const close = useRef(onClose)
+  close.current = onClose
+  useEscape(() => close.current())
+  const keys = useMenuKeys(ref)
   useEffect(() => {
-    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose() }
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) close.current() }
     document.addEventListener('mousedown', down)
-    document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
-  }, [onClose])
+    return () => document.removeEventListener('mousedown', down)
+  }, [])
 
   return (
-    <div className="tmenu" ref={ref} style={{ ...pos, width: 210 }} onContextMenu={(e) => e.preventDefault()}>
+    <div className="tmenu" role="menu" ref={ref} style={{ ...pos, width: 210 }} onKeyDown={keys} onContextMenu={(e) => e.preventDefault()}>
       {ITEMS.map((it) => (
         <button data-testid="tabmenu-button-1" key={it.action} disabled={!tabsToClose(ids, target, it.action).length} onClick={() => { onPick(it.action); onClose() }}>{it.label}</button>
       ))}

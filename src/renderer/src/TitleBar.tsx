@@ -1,6 +1,6 @@
 // The title bar: the honeycomb, name and tagline, the Thread / View / Tools menus, the Ctrl+K search, the Watchers
 // control, region toggles and Settings. The whole bar drags the window; Windows draws min / max / close on the right.
-import { useRef, useState, type ReactNode } from 'react'
+import { useRef, useState } from 'react'
 import { useAppName, useAppTagline } from './appSettings'
 import { HiveMark } from './HiveMark'
 import { Icon, Popover, anchorOf, type Anchor } from './ui'
@@ -9,7 +9,7 @@ import { WatchersButton } from './watchers'
 export type MenuItem = { label: string; hint?: string; icon?: string; checked?: boolean; sep?: boolean; disabled?: boolean; onClick: (el: HTMLElement | null) => void; testid: string }
 export type Menu = { label: string; items: MenuItem[] }
 
-export function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => void }) {
+function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => void }) {
   return (
     <div className="poplist menu">
       {items.map((it, i) => (
@@ -61,5 +61,3 @@ export function TitleBar({ menus, views = [], onPalette, onWatchers, toggles, on
     </header>
   )
 }
-
-export const Kbd = ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>

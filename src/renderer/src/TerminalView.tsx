@@ -45,7 +45,15 @@ function wire() {
 
 async function start(id: string, e: Entry) {
   e.state = 'opening'
-  const r = await window.api.terminalOpen(id, e.cwd, e.term.cols, e.term.rows)
+  let r: Awaited<ReturnType<typeof window.api.terminalOpen>>
+  try { r = await window.api.terminalOpen(id, e.cwd, e.term.cols, e.term.rows) } catch (err) {
+    // the shell did not start (a wrong shell path, a folder that is gone): say so, and Enter tries again
+    if (entries.get(id) !== e) return
+    e.state = 'exited'
+    const why = String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    e.term.write(`\r\n\x1b[31m[the shell did not start: ${why}]\x1b[0m\r\n\x1b[90m[press Enter to try again]\x1b[0m\r\n`)
+    return
+  }
   if (entries.get(id) !== e) return
   if (!r.fresh) e.term.write(r.scrollback)
   e.cwd = r.cwd
@@ -93,7 +101,7 @@ function create(id: string, cwd: string): Entry {
 }
 
 // the selection, or else the last 200 lines of output, as a fenced block for the message box
-export function terminalTextForChat(id: string): string | null {
+function terminalTextForChat(id: string): string | null {
   const e = entries.get(id)
   if (!e) return null
   let text = e.term.hasSelection() ? e.term.getSelection() : ''

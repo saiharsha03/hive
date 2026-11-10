@@ -69,8 +69,6 @@ function set(next: State) {
 export const getUIs = (): UIInfo[] => UIS
 // every UI offers all the themes; the list is per UI so a UI could narrow it later
 export const getThemes = (_ui?: UIId): ThemeInfo[] => THEMES
-export const currentUI = (): UIId => state.ui
-export const currentTheme = (ui: UIId = state.ui): ThemeId => state.themes[ui]
 
 export function setUI(id: UIId) {
   if (!isUI(id) || id === state.ui) return

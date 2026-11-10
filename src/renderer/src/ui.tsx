@@ -6,10 +6,34 @@ import { getPref, setPref } from './prefs'
 export const Icon = ({ name, className = '', title, style }: { name: string; className?: string; title?: string; style?: CSSProperties }) =>
   <span className={`codicon codicon-${name} ${className}`} title={title} style={style} aria-hidden={title ? undefined : true} />
 
+// Escape: one stack for every layer (menus, popovers, modals, the palette, a selection). The key goes to the layer
+// opened last and stops there, so one press closes one thing. A handler that returns false passes it to the one below.
+type EscHandler = (e: KeyboardEvent) => boolean | void
+const escStack: { current: EscHandler }[] = []
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return
+  for (let i = escStack.length - 1; i >= 0; i--) {
+    if (escStack[i].current(e) === false) continue
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    return
+  }
+}, true) // capture: the open layer takes the key before the message box (Esc = stop Claude) or the terminal under it
+export function useEscape(onEscape: EscHandler, on = true) {
+  const h = useRef(onEscape)
+  h.current = onEscape
+  useEffect(() => {
+    if (!on) return
+    escStack.push(h)
+    return () => { const i = escStack.indexOf(h); if (i >= 0) escStack.splice(i, 1) }
+  }, [on])
+}
+
 // close on a click outside `ref` (and outside any other open popover or menu) or on Escape
-export function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
+function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
   const close = useRef(onClose)
   close.current = onClose
+  useEscape(() => close.current())
   useEffect(() => {
     const down = (e: MouseEvent) => {
       const t = e.target as HTMLElement
@@ -18,10 +42,55 @@ export function useDismiss(ref: React.RefObject<HTMLElement | null>, onClose: ()
       if (t.closest?.('.tmenu')) return
       close.current()
     }
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') close.current() }
     const t = setTimeout(() => document.addEventListener('mousedown', down))
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', down) }
+  }, [])
+}
+
+// A context menu: the first item takes the focus when it opens, Up / Down / Home / End move between items, and the
+// focus goes back where it was when the menu closes. Returns the menu's key handler.
+export function useMenuKeys(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    ref.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus()
+    return () => { if (before?.isConnected) before.focus() }
+  }, [])
+  return (e: React.KeyboardEvent<HTMLElement>) => {
+    const step: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity }
+    if (!(e.key in step) || (e.target as HTMLElement).tagName === 'INPUT') return
+    const all = [...e.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled)')]
+    if (!all.length) return
+    e.preventDefault()
+    const at = all.indexOf(document.activeElement as HTMLElement)
+    const d = step[e.key]
+    const to = d === -Infinity ? 0 : d === Infinity ? all.length - 1 : (at + d + all.length) % all.length
+    all[to].focus()
+  }
+}
+
+// A dialog keeps the keyboard: focus moves in when it opens (unless something inside took it already), Tab and
+// Shift+Tab stay inside, and the element that had the focus gets it back when the dialog closes.
+const FOCUSABLE = 'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+export function useFocusTrap(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const box = ref.current
+    if (!box) return
+    const before = document.activeElement as HTMLElement | null
+    const items = () => [...box.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null)
+    // the dialog itself takes the focus (not its first button, which Enter would press) unless a field inside asked for it
+    if (!box.contains(document.activeElement)) box.focus()
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const all = items()
+      if (!all.length) { e.preventDefault(); return }
+      const first = all[0], last = all[all.length - 1]
+      const at = document.activeElement
+      if (!box.contains(at)) { e.preventDefault(); first.focus() }
+      else if (e.shiftKey && at === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && at === last) { e.preventDefault(); first.focus() }
+    }
     document.addEventListener('keydown', key)
-    return () => { clearTimeout(t); document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
+    return () => { document.removeEventListener('keydown', key); if (before?.isConnected) before.focus() }
   }, [])
 }
 
@@ -62,16 +131,12 @@ export function Popover({ anchor, onClose, children, width, className = '', test
 
 // A focused modal over a dimmed window; Escape or the backdrop closes it
 export function Modal({ title, onClose, children, wide, testid, actions }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; testid?: string; actions?: ReactNode }) {
-  const close = useRef(onClose)
-  close.current = onClose
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.pop')) close.current() }
-    document.addEventListener('keydown', key)
-    return () => document.removeEventListener('keydown', key)
-  }, [])
+  const box = useRef<HTMLDivElement>(null)
+  useEscape(() => onClose())
+  useFocusTrap(box)
   return (
     <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} data-testid={testid ? `${testid}-scrim` : undefined}>
-      <div className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true" data-testid={testid}>
+      <div className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true" tabIndex={-1} ref={box} data-testid={testid}>
         <div className="modal-head">
           <span className="modal-title">{title}</span>
           {actions}
@@ -80,6 +145,24 @@ export function Modal({ title, onClose, children, wide, testid, actions }: { tit
         <div className="modal-body">{children}</div>
       </div>
     </div>
+  )
+}
+
+// The app's own "are you sure": what will happen, then the action or Cancel. Cancel has the focus, so Enter is safe.
+export function Confirm({ title, children, action, danger, onConfirm, onCancel, testid = 'confirm' }: {
+  title: ReactNode; children: ReactNode; action: string; danger?: boolean; onConfirm: () => void; onCancel: () => void; testid?: string
+}) {
+  return (
+    <Modal title={title} onClose={onCancel} testid={testid}>
+      <div className="confirm">
+        <div className="confirm-body">{children}</div>
+        <div className="drow confirm-acts">
+          <span className="dspace" />
+          <button className="dbtn" autoFocus onClick={onCancel} data-testid={`${testid}-cancel`}>Cancel</button>
+          <button className={danger ? 'dbtn danger' : 'dbtn primary'} onClick={onConfirm} data-testid={`${testid}-ok`}>{action}</button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

@@ -13,13 +13,25 @@ let snap: WatchersSnapshot = { list: null, watchers: [], error: '', busy: {} }
 const subs = new Set<() => void>()
 const emit = (next: Partial<WatchersSnapshot>) => { snap = { ...snap, ...next }; for (const f of subs) f() }
 let stop: (() => void) | null = null
+// what the list could not load, and what the last switch / run said: kept apart, so a reload after a failed action
+// does not wipe the reason it failed
+let loadError = ''
+let actionError = ''
+const errorNow = () => actionError || loadError
+let lastList = ''
 
 export async function reloadWatchers(): Promise<void> {
   try {
     const list = await window.api.watchersList()
-    emit({ list, watchers: list.watchers.map((w) => ({ ...w, state: w.status, waiting: w.status === 'waiting' })), error: '' })
+    loadError = ''
+    // the poll answers every 10 s: the same answer keeps the same objects, so nothing that reads them re-renders
+    const json = JSON.stringify(list)
+    if (json === lastList) { if (snap.error !== errorNow()) emit({ error: errorNow() }); return }
+    lastList = json
+    emit({ list, watchers: list.watchers.map((w) => ({ ...w, state: w.status, waiting: w.status === 'waiting' })), error: errorNow() })
   } catch (e) {
-    emit({ error: clean(e) })
+    loadError = clean(e)
+    emit({ error: errorNow() })
   }
 }
 
@@ -38,15 +50,18 @@ function subscribe(f: () => void) {
 }
 
 async function act(id: string, fn: () => Promise<string | unknown>): Promise<string> {
-  emit({ busy: { ...snap.busy, [id]: true } })
+  actionError = ''
+  emit({ busy: { ...snap.busy, [id]: true }, error: errorNow() })
   try {
     const r = await fn()
     const msg = typeof r === 'string' ? r : ''
-    if (msg) emit({ error: msg })
+    actionError = msg
+    if (msg) emit({ error: errorNow() })
     return msg
   } catch (e) {
     const msg = clean(e)
-    emit({ error: msg })
+    actionError = msg
+    emit({ error: errorNow() })
     return msg
   } finally {
     const { [id]: _, ...rest } = snap.busy
@@ -56,7 +71,7 @@ async function act(id: string, fn: () => Promise<string | unknown>): Promise<str
 }
 
 export const setWatcherEnabled = (id: string, on: boolean) => act(id, () => window.api.watcherEnable(id, on))
-export const runWatcher = (id: string, kind: 'sweep' | 'daily' | 'weekly' = 'sweep') => act(id, () => window.api.watcherRun(id, kind))
+const runWatcher = (id: string, kind: 'sweep' | 'daily' | 'weekly' = 'sweep') => act(id, () => window.api.watcherRun(id, kind))
 
 export function useWatchers() {
   const s = useSyncExternalStore(subscribe, () => snap)

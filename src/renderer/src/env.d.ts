@@ -28,7 +28,8 @@ type SessionStats = {
 
 type FsEntry = { name: string; path: string; dir: boolean }
 type Item =
-  | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string; seen?: boolean; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean } }
+  // failed: the message never reached Claude (why)
+  | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string; seen?: boolean; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean }; failed?: string }
   | { kind: 'assistant'; text: string; at?: number }
   // patch: Claude Code's structuredPatch from an Edit / MultiEdit / Write result, for the diff; output: the result as text, shown when the row is opened
   | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown; output?: string }
@@ -94,7 +95,7 @@ interface Window {
     setPlugin: (key: string, on: boolean) => Promise<void>
     editorRead: (path: string) => Promise<{ text: string; mtime: number }>
     editorMtime: (path: string) => Promise<number | null>
-    editorWrite: (path: string, text: string) => Promise<number>
+    editorWrite: (path: string, text: string, expected?: number | null) => Promise<number>
     openInVsCode: (path: string, line: number) => Promise<void>
     lspOpen: (file: string, text: string) => Promise<boolean>
     lspChange: (file: string, text: string, version: number) => Promise<void>

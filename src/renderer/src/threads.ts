@@ -122,7 +122,7 @@ function write(next: ThreadMap) {
 }
 
 // merge a patch into one thread; an undefined field removes it, and an empty record is dropped
-export function patchThread(id: string, patch: { [K in keyof ThreadState]: ThreadState[K] | undefined }) {
+function patchThread(id: string, patch: { [K in keyof ThreadState]: ThreadState[K] | undefined }) {
   const merged: Record<string, number | undefined> = { ...cache[id], ...patch }
   const s = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined)) as ThreadState
   const { [id]: _old, ...rest } = cache
