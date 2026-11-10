@@ -80,13 +80,14 @@ export function turnQueue<T>(deliver: (msg: T, priority: Priority | undefined, i
 export function inOrder() {
   const chains = new Map<string, Promise<void>>()
   return {
-    run(key: string, f: () => void, first?: Promise<unknown> | null): void {
+    // onError: a send that fails after waiting (the caller's own call has returned by then, so it must be told)
+    run(key: string, f: () => void, first?: Promise<unknown> | null, onError: (e: unknown) => void = (e) => console.error('send failed:', e)): void {
       const prev = chains.get(key)
       if (!prev && !first) { f(); return }
       const p: Promise<void> = (prev ?? Promise.resolve())
         .then(() => first ?? undefined)
         .catch(() => {})
-        .then(() => { try { f() } catch (e) { console.error('send failed:', e) } })
+        .then(() => { try { f() } catch (e) { onError(e) } })
         .finally(() => { if (chains.get(key) === p) chains.delete(key) })
       chains.set(key, p)
     },

@@ -64,3 +64,12 @@ test('a send that waits holds back the sends after it; with nothing ahead a send
   await new Promise((r) => setTimeout(r, 0))
   assert.equal(out.at(-1), 'after a failed boost')
 })
+
+test('a send that fails after waiting is reported to the caller, not dropped', async () => {
+  const o = inOrder()
+  const errors: string[] = []
+  o.run('t', () => { throw new Error('no process') }, Promise.resolve(), (e) => errors.push((e as Error).message))
+  await new Promise((r) => setTimeout(r, 0))
+  assert.deepEqual(errors, ['no process'])
+  assert.throws(() => o.run('t', () => { throw new Error('at once') }), /at once/) // nothing ahead: it throws to the caller (chat:send rejects)
+})

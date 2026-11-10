@@ -1050,10 +1050,15 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   // (and steer, or answer you) while it runs; only commands, never agents
   const longCommands = autoBackground((id) => q.backgroundTasks(id), autoBackgroundMs)
 
+  // a process that ends before its session starts, without an error, still has to say so (hive_error): the window
+  // marks the message failed on hive_error or on a rejected chat:send, never on silence
+  let inited = false
+  let errored = false
   void (async () => {
     try {
       for await (const m of q as AsyncIterable<SDKMessage>) {
         if (m.type === 'system' && (m as any).subtype === 'init') {
+          inited = true
           s.sessionId = (m as any).session_id
           if (forkedFrom && s.sessionId !== forkedFrom) void moveThreadLinks(forkedFrom, s.sessionId!).catch(() => 0)
           noteSession(tabId, s.sessionId!, resumedFrom)
@@ -1132,7 +1137,7 @@ ${s.lastReply}`, Date.now())
         }
       }
     } catch (e: any) {
-      if (!s.retiring) send({ type: 'hive_error', message: String(e?.message ?? e) }) // closed on purpose: no error
+      if (!s.retiring) { errored = true; send({ type: 'hive_error', message: String(e?.message ?? e) }) } // closed on purpose: no error
     } finally {
       // only if this tab still points at this process: a reopened tab may already have a new one. A process closeTab
       // stopped is already out of live, but the window still shows it working until it hears hive_closed
@@ -1144,6 +1149,7 @@ ${s.lastReply}`, Date.now())
           ...s.turns.drain().map(({ id, msg }) => ({ queueId: id, ...(msg.uuid ? { uuid: msg.uuid } : {}), ...messageParts(msg.message.content), source: s.queuedFrom.get(id) ?? ('hive' as const) })),
           ...s.outbox.values(),
         ]
+        if (!inited && !errored && !s.retiring) send({ type: 'hive_error', message: 'Claude Code ended before the session started.' })
         s.outbox.clear()
         pendingReturned(tabId)
         if (unsent.length) send({ type: 'hive_unsent', messages: unsent })
@@ -1221,10 +1227,11 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   const interrupt = !!msg.interrupt && msg.mode === 'queue' && cur.turns.isBusy() // decided before the message goes in
   // in the order sent: a message after an ultrathink one waits for it instead of overtaking it. An interrupt does not
   // wait for its own effort change, only for sends made before it; the turn is stopped once it has its place in the queue
+  // a send that runs now and fails rejects chat:send; one that waited tells the tab with hive_error instead
   sends.run(tabId, () => {
     go()
     if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
-  }, boost && !interrupt ? boost : null)
+  }, boost && !interrupt ? boost : null, (e: any) => cur.emit({ type: 'hive_error', message: `The message was not sent: ${e?.message ?? e}` }))
 }
 
 // a transcript whose thread is working now: search leaves it until the turn ends
