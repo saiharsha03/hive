@@ -363,7 +363,12 @@ Settings > General also holds what new threads start with:
   memory entries up to that size and names the full file; nothing is cut on disk.
 
 The Dependabot reviewer starts at most `HIVE_DEPENDABOT_MAX_REVIEWS` review threads at once (default 3); the rest
-start as earlier ones finish.
+start as earlier ones finish. **Allow my IP** remembers every address its command succeeded for, so moving between
+known places asks nothing; `HIVE_ALLOWLIST_TRUST_HOURS` makes an allowed address expire (empty = never), and the
+command palette forgets one.
+
+Hive writes each plan-limit reading to `~/.claude/usage/latest.json` (at most once a minute, the same shape as the
+terminal's usage-file plugin), so a hook that guards usage by reading that file keeps working inside Hive.
 
 ## Read this before using it
 

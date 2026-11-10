@@ -207,6 +207,8 @@ Hive keeps its own state as small JSON files; the settings store and UI state ar
 | `~/.claude/hive-pending.json`, `~/.claude/hive-pending/` | Messages that have not reached Claude yet, and their pictures. |
 | `~/.claude/hive-autocontinue.json`, `~/.claude/hive/thread-wakeups.db` | Automatic continues after a usage limit, and scheduled wake-ups. |
 | `~/.claude/hive/roles/` | The team role library and each role's memory (`shared-memory.md` for all roles). |
+| `~/.claude/hive-allowlist.json` | Every public IP the allowlist command succeeded for, with when (`main/allowKnown.ts`). |
+| `~/.claude/usage/latest.json` | The latest plan-limit reading, for a usage-guard hook (`main/usageFile.ts`); written, never read. |
 | `userData/search`, `userData/sessions-cache.json` | Search index and the session list cache. |
 | `.env`, `scripts.json` next to the app | Workspace-specific configuration and credentials; git-ignored. |
 
