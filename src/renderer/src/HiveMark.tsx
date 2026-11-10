@@ -1,11 +1,11 @@
-// Hive's mark beside the name: one cell of the hive seen from above, its top face in the accent (the design lead's
-// "hive-cell" mark). Colours are theme tokens, so it reads in every theme.
-export function HiveMark({ size = 16 }: { size?: number }) {
+// Hive's mark beside the name: a hexagon (one cell of the hive) holding an H whose bar is in the brand token (the
+// signal colour where the theme has one). Colours are theme tokens, so it reads in every theme.
+export function HiveMark({ size = 20 }: { size?: number }) {
   return (
-    <svg className="hivemark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M16 3L27.26 9.5L16 16L4.74 9.5Z" fill="var(--dim)" />
-      <path d="M4.74 9.5L16 16L16 29L4.74 22.5Z" fill="var(--hi)" />
-      <path d="M27.26 9.5L27.26 22.5L16 29L16 16Z" fill="none" stroke="var(--hi)" strokeWidth="1.8" strokeLinejoin="round" />
+    <svg className="hivemark" width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 2.2 20.5 7v10L12 21.8 3.5 17V7z" stroke="var(--hi)" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M8.6 8.2v7.6M15.4 8.2v7.6" stroke="var(--hi)" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M8.6 12h6.8" stroke="var(--brand-bar)" strokeWidth="1.9" strokeLinecap="round" />
     </svg>
   )
 }

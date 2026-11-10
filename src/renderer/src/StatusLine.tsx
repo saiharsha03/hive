@@ -1,6 +1,6 @@
-// The status line: the focused thread's branch and context; the 5-hour use (amber above 60%) and the 7-day; MCP;
-// the phone; then on the right the Undo of the last list action, Allow my IP (amber when your address changed),
-// Pull latest, quiet hours and an update when there is one.
+// The status line, all faint: the focused thread's branch, its context and the 7-day use each with a small meter; then
+// on the right where this computer's address stands (in the signal colour only when it is not allowed: that needs
+// you), the phone, quiet hours, and the Undo of the last list action or an update or Pull latest.
 import { useEffect, useState } from 'react'
 import { panes as panesStore, useSessionMetas, useStore } from './store'
 import { focusedTab } from './panes'
@@ -9,11 +9,16 @@ import { notice, openPage, runUndo, undo as undoStore } from './actions'
 type KnownIp = { ip: string; at: number | null; label?: string }
 import type { AllowStatus } from '../../shared/allowCore'
 import type { UpdateState } from '../../shared/versionCore'
-import { tokens as fmtTokens, clock, Btn, when, WARN_PCT } from './kit'
+import { tokens as fmtTokens, Btn, when, WARN_PCT } from './kit'
+import { useQuietHours } from './api/next'
 import { useEscape, useFocusTrap } from './ui'
 import { useRef } from 'react'
 
-const left = (iso: string | null) => (iso ? clock(Date.parse(iso)) : '')
+// a small meter after a number
+const Meter = ({ pct }: { pct: number }) => <span className={`meter${pct > WARN_PCT ? ' warm' : ''}`} aria-hidden><i style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></span>
+// inside the quiet window now (it may wrap past midnight)
+const minutes = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + (m || 0) }
+const inQuiet = (from: string, to: string, d = new Date()) => { const n = d.getHours() * 60 + d.getMinutes(), a = minutes(from), b = minutes(to); return a <= b ? n >= a && n < b : n >= a || n < b }
 
 // Pull latest: every repo fetched and its default branch fast-forwarded; a note when done
 let pulling = false
@@ -85,6 +90,12 @@ export function StatusLine() {
   const [allowOpen, setAllowOpen] = useState(false)
   const [busyPull, setBusyPull] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
+  const [phone, setPhone] = useState<{ configured: boolean; paired: boolean; connected: boolean } | null>(null)
+  const quiet = useQuietHours()
+  useEffect(() => {
+    void window.api.mobileStatus().then(setPhone).catch(() => {})
+    return window.api.onMobileStatus(setPhone)
+  }, [])
   useEffect(() => {
     const load = () => void window.api.getStatus().then(setStatus).catch(() => {})
     load()
@@ -105,15 +116,17 @@ export function StatusLine() {
     return () => { alive = false; clearInterval(t) }
   }, [f?.id, f?.busy])
   const branch = f ? (f.worktrees?.at(-1)?.branch ?? (f.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? '') : ''
-  const five = status?.five
+  const seven = status?.seven
+  const ipWord = !allow ? '' : allow.running ? 'Allowing this address' : allow.changed ? 'New address, not allowed' : allow.ip ? 'Address allowed' : allow.unreadable ? 'Address not read' : 'Allow my IP'
   return (
     <footer className="sline" data-testid="status-bar">
-      {branch && <span className="branch" data-testid="status-branch">{branch}</span>}
-      {ctx && <span data-testid="status-context">Context <b className="num">{fmtTokens(ctx.total)}</b>{ctx.max ? <> of <b>{fmtTokens(ctx.max)}</b></> : null}</span>}
-      {five?.pct != null && <button className={five.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-five">5-hour <b className="num">{Math.round(five.pct)}%</b>{five.resetsAt ? `, resets ${left(five.resetsAt)}` : ''}</button>}
-      {/* at most five items: the 7-day use, MCP, the phone and quiet hours live on the Status and Settings pages */}
+      {branch && <b className="branch" data-testid="status-branch">{branch}</b>}
+      {ctx && <span data-testid="status-context">Context {fmtTokens(ctx.total)}{ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}{ctx.max ? <Meter pct={(ctx.total / ctx.max) * 100} /> : null}</span>}
+      {seven?.pct != null && <button className={seven.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title="Status and usage" data-testid="status-seven">7-day {Math.round(seven.pct)}%<Meter pct={seven.pct} /></button>}
       <span className="r" />
-      {allow?.configured && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `Your address: ${allow.ip}` : allow.error} data-testid="status-allow">{allow.running ? 'Allowing your IP' : 'Allow my IP'}</button>}
+      {allow?.configured && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `This computer's address: ${allow.ip}. Click for Allow my IP` : allow.error || 'Allow my IP'} data-testid="status-allow">{ipWord}</button>}
+      {phone?.configured && <button onClick={() => openPage('settings')} title={phone.connected ? 'The phone app is connected' : 'Pairing and the relay are in Settings'} data-testid="status-phone">{phone.paired ? 'Phone paired' : 'Phone not paired'}</button>}
+      {quiet?.on && <button onClick={() => openPage('settings')} title={`Quiet hours ${quiet.from} to ${quiet.to}: notifications stay silent`} data-testid="status-quiet">{inQuiet(quiet.from, quiet.to) ? `Quiet until ${quiet.to}` : `Quiet from ${quiet.from}`}</button>}
       {u ? <span className="undo" data-testid="undo-line">{u.text}<button onClick={() => runUndo()} data-testid="undo">Undo</button></span>
         : update ? <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Hive ${update.version} available`}</button>
           : <button onClick={() => void runPull(setBusyPull)} disabled={busyPull} data-testid="status-pull">{busyPull ? 'Pulling' : 'Pull latest'}</button>}

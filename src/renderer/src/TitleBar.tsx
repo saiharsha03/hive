@@ -1,15 +1,13 @@
-// The title bar: mark and name; the counts as coloured words (each jumps to the first such thread); the command field
-// (Ctrl+K) whose palette lists threads, files, views, actions and every Claude command; the account switcher with
-// name, plan, 5h and 7d. The bar drags the window; Windows draws minimise, maximise and close on the right.
+// The title bar: mark and name; the command field centred (Ctrl+K), whose palette lists threads, files, views, actions
+// and every Claude command; at the right only the 5-hour use and the account name, which opens the switcher. What needs
+// you is counted in the rail, not here. The bar drags the window; Windows draws its caption buttons on the right.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppName } from './appSettings'
 import { HiveMark } from './HiveMark'
 import { useEscape } from './ui'
 import { matchRank } from '../../shared/paletteRank'
 import { filterCommands, type Command as EngineCommand } from '../../shared/composerCore'
-import { live as liveStore, activate, openSession } from './actions'
-import { liveLook } from './Rail'
-import { useStore } from './store'
+import { openSession } from './actions'
 import { AccountSwitcher, useAccountSummary } from './AccountSwitcher'
 import { WARN_PCT } from './kit'
 
@@ -21,23 +19,6 @@ export type PaletteSources = {
   files: (q: string) => Promise<Command[]>
   engine: () => Promise<EngineCommand[]>
   runSlash: (c: EngineCommand) => void
-}
-
-// the counts of what needs you: NEED YOU (waiting, not failed) and FAILED
-function Counts() {
-  const live = useStore(liveStore, (l) => l)
-  const failed = live.waiting.filter((r) => liveLook(r).word === 'FAILED')
-  const need = live.waiting.filter((r) => liveLook(r).word !== 'FAILED')
-  const word = (n: number, w: string, cls: string, first: string | undefined, testid: string) => (
-    <button className={`tb-count ${n ? cls : 'zero'}`} onClick={() => first && activate(first)} disabled={!first} title={first ? 'Show the first one' : undefined} data-testid={testid}>{n} {w}</button>
-  )
-  return (
-    <div className="tb-counts" data-testid="title-counts">
-      {/* only what needs you; nothing at all when nothing does */}
-      {need.length > 0 && word(need.length, 'NEED YOU', 'w', need[0]?.id, 'count-need')}
-      {failed.length > 0 && word(failed.length, 'FAILED', 'f', failed[0]?.id, 'count-failed')}
-    </div>
-  )
 }
 
 // the field and the list under it
@@ -103,7 +84,7 @@ function CommandField({ src, open, setOpen, focusN }: { src: PaletteSources; ope
   let lastGroup = ''
   return (
     <div className="tb-field">
-      <input ref={input} placeholder="Search threads, run a command, or type / for Claude commands" value={q} aria-label="Command field" aria-expanded={open} aria-controls="palette-list" role="combobox"
+      <input ref={input} placeholder="Find a thread, run a command, or type / for Claude's commands" value={q} aria-label="Command field" aria-expanded={open} aria-controls="palette-list" role="combobox"
         onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true) }} data-testid="palette-input"
         onBlur={(e) => { if (!list.current?.contains(e.relatedTarget as Node)) setTimeout(() => setOpen(false), 120) }}
         onKeyDown={(e) => {
@@ -140,8 +121,8 @@ function AccountButton({ open, setOpen }: { open: boolean; setOpen: (b: boolean)
   return (
     <>
       <button className={`tb-acct${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title="Accounts (Ctrl+Alt+1..3 switches)" data-testid="account-button">
-        <span>{a.label || 'Account'}</span>
-        {a.five != null && <i className={`lim${a.five > WARN_PCT ? ' warm' : ''}`}>5h {pct(a.five)}</i>}
+        {a.five != null && <i className={`lim${a.five > WARN_PCT ? ' warm' : ''}`}>5-hour {pct(a.five)}</i>}
+        <b>{a.label || 'Account'}</b>
       </button>
       {open && <AccountSwitcher onClose={() => setOpen(false)} />}
     </>
@@ -153,8 +134,7 @@ export function TitleBar({ src, paletteN, accountsOpen, setAccountsOpen }: { src
   const [open, setOpen] = useState(false)
   return (
     <header className="tb" data-testid="titlebar">
-      <span className="tb-brand" data-testid="brand"><HiveMark size={16} />{name}</span>
-      <Counts />
+      <span className="tb-brand" data-testid="brand"><HiveMark size={20} />{name}</span>
       <CommandField src={src} open={open} setOpen={setOpen} focusN={paletteN} />
       <AccountButton open={accountsOpen} setOpen={setAccountsOpen} />
     </header>

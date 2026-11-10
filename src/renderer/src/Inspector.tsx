@@ -1,5 +1,6 @@
-// The inspector: the focused thread's Activity (what runs in it, what is scheduled for it, what finished, and what
-// runs elsewhere), its Changes (git for its repo: stage, commit, push), its Files (tree with git colours) and a short
+// The inspector: the focused thread's Activity as a timeline (a time column, then a name and one mono line of what it
+// is doing; actions on the hovered or focused item): Running now, Coming up, Earlier in this thread, and Elsewhere
+// folded to one line with a count plus any failure. Then its Changes (git for its repo: stage, commit, push), its Files (tree with git colours) and a short
 // Status. With a page or a file focused it keeps showing the thread that was last on screen.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { activate, diffSpec, inspectorTab, openPage, send, setPreview, showDiff, type InspectorTab } from './actions'
@@ -7,8 +8,8 @@ import { useAllStatus, useThreadStatus } from './statusStore'
 import { panes as panesStore, sessions, shallowEq, useSessionMetas, useStore, type SessionMeta } from './store'
 import type { Session } from './chat'
 import { focusedTab } from './panes'
-import { State, Btn, Bar, KV, dur, clock, relative, taskState, tokens as fmtTokens } from './kit'
-import { shellName, kindLabel, type Task } from '../../shared/taskCore'
+import { Btn, Bar, KV, dur, clock, relative, tokens as fmtTokens } from './kit'
+import { shellName, type Task } from '../../shared/taskCore'
 import { describer, useNow } from './ThreadStatus'
 import { nextRun, describeCron } from '../../shared/cronCore'
 import { modelLabel } from '../../shared/statusCore'
@@ -75,7 +76,6 @@ function TaskItem({ t, tabId, thread, busy, elsewhere }: { t: Task; tabId: strin
   const [msg, setMsg] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const now = Date.now()
-  const w = taskState(t.status)
   const last = t.now || t.lastTool || t.summary || t.error || ''
   const isAgent = /agent/.test(t.kind)
   const go = () => {
@@ -85,21 +85,23 @@ function TaskItem({ t, tabId, thread, busy, elsewhere }: { t: Task; tabId: strin
     setMsg(null)
   }
   return (
-    <div className={`item${open ? ' open' : ''}`} tabIndex={0} data-testid="activity-item">
-      <div className="i1"><State word={w.word} tone={w.tone} /><span className="n" title={t.title}>{elsewhere ? `${t.title} in ${thread}` : `${kindLabel(t.kind)}: ${t.title}`}</span>
-        <span className="d">{t.status === 'running' ? dur(now - t.startedAt) : clock(t.endedAt ?? t.startedAt)}</span></div>
-      {last && <div className="i2" title={last}>{last}</div>}
-      {msg !== null && (
-        <div className="i3"><input className="uline" style={{ flex: 1 }} autoFocus value={msg} placeholder="Message this subagent (Claude passes it on)" onChange={(e) => setMsg(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go() } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMsg(null) } }} data-testid={`agent-chat-${t.id}`} /></div>
-      )}
-      <div className="i3">
-        {t.status === 'running' && isAgent && msg === null && <Btn kind="link" onClick={() => setMsg('')}>Message</Btn>}
-        <Btn kind="link" onClick={() => (elsewhere ? activate(tabId) : setOpen(!open))}>{elsewhere ? 'Open' : open ? 'Less' : 'Output'}</Btn>
-        {t.status === 'running' && <Btn kind="link" className="x" onClick={() => void window.api.chatStopTask(tabId, t.id)} testid={`task-stop-${t.id}`}>Stop</Btn>}
-        {elsewhere && t.status === 'failed' && <Btn kind="link" onClick={() => send(tabId, `Retry the task that failed: ${t.title}`, [], busy ? 'queue' : undefined)}>Retry</Btn>}
+    <div className={`item${open ? ' open' : ''}${t.status === 'failed' ? ' failed' : ''}`} tabIndex={0} data-testid="activity-item">
+      <div className="tm">{t.status === 'running' ? dur(now - t.startedAt) : clock(t.endedAt ?? t.startedAt)}</div>
+      <div>
+        <div className="nm" title={t.title}>{elsewhere ? `${t.title}${t.status === 'failed' ? ' failed' : ''} in ${thread}` : t.title}</div>
+        {last && <div className="ds" title={last}>{last}</div>}
+        {open && (t.agents.length > 0 || t.error) && <div className="ds">{[t.error, ...t.agents.map((a) => `${a.label}: ${a.state}${a.result ? `, ${a.result}` : ''}`)].filter(Boolean).join('\n')}</div>}
+        {msg !== null && (
+          <div className="ac"><input className="uline" style={{ flex: 1 }} autoFocus value={msg} placeholder="Message this subagent (Claude passes it on)" onChange={(e) => setMsg(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go() } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMsg(null) } }} data-testid={`agent-chat-${t.id}`} /></div>
+        )}
+        <div className="ac">
+          <Btn kind="link" onClick={() => (elsewhere ? activate(tabId) : setOpen(!open))}>{elsewhere ? 'Open' : open ? 'Less' : 'Output'}</Btn>
+          {t.status === 'running' && <Btn kind="link" onClick={() => void window.api.chatStopTask(tabId, t.id)} testid={`task-stop-${t.id}`}>Stop</Btn>}
+          {t.status === 'running' && isAgent && msg === null && <Btn kind="link" onClick={() => setMsg('')}>Message</Btn>}
+          {elsewhere && t.status === 'failed' && <Btn kind="link" onClick={() => send(tabId, `Retry the task that failed: ${t.title}`, [], busy ? 'queue' : undefined)}>Retry</Btn>}
+        </div>
       </div>
-      {open && (t.agents.length > 0 || t.error) && <div className="i2">{[t.error, ...t.agents.map((a) => `${a.label}: ${a.state}${a.result ? `, ${a.result}` : ''}`)].filter(Boolean).join('\n')}</div>}
     </div>
   )
 }
@@ -110,8 +112,7 @@ function Activity({ s }: { s?: SessionMeta }) {
   const session = useThreadSlice(s?.id)
   const now = useNow(true)
   const st = s ? all.get(s.id) : undefined
-  // Finished and Elsewhere rest folded, with their counts
-  const [showFinished, setShowFinished] = useState(false)
+  // Elsewhere rests folded to one line with its counts; a failure there stays in view
   const [showElsewhere, setShowElsewhere] = useState(false)
   const name = useMemo(() => describer(session?.items ?? []), [session?.items])
   const tasks = (st?.tasks ?? []).map((t) => ({ ...t, title: shellName(t, name) }))
@@ -132,35 +133,45 @@ function Activity({ s }: { s?: SessionMeta }) {
     load()
     return onWakeupsChanged(load)
   }, [])
-  const schedule: { word: string; tone: 'work' | 'hold' | 'accent' | 'idle'; what: string; at: string }[] = []
-  for (const j of st?.crons ?? []) { const n = nextRun(j.schedule, new Date(now)); schedule.push({ word: 'LOOP', tone: 'work', what: `${describeCron(j.schedule)}: ${j.prompt}`, at: n ? clock(n) : '' }) }
-  if (st?.nextWake) schedule.push({ word: 'WAKE-UP', tone: 'accent', what: 'Claude wakes this thread', at: clock(st.nextWake) })
-  for (const w of wakes?.wakeups ?? []) if (s?.sessionId && w.sessionId === s.sessionId) schedule.push({ word: 'WAKE-UP', tone: 'accent', what: w.prompt, at: clock(Date.parse(w.wakeAt)) })
-  for (const c of wakes?.continues ?? []) if (s && (c.tabId === s.id || c.key === s.sessionId)) schedule.push({ word: 'AUTO-CONTINUE', tone: 'hold', what: 'Continues after the usage limit resets', at: clock(c.at) })
+  const schedule: { what: string; how: string; at: string }[] = []
+  for (const j of st?.crons ?? []) { const n = nextRun(j.schedule, new Date(now)); schedule.push({ what: j.prompt, how: describeCron(j.schedule), at: n ? clock(n) : '' }) }
+  if (st?.nextWake) schedule.push({ what: 'Claude wakes this thread', how: 'wake-up', at: clock(st.nextWake) })
+  for (const w of wakes?.wakeups ?? []) if (s?.sessionId && w.sessionId === s.sessionId) schedule.push({ what: w.prompt, how: 'wake-up', at: clock(Date.parse(w.wakeAt)) })
+  for (const c of wakes?.continues ?? []) if (s && (c.tabId === s.id || c.key === s.sessionId)) schedule.push({ what: 'Continues after the usage limit resets', how: 'automatic continue', at: clock(c.at) })
   const elsewhere = [...all].filter(([tab]) => tab !== s?.id).flatMap(([tab, x]) => x.tasks.filter((t) => t.status === 'running' || (t.status === 'failed' && now - (t.endedAt ?? 0) < 3_600_000)).map((t) => ({ t, tab })))
   const titleOf = (tab: string) => metas.find((m) => m.id === tab)?.title ?? tab
+  const elseRunning = elsewhere.filter((x) => x.t.status === 'running').length
+  const elseFailed = elsewhere.filter((x) => x.t.status === 'failed')
+  const earlier = finishedHere.length + edits.length
   return (
     <div data-testid="inspector-activity">
-      <div className="isec"><span>Running in this thread</span><span>{runningHere.length}</span></div>
+      <div className="isec"><span>Running now</span></div>
       {!s ? <div className="iempty">No thread on screen.</div> : runningHere.length ? runningHere.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)
         : <div className="iempty">{s.busy ? 'Claude is working; nothing runs in the background.' : 'Nothing running.'}</div>}
-      <div className="isec"><span>Scheduled for this thread</span><span>{schedule.length}</span></div>
-      {schedule.length ? schedule.map((x, i) => (
-        <div key={i} className="item" tabIndex={0}><div className="i1"><State word={x.word} tone={x.tone} /><span className="n" title={x.what}>{x.what}</span><span className="d">{x.at}</span></div>
-          <div className="i3"><Btn kind="link" onClick={() => openPage('scheduled')}>Scheduled page</Btn></div></div>
-      )) : <div className="iempty">Nothing scheduled.</div>}
-      <button className="isec fold" onClick={() => setShowFinished((x) => !x)} aria-expanded={showFinished} data-testid="insp-finished"><span>Finished</span><span>{finishedHere.length + edits.length}</span></button>
-      {showFinished && <>
-      {finishedHere.map((t) => s && <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
-      {edits.map((e) => (
-        <div key={e.id} className="item" tabIndex={0}><div className="i1"><State word="DONE" tone="done" /><span className="n" title={e.label}>Edit {e.label}</span><span className="d" /></div>
-          <div className="i2"><span className="add-t">+{e.c.add}</span> <span className="del-t">-{e.c.del}</span> <Btn kind="link" onClick={() => showDiff(e.spec)}>open the diff</Btn></div></div>
-      ))}
-      {!finishedHere.length && !edits.length && <div className="iempty">Nothing finished yet today.</div>}
+      {schedule.length > 0 && <>
+        <div className="isec"><span>Coming up</span></div>
+        {schedule.map((x, i) => (
+          <div key={i} className="item" tabIndex={0}><div className="tm">{x.at}</div>
+            <div><div className="nm" title={x.what}>{x.what}</div><div className="ds">{x.how}</div>
+              <div className="ac"><Btn kind="link" onClick={() => openPage('scheduled')}>Scheduled</Btn></div></div></div>
+        ))}
       </>}
-      <button className="isec fold" onClick={() => setShowElsewhere((x) => !x)} aria-expanded={showElsewhere} data-testid="insp-elsewhere"><span>Elsewhere</span><span>{elsewhere.length}</span></button>
-      {showElsewhere && (elsewhere.length ? elsewhere.slice(0, 12).map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)
-        : <div className="iempty">Nothing running in other threads.</div>)}
+      {earlier > 0 && s && <>
+        <div className="irule" />
+        <div className="isec" data-testid="insp-finished"><span>Earlier in this thread</span></div>
+        {finishedHere.slice(0, 6).map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
+        {edits.map((e) => (
+          <div key={e.id} className="item" tabIndex={0}><div className="tm" />
+            <div><div className="nm" title={e.label}>Edited {e.label}</div><div className="ds"><span className="add-t">+{e.c.add}</span> <span className="del-t">{'\u2212'}{e.c.del}</span></div>
+              <div className="ac"><Btn kind="link" onClick={() => showDiff(e.spec)}>Open the diff</Btn></div></div></div>
+        ))}
+      </>}
+      <div className="irule" />
+      <button className="ifold" onClick={() => setShowElsewhere((x) => !x)} aria-expanded={showElsewhere} data-testid="insp-elsewhere"><span>Elsewhere</span>
+        <span>{elsewhere.length ? [elseRunning ? `${elseRunning} running` : '', elseFailed.length ? `${elseFailed.length} failed` : ''].filter(Boolean).join(', ') : 'nothing running'}</span></button>
+      {showElsewhere
+        ? elsewhere.slice(0, 12).map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)
+        : elseFailed.map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)}
     </div>
   )
 }
@@ -214,7 +225,7 @@ function MiniStatus({ s }: { s: SessionMeta }) {
   const pct = ctx && ctx.max ? (ctx.total / ctx.max) * 100 : null
   const wt = s.worktrees?.at(-1)
   return (
-    <div style={{ padding: '6px 14px' }} data-testid="inspector-status">
+    <div style={{ padding: '14px 22px' }} data-testid="inspector-status">
       <KV rows={[
         ['Model', st.model ? `${modelLabel(st.model)}` : 'default'],
         ['Effort', st.ultrathink ? 'max for this turn' : st.effort ?? 'default'],

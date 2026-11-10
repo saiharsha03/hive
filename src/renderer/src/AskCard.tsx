@@ -22,19 +22,18 @@ export function AskCard({ tabId, id, input, open }: { tabId: string; id: string;
     <div className={`askcard${open ? '' : ' done'}`} data-testid="ask-card">
       {qs.map((q, i) => (
         <div key={i} className="askq">
-          {q.header && <span className="askhead">{q.header}</span>}
           <div className="asktext">{q.question}</div>
           {open && q.options.map((o) => (
             <label key={o.label} className="askopt">
               <input type={q.multiSelect ? 'checkbox' : 'radio'} name={`${id}-${i}`} checked={picks[i].includes(o.label) && !(!q.multiSelect && other[i].trim())} onChange={() => { toggle(i, o.label, q.multiSelect); if (!q.multiSelect) setOther((x) => x.map((v, j) => (j === i ? '' : v))) }} />
-              <span><b>{o.label}</b>{o.description && <span className="askdesc"> {o.description}</span>}</span>
+              <span>{o.label}{o.description && <span className="askdesc">{o.description.replace(/\.$/, '')}</span>}</span>
             </label>
           ))}
-          {open && <input className="askother" placeholder="Other: type your own answer" value={other[i]} onChange={(e) => { const v = e.target.value; setOther((x) => x.map((s, j) => (j === i ? v : s))) }} data-testid="ask-other" />}
+          {open && <input className="askother" placeholder="Or type your own answer" value={other[i]} onChange={(e) => { const v = e.target.value; setOther((x) => x.map((s, j) => (j === i ? v : s))) }} data-testid="ask-other" />}
         </div>
       ))}
       {open
-        ? <div className="askfoot"><button className="primary" disabled={!answers || sending} onClick={submit} data-testid="ask-submit">Submit</button><span className="hint">or reply in the chat</span>{err && <span className="s-fail">{err}</span>}</div>
+        ? <div className="askfoot"><button className="primary" disabled={!answers || sending} onClick={submit} data-testid="ask-submit">Answer</button><span className="hint">{qs.length === 1 && qs[0].options.length ? `${qs[0].multiSelect ? 'Pick any' : 'Pick one'}, or just reply below` : 'Or just reply below'}</span>{err && <span className="s-fail">{err}</span>}</div>
         : <div className="hint">Question closed</div>}
     </div>
   )

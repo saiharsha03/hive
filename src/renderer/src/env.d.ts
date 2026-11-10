@@ -29,7 +29,7 @@ type SessionStats = {
 type FsEntry = { name: string; path: string; dir: boolean }
 type Item =
   // failed: the message never reached Claude (why)
-  | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string; seen?: boolean; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean }; failed?: string }
+  | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string; seen?: boolean; seenAt?: number; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean }; failed?: string }
   | { kind: 'assistant'; text: string; at?: number }
   // patch: Claude Code's structuredPatch from an Edit / MultiEdit / Write result, for the diff; output: the result as text, shown when the row is opened
   | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown; output?: string }

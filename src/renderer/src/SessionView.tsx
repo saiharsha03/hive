@@ -204,17 +204,40 @@ function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<It
 
 // A run of tool calls rests as one dim line ("6 steps: Read, Grep, 2 Edit, Write, Bash") that opens on click; a failed
 // step stays in view under it
-type RunStep = { key: string; word: string; failed: boolean; running: boolean; node: ReactNode }
+type RunStep = { key: string; word: string; failed: boolean; running: boolean; node: ReactNode; item?: Extract<Item, { kind: 'tool' }> }
+const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+const SEARCHES = new Set(['Grep', 'Glob', 'WebSearch', 'ToolSearch'])
+const READS = new Set(['Read', 'WebFetch', 'LS'])
+const COMMANDS = new Set(['Bash', 'PowerShell', 'BashOutput'])
+const AGENTS = new Set(['Agent', 'Task'])
+const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`
+// "7 steps, 3 edits +58 -8, 1 search, 2 reads, 1 agent, running": what a run of tool calls did, in one line
+function runSummary(steps: RunStep[]): ReactNode {
+  const by = (set: Set<string>) => steps.filter((s) => s.item && set.has(s.item.name))
+  const edits = by(EDITS)
+  const lines = edits.reduce((t, s) => { const c = counts(hunksOf(s.item!)); return { add: t.add + c.add, del: t.del + c.del } }, { add: 0, del: 0 })
+  const searches = by(SEARCHES).length, reads = by(READS).length, cmds = by(COMMANDS).length, agents = by(AGENTS).length
+  const codex = steps.filter((s) => !s.item).length
+  const failed = steps.filter((s) => s.failed).length
+  return <>
+    <b>{n(steps.length, 'step', 'steps')}</b>
+    {edits.length > 0 && <span>{n(edits.length, 'edit', 'edits')}</span>}
+    {(lines.add > 0 || lines.del > 0) && <><span className="add-t">+{lines.add}</span><span className="del-t">{'−'}{lines.del}</span></>}
+    {searches > 0 && <span>{n(searches, 'search', 'searches')}</span>}
+    {reads > 0 && <span>{n(reads, 'read', 'reads')}</span>}
+    {cmds > 0 && <span>{n(cmds, 'command', 'commands')}</span>}
+    {agents > 0 && <span>{n(agents, 'agent', 'agents')}</span>}
+    {codex > 0 && <span>{n(codex, 'Codex run', 'Codex runs')}</span>}
+    {failed > 0 && <span className="s-fail">{failed} failed</span>}
+    {steps.some((s) => s.running) && <span>running</span>}
+  </>
+}
 function ToolRun({ steps }: { steps: RunStep[] }) {
   const [open, setOpen] = useState(false)
-  const counts = new Map<string, number>()
-  for (const s of steps) counts.set(s.word, (counts.get(s.word) ?? 0) + 1)
-  const what = [...counts].map(([w, n]) => (n > 1 ? `${n} ${w}` : w)).join(', ')
-  const running = steps.some((s) => s.running)
   return (
     <div className="tools">
-      <button className="trun" onClick={() => setOpen((o) => !o)} aria-expanded={open} data-testid="tool-run">
-        <span>{steps.length} steps: {what}</span>{running && <span className="trun-now">working</span>}<span className="trun-k">{open ? 'Hide' : 'Show'}</span>
+      <button className="trun" onClick={() => setOpen((o) => !o)} aria-expanded={open} title={open ? 'Hide the steps' : 'Show the steps'} data-testid="tool-run">
+        {runSummary(steps)}
       </button>
       {open ? steps.map((s) => s.node) : steps.filter((s) => s.failed).map((s) => s.node)}
     </div>
@@ -335,7 +358,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     if (it.kind === 'tool' && it.name !== SHOW && it.name !== CODEX && it.name !== 'AskUserQuestion') {
       const bg = bgOf.get(it.id)
       const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
-      tools.push({ key, word: toolVerb(it.name).word, failed: status === 'error', running: status === 'running', node: <ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
+      tools.push({ key, item: it, word: toolVerb(it.name).word, failed: status === 'error', running: status === 'running', node:<ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
       return
     }
     if (it.kind === 'codex') { tools.push({ key, word: 'Codex', failed: it.status === 'error', running: it.status === 'running', node: <CodexBox key={key} it={it} /> }); return }
@@ -345,12 +368,11 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
       out.push(
         <div key={key} className={`msg you${it.steer ? ' steer' : ''}`} title={it.steer && it.during ? `Steered while Claude was on: ${it.during}` : undefined} data-testid="msg-user">
           {/* seen: Claude took the message in (at once for a normal send, at its next step for a steered one) */}
-          {it.seen ? <span className="seen sw sw-done" title="Claude has read this message" data-testid="msg-seen">SEEN BY CLAUDE</span>
-            : it.steer && it.uuid && session.busy && <span className="seen sw sw-idle" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">NOT READ YET</span>}
-          {it.failed && <span className="seen sw sw-fail" title={it.failed} data-testid="msg-failed">NOT SENT</span>}
           {it.images.length > 0 && <div className="imgs">{it.images.map((src, j) => <button key={j} className="thumb" onClick={() => st.open(src)} data-testid="chat-image"><img src={src} alt="" /></button>)}</div>}
           {it.text && <div className="body">{it.text}</div>}
-          {it.failed && <div className="msg-note s-fail">Not sent: {it.failed}</div>}
+          {it.seen ? <span className="seen" title="Claude has read this message" data-testid="msg-seen">Seen by Claude{it.seenAt ? ` ${clock(it.seenAt)}` : ''}</span>
+            : it.steer && it.uuid && session.busy && <span className="seen" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">Not read yet</span>}
+          {it.failed && <span className="seen s-fail" title={it.failed} data-testid="msg-failed">Not sent: {it.failed}</span>}
           {it.uuid && session.sessionId && !session.busy && !it.steer && (
             <button className="rewindb" onClick={() => startRewind(it, i)} title="Go back to before this message: put back the files Claude changed since, and edit the message" data-testid="msg-rewind">Rewind</button>
           )}
@@ -375,7 +397,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
       return
     }
     if (it.kind === 'agent') { out.push(<div key={key} className="msg cl from"><div className="msg-note">{it.from}</div><MdBody text={it.text} /></div>); return }
-    if (it.kind === 'error') { out.push(<div key={key} className="msg err" data-testid="msg-error"><State word="FAILED" tone="fail" /> <span>{it.text}</span></div>) }
+    if (it.kind === 'error') { out.push(<div key={key} className="msg err" data-testid="msg-error"><span>Failed: {it.text}</span></div>) }
   })
   flush()
   return (
@@ -663,21 +685,22 @@ export function SessionView(p: Props) {
             <Btn kind="link" onClick={() => { setMenu(false); p.onRunInBackground() }} testid="chat-run-background">Move to the background</Btn>
           </div>
         )}
-        <Pins pins={[...pinRows.slice(0, 3), ...(folder ? [['Folder', folder] as [string, ReactNode]] : [])]} />
+        {folder && <div className="phead-sub" title={session.cwd} data-testid="folder-picker">{wt ? <>{wt.repo} on <b>{wt.branch}</b></> : folder}</div>}
+        <Pins pins={pinRows.slice(0, 3)} />
         {pinning !== null && (
           <input className="uline pin-in" autoFocus value={pinning} placeholder="A fact to keep in view, Enter pins it" onChange={(e) => setPinning(e.target.value)}
             onBlur={() => setPinning(null)} onKeyDown={(e) => { if (e.key === 'Enter' && pinning.trim()) { savePins([...pins, pinning.trim()]); setPinning(null) } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPinning(null) } }} data-testid="pin-input" />
         )}
       </header>
-      {sinceLine && <div className="since" data-testid="since-line"><b>Since {clock(since!.at)}</b>{sinceLine}</div>}
+      {sinceLine && <div className="since" data-testid="since-line"><b>Since you looked at {clock(since!.at)}</b>{sinceLine}</div>}
       {wakeAt && (
-        <div className="hold-line" data-testid="auto-continue"><State word="PAUSED" tone="hold" /> Usage limit reached. Continues by itself at {wakeLabel(wakeAt, Date.now())}.
+        <div className="hold-line" data-testid="auto-continue">Paused: usage limit reached. Continues by itself at {wakeLabel(wakeAt, Date.now())}.
           <Btn kind="quiet" onClick={() => { void window.api.chatCancelContinue(session.sessionId ?? session.id).then(() => { setWakeAt(null); p.onSend(CONTINUE_PROMPT, []) }) }} testid="auto-continue-now">Resume now</Btn>
           <Btn kind="link" className="x" onClick={() => { void window.api.chatCancelContinue(session.sessionId ?? session.id).then(() => setWakeAt(null)) }} testid="auto-continue-cancel">Cancel</Btn>
         </div>
       )}
       {session.endedRun && !session.busy && (
-        <div className="hold-line" data-testid="ended-run"><State word="ENDED" tone="idle" /> This watcher run has ended and its thread is closed. Sending a message reopens it, read-only: Claude reads the whole conversation again, which counts against your usage.</div>
+        <div className="hold-line" data-testid="ended-run">This watcher run has ended and its thread is closed. Sending a message reopens it, read-only: Claude reads the whole conversation again, which counts against your usage.</div>
       )}
       {finding && <FindBar onClose={() => { setFinding(false); box.current?.focus({ preventScroll: true }) }} />}
       <div className="thread conv" ref={thread} onScroll={onScroll}>
@@ -687,7 +710,7 @@ export function SessionView(p: Props) {
 
       {session.busy && (
         <div className="working" data-testid="working">
-          <State word={session.compacting ? 'COMPACTING' : 'WORKING'} tone="work" />
+          <span className="sweep" aria-hidden />
           <span className="what">{session.compacting ? 'Freeing up context; this can take a few minutes' : running?.kind === 'tool' ? workingOn(session.items) ?? 'Working' : 'Thinking'}</span>
           <Btn kind="link" onClick={() => p.onBackground()} testid="chat-background-tasks" title="Move what runs to the background (Ctrl+B)">Background tasks</Btn>
         </div>
@@ -730,12 +753,13 @@ export function SessionView(p: Props) {
             {shownClip && <ClipChip offer={shownClip} onPaste={() => void pasteClip()} onDismiss={dismissClip} />}
           </div>
         )}
+        <div className="cbox">
         <div className="cin">
           {ultra && <div className="cmirror" ref={mirror} aria-hidden data-testid="ultra-mirror">{ultrathinkParts(draft).map((x, j) => (x.hit ? <mark key={j}>{x.text}</mark> : x.text))}{'\n'}</div>}
           <textarea
             ref={box} rows={1} className={ultra ? 'ultra' : undefined} aria-label="Message Claude"
             onScroll={(e) => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop }}
-            placeholder={session.busy ? 'Steer Claude' : session.asks?.length ? 'Answer above or reply' : 'Message Claude'}
+            placeholder={session.busy ? 'Steer Claude' : session.asks?.length ? 'Answer above, or reply here' : 'Reply to Claude'}
             value={draft}
             onChange={(e) => { setDraft(e.target.value); setCaret(e.target.selectionStart) }}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
@@ -751,15 +775,15 @@ export function SessionView(p: Props) {
         <div className="crow">
           <ModelEffort tabId={session.id} ultra={ultra} />
           <span className={shownMode === 'bypassPermissions' ? 'pick warn' : 'pick'} title={session.modeError ?? 'Permission mode of this thread'} data-testid="mode-picker"><i>Mode</i>{modeLabel(shownMode).replace(/ mode$/i, '').toLowerCase()}{session.modeError ? ', switch failed' : ''}</span>
-          <span className="pick wide" title={session.cwd} data-testid="folder-picker"><i>Folder</i>{folder}</span>
           {ultra && <span className="pick ultra" data-testid="ultra-note">ultrathink: max effort for this turn</span>}
           <Btn kind="link" onClick={() => fileInput.current?.click()} testid="composer-attach" title="Attach files or images">Attach</Btn>
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />
           <span className="cbtns">
-            <Btn kind="primary" onClick={() => submit('steer')} testid="send" title={session.busy ? 'Delivered at Claude\'s next step, inside the running turn (Enter)' : 'Send (Enter)'}>{session.busy ? 'Steer' : 'Send'}</Btn>
             {session.busy && <Btn kind="link" onClick={() => submit('queue')} testid="send-queue" title="Held until Claude finishes, then starts a new turn (Tab)">Queue</Btn>}
             {session.busy && <Btn kind="link" onClick={p.onStop} testid="chat-stop" title="Stop this turn; the queue holds (Esc)">Stop</Btn>}
+            <Btn kind="primary" className={draft.trim() || images.length ? '' : 'idle'} onClick={() => submit('steer')} testid="send" title={session.busy ? 'Delivered at Claude\'s next step, inside the running turn (Enter)' : 'Send (Enter)'}>{session.busy ? 'Steer' : 'Send'}</Btn>
           </span>
+        </div>
         </div>
       </div>
     </main>

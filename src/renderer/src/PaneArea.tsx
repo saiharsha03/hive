@@ -78,8 +78,8 @@ export function TabRow() {
             onContextMenu={(e) => { e.preventDefault(); setMenu({ id, x: e.clientX, y: e.clientY }) }}
             title={`${s.title}${tabs.length > 1 ? ' (drag onto a pane to move it, onto its edge to split)' : ''}`}
             data-testid="tab" data-id={id} data-index={i}>
-            {w && <State word={w[0]} tone={w[1]} />}
             <span className="tab-t">{s.title}</span>
+            {w && (w[1] === 'wait' || w[1] === 'fail') && <State word={w[0]} tone={w[1]} />}
             {dirty && <span className="tab-dirty" data-testid="tab-dirty">M</span>}
             <button className="tab-x" aria-label={`Close ${s.title}`} onClick={(e) => { e.stopPropagation(); onClose(id) }} data-testid={`tab-close-${id}`}>×</button>
           </div>
