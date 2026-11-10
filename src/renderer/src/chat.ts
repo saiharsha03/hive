@@ -74,7 +74,11 @@ export function toolLine(name: string, input: any): { verb: string; what: string
     case 'mcp__hive__wait_for_thread': return { verb: input?.timeout_s === 0 ? 'Checked thread' : 'Waited for thread', what: short(input?.thread) }
   }
   const mcp = name.match(/^mcp__(.+?)__(.+)$/)
-  if (mcp) return { verb: mcp[2].replace(/_/g, ' '), what: mcp[1].replace(/^claude_ai_/, '').replace(/_/g, ' ') }
+  // a connector's tool (Hive's own included): its name, and the first thing it was called with
+  if (mcp) {
+    const first = Object.values(input ?? {}).find((v) => typeof v === 'string' && v.trim()) as string | undefined
+    return { verb: mcp[2].replace(/_/g, ' '), what: short(first, 80) }
+  }
   return { verb: name, what: '' }
 }
 

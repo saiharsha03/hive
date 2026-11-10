@@ -159,7 +159,9 @@ function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<It
   const hunks = file ? hunksOf(it) : null
   const c = hunks ? counts(hunks) : null
   const label = file ? shortPath(file, cwd) : ''
-  const { what } = toolLine(it.name, it.input)
+  const line = toolLine(it.name, it.input)
+  // a connector's tool says its own name in the row (the first word only names the connector)
+  const what = it.name.startsWith('mcp__') ? [line.verb, line.what].filter(Boolean).join(': ') : line.what
   const cmd = (it.name === 'Bash' || it.name === 'PowerShell') && typeof it.input?.command === 'string' ? it.input.command as string : ''
   const path = file ? label : typeof it.input?.file_path === 'string' ? shortPath(it.input.file_path, cwd) : cmd || what || (typeof it.input?.pattern === 'string' ? it.input.pattern : '')
   const can = it.output !== undefined || !!hunks?.length
