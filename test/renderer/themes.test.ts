@@ -34,7 +34,7 @@ test('body text, secondary text, the signal read at 4.5:1 on every surface, red 
 
 test('Quiet keeps its surfaces and honey signal, with a blue accent', () => {
   const q = THEME_TOKENS.dark
-  assert.deepEqual([q.bg, q.side, q.raised, q.lift2, q.hi, q.signal, q.fail], ['#16171A', '#111214', '#1E2024', '#26282D', '#ECEAE5', '#E9B44C', '#E2574C'])
+  assert.deepEqual([q.bg, q.side, q.raised, q.lift2, q.hi, q.signal, q.fail], ['#121314', '#191A1B', '#242526', '#2D2E30', '#CCCCCC', '#E9B44C', '#E2574C'])
   assert.equal(q['signal-wash'], 'rgba(233, 180, 76, 0.07)')
   assert.notEqual(q.accent, q.hi)
   assert.notEqual(q.accent, q.signal)
