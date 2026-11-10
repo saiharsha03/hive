@@ -68,7 +68,13 @@ const within = <T>(p: Promise<T>, ms: number): Promise<T | null> =>
   Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ms))])
 const keep = (u: any, at: number): boolean => {
   if (!realLimits(u?.rate_limits) || (usage && at < usage.at)) return false
-  usage = { limits: u.rate_limits, plan: u.subscription_type ?? null, at }
+  // the per-model week (model_scoped) only comes with an answer from a thread on that model: a newer answer without
+  // it keeps the last one known, until that week resets
+  const before = usage?.limits?.model_scoped
+  const limits = !Array.isArray(u.rate_limits.model_scoped) && Array.isArray(before)
+    ? { ...u.rate_limits, model_scoped: before.filter((m: any) => !m?.resets_at || Date.parse(m.resets_at) > Date.now()) }
+    : u.rate_limits
+  usage = { limits, plan: u.subscription_type ?? null, at }
   usageFromFile = false
   writeUsageFile(u.rate_limits) // for a usage-guard hook (usageFile.ts): at most once a minute, never in test mode
   return true

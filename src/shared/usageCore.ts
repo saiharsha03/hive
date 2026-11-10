@@ -20,10 +20,15 @@ export function usageRows(l: any, now = Date.now()): UsageRow[] {
   if (!realLimits(l)) return []
   const named = (k: string) => k.replace(/^seven_day_/, '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
   const extra: [string, string][] = Object.keys(l).filter((k) => /^seven_day_\w+$/.test(k) && !WINDOWS.some(([w]) => w === k)).map((k) => [k, `Current week (${named(k)})`])
-  return [...WINDOWS, ...extra].flatMap(([key, label]) => {
+  const rows = [...WINDOWS, ...extra].flatMap(([key, label]) => {
     const w = l[key]
     return typeof w?.utilization === 'number' ? [afterReset({ key, label, pct: w.utilization, resetsAt: typeof w.resets_at === 'string' ? w.resets_at : null }, now)] : []
   })
+  // a week counted for one model alone (the answer's model_scoped list: "Fable", ...), as /usage shows it
+  const scoped = (Array.isArray(l.model_scoped) ? l.model_scoped : []).flatMap((m: any) =>
+    typeof m?.utilization === 'number' && typeof m?.display_name === 'string'
+      ? [afterReset({ key: `model_${m.display_name.toLowerCase().replace(/\W+/g, '_')}`, label: `Current week (${m.display_name})`, pct: m.utilization, resetsAt: typeof m.resets_at === 'string' ? m.resets_at : null }, now)] : [])
+  return [...rows, ...scoped]
 }
 
 // A kept reading outlives its window: once the reset time has passed, that window is back at 0 (the bar sat on

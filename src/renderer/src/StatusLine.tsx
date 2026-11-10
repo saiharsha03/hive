@@ -182,7 +182,7 @@ export function StatusLine() {
       {branch && <b className="branch" data-testid="status-branch">{branch}</b>}
       {ctx && <span data-testid="status-context">Context {fmtTokens(ctx.total)}{ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}{ctx.max ? <Meter pct={(ctx.total / ctx.max) * 100} /> : null}</span>}
       {(status?.usage ?? []).map((u) => {
-        const name = u.key === 'five_hour' ? '5-hour' : u.key === 'seven_day' ? '7-day' : `7-day ${u.key.replace(/^seven_day_/, '').replace(/_/g, ' ')}`
+        const name = u.key === 'five_hour' ? '5-hour' : u.key === 'seven_day' ? '7-day' : `7-day ${u.label.match(/\((.+)\)/)?.[1] ?? u.key.replace(/^(seven_day|model)_/, '')}`
         const at = u.resetsAt ? new Date(u.resetsAt) : null
         const soon = at && at.getTime() - Date.now() < 24 * 3_600_000
         const when = at ? (soon ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : at.toLocaleDateString([], { weekday: 'short' }) + ' ' + at.toLocaleTimeString([], { hour: 'numeric' })) : ''
