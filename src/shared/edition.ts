@@ -1,8 +1,8 @@
-// This app is being rebuilt beside the Hive that runs today, so for now it is its own app: its own name, its own state
-// folder (dataDir) and its own taskbar identity, and nothing of Hive's is touched. When it takes over, NEXT becomes
-// false and it is Hive.
+// This app replaced the earlier Hive on this machine. It is Hive: the name, the taskbar identity and the shortcuts.
+// Its state stays in the folder it was built up in (~/.claude/hive-next), so nothing has to move again. NEXT keeps the
+// conveniences of a run from source while it is still being reworked: Ctrl+R / F5 and reloading on a new build.
 export const NEXT = true
-export const PRODUCT = NEXT ? 'Hive Next' : 'Hive'
-/** the folder under ~/.claude for this app's own state while it runs beside Hive ('' = ~/.claude itself) */
-export const STATE_FOLDER = NEXT ? 'hive-next' : ''
-export const APP_ID = NEXT ? 'io.github.saiharsha03.hive.next' : 'io.github.saiharsha03.hive'
+export const PRODUCT = 'Hive'
+/** the folder under ~/.claude for this app's state */
+export const STATE_FOLDER = 'hive-next'
+export const APP_ID = 'io.github.saiharsha03.hive'
