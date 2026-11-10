@@ -419,7 +419,7 @@ if (process.env.SIDE) {
   const D = resolve(process.env.SIDE)
   mkdirSync(D, { recursive: true })
   const d = async (name) => { await page.waitForTimeout(900); await page.screenshot({ path: join(D, `${name}.png`) }); console.log('side', name) }
-  for (const v of ['files', 'threads', 'git', 'codex', 'env', 'allow', 'deploy', 'notes', 'todo', 'watchers']) { await page.locator(`[data-testid="abar-${v}"]`).click(); await d(v) }
+  for (const v of ['files', 'threads', 'git', 'codex', 'env', 'allow', 'deploy', 'notes', 'todo', 'watchers', 'running', 'scheduled', 'pull', 'scripts', 'dependabot', 'usage']) { await page.locator(`[data-testid="abar-${v}"]`).click(); await d(v) }
   await page.locator('[data-testid="abar-todo"]').click()
   await d('closed')
   await app.close(); process.exit(0)

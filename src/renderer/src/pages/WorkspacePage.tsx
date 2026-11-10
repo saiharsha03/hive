@@ -35,7 +35,7 @@ export const pickWorkspaceTab = (tab: WorkspaceTab) => {
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
 // ---- Pull ----
-function PullTab() {
+export function PullTab() {
   const [names, setNames] = useState<string[]>([])
   const [res, setRes] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<'' | 'pull' | 'check'>('')
@@ -97,7 +97,7 @@ function StacksTab() {
   const { state, setState } = useDev()
   return <DevPanel state={state} setState={setState} onLogs={openStackLog} />
 }
-function ScriptsTab() {
+export function ScriptsTab() {
   const { runs } = useScripts(setPreview)
   return <ScriptsPanel runs={runs} onOpen={setPreview} />
 }
@@ -109,7 +109,7 @@ function TodosTab() {
 // ---- Dependabot ----
 const label = (k: string) => { const w = k.replace(/^HIVE_DEPENDABOT_/, '').toLowerCase().replace(/_/g, ' '); return w[0].toUpperCase() + w.slice(1) }
 
-function DependabotTab() {
+export function DependabotTab() {
   const [env, setEnv] = useState<Record<string, string> | null>(null)
   const [threads, setThreads] = useState<SessionInfo[] | null>(null)
   const [err, setErr] = useState('')

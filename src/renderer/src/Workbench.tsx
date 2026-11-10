@@ -19,6 +19,10 @@ import { useTodos } from './useTodos'
 import { AllowBody, allowOut, useAllow } from './StatusLine'
 import { DeploysPage } from './pages/DeploysPage'
 import { WatchersPage } from './pages/WatchersPage'
+import { RunningPage } from './pages/RunningPage'
+import { ScheduledPage } from './pages/ScheduledPage'
+import { StatusPage } from './pages/StatusPage'
+import { DependabotTab, PullTab, ScriptsTab } from './pages/WorkspacePage'
 import type { useDeploy } from './useDeploy'
 import type { ToolTab } from './chat'
 import { Boundary, Btn } from './kit'
@@ -28,7 +32,7 @@ import { CodexOutput, CodexSide } from './CodexView'
 import './pages/workspace.css'
 import './workbench.css'
 
-export type SideView = 'files' | 'threads' | 'codex' | 'git' | 'env' | 'allow' | 'deploy' | 'notes' | 'todo' | 'watchers' | 'quarry' | 'accounts'
+export type SideView = 'files' | 'threads' | 'codex' | 'git' | 'env' | 'allow' | 'deploy' | 'notes' | 'todo' | 'watchers' | 'running' | 'scheduled' | 'pull' | 'scripts' | 'dependabot' | 'usage' | 'quarry' | 'accounts'
 const VIEWS: { id: SideView; label: string; icon: string; brand?: 'claude' | 'openai' }[] = [
   { id: 'files', label: 'Files', icon: 'files' },
   { id: 'threads', label: 'Threads', icon: 'comment-discussion', brand: 'claude' },
@@ -40,6 +44,12 @@ const VIEWS: { id: SideView; label: string; icon: string; brand?: 'claude' | 'op
   { id: 'notes', label: 'Notes', icon: 'note' },
   { id: 'todo', label: 'To do', icon: 'checklist' },
   { id: 'watchers', label: 'Watchers', icon: 'eye' },
+  { id: 'running', label: 'Running', icon: 'pulse' },
+  { id: 'scheduled', label: 'Scheduled', icon: 'clock' },
+  { id: 'pull', label: 'Pull', icon: 'repo-pull' },
+  { id: 'scripts', label: 'Scripts', icon: 'terminal' },
+  { id: 'dependabot', label: 'Dependabot', icon: 'package' },
+  { id: 'usage', label: 'Usage', icon: 'graph' },
   { id: 'quarry', label: 'Quarry', icon: 'database' },
   { id: 'accounts', label: 'Accounts', icon: 'account' },
 ]
@@ -64,7 +74,8 @@ export function ActivityBar() {
   // a whole-page section is simply shown; a side bar section hides its side bar when its icon is clicked again
   const pick = (v: SideView) => (!isFull(v) && open && v === view ? setLayout({ rail: false }) : showSide(v))
   // what an icon says beside it: threads waiting for you, an address that is not allowed yet
-  const mark = (v: SideView) => (v === 'threads' && waiting > 0 ? String(waiting) : v === 'allow' && allow?.changed ? '!' : '')
+  const working = useStore(liveStore, (l) => l.working.length)
+  const mark = (v: SideView) => (v === 'threads' && waiting > 0 ? String(waiting) : v === 'running' && working > 0 ? String(working) : v === 'allow' && allow?.changed ? '!' : '')
   return (
     <nav className="abar" aria-label="Sections" data-testid="activity-bar">
       {VIEWS.filter((v) => v.id !== 'accounts' && (v.id !== 'quarry' || quarry?.available)).map((v) => (
@@ -139,6 +150,12 @@ function FullPage({ view, deploy }: { view: SideView; deploy: ReturnType<typeof 
     case 'quarry': return <QuarryPage />
     case 'deploy': return <DeploysPage deploy={deploy} />
     case 'watchers': return <WatchersPage />
+    case 'running': return <RunningPage />
+    case 'scheduled': return <ScheduledPage />
+    case 'usage': return <StatusPage />
+    case 'pull': return <Page title="Pull"><PullTab /></Page>
+    case 'scripts': return <Page title="Scripts"><ScriptsTab /></Page>
+    case 'dependabot': return <Page title="Dependabot"><DependabotTab /></Page>
     case 'accounts': return <Page title="Accounts"><AccountSwitcher page onClose={() => {}} /></Page>
     case 'codex': return <Page title="Codex"><CodexSide /><CodexOutput /></Page>
     case 'env': return <Page title="Environments"><EnvPage /></Page>

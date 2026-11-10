@@ -139,3 +139,11 @@ button.rail-gh:hover { color: var(--hi); }
 .acct-page > .poph { padding-left: 0; padding-right: 0; font-size: 0; }
 .acct-page > .poph span { font-size: 13px; }
 .acct-page .acct-row, .acct-page .acct-foot { padding-left: 0; padding-right: 0; }
+
+/* Allow IP as a page: the buttons sit under the text at the left, not at the far edge of a wide window */
+.allow-page .ip-foot { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 10px; }
+.allow-page .ip-foot span { flex: 0 0 100%; }
+.allow-page .ip-row { grid-template-columns: 130px 160px auto; justify-content: start; }
+.allow-page .ip-row .w { text-align: left; }
+.allow-page .poph { font-size: 0; }
+.allow-page .poph span { font-size: 13px; }
