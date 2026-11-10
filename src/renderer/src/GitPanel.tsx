@@ -48,7 +48,7 @@ export function GitPanel({ onClose, onDiff, focus }: { onClose?: () => void; onD
               <table className="dtable gtable">
                 <thead><tr><th>Repo</th><th>Branch</th><th>Changes</th><th>Upstream</th></tr></thead>
                 <tbody>{rows.map((r) => (
-                  <tr data-testid="git-repo" data-name={r.name} key={r.dir} className="grow" onClick={() => setSel(r)} title={r.dir}>
+                  <tr data-testid="git-repo" data-name={r.name} key={r.dir} className="grow" tabIndex={0} onClick={() => setSel(r)} onKeyDown={(e) => { if (e.key === 'Enter') setSel(r) }} title={r.dir}>
                     <td>{r.name}{r.worktree && <span className="gtag">worktree</span>}</td>
                     <td>{r.error ? <span className="pr bad">{r.error}</span> : r.branch ?? <span className="pr warn">detached</span>}</td>
                     <td className={r.changes ? 'pr warn' : 'dd'}>{r.error ? '' : r.changes || '-'}</td>
@@ -153,7 +153,7 @@ function RepoDetail({ row, onDiff }: { row: GitRow; onDiff: (s: DiffSpec) => voi
         {!log.length && <div className="dnote">No commits yet.</div>}
         <table className="dtable glog">
           <tbody>{log.map((c) => (
-            <tr key={c.sha} className="grow" onClick={() => onDiff({ t: 'commit', dir, repo: row.name, sha: c.sha, title: c.title })} title={c.sha}>
+            <tr key={c.sha} className="grow" tabIndex={0} onClick={() => onDiff({ t: 'commit', dir, repo: row.name, sha: c.sha, title: c.title })} onKeyDown={(e) => { if (e.key === 'Enter') onDiff({ t: 'commit', dir, repo: row.name, sha: c.sha, title: c.title }) }} title={c.sha}>
               <td className="gsha">{c.short}</td><td className="gtitle">{c.title}</td><td className="dd">{c.author}</td><td className="dd">{relativeTime(c.at, Date.now())}</td>
             </tr>
           ))}</tbody>

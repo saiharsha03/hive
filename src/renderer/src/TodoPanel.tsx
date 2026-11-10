@@ -82,7 +82,7 @@ export function TodoPanel({ todos, today, error, reload, onClose, onTalk }: Prop
     void run(() => window.api.restoreTodo(undo.todo, undo.index))
   }
 
-  // Up/Down move, Space ticks, Delete removes; typing in a box or a picker keeps its own keys
+  // Up/Down move, Space ticks, Enter or F2 edits, Delete removes; typing in a box or a picker keeps its own keys
   const onKey = (e: React.KeyboardEvent) => {
     const el = e.target as HTMLElement
     if (el.tagName === 'SELECT' || (el.tagName === 'INPUT' && (el as HTMLInputElement).type !== 'checkbox')) return
@@ -96,6 +96,7 @@ export function TodoPanel({ todos, today, error, reload, onClose, onTalk }: Prop
     if (el !== e.currentTarget || i < 0) return
     if (e.key === ' ') { e.preventDefault(); void toggleDone(visible[i]) }
     if (e.key === 'Delete') { e.preventDefault(); remove(visible[i]) }
+    if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); startEdit(visible[i]) }
   }
   useEffect(() => { listRef.current?.querySelector('.td.cur')?.scrollIntoView({ block: 'nearest' }) }, [cur])
 
