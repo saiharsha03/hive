@@ -414,6 +414,40 @@ await page.mouse.move(700, 880)
 if (await tid('drawer').isVisible().catch(() => false)) await tid('drawer-close').click()
 await shot('A-main')
 
+// CALM=<folder>: the calm pass only: the same main view in each UI font, in the light theme, and the editor
+if (process.env.CALM) {
+  const C = resolve(process.env.CALM)
+  mkdirSync(C, { recursive: true })
+  const calm = async (name) => { await page.mouse.move(700, 892); await page.waitForTimeout(700); await page.screenshot({ path: join(C, `${name}.png`) }); console.log('calm', name) }
+  const run = async (label) => { await page.keyboard.press('Control+KeyK'); await page.keyboard.type(label); await page.waitForTimeout(250); await page.keyboard.press('Enter'); await page.waitForTimeout(400) }
+  await calm('calm-inter')
+  for (const [label, name] of [['UI font: Segoe UI Variable', 'calm-segoe'], ['UI font: IBM Plex Sans', 'calm-plex'], ['UI font: Geist', 'calm-geist']]) { await run(label); await calm(name) }
+  await run('UI font: Inter')
+  await run('Theme: Light')
+  await calm('calm-inter-light')
+  await run('Theme: Dark')
+  // the editor beside its thread (the deploy thread goes back into the first pane), Files in the inspector
+  await page.locator('[data-testid="tab"][data-id="t-ship"]').dragTo(page.locator('[data-testid="tab"][data-id="t-invoice"]')).catch(() => {})
+  await page.waitForTimeout(300)
+  await page.locator('[data-testid="tab"][data-id="t-invoice"]').click()
+  await tid('insp-files').click()
+  await page.waitForTimeout(600)
+  await page.getByText('billing', { exact: true }).first().click().catch(() => {})
+  await page.waitForTimeout(400)
+  await page.getByText('invoice.py', { exact: true }).first().click().catch(() => {})
+  await page.waitForTimeout(1500)
+  const ft = page.locator('[data-testid="tab"][data-id$="invoice.py"]').first()
+  const pb = await page.locator('[data-testid="chat-pane"]').first().boundingBox()
+  if (pb) await ft.dragTo(page.locator('[data-testid="chat-pane"]').first(), { targetPosition: { x: pb.width - 40, y: pb.height / 2 } }).catch(() => {})
+  await page.waitForTimeout(400)
+  await page.locator('[data-testid="tab"][data-id="t-invoice"]').click()
+  await page.locator('[data-testid="tab"][data-id$="invoice.py"]').first().click()
+  await page.waitForTimeout(2500)
+  await calm('calm-editor')
+  await app.close()
+  process.exit(0)
+}
+
 // a streaming reply changes its own pane only: count DOM changes in the other regions while 60 chunks arrive
 await tid('insp-files').click()
 await page.waitForTimeout(800)

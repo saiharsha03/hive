@@ -319,6 +319,6 @@ button.rail-gh:hover { color: var(--hi); }
 .item .i3 { display: none; }
 .item:hover .i3, .item:focus-within .i3, .item.open .i3 { display: flex; }
 .isec.fold { width: 100%; background: none; border: 0; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; text-align: left; border-top: 1px solid var(--rule); }
-.isec.fold::before { content: '+ '; color: var(--faint); }
-.isec.fold[aria-expanded="true"]::before { content: '- '; }
+.isec.fold span:first-child::before { content: '+ '; color: var(--faint); }
+.isec.fold[aria-expanded="true"] span:first-child::before { content: '- '; }
 .isec.fold:hover { color: var(--hi); }

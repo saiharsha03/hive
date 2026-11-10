@@ -138,8 +138,11 @@
 .qn { font: 11px/22px var(--mono); color: var(--dim); }
 .qt { overflow-wrap: anywhere; }
 .qa { display: flex; gap: 12px; }
-.qi .qa .btn-link:first-child { opacity: 0; }
-.qi:hover .qa .btn-link:first-child, .qi:focus-within .qa .btn-link:first-child { opacity: 1; }
+.qi .qa { visibility: hidden; }
+.qi:hover .qa, .qi:focus-within .qa { visibility: visible; }
+.qi { grid-template-columns: 18px minmax(0, 1fr) auto; }
+/* one primary button on screen: the focused pane's; a disabled one is not blue either */
+.session:not(.focused) .btn-primary, .btn-primary:disabled, .askfoot button.primary:disabled { background: transparent; color: var(--hi); box-shadow: inset 0 0 0 1px var(--rule2); }
 .qa .btn-link { font-size: 11.5px; }
 
 /* composer */
