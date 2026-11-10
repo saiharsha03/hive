@@ -27,6 +27,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- a notification's button (a question's choice, Stop): pressed while the app may be locked or closed -->
+        <receiver android:name=".NoteAction" android:exported="false" />
         <service android:name=".Push" android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
