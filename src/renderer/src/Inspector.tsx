@@ -55,9 +55,9 @@ export const Inspector = memo(function Inspector() {
   return (
     <aside className="insp" data-testid="inspector" aria-label="Inspector">
       <div className="itabs" role="tablist">
-        {(['activity', 'changes', 'gate'] as ITab[]).map((t) => (
+        {(['activity', 'changes', 'rewind', 'gate'] as ITab[]).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`itab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)} data-testid={`insp-${t}`}>
-            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : 'PR gate'}
+            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : t === 'rewind' ? 'Rewind' : 'PR gate'}
             {t === 'activity' && running > 0 && <span className="n">{running}</span>}
           </button>
         ))}
@@ -65,6 +65,7 @@ export const Inspector = memo(function Inspector() {
       <div className="ibody">
         {tab === 'activity' && <>{s && <MiniStatus s={s} />}<Activity s={s} /></>}
         {tab === 'changes' && (s ? <Changes id={s.id} /> : <div className="iempty">Open a thread to see its changes.</div>)}
+        {tab === 'rewind' && (s ? <RewindView s={s} /> : <div className="iempty">Open a thread to rewind it.</div>)}
         {tab === 'gate' && (s ? <GateView s={s} /> : <div className="iempty">Open a thread to see its PR gate.</div>)}
       </div>
     </aside>
@@ -72,7 +73,13 @@ export const Inspector = memo(function Inspector() {
 })
 
 // ---- Activity ----
-function TaskItem({ t, tabId, thread, busy, elsewhere }: { t: Task; tabId: string; thread?: string; busy: boolean; elsewhere?: boolean }) {
+// What a subagent, workflow or Codex run was started with, read from the tool call that started it.
+type TaskDetail = { type: string; model: string; prompt: string }
+const kindName = (t: Task) => (t.kind === 'codex' ? 'Codex' : /workflow/.test(t.kind) ? 'Workflow' : /bash|shell/.test(t.kind) ? 'Shell' : /monitor/.test(t.kind) ? 'Monitor' : /agent/.test(t.kind) ? 'Subagent' : t.kind)
+
+// One piece of background work, folded to a line: its kind and name. Open, it says which model runs it, what it is
+// doing now, what it was asked (the prompt), and how much it has used; Stop and Message are there too.
+function TaskItem({ t, tabId, thread, busy, elsewhere, detail }: { t: Task; tabId: string; thread?: string; busy: boolean; elsewhere?: boolean; detail?: TaskDetail }) {
   const [msg, setMsg] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const now = Date.now()
@@ -84,19 +91,35 @@ function TaskItem({ t, tabId, thread, busy, elsewhere }: { t: Task; tabId: strin
     send(tabId, `[To subagent "${t.name ? `${t.name}: ` : ''}${t.title}" (task ${t.id})] ${v}`, [], busy ? 'steer' : undefined)
     setMsg(null)
   }
+  const type = [kindName(t), detail?.type || (t.kind !== 'codex' ? t.name : '')].filter(Boolean).join(', ')
+  const model = detail?.model || (t.kind === 'codex' ? t.name : '') || ''
+  const used = [t.tokens ? `${fmtTokens(t.tokens)} tokens` : '', t.toolUses ? `${t.toolUses} tool calls` : '', t.durationMs ? dur(t.durationMs) : ''].filter(Boolean).join(', ')
   return (
-    <div className={`item${open ? ' open' : ''}${t.status === 'failed' ? ' failed' : ''}`} tabIndex={0} data-testid="activity-item">
+    <div className={`item tk st-${t.status}${open ? ' open' : ''}${t.status === 'failed' ? ' failed' : ''}`} data-testid="activity-item">
       <div className="tm">{t.status === 'running' ? dur(now - t.startedAt) : clock(t.endedAt ?? t.startedAt)}</div>
       <div>
-        <div className="nm" title={taskHeading(t)}>{elsewhere ? `${taskHeading(t)}${t.status === 'failed' ? ' failed' : ''} in ${thread}` : taskHeading(t)}</div>
-        {last && <div className="ds" title={last}>{last}</div>}
-        {open && (t.agents.length > 0 || t.error) && <div className="ds">{[t.error, ...t.agents.map((a) => `${a.label}: ${a.state}${a.result ? `, ${a.result}` : ''}`)].filter(Boolean).join('\n')}</div>}
+        <button className="tk-head" onClick={() => (elsewhere ? activate(tabId) : setOpen(!open))} aria-expanded={open} title={taskHeading(t)} data-testid="task-toggle">
+          {!elsewhere && <i className={`codicon codicon-chevron-${open ? 'down' : 'right'}`} aria-hidden />}
+          <span className="nm">{elsewhere ? `${taskHeading(t)}${t.status === 'failed' ? ' failed' : ''} in ${thread}` : taskHeading(t)}</span>
+        </button>
+        {!open && last && <div className="ds" title={last}>{last}</div>}
+        {open && (
+          <div className="tk-body" data-testid="task-detail">
+            <div className="tk-row"><i>Type</i><span>{type}</span></div>
+            <div className="tk-row"><i>Model</i><span>{model ? modelLabel(model) : "the thread's model"}</span></div>
+            <div className="tk-row"><i>Now</i><span>{t.status === 'running' ? (t.now || t.lastTool || 'working') : t.status}</span></div>
+            {used && <div className="tk-row"><i>Used</i><span>{used}</span></div>}
+            {(t.error || t.summary) && <div className="tk-row"><i>{t.error ? 'Error' : 'Result'}</i><span>{t.error || t.summary}</span></div>}
+            {t.agents.length > 0 && <div className="tk-row"><i>Agents</i><span>{t.agents.map((a) => `${a.label}: ${a.state}${a.result ? `, ${a.result}` : ''}`).join('\n')}</span></div>}
+            <div className="tk-row tk-prompt"><i>Prompt</i><pre>{detail?.prompt || t.title}</pre></div>
+          </div>
+        )}
         {msg !== null && (
           <div className="ac"><input className="uline" style={{ flex: 1 }} autoFocus value={msg} placeholder="Message this subagent (Claude passes it on)" onChange={(e) => setMsg(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go() } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMsg(null) } }} data-testid={`agent-chat-${t.id}`} /></div>
         )}
         <div className="ac">
-          <Btn kind="link" onClick={() => (elsewhere ? activate(tabId) : setOpen(!open))}>{elsewhere ? 'Open' : open ? 'Less' : 'Output'}</Btn>
+          {elsewhere && <Btn kind="link" onClick={() => activate(tabId)}>Open</Btn>}
           {t.status === 'running' && <Btn kind="link" onClick={() => void window.api.chatStopTask(tabId, t.id)} testid={`task-stop-${t.id}`}>Stop</Btn>}
           {t.status === 'running' && isAgent && msg === null && <Btn kind="link" onClick={() => setMsg('')}>Message</Btn>}
           {elsewhere && t.status === 'failed' && <Btn kind="link" onClick={() => send(tabId, `Retry the task that failed: ${t.title}`, [], busy ? 'queue' : undefined)}>Retry</Btn>}
@@ -140,15 +163,38 @@ function Activity({ s }: { s?: SessionMeta }) {
   if (st?.nextWake) wakeups.push({ what: 'Claude wakes this thread', how: 'wake-up', at: clock(st.nextWake) })
   for (const w of wakes?.wakeups ?? []) if (s?.sessionId && w.sessionId === s.sessionId) wakeups.push({ what: w.prompt, how: 'wake-up', at: clock(Date.parse(w.wakeAt)) })
   for (const c of wakes?.continues ?? []) if (s && (c.tabId === s.id || c.key === s.sessionId)) wakeups.push({ what: 'Continues after the usage limit resets', how: 'automatic continue', at: clock(c.at) })
+  const detailOf = (t: Task): TaskDetail | undefined => {
+    for (const it of session?.items ?? []) {
+      if (it.kind === 'tool' && t.toolUseId && it.id === t.toolUseId) return { type: String(it.input?.subagent_type ?? it.input?.name ?? ''), model: String(it.input?.model ?? ''), prompt: String(it.input?.prompt ?? it.input?.command ?? it.input?.description ?? '') }
+      if (it.kind === 'codex' && t.kind === 'codex' && (it.task === t.title || t.id === `codex:${it.id}`)) return { type: it.allowEdits ? 'can edit files' : 'read only', model: it.model, prompt: it.task }
+    }
+    return undefined
+  }
   // what runs now, by kind: each has its own heading, with its count, whether or not anything is in it
   const isShell = (t: Task) => /bash|shell/.test(t.kind)
   const isMonitor = (t: Task) => /monitor/.test(t.kind)
   const shells = runningHere.filter(isShell)
   const monitors = runningHere.filter(isMonitor)
-  const agents = runningHere.filter((t) => !isShell(t) && !isMonitor(t))
-  // the last things you said in this thread, newest first: each is a point to rewind to
-  const points = useMemo(() => (session?.items ?? []).flatMap((it) => (it.kind === 'user' && it.uuid ? [{ uuid: it.uuid, text: it.text.replace(/\s+/g, ' ').trim() }] : [])).slice(-5).reverse(), [session?.items])
-  const sec = (label: string, n: number) => <div className="isec isec-k"><span>{label}</span><span className="n">{n}</span></div>
+  // a review: a Codex run, or a subagent asked to review, audit or scan (its name, title or prompt says so)
+  const isReview = (t: Task) => {
+    if (isShell(t) || isMonitor(t)) return false
+    const d = detailOf(t)
+    return t.kind === 'codex' || /\b(review|reviewer|audit|security[- ]scan|verify|verdict)\b/i.test(`${t.name ?? ''} ${t.title} ${d?.type ?? ''} ${(d?.prompt ?? '').slice(0, 400)}`)
+  }
+  const reviews = runningHere.filter(isReview)
+  const reviewsDone = finishedHere.filter(isReview).slice(0, 4)
+  const agents = runningHere.filter((t) => !isShell(t) && !isMonitor(t) && !isReview(t))
+  // Claude asked its advisor and the answer has not come back yet
+  const advising = (session?.items ?? []).some((it) => it.kind === 'tool' && it.name === 'advisor' && it.status === 'running')
+  const advisorModel = st?.advisor ? modelLabel(st.advisor) : ''
+  // what the thread is held up by right now, said in one line with a moving bar
+  const waitingOn: { tone: string; text: string } | null = !s ? null
+    : advising ? { tone: 'advisor', text: `Asking the advisor${advisorModel ? ` (${advisorModel})` : ''}` }
+      : reviews.length ? { tone: 'review', text: `${s.busy ? 'Waiting on' : 'Running'} ${reviews.length === 1 ? `a review: ${taskHeading(reviews[0])}` : `${reviews.length} reviews`}` }
+        : agents.length ? { tone: 'agent', text: `${s.busy ? 'Waiting on' : 'Running'} ${agents.length === 1 ? `a subagent: ${taskHeading(agents[0])}` : `${agents.length} subagents`}` }
+          : shells.length ? { tone: 'shell', text: `${shells.length === 1 ? 'A shell command is' : `${shells.length} shell commands are`} running in the background` }
+            : s.busy ? { tone: 'work', text: 'Claude is working' } : null
+  const sec = (label: string, n: number, tone = '') => <div className={`isec isec-k${n > 0 ? ` on k-${tone}` : ''}`}><span>{label}</span><span className="n">{n}</span></div>
   const due = (x: Due, i: number) => (
     <div key={i} className="item" tabIndex={0}><div className="tm">{x.at}</div>
       <div><div className="nm" title={x.what}>{x.what}</div><div className="ds">{x.how}</div>
@@ -163,27 +209,26 @@ function Activity({ s }: { s?: SessionMeta }) {
     <div data-testid="inspector-activity">
       {!s && <div className="iempty" style={{ paddingTop: 16 }}>No thread on screen.</div>}
       {s && <>
-        {sec('Subagents', agents.length)}
-        {agents.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
-        {sec('Shells', shells.length)}
-        {shells.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
-        {sec('Monitors', monitors.length)}
-        {monitors.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
-        {sec('Wake-ups', wakeups.length)}
+        {waitingOn && <div className={`waiting w-${waitingOn.tone}`} data-testid="insp-waiting"><span>{waitingOn.text}</span><i aria-hidden /></div>}
+        {sec('Reviews', reviews.length, 'review')}
+        {reviews.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {reviewsDone.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {advising && <div className="item"><div className="tm" /><div><div className="nm">Advisor{advisorModel ? `, ${advisorModel}` : ''}</div><div className="ds">Reading the conversation to advise Claude</div></div></div>}
+        {sec('Subagents', agents.length, 'agent')}
+        {agents.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {sec('Shells', shells.length, 'shell')}
+        {shells.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {sec('Monitors', monitors.length, 'monitor')}
+        {monitors.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {sec('Wake-ups', wakeups.length, 'wake')}
         {wakeups.map(due)}
-        {sec('Loops', loops.length)}
+        {sec('Loops', loops.length, 'loop')}
         {loops.map(due)}
-        {sec('Rewind', points.length)}
-        {points.map((p) => (
-          <div key={p.uuid} className="item" tabIndex={0}><div className="tm" />
-            <div><div className="nm" title={p.text}>{p.text || 'A message with only attachments'}</div>
-              <div className="ac"><Btn kind="link" onClick={() => window.dispatchEvent(new CustomEvent('hive:rewind', { detail: { tab: s.id, uuid: p.uuid } }))} testid="insp-rewind" title="Go back to before this message: put back the files Claude changed since, and edit the message">Rewind to before this</Btn></div></div></div>
-        ))}
       </>}
       {earlier > 0 && s && <>
         <div className="irule" />
         <div className="isec" data-testid="insp-finished"><span>Earlier in this thread</span></div>
-        {finishedHere.slice(0, 6).map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} />)}
+        {finishedHere.filter((t) => !isReview(t)).slice(0, 6).map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
         {edits.map((e) => (
           <div key={e.id} className="item" tabIndex={0}><div className="tm" />
             <div><div className="nm" title={e.label}>Edited {e.label}</div><div className="ds"><span className="add-t">+{e.c.add}</span> <span className="del-t">{'\u2212'}{e.c.del}</span></div>
@@ -232,6 +277,23 @@ function GateView({ s }: { s: SessionMeta }) {
           <span className="gate-t">{i.title || 'Not in the checklist'}{open === i.id && <span className="gate-ev">{i.evidence || 'Not checked for this commit yet.'}</span>}</span>
           <span className={`gate-s ${i.state ? `gate-${i.state.toLowerCase()}` : 'gate-wait'}`}>{i.state ? (i.state === 'NA' ? 'n/a' : i.state === 'FIXED' ? 'fixed' : 'pass') : 'to do'}</span>
         </button>
+      ))}
+    </div>
+  )
+}
+
+// ---- Rewind: everything you said in this thread, newest first; each is a point to go back to ----
+function RewindView({ s }: { s: SessionMeta }) {
+  const session = useThreadSlice(s.id)
+  const points = useMemo(() => (session?.items ?? []).flatMap((it) => (it.kind === 'user' && it.uuid ? [{ uuid: it.uuid, text: it.text.replace(/\s+/g, ' ').trim(), at: it.at }] : [])).reverse(), [session?.items])
+  if (!points.length) return <div className="iempty" style={{ paddingTop: 16 }}>Nothing to rewind to yet. Each message you send becomes a point to go back to.</div>
+  return (
+    <div data-testid="inspector-rewind">
+      <div className="gate-note" style={{ paddingTop: 14 }}>Go back to before one of your messages: the files Claude changed since are put back, and the message is ready to edit.</div>
+      {points.map((p) => (
+        <div key={p.uuid} className="item" tabIndex={0}><div className="tm">{p.at ? clock(p.at) : ''}</div>
+          <div><div className="nm rw" title={p.text}>{p.text || 'A message with only attachments'}</div>
+            <div className="ac"><Btn kind="link" disabled={s.busy} onClick={() => window.dispatchEvent(new CustomEvent('hive:rewind', { detail: { tab: s.id, uuid: p.uuid } }))} testid="insp-rewind" title={s.busy ? 'Stop Claude first: a thread that is working cannot be rewound' : 'Go back to before this message'}>Rewind to before this</Btn></div></div></div>
       ))}
     </div>
   )

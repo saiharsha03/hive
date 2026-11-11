@@ -211,7 +211,6 @@ interface Window {
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
     allowForget: (address: string) => Promise<import('../../shared/allowCore').AllowStatus>
     allowMark: () => Promise<import('../../shared/allowCore').AllowStatus>
-    appQuit: () => Promise<void>
     versionsGet: () => Promise<import('../../main/versions').Versions>
     versionsCheck: () => Promise<import('../../main/versions').Versions>
     onVersions: (cb: (v: import('../../main/versions').Versions) => void) => () => void

@@ -292,3 +292,38 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 
 /* when Claude wrote a reply, small under it */
 .conv .msg.cl .msg-at { display: block; margin-top: 4px; font: 400 11.5px/1.4 var(--sans); color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* ---------- Activity: colour by kind, a line for what the thread is held up by, tasks that open ---------- */
+.app { --k-review: #CE9178; --k-agent: var(--work); --k-shell: #D7BA7D; --k-monitor: #4EC9B0; --k-wake: var(--signal); --k-loop: #9CDCFE; --k-advisor: #DCDCAA; }
+.insp .isec.isec-k.on { color: var(--hi); }
+.insp .isec.isec-k.on .n { font-weight: 600; }
+.insp .isec.isec-k.on.k-review, .insp .isec.isec-k.on.k-review .n { color: var(--k-review); }
+.insp .isec.isec-k.on.k-agent, .insp .isec.isec-k.on.k-agent .n { color: var(--k-agent); }
+.insp .isec.isec-k.on.k-shell, .insp .isec.isec-k.on.k-shell .n { color: var(--k-shell); }
+.insp .isec.isec-k.on.k-monitor, .insp .isec.isec-k.on.k-monitor .n { color: var(--k-monitor); }
+.insp .isec.isec-k.on.k-wake, .insp .isec.isec-k.on.k-wake .n { color: var(--k-wake); }
+.insp .isec.isec-k.on.k-loop, .insp .isec.isec-k.on.k-loop .n { color: var(--k-loop); }
+
+/* what the thread is waiting on: one line, and a bar that moves while it waits */
+.waiting { margin: 12px 22px 2px; padding: 9px 12px 11px; position: relative; overflow: hidden; background: color-mix(in srgb, var(--w) 12%, var(--side)); border-left: 3px solid var(--w); font: 600 12.5px/1.4 var(--sans); color: var(--hi); border-radius: 4px !important; }
+.waiting span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waiting i { position: absolute; left: 0; bottom: 0; width: 30%; height: 2px; background: var(--w); animation: waiting-run 1.5s ease-in-out infinite alternate; }
+@keyframes waiting-run { from { transform: translateX(0); } to { transform: translateX(234%); } }
+.waiting.w-review { --w: var(--k-review); } .waiting.w-agent { --w: var(--k-agent); } .waiting.w-shell { --w: var(--k-shell); } .waiting.w-advisor { --w: var(--k-advisor); } .waiting.w-work { --w: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .waiting i { animation: none; width: 100%; } }
+
+/* a task row: a heading that opens, its state on the time, its details in rows */
+.insp .item.tk .tk-head { display: flex; align-items: center; gap: 4px; width: 100%; padding: 0; background: none; border: 0; color: var(--hi); font: inherit; text-align: left; cursor: pointer; }
+.insp .item.tk .tk-head .codicon { font-size: 13px; color: var(--dim); flex: none; }
+.insp .item.tk .tk-head .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insp .item.tk.open .tk-head .nm { white-space: normal; }
+.insp .item.tk.st-running .tm { color: var(--work); font-weight: 600; }
+.insp .item.tk.st-completed .tm { color: var(--git-added); }
+.insp .item.tk.st-failed .tm, .insp .item.tk.st-failed .tk-head { color: var(--fail); }
+.insp .item.tk.st-stopped .tm { color: var(--dim); }
+.tk-body { margin: 6px 0 4px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 4px !important; display: flex; flex-direction: column; gap: 5px; }
+.tk-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; font-size: 12px; align-items: baseline; }
+.tk-row i { font-style: normal; color: var(--dim); }
+.tk-row span { color: var(--ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+.tk-row pre { margin: 0; font: 12px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; user-select: text; }
+.insp .item .nm.rw { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

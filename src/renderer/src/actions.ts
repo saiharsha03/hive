@@ -75,7 +75,7 @@ export function showDiffBeside(d: DiffSpec | null) {
 }
 
 // ---- inspector: which tab it shows (Activity, Changes, Files, Status) ----
-export type InspectorTab = 'activity' | 'changes' | 'files' | 'status' | 'gate'
+export type InspectorTab = 'activity' | 'changes' | 'files' | 'status' | 'gate' | 'rewind'
 export const inspectorTab = createStore<InspectorTab>('activity')
 export function showInspector(t: InspectorTab) { inspectorTab.set(t); setLayout({ inspector: true, focus: false }) }
 

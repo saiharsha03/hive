@@ -655,8 +655,6 @@ handle('engine:latest', () => latestEngine())
 handle('engine:update', () => updateEngine())
 // the installed Claude Code and the SDK: their versions, what is newest, and (check) a read now that installs what is newer
 handle('versions:get', () => versions())
-// Quit from the window (the palette): never only from the tray
-handle('app:quit', () => { quitting = true; app.quit() })
 // the PR gate for a thread's checkout: the checklist and what the review marker says for the commit at HEAD
 handle('gate:read', (_e, dir: unknown) => readGate(String(dir ?? '')))
 handle('versions:check', () => checkVersions())
