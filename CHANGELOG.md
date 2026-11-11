@@ -4,6 +4,25 @@ All notable changes to Hive are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-11-10
+
+### Added
+
+- **Activity**: Reviews as their own section (Codex runs and subagents asked to review), one line for what the thread is
+  waiting on (a review, subagents, the advisor), colour by kind, and each task opens to its type, model, prompt and
+  current step. **Rewind** is its own tab.
+- The time Claude wrote a reply shows under it.
+- Quit Hive is in the palette.
+
+### Fixed
+
+- Interrupt and Stop no longer wait for a long shell command: after a few seconds the command is ended (Windows).
+- The tray icon is drawn from the .ico.
+
+### Changed
+
+- The signed phone app is built and attached to a release by CI.
+
 ## [1.1.1] - 2026-11-10
 
 ### Changed
