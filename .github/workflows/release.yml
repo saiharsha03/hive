@@ -76,3 +76,53 @@ jobs:
             dist/*.exe
             dist/*.exe.blockmap
             dist/latest.yml
+
+  # The phone app, signed with the release key and attached to the same release. The key, its password and the
+  # Firebase file are repository secrets (never in the repo); without them this job is skipped and the release is the
+  # desktop builds alone.
+  android:
+    needs: windows
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      HAS_KEY: ${{ secrets.HIVE_KEYSTORE_B64 != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_KEY == 'true'
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        if: env.HAS_KEY == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        if: env.HAS_KEY == 'true'
+
+      - name: Build the signed app
+        if: env.HAS_KEY == 'true'
+        working-directory: mobile
+        env:
+          KEYSTORE_B64: ${{ secrets.HIVE_KEYSTORE_B64 }}
+          SERVICES_B64: ${{ secrets.HIVE_GOOGLE_SERVICES_B64 }}
+          HIVE_KEYSTORE_PASSWORD: ${{ secrets.HIVE_KEYSTORE_PASSWORD }}
+          HIVE_KEY_ALIAS: hive
+        run: |
+          mkdir -p "$RUNNER_TEMP/hive-secrets"
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hive-secrets/hive-release.jks"
+          echo "$SERVICES_B64" | base64 -d > "$RUNNER_TEMP/hive-secrets/google-services.json"
+          export HIVE_KEYSTORE="$RUNNER_TEMP/hive-secrets/hive-release.jks" HIVE_FIREBASE_DIR="$RUNNER_TEMP/hive-secrets"
+          chmod +x gradlew
+          ./gradlew --no-daemon -q testDebugUnitTest assembleRelease
+          name=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | cut -d'"' -f2)
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/Hive-Phone-$name.apk"
+          rm -rf "$RUNNER_TEMP/hive-secrets" app/google-services.json
+          echo "APK=$RUNNER_TEMP/Hive-Phone-$name.apk" >> "$GITHUB_ENV"
+
+      - name: Attach it to the release
+        if: env.HAS_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
