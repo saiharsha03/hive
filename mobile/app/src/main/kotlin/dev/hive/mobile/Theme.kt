@@ -54,13 +54,9 @@ object C {
     val hold = Color(0xFFC9A86A)
 }
 
-val Sans = FontFamily(
-    Font(R.font.space_grotesk_regular, FontWeight.Normal),
-    Font(R.font.space_grotesk_medium, FontWeight.Medium),
-    Font(R.font.space_grotesk_bold, FontWeight.SemiBold),
-    Font(R.font.space_grotesk_bold, FontWeight.Bold),
-)
-val Mono = FontFamily(Font(R.font.space_mono_regular, FontWeight.Normal), Font(R.font.space_mono_bold, FontWeight.Bold))
+// the phone's own faces (Roboto and its mono), as the system draws them: no bundled display face
+val Sans = FontFamily.SansSerif
+val Mono = FontFamily.Monospace
 
 object T {
     val page = TextStyle(fontFamily = Sans, fontWeight = FontWeight.Bold, fontSize = 21.sp, lineHeight = 26.sp, color = C.hi)

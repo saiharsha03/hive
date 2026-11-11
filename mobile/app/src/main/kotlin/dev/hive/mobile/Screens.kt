@@ -204,11 +204,13 @@ fun ThreadScreen(
     onStop: () -> Unit = {}, onStopTask: (Task) -> Unit = {}, onAnswer: (Ask, JSONObject) -> Unit = { _, _ -> }, onMic: () -> Unit = {},
     settings: ThreadSettings? = null, settingsOpen: String = "", onSettingsOpen: (String) -> Unit = {}, onSetting: (String, String) -> Unit = { _, _ -> },
     onQueue: (() -> Unit)? = null, onInterrupt: (() -> Unit)? = null,
+    more: ThreadMore? = null, morePane: String = "", now: Long = 0, rewinding: String = "", onMorePane: (String) -> Unit = {}, onRewind: (Point) -> Unit = {},
 ) {
     Column(Modifier.fillMaxSize()) {
         Head(v.title.ifEmpty { if (loaded) "Thread" else "Opening" }, sub = true, onBack = onBack, right = if (v.working) "Stop" else "", rightColor = C.fail, onRight = onStop)
         Notice(notice)
         Notice(error)
+        if (more != null) ThreadMoreBar(more, morePane, now, online, rewinding, onMorePane, onRewind)
         if (leaving) ConfirmBar("Leave without sending?", "What you typed has not been sent. It is kept as a draft in this thread.", "Leave", cancel = "Stay", onCancel = onStay, onConfirm = onLeave)
         // the thread's running subagents, shells, workflows and Codex runs with their live line; Stop ends one
         if (v.tasks.isNotEmpty()) {
@@ -497,7 +499,7 @@ fun NewThreadScreen(
 // syncs: Hive on the computer keeps the same quiet hours. unpair: the question is open.
 @Composable
 fun SettingsScreen(
-    quiet: Quiet, buttons: Boolean, relay: String, linkWord: String, clock: String, syncs: Boolean = false, unpair: Boolean = false, online: Boolean = true, notice: String = "", version: String = "",
+    quiet: Quiet, buttons: Boolean, relay: String, linkWord: String, clock: String, syncs: Boolean = false, unpair: Boolean = false, online: Boolean = true, notice: String = "", version: String = "", computer: String = "",
     onBack: () -> Unit = {}, onQuiet: (Boolean) -> Unit = {}, onFrom: () -> Unit = {}, onTo: () -> Unit = {}, onButtons: (Boolean) -> Unit = {},
     onAskUnpair: () -> Unit = {}, onCancelUnpair: () -> Unit = {}, onUnpair: () -> Unit = {},
 ) {
@@ -515,6 +517,7 @@ fun SettingsScreen(
             "Unpair", danger = true, onCancel = onCancelUnpair, onConfirm = onUnpair)
         else SettingRow("Unpair this phone", "", onClick = onAskUnpair)
         if (version.isNotEmpty()) Text("Hive $version", Modifier.padding(horizontal = Pad, vertical = 12.dp), style = T.mono)
+        if (computer.isNotEmpty()) Text("On the computer: $computer", Modifier.padding(horizontal = Pad).padding(bottom = 12.dp), style = T.mono)
     }
 }
 

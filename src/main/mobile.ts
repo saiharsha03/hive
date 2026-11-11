@@ -55,7 +55,7 @@ type Deps = {
   // 3.0 app: a thread's model, effort and permission mode (read and set), a message that waits or interrupts, the
   // notes, the to-dos and the watchers
   settings?: (id: string) => Promise<PhoneThreadSettings>
-  setThread?: (id: string, what: 'mode' | 'model' | 'effort', value: string) => Promise<string>
+  setThread?: (id: string, what: 'mode' | 'model' | 'effort' | 'advisor', value: string) => Promise<string>
   sendHow?: (id: string, text: string, how: 'queue' | 'interrupt') => Promise<string>
   notes?: () => Promise<{ id: string; title: string; text: string; updated: number }[]>
   noteSave?: (id: string | null, text: string) => Promise<string>
@@ -64,6 +64,11 @@ type Deps = {
   todoDone?: (id: string, done: boolean) => Promise<string>
   watchers?: () => Promise<{ id: string; name: string; goal: string; enabled: boolean; status: string; note: string; lastRun: number | null; nextRun: number | null }[]>
   watcherRun?: (id: string) => Promise<string>
+  // 3.1: a thread's context, what it waits on, its work in detail (reviews apart), the points to rewind to, its PR gate,
+  // the advisor; rewinding; the versions of Claude Code and the SDK
+  threadMore?: (id: string) => Promise<unknown>
+  rewind?: (id: string, uuid: string) => Promise<string>
+  versions?: () => unknown
 }
 export type PhoneThreadSettings = { live: boolean; mode: string; model: string; effort: string; modes: { value: string; label: string }[]; models: { value: string; label: string }[]; efforts: string[] }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
@@ -287,7 +292,7 @@ let staleSaid = 0
 
 // ---- what the 2.0 app asks for, from the optional deps or from the ones every Hive has ----
 // which optional requests this Hive answers; the app hides the screens and buttons for the others
-const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.settings && d.setThread ? ['threadSettings'] : []), ...(d.sendHow ? ['sendHow'] : []), ...(d.notes && d.noteSave ? ['notes'] : []), ...(d.todos ? ['todos'] : []), ...(d.watchers ? ['watchers'] : []), ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
+const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.settings && d.setThread ? ['threadSettings'] : []), ...(d.sendHow ? ['sendHow'] : []), ...(d.notes && d.noteSave ? ['notes'] : []), ...(d.todos ? ['todos'] : []), ...(d.watchers ? ['watchers'] : []), ...(d.threadMore ? ['threadMore'] : []), ...(d.rewind ? ['rewind'] : []), ...(d.versions ? ['versions'] : []), ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
 
 async function peekThread(d: Deps, id: string): Promise<PhonePeek | null> {
   if (d.peek) return d.peek(id)
@@ -431,7 +436,7 @@ async function onMessage(raw: string): Promise<void> {
       case 'threadSettings': return deps.settings ? reply({ settings: await deps.settings(id) }) : reply({ error: 'unknown request threadSettings' })
       case 'setThread': {
         const what = String(m.what ?? '')
-        if (!deps.setThread || (what !== 'mode' && what !== 'model' && what !== 'effort')) return reply({ error: 'unknown request setThread' })
+        if (!deps.setThread || (what !== 'mode' && what !== 'model' && what !== 'effort' && what !== 'advisor')) return reply({ error: 'unknown request setThread' })
         return reply({ ok: await deps.setThread(id, what, String(m.value ?? '')) })
       }
       case 'notes': return deps.notes ? reply({ notes: await deps.notes() }) : reply({ error: 'unknown request notes' })
@@ -452,6 +457,9 @@ async function onMessage(raw: string): Promise<void> {
       }
       case 'todoDone': return deps.todoDone ? reply({ ok: await deps.todoDone(id, m.done !== false) }) : reply({ error: 'unknown request todoDone' })
       case 'watchers': return deps.watchers ? reply({ watchers: await deps.watchers() }) : reply({ error: 'unknown request watchers' })
+      case 'threadMore': return deps.threadMore ? reply({ more: await deps.threadMore(id) }) : reply({ error: 'unknown request threadMore' })
+      case 'rewind': return deps.rewind ? reply({ ok: await deps.rewind(id, String(m.uuid ?? '')) }) : reply({ error: 'unknown request rewind' })
+      case 'versions': return deps.versions ? reply({ versions: deps.versions() }) : reply({ error: 'unknown request versions' })
       case 'watcherRun': return deps.watcherRun ? reply({ ok: await deps.watcherRun(id) }) : reply({ error: 'unknown request watcherRun' })
       case 'new': {
         const d = deps

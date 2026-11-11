@@ -18,7 +18,7 @@ import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
 import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
-import { registerStatusIpc, setEffort, setModel } from './liveStatus'
+import { registerStatusIpc, setAdvisor, setEffort, setModel } from './liveStatus'
 import { modeLabel } from '../shared/modeCore'
 import { threadStatusView } from './statusView'
 import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
@@ -286,13 +286,14 @@ const mobileDeps = () => ({
       modes: THREAD_MODES.map((m) => ({ value: m, label: modeLabel(m) })), models, efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
     }
   },
-  setThread: async (id: string, what: 'mode' | 'model' | 'effort', value: string) => {
+  setThread: async (id: string, what: 'mode' | 'model' | 'effort' | 'advisor', value: string) => {
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
     const w = mainWeb()
     if (!w) throw new Error(`The ${appName()} window is not open`)
     if (what === 'mode') { setThreadMode(l?.tabId ?? id, value, w); return 'set' }
     if (!l) throw new Error('Send this thread a message first: its model and effort can be changed once it is running')
     if (what === 'model') await setModel(l.tabId, liveQuery(l.tabId), value)
+    else if (what === 'advisor') await setAdvisor(l.tabId, liveQuery(l.tabId), value === 'off' ? '' : value)
     else await setEffort(l.tabId, liveQuery(l.tabId), value)
     return 'set'
   },
@@ -311,6 +312,56 @@ const mobileDeps = () => ({
   todoDone: async (id: string, done: boolean) => { await setDone(id, done); return done ? 'done' : 'open' },
   watchers: async () => (await listWatchersView()).watchers.map((x) => ({ id: x.id, name: x.name, goal: x.goal, enabled: x.enabled, status: String(x.status), note: x.message || x.waitingReason, lastRun: x.lastRun, nextRun: x.nextRun })),
   watcherRun: async (id: string) => { await runWatcherNow(id, 'sweep'); return 'started' },
+  // a thread in more detail, for the phone's thread screen
+  threadMore: async (id: string) => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    const saved = l ? undefined : (await listSessions()).find((x) => x.id === id)
+    const cwd = l?.cwd ?? saved?.cwd ?? ''
+    const sessionId = l?.sessionId ?? saved?.id ?? null
+    const path = sessionId && cwd ? transcriptPath(cwd, sessionId) : saved?.path
+    const items = path ? (await loadRecentHistory(path, 4_000_000, 400)).items : []
+    const tasks = l ? threadTasks(l.tabId) : []
+    const detail = (toolUseId?: string) => {
+      const it = items.find((x) => x.kind === 'tool' && x.id === toolUseId) as { input?: Record<string, unknown> } | undefined
+      return { type: String(it?.input?.subagent_type ?? ''), model: String(it?.input?.model ?? ''), prompt: String(it?.input?.prompt ?? it?.input?.command ?? it?.input?.description ?? '').slice(0, 4000) }
+    }
+    const isReview = (t: (typeof tasks)[number]) => !/bash|shell|monitor/.test(t.kind) && (t.kind === 'codex' || /\b(review|reviewer|audit|security[- ]scan|verify|verdict)\b/i.test(`${t.name ?? ''} ${t.title} ${detail(t.toolUseId).type} ${detail(t.toolUseId).prompt.slice(0, 400)}`))
+    const work = tasks.filter((t) => t.status === 'running').map((t) => ({
+      id: t.id, kind: t.kind === 'codex' ? 'Codex' : /workflow/.test(t.kind) ? 'Workflow' : /bash|shell/.test(t.kind) ? 'Shell' : /monitor/.test(t.kind) ? 'Monitor' : 'Subagent',
+      review: isReview(t), title: t.title, now: t.now || t.lastTool || '', startedAt: t.startedAt, tokens: t.tokens ?? 0, ...detail(t.toolUseId),
+    }))
+    const reviews = work.filter((w) => w.review), agents = work.filter((w) => !w.review && (w.kind === 'Subagent' || w.kind === 'Workflow'))
+    const advising = items.some((it) => it.kind === 'tool' && it.name === 'advisor' && it.status === 'running')
+    const facts = l ? threadFacts(l.tabId) : null
+    const waiting = advising ? `Asking the advisor${facts?.advisor ? ` (${facts.advisor})` : ''}`
+      : reviews.length ? `Waiting on ${reviews.length === 1 ? `a review: ${reviews[0].title}` : `${reviews.length} reviews`}`
+        : agents.length ? `Waiting on ${agents.length === 1 ? `a subagent: ${agents[0].title}` : `${agents.length} subagents`}`
+          : l?.busy ? 'Claude is working' : ''
+    const points = items.flatMap((it) => (it.kind === 'user' && it.uuid ? [{ uuid: it.uuid, text: it.text.replace(/\s+/g, ' ').trim().slice(0, 300), at: it.at ?? 0 }] : [])).reverse().slice(0, 30)
+    const g = cwd ? await readGate(l ? (threadFacts(l.tabId)?.cwd ?? cwd) : cwd).catch(() => null) : null
+    return {
+      context: l ? await contextUsage(l.tabId).catch(() => null) : null,
+      waiting, work, points, busy: !!l?.busy,
+      advisor: facts?.advisor ?? '',
+      gate: g && !g.error && (g.checklist || g.marker) ? { sha: g.sha?.slice(0, 7) ?? '', branch: g.branch ?? '', done: g.done, total: g.items.length, marker: g.marker, items: g.items.map((i) => ({ id: i.id, title: i.title, state: i.state })) } : null,
+    }
+  },
+  // a rewind from the phone: the files Claude changed since that message go back, then the conversation; an open tab
+  // in the window drops what came after it
+  rewind: async (id: string, uuid: string) => {
+    const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+    const saved = l ? undefined : (await listSessions()).find((x) => x.id === id)
+    const tabId = l?.tabId ?? id, cwd = l?.cwd ?? saved?.cwd ?? '', sessionId = l?.sessionId ?? saved?.id ?? ''
+    if (!cwd || !sessionId || !uuid) throw new Error('That thread or message is not known')
+    const preview = await rewindPreview(tabId, cwd, sessionId, uuid).catch(() => null)
+    const files = preview?.canRewind ? preview.filesChanged ?? [] : null
+    const r = await rewindApply(tabId, cwd, sessionId, uuid, files)
+    if (!r.ok) throw new Error(r.error ?? (r.partial ? `Some files could not be put back: ${r.partial.missing.join(', ')}` : 'The rewind did not go through'))
+    const w = mainWeb()
+    if (w) void w.executeJavaScript(`window.dispatchEvent(new CustomEvent('hive:phone-rewound', { detail: ${JSON.stringify({ tabId, uuid })} }))`).catch(() => {})
+    return files?.length ? `rewound, ${files.length} file${files.length === 1 ? '' : 's'} put back` : 'rewound'
+  },
+  versions: () => versions(),
   // 2.0 app: a thread now without its transcript, all running background work, stop everything, run a wake-up now,
   // and the quiet hours it shares with Hive
   peek: (id: string) => {

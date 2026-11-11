@@ -460,6 +460,14 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collec
     var settingsOpen by remember { mutableStateOf("") }
     val loadSettings: () -> Unit = { if ("threadSettings" in can) scope.launch { attempt { settings = ReadMore.settings(Relay.ask("threadSettings", mapOf("id" to id)).optJSONObject("settings")) } } }
     LaunchedEffect(id, v.working) { loadSettings() }
+    // 3.1: context, what it waits on, its work, the points to rewind to, its PR gate
+    var more by remember { mutableStateOf<ThreadMore?>(null) }
+    var morePane by remember { mutableStateOf("") }
+    var rewinding by remember { mutableStateOf("") }
+    val now = rememberNow(5_000)
+    val loadMore: () -> Unit = { if ("threadMore" in can) scope.launch { attempt { more = ReadMore2.more(Relay.ask("threadMore", mapOf("id" to id)).optJSONObject("more")) } } }
+    LaunchedEffect(id, v.working, v.tasks.size) { loadMore() }
+    LaunchedEffect(id, v.working) { while (v.working) { kotlinx.coroutines.delay(6_000); loadMore() } }
     val sendHow: (String, String) -> Unit = { text, how ->
         // the same text sent again after a try that got no answer carries the same id: Hive runs it once
         val mid = Drafts.midFor(id, text)
@@ -486,7 +494,9 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collec
         onStopTask = { t -> act("stopTask", mapOf("id" to id, "task" to t.id)) { } },
         onAnswer = { a, answers -> sentAsks = sentAsks + a.id; act("answer", mapOf("id" to id, "ask" to a.id, "answers" to answers)) { ok -> if (!ok) sentAsks = sentAsks - a.id } },
         onMic = mic,
-        settings = settings, settingsOpen = settingsOpen, onSettingsOpen = { settingsOpen = it },
+        more = more, morePane = morePane, now = now, rewinding = rewinding, onMorePane = { morePane = it },
+        onRewind = { p -> rewinding = p.uuid; scope.launch { err = attempt { Relay.ask("rewind", mapOf("id" to id, "uuid" to p.uuid)) }; rewinding = ""; if (err.isEmpty()) { morePane = ""; Drafts.text[id] = p.text }; reload(); loadMore() } },
+        settings = settings?.copy(advisor = more?.advisor ?: ""), settingsOpen = settingsOpen, onSettingsOpen = { settingsOpen = it },
         onSetting = { what, value -> settingsOpen = ""; scope.launch { err = attempt { Relay.ask("setThread", mapOf("id" to id, "what" to what, "value" to value)) }; loadSettings() } },
         onQueue = if (how) ({ val text = draft.trim(); Drafts.text.remove(id); sendHow(text, "queue") }) else null,
         onInterrupt = if (how) ({ val text = draft.trim(); Drafts.text.remove(id); sendHow(text, "interrupt") }) else null)
@@ -727,7 +737,10 @@ private fun SettingsRoute(notice: String, online: Boolean, syncs: Boolean, onBac
     val word = when (state) { Relay.State.Online -> "online"; Relay.State.RelayOnly -> "computer offline"; Relay.State.Connecting -> "connecting"; Relay.State.Off -> "not connected"; Relay.State.Unpaired -> "unpaired" }
     val clock = if (state != Relay.State.Online) "" else "clock within ${String.format(java.util.Locale.ROOT, "%.1f", kotlin.math.abs(skew) / 1000.0)} s"
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "" }
-    SettingsScreen(quiet, buttons, known?.relay?.removePrefix("https://") ?: "", word, clock, syncs, unpair, online, listOf(notice, err).filter { it.isNotEmpty() }.joinToString(" "), version,
+    val can by Relay.can.collectAsState()
+    var computer by remember { mutableStateOf("") }
+    rememberLoader("versions" in can) { if ("versions" in can) attempt { computer = ReadMore2.versions(Relay.ask("versions").optJSONObject("versions")) } }
+    SettingsScreen(quiet, buttons, known?.relay?.removePrefix("https://") ?: "", word, clock, syncs, unpair, online, listOf(notice, err).filter { it.isNotEmpty() }.joinToString(" "), version, computer,
         onBack = onBack, onQuiet = { setQuiet(quiet.copy(on = it)) },
         onFrom = { pick(quiet.from) { setQuiet(quiet.copy(from = it)) } }, onTo = { pick(quiet.to) { setQuiet(quiet.copy(to = it)) } },
         onButtons = { buttons = it; Settings.setButtons(ctx, it) },

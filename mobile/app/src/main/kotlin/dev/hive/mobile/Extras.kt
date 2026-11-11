@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 
 data class Pick(val value: String, val label: String)
-data class ThreadSettings(val live: Boolean = false, val mode: String = "", val model: String = "", val effort: String = "", val modes: List<Pick> = emptyList(), val models: List<Pick> = emptyList(), val efforts: List<String> = emptyList())
+data class ThreadSettings(val live: Boolean = false, val mode: String = "", val model: String = "", val effort: String = "", val modes: List<Pick> = emptyList(), val models: List<Pick> = emptyList(), val efforts: List<String> = emptyList(), val advisor: String = "")
 data class Note(val id: String, val title: String, val text: String, val updated: Long)
 data class Todo(val id: String, val text: String, val status: String, val due: String)
 data class Watcher(val id: String, val name: String, val goal: String, val enabled: Boolean, val status: String, val note: String, val lastRun: Long, val nextRun: Long)
@@ -57,14 +57,16 @@ fun ThreadSettingsBar(s: ThreadSettings, open: String, onOpen: (String) -> Unit,
             SettingWord("Mode", modeLabel, open == "mode", if (s.mode == "bypassPermissions") C.fail else C.hi) { onOpen(if (open == "mode") "" else "mode") }
             SettingWord("Model", if (s.model.isEmpty()) "default" else modelName(s.model), open == "model") { onOpen(if (open == "model") "" else "model") }
             SettingWord("Effort", s.effort.ifEmpty { "default" }, open == "effort") { onOpen(if (open == "effort") "" else "effort") }
+            SettingWord("Advisor", if (s.advisor.isEmpty()) "off" else modelName(s.advisor), open == "advisor") { onOpen(if (open == "advisor") "" else "advisor") }
         }
         val rows: List<Pick> = when (open) {
             "mode" -> s.modes
             "model" -> s.models
             "effort" -> s.efforts.map { Pick(it, it) }
+            "advisor" -> listOf(Pick("off", "Off")) + s.models.filter { it.value != "default" }
             else -> emptyList()
         }
-        val now = when (open) { "mode" -> s.mode; "model" -> s.model; else -> s.effort }
+        val now = when (open) { "mode" -> s.mode; "model" -> s.model; "advisor" -> s.advisor.ifEmpty { "off" }; else -> s.effort }
         if (open.isNotEmpty()) {
             Rule()
             if (open != "mode" && !s.live) Text("Send this thread a message first: its $open can be changed once it is running.", Modifier.padding(horizontal = 14.dp, vertical = 8.dp), style = T.note)

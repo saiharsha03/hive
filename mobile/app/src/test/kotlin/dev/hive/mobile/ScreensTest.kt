@@ -86,6 +86,14 @@ class ScreensTest {
     )
 
     @Test fun thread() = shot("thread") { ThreadScreen(shipThread, draft = "") }
+    private val more = ThreadMore(112_000, 1_000_000, "Waiting on a review: Reviewer: check the retry path",
+        listOf(Work("t1", "Subagent", true, "Reviewer: check the retry path", "Reading billing/webhooks.py", 1_700_000_000_000, 48_000, "reviewer", "claude-fable-5-2", "Review the retry change in billing/invoice.py for races and missing tests."),
+            Work("t2", "Shell", false, "Run the billing tests", "pytest tests/billing", 1_700_000_000_000, 0, "", "", "pytest tests/billing -q")),
+        listOf(Point("u1", "Use a unique constraint, not a lookup", 1_700_000_000_000)), true, "claude-fable-5-2",
+        Gate("a91f3c2", "fix/invoice-retry", 9, 16, true, listOf(GateItem("K1", "Scoping", "PASS"), GateItem("K7", "Tests prove the fix", ""))))
+    @Test fun threadWork() = shot("thread-work") { ThreadScreen(shipThread, draft = "", more = more, morePane = "work", now = 1_700_000_030_000,
+        settings = ThreadSettings(true, "bypassPermissions", "claude-opus-5-5", "high", advisor = "claude-fable-5-2")) }
+    @Test fun threadGate() = shot("thread-gate") { ThreadScreen(shipThread, draft = "", more = more, morePane = "gate", now = 1_700_000_030_000) }
 
     @Test fun threadWorking() = shot("thread-working") {
         ThreadScreen(ThreadView(

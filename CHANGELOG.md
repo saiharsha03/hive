@@ -4,6 +4,18 @@ All notable changes to Hive are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-11-10
+
+### Added
+
+- **Phone 1.2**: at the top of a thread its context and what it waits on, then Work (reviews apart, each task opening to
+  its type, model, prompt and current step), Rewind and the PR gate; the advisor beside mode, model and effort; the
+  computer's Claude Code and SDK versions in Settings. The app uses the phone's own font.
+
+### Changed
+
+- A hook's note after a tool call folds into that run of steps.
+
 ## [1.1.3] - 2026-11-10
 
 ### Fixed

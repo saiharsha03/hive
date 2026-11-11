@@ -117,9 +117,21 @@ export function Shell() {
   useEffect(() => {
     const say = () => notice('A new build is ready. Ctrl+R loads it; threads that are working stop.')
     const tell = (e: Event) => notice(String((e as CustomEvent).detail ?? ''))
+    // a rewind done from the phone: an open tab drops what came after that message
+    const rewound = (e: Event) => {
+      const d = (e as CustomEvent).detail as { tabId?: string; uuid?: string } | undefined
+      if (!d?.uuid) return
+      setSessions((all) => all.map((x) => {
+        if (x.id !== d.tabId && x.sessionId !== d.tabId) return x
+        const i = x.items.findIndex((it) => it.kind === 'user' && it.uuid === d.uuid)
+        return i < 0 ? x : { ...x, items: x.items.slice(0, i), history: undefined }
+      }))
+      notice('Rewound from the phone')
+    }
+    window.addEventListener('hive:phone-rewound', rewound)
     window.addEventListener('hive:build', say)
     window.addEventListener('hive:say-notice', tell)
-    return () => { window.removeEventListener('hive:build', say); window.removeEventListener('hive:say-notice', tell) }
+    return () => { window.removeEventListener('hive:build', say); window.removeEventListener('hive:say-notice', tell); window.removeEventListener('hive:phone-rewound', rewound) }
   }, [])
 
   // ---- keyboard ----
