@@ -184,8 +184,11 @@ export function StatusLine() {
       {(status?.usage ?? []).map((u) => {
         const name = u.key === 'five_hour' ? '5-hour' : u.key === 'seven_day' ? '7-day' : `7-day ${u.label.match(/\((.+)\)/)?.[1] ?? u.key.replace(/^(seven_day|model)_/, '')}`
         const at = u.resetsAt ? new Date(u.resetsAt) : null
-        const soon = at && at.getTime() - Date.now() < 24 * 3_600_000
-        const when = at ? (soon ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : at.toLocaleDateString([], { weekday: 'short' }) + ' ' + at.toLocaleTimeString([], { hour: 'numeric' })) : ''
+        // the day always said: today, tomorrow, a weekday within the week, else the date
+        const day = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime() }
+        const days = at ? Math.round((day(at) - day(new Date())) / 86_400_000) : 0
+        const time = at ? at.toLocaleTimeString([], { hour: 'numeric', minute: at.getMinutes() ? '2-digit' : undefined }) : ''
+        const when = !at ? '' : days <= 0 ? `today ${time}` : days === 1 ? `tomorrow ${time}` : days < 7 ? `${at.toLocaleDateString([], { weekday: 'short' })} ${time}` : `${at.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`
         return (
           <button key={u.key} className={u.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title={`${u.label}${at ? `: resets ${at.toLocaleString()}` : ''}. Click for status and usage`} data-testid={`status-${u.key}`}>
             {name} {Math.round(u.pct)}%<Meter pct={u.pct} />{when && <span className="lim-reset">resets {when}</span>}
