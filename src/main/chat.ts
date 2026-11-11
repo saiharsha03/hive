@@ -4,7 +4,7 @@ import { createSdkMcpServer, query, tool, type Options, type PermissionMode, typ
 import type { WebContents } from 'electron'
 import { typeInTerminal } from './terminal'
 import { cliLine, cliOnlyCommand } from '../shared/cliCommandCore'
-import type { ChildProcess } from 'node:child_process'
+import { execFile, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFile, rm } from 'node:fs/promises'
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
@@ -155,6 +155,8 @@ type Live = {
   q: Query; push: (m: SDKUserMessage) => void; sessionId: string | null; turns: ReturnType<typeof turnQueue<SDKUserMessage>>
   background: boolean // hidden from the tab bar, or started by Hive on its own: runs in auto mode
   closedByApp?: boolean // closeTab stopped it (disable, rotation, archive): the window must still hear hive_closed
+  startedAt?: number // when its Claude process was started (to find that process: forceStopCommand)
+  shellSince?: number | null // a foreground shell command the turn is waiting on, since when
   mode: PermissionMode | null // the live session's mode as last reported or set
   modeChain: Promise<void> // mode switches run one after another
   cwd: string
@@ -1115,7 +1117,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     },
   )
   s = {
-    q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(),
+    q, push: (m) => { s.waitingReason = undefined; push(m) }, sessionId: resume ?? null, turns, background, mode: null, modeChain: Promise.resolve(), startedAt: Date.now(), shellSince: null,
     cwd, lastReply: null, lastOk: null, onIdle: new Set(), emit: send, status: emptyStatus(),
     watcher, outbox: new Map(), queuedFrom: new Map(), stopTasks: 0, lastActiveAt: Date.now(), memoryDir,
   }
@@ -1167,8 +1169,12 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           if (t.trim()) lastText = t
           if ((m as any).error === 'rate_limit' && /limit/i.test(t)) limited = true
           longCommands.started(m.message?.content as any[])
+          if (((m.message?.content ?? []) as any[]).some((b) => b.type === 'tool_use' && (b.name === 'Bash' || b.name === 'PowerShell') && !b.input?.run_in_background)) s.shellSince = Date.now()
         }
-        if (m.type === 'user' && !m.parent_tool_use_id) longCommands.ended((m as any).message?.content)
+        if (m.type === 'user' && !m.parent_tool_use_id) {
+          longCommands.ended((m as any).message?.content)
+          if (((m as any).message?.content ?? []).some?.((b: any) => b.type === 'tool_result')) s.shellSince = null
+        }
         if (m.type === 'rate_limit_event') {
           const i = (m as any).rate_limit_info
           if (i?.status === 'rejected') { limited = true; limitKind = i.rateLimitType; if (Number.isFinite(i.resetsAt)) limitReset = i.resetsAt * 1000 }
@@ -1383,7 +1389,7 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   // a send that runs now and fails rejects chat:send; one that waited tells the tab with hive_error instead
   sends.run(tabId, () => {
     go()
-    if (interrupt) void cur.q.interrupt().catch(() => { /* turn already over */ })
+    if (interrupt) { void cur.q.interrupt().catch(() => { /* turn already over */ }); forceStopLater(tabId) }
   }, boost && !interrupt ? boost : null, (e: any) => cur.emit({ type: 'hive_error', message: `The message was not sent: ${e?.message ?? e}` }))
 }
 
@@ -1753,7 +1759,42 @@ export async function background(tabId: string, toolUseId?: string): Promise<boo
 
 export async function interrupt(tabId: string): Promise<void> {
   cancelAsks(tabId) // Stop also ends an open question
+  forceStopLater(tabId)
   await live.get(tabId)?.q.interrupt()
+}
+
+// An interrupt asks Claude Code to stop the turn, and it does, but only once the shell command it is waiting on has
+// ended: a command that sits in a long wait (a build, a `WaitForExit`, a sleep) held Stop and Interrupt back for
+// minutes. So a few seconds after an interrupt, when the turn is still waiting on a foreground shell command, that
+// command's process tree is ended; the turn then stops at once. Only the newest shell under this thread's own Claude
+// process, started after the command began, is touched: background shells, subagents and other threads are not.
+const FORCE_AFTER_MS = 4000
+function forceStopLater(tabId: string): void {
+  const s = live.get(tabId)
+  if (!s || process.platform !== 'win32' || TEST_MODE) return
+  setTimeout(() => {
+    const now = live.get(tabId)
+    if (now !== s || !s.turns.isBusy() || !s.shellSince) return
+    void forceStopCommand(s).catch(() => { /* the command is left to end by itself */ })
+  }, FORCE_AFTER_MS)
+}
+function forceStopCommand(s: Live): Promise<void> {
+  const since = s.shellSince
+  if (!since || !s.startedAt) return Promise.resolve()
+  // this thread's Claude process: a child of this app started when the thread started (its --resume names the session
+  // when it was resumed); then the newest shell under it that began with or after the command
+  const script = `
+$me = ${process.pid}; $started = [DateTimeOffset]::FromUnixTimeMilliseconds(${s.startedAt}).LocalDateTime; $since = [DateTimeOffset]::FromUnixTimeMilliseconds(${since - 3000}).LocalDateTime
+$sid = '${(s.sessionId ?? '').replace(/[^A-Za-z0-9-]/g, '')}'
+$all = Get-CimInstance Win32_Process
+$claude = $all | Where-Object { $_.ParentProcessId -eq $me -and $_.Name -eq 'claude.exe' }
+$mine = $claude | Where-Object { $sid -and $_.CommandLine -like "*--resume=$sid*" } | Select-Object -First 1
+if (-not $mine) { $mine = $claude | Where-Object { [Math]::Abs(($_.CreationDate - $started).TotalSeconds) -lt 5 } | Sort-Object { [Math]::Abs(($_.CreationDate - $started).TotalSeconds) } | Select-Object -First 1 }
+if (-not $mine) { exit 0 }
+$shell = $all | Where-Object { $_.ParentProcessId -eq $mine.ProcessId -and $_.Name -in 'powershell.exe','pwsh.exe','bash.exe','sh.exe','cmd.exe' -and $_.CreationDate -ge $since } | Sort-Object CreationDate -Descending | Select-Object -First 1
+if ($shell) { taskkill /PID $shell.ProcessId /T /F | Out-Null }
+`
+  return new Promise((resolve) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 15_000 }, () => resolve()))
 }
 
 // Rewind a turn. The file backups live with the session, not the process, so a thread with no running process (or one

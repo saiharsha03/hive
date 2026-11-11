@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, watch, writ
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
+import trayIco from '../../build/icon.ico?asset'
 import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, setThreadMode, THREAD_MODES, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { busyTranscript, configureChat, liveQuery, resumeEverything, runningEverywhere, stopEverything, stoppedQueues, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
@@ -654,6 +655,8 @@ handle('engine:latest', () => latestEngine())
 handle('engine:update', () => updateEngine())
 // the installed Claude Code and the SDK: their versions, what is newest, and (check) a read now that installs what is newer
 handle('versions:get', () => versions())
+// Quit from the window (the palette): never only from the tray
+handle('app:quit', () => { quitting = true; app.quit() })
 // the PR gate for a thread's checkout: the checklist and what the review marker says for the commit at HEAD
 handle('gate:read', (_e, dir: unknown) => readGate(String(dir ?? '')))
 handle('versions:check', () => checkVersions())
@@ -1007,7 +1010,12 @@ const showWindow = () => {
 }
 function makeTray(): void {
   if (TEST_MODE || tray) return
-  tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
+  // Windows draws the tray from an .ico (it picks the size for the screen's scale); a resized PNG came out as a dark
+  // tile that could not be seen in the tray. An image that did not load is said, never left as an invisible icon.
+  let image = process.platform === 'win32' ? nativeImage.createFromPath(trayIco) : nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
+  if (image.isEmpty()) image = nativeImage.createFromPath(icon).resize({ width: 32, height: 32 })
+  if (image.isEmpty()) console.warn('tray: the icon image did not load')
+  tray = new Tray(image)
   tray.setToolTip(appName())
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `Open ${appName()}`, click: showWindow },

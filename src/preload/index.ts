@@ -247,6 +247,7 @@ contextBridge.exposeInMainWorld('api', {
   engineLatest: () => ipcRenderer.invoke('engine:latest'),
   engineUpdate: () => ipcRenderer.invoke('engine:update'),
   versionsGet: () => ipcRenderer.invoke('versions:get'),
+  appQuit: () => ipcRenderer.invoke('app:quit'),
   versionsCheck: () => ipcRenderer.invoke('versions:check'),
   onVersions: (cb: (v: unknown) => void) => {
     const fn = (_e: unknown, v: unknown) => cb(v)
