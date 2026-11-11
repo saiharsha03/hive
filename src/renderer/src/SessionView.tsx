@@ -205,7 +205,8 @@ function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<It
 
 // A run of tool calls rests as one dim line ("6 steps: Read, Grep, 2 Edit, Write, Bash") that opens on click; a failed
 // step stays in view under it
-type RunStep = { key: string; word: string; failed: boolean; running: boolean; node: ReactNode; item?: Extract<Item, { kind: 'tool' }> }
+// hook: a note a hook printed after a tool call (a linter's findings), folded into the run with the call it is about
+type RunStep = { key: string; word: string; failed: boolean; running: boolean; node: ReactNode; item?: Extract<Item, { kind: 'tool' }>; hook?: boolean }
 const EDITS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const SEARCHES = new Set(['Grep', 'Glob', 'WebSearch', 'ToolSearch'])
 const READS = new Set(['Read', 'WebFetch', 'LS'])
@@ -218,10 +219,11 @@ function runSummary(steps: RunStep[]): ReactNode {
   const edits = by(EDITS)
   const lines = edits.reduce((t, s) => { const c = counts(hunksOf(s.item!)); return { add: t.add + c.add, del: t.del + c.del } }, { add: 0, del: 0 })
   const searches = by(SEARCHES).length, reads = by(READS).length, cmds = by(COMMANDS).length, agents = by(AGENTS).length
-  const codex = steps.filter((s) => !s.item).length
+  const notes = steps.filter((s) => s.hook).length
+  const codex = steps.filter((s) => !s.item && !s.hook).length
   const failed = steps.filter((s) => s.failed).length
   return <>
-    <b>{n(steps.length, 'step', 'steps')}</b>
+    <b>{n(steps.length - notes, 'step', 'steps')}</b>
     {edits.length > 0 && <span>{n(edits.length, 'edit', 'edits')}</span>}
     {(lines.add > 0 || lines.del > 0) && <><span className="add-t">+{lines.add}</span><span className="del-t">{'−'}{lines.del}</span></>}
     {searches > 0 && <span>{n(searches, 'search', 'searches')}</span>}
@@ -229,6 +231,7 @@ function runSummary(steps: RunStep[]): ReactNode {
     {cmds > 0 && <span>{n(cmds, 'command', 'commands')}</span>}
     {agents > 0 && <span>{n(agents, 'agent', 'agents')}</span>}
     {codex > 0 && <span>{n(codex, 'Codex run', 'Codex runs')}</span>}
+    {notes > 0 && <span>{n(notes, 'hook note', 'hook notes')}</span>}
     {failed > 0 && <span className="s-fail">{failed} failed</span>}
     {steps.some((s) => s.running) && <span>running</span>}
   </>
@@ -366,6 +369,9 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
       tools.push({ key, item: it, word: toolVerb(it.name).word, failed: status === 'error', running: status === 'running', node:<ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
       return
     }
+    // a note a hook printed after a tool call goes with that call, inside the run (open it to read); a hook that blocks
+    // a call (PreToolUse) stays in view
+    if (it.kind === 'warning' && it.event === 'PostToolUse' && tools.length) { tools.push({ key, word: 'hook', failed: false, running: false, hook: true, node: <WarningRow key={key} event={it.event} text={it.text} /> }); return }
     if (it.kind === 'codex') { tools.push({ key, word: 'Codex', failed: it.status === 'error', running: it.status === 'running', node: <CodexBox key={key} it={it} /> }); return }
     flush()
     if (it.kind === 'user') {
