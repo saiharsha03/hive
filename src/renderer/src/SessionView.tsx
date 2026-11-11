@@ -270,6 +270,10 @@ function FindBar({ onClose }: { onClose: () => void }) {
   )
 }
 
+const replyTime = (at: number): string => {
+  const d = new Date(at)
+  return d.toDateString() === new Date().toDateString() ? clock(d) : `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${clock(d)}`
+}
 type UserItem = Extract<Item, { kind: 'user' }>
 type Rewind = { it: UserItem; index: number; preview: RewindFiles | null; error?: string; working?: boolean; partial?: { missing: string[]; skipped: number } }
 
@@ -381,7 +385,8 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
       )
       return
     }
-    if (it.kind === 'assistant') { out.push(<div key={key} className="msg cl" data-testid="msg-assistant"><MdBody text={it.text} /></div>); return }
+    // the time Claude wrote it, small under the reply (a day and the time once it is not today)
+    if (it.kind === 'assistant') { out.push(<div key={key} className="msg cl" data-testid="msg-assistant"><MdBody text={it.text} />{it.at ? <span className="msg-at" title={new Date(it.at).toLocaleString()} data-testid="msg-time">{replyTime(it.at)}</span> : null}</div>); return }
     if (it.kind === 'tool' && it.name === 'AskUserQuestion') { out.push(<div key={key} className="qwrap"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} /></div>); return }
     if (it.kind === 'show') { out.push(<div key={key} className="msg"><ShowCard path={it.path} onOpen={st.open} /></div>); return }
     if (it.kind === 'note') { out.push(<div key={key} className="note">{it.text}</div>); return }

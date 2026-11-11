@@ -289,3 +289,6 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .full-sec .page-head h1 { font: 600 20px var(--sans); letter-spacing: 0; }
 .full-sec .page-tabs { margin: 10px 0 14px; gap: 18px; }
 .full-sec .page-tabs button.on { font-weight: 400; }
+
+/* when Claude wrote a reply, small under it */
+.conv .msg.cl .msg-at { display: block; margin-top: 4px; font: 400 11.5px/1.4 var(--sans); color: var(--faint); font-variant-numeric: tabular-nums; }
