@@ -4,6 +4,12 @@ All notable changes to Hive are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-11-10
+
+### Fixed
+
+- A limit's reset time says the day: today, tomorrow, a weekday or the date.
+
 ## [1.1.2] - 2026-11-10
 
 ### Added
