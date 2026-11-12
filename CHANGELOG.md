@@ -4,6 +4,13 @@ All notable changes to Hive are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-11-12
+
+### Changed
+
+- Closing a thread that is still working asks first: keep it working in the background, or close and stop it. An idle
+  thread closes as before.
+
 ## [1.1.4] - 2026-11-10
 
 ### Added
