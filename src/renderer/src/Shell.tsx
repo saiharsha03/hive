@@ -21,6 +21,7 @@ import {
   openFileTab, openPage, place, preview, reopenClosed, runUndo, sendFailed, setExtraRows, setPreview, stepTab, stopEverything, tabAt, toggleTerminal,
 } from './actions'
 import { PAGE_LABEL, PAGE_KEYS, type ToolTab } from './chat'
+import { CloseAsk } from './CloseAsk'
 import { panes as panesStore, setSessions, useSessionMetas, useStore } from './store'
 import { focusedTab, activate as activateIn } from './panes'
 import { RunningPage } from './pages/RunningPage'
@@ -253,6 +254,7 @@ export function Shell() {
         </div>
       )}
       {dropped && <DropPrompt path={dropped} choices={dropChoices} onPick={(c) => startFromFile(c, dropped)} onCancel={() => setDropped(null)} />}
+      <CloseAsk />
       {toasts.length > 0 && (
         <div className="toasts" role="status">
           {toasts.map((n) => (
