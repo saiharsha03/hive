@@ -817,6 +817,10 @@ handle('git:push', (_e, dir: string) => gitPanel.gitPush(String(dir)))
 handle('git:fetch', (_e, dir: string) => gitPanel.gitFetch(String(dir)))
 handle('git:locate', (_e, file: string) => gitPanel.gitLocate(String(file)))
 handle('git:prChecks', (_e, dir: string) => gitPanel.prChecks(String(dir)))
+// the PR chip's merge, "Merge when ready" and the info they show; only on the user's click in a confirm
+handle('git:prMergeInfo', (_e, dir: string) => gitPanel.prMergeInfo(String(dir)).catch((e) => ({ unavailable: String((e as Error).message ?? e).split(/\r?\n/)[0] })))
+handle('git:prMerge', (_e, dir: string, headSha: string) => gitPanel.prMerge(String(dir), String(headSha)))
+handle('git:prAutoMerge', (_e, dir: string, headSha: string, on: boolean) => gitPanel.prAutoMerge(String(dir), String(headSha), on === true))
 // Scripts: plain commands from scripts.json; the page names a script and an option, never a command
 handle('scripts:config', () => scriptsConfig())
 handle('scripts:state', () => scriptsState())

@@ -141,6 +141,12 @@ export const setRetireHandler = (fn: ((id: string) => void) | null) => { onRetir
 export const keepVisible = (id: string) => { const s = cache[id]; if (s?.closedAt || s?.archivedAt) patchThread(id, { closedAt: undefined, archivedAt: undefined }) }
 export const close = (id: string, on: boolean) => { patchThread(id, { closedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
 export const archive = (id: string, on: boolean) => { patchThread(id, { archivedAt: on ? Date.now() : undefined }); if (on) onRetire?.(id) }
+// archive after its pull request merged or closed (Changes panel): the same place in the list, but the worktrees and
+// branches it made are kept
+export const archiveKeepingWork = (id: string) => patchThread(id, { archivedAt: Date.now() })
+// the thread's PR toggles, kept with its place
+export const threadState = (id: string): ThreadState | undefined => cache[id]
+export const setPrToggle = (id: string, key: 'autoFix' | 'autoArchive', on: boolean) => patchThread(id, { [key]: on ? Date.now() : undefined })
 
 // Claude's organize_thread call: the same store functions the menu uses. `until` is an ISO string, already checked in main.
 export function organize(id: string, action: string, until?: string) {

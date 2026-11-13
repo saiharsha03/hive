@@ -1,5 +1,6 @@
 // Thread places (pin, snooze, close, archive) shared by the desktop sidebar and the phone list Hive main builds.
-export type ThreadState = { pinned?: number; snoozedUntil?: number; snoozedAt?: number; closedAt?: number; archivedAt?: number }
+// autoFix / autoArchive: when the thread's PR toggles were turned on (Changes panel), absent when off
+export type ThreadState = { pinned?: number; snoozedUntil?: number; snoozedAt?: number; closedAt?: number; archivedAt?: number; autoFix?: number; autoArchive?: number }
 export type ThreadMap = Record<string, ThreadState>
 export type Place = 'pinned' | 'returned' | 'active' | 'snoozed' | 'closed' | 'archived'
 

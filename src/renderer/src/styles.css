@@ -160,6 +160,12 @@ kbd { font: 11px var(--mono); color: var(--faint); }
 .prchip { display: flex; align-items: baseline; gap: 8px; padding: 0 12px 6px; font-size: 12px; color: var(--dim); flex-shrink: 0; white-space: nowrap; overflow: hidden; }
 .prchip a { color: var(--accent-text); text-decoration: none; }
 .prchip a:hover { text-decoration: underline; }
+.prchip .practs { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.prchip .practs button { display: flex; align-items: center; gap: 4px; padding: 1px 6px; color: var(--dim); }
+.prchip .practs button:hover:not(:disabled) { color: var(--hi); }
+.prchip .practs button:disabled { opacity: 0.45; cursor: default; }
+.prchip .practs .codicon { font-size: 14px; }
+.prchip.prblock { white-space: normal; color: var(--faint); }
 .ci-passing { color: var(--done); }
 .ci-failing { color: var(--fail); }
 .ci-pending { color: var(--signal); }

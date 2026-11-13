@@ -34,6 +34,15 @@ export function summarizeChecks(rollup: unknown): Checks {
   return out
 }
 
+// the names of the failing checks (a CheckRun's name, a StatusContext's context), each once
+export function failingChecks(rollup: unknown): string[] {
+  const names = (Array.isArray(rollup) ? rollup : [])
+    .filter((c) => c && typeof c === 'object' && verdict(c as Record<string, unknown>) === 'failed')
+    .map((c) => String((c as Record<string, unknown>).name ?? (c as Record<string, unknown>).context ?? '').trim())
+    .filter(Boolean)
+  return [...new Set(names)]
+}
+
 // "3 of 5 passed, 1 failed, 1 running"
 export function checksText(c: Checks): string {
   if (!c.total) return 'no checks'

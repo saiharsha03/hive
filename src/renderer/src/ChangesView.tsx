@@ -6,19 +6,23 @@ import type { DiffSpec } from './DiffPanel'
 import { counts, FILE_TOOLS, type Hunk } from '../../shared/diffCore'
 import type { Detail, Entry, FileArea } from '../../shared/gitCore'
 import { sinceLastPr } from '../../shared/changesCore'
-import { checksText, protectedBranch, shipPrompt, type PrChecks, type PrChecksResult } from '../../shared/ciCore'
+import { checksText, protectedBranch, shipPrompt } from '../../shared/ciCore'
+import { fixChecksPrompt } from '../../shared/prAutoCore'
+import type { MergeInfo, MergeInfoResult } from '../../shared/prCore'
 import { hunksOf, shortPath } from './SessionView'
-import { send } from './actions'
+import { notice, offerUndo, send } from './actions'
+import { applyPr, markSent, threadKey } from './prAuto'
 import { prChecksSeen } from './store'
-import { Icon, Modal } from './ui'
+import { archive, archiveKeepingWork, setPrToggle, useThreads } from './threads'
+import { anchorOf, Icon, Modal, Popover, type Anchor } from './ui'
 
 type Row = { key: string; path: string; letter: string; add?: number; del?: number; spec: DiffSpec; agent: boolean }
 const LETTER_CLASS: Record<string, string> = { M: 'g-modified', A: 'g-added', '?': 'g-untracked', U: 'g-untracked', D: 'g-deleted', R: 'g-renamed', C: 'g-renamed' }
 const base = (p: string) => p.split('/').at(-1) ?? p
 const dirOf = (p: string) => p.split('/').slice(0, -1).join('/')
-const isPr = (r: PrChecksResult | undefined): r is PrChecks => !!r && 'number' in r
+const isPr = (r: MergeInfoResult | undefined): r is MergeInfo => !!r && 'pr' in r
 // merged / closed / draft beat the checks' own state
-const prWord = (p: PrChecks) => (p.state === 'MERGED' ? 'merged' : p.state === 'CLOSED' ? 'closed' : p.isDraft ? 'draft' : '')
+const prWord = (p: { state: string; isDraft: boolean }) => (p.state === 'MERGED' ? 'merged' : p.state === 'CLOSED' ? 'closed' : p.isDraft ? 'draft' : '')
 
 // the agent's edits in this thread since it last opened a pull request (what went into the PR is done), one row per
 // file with the counts of all its edits. Uncommitted files in the working tree still show from git.
@@ -88,7 +92,8 @@ export function ChangesView({ session, diff, shown, onDiff, onOpenGit }: {
 
   // the branch's pull request (gh, read-only): read when the branch, its head or what is ahead changes, on refresh, and
   // every 30 s while the PR is open with checks still running
-  const [pr, setPr] = useState<PrChecksResult | undefined>(undefined)
+  const [info, setPr] = useState<MergeInfoResult | undefined>(undefined)
+  const pr = isPr(info) ? info.pr : null
   const [prN, setPrN] = useState(0)
   const asked = useRef('')
   useEffect(() => { setPr(undefined); asked.current = '' }, [where])
@@ -96,9 +101,18 @@ export function ChangesView({ session, diff, shown, onDiff, onOpenGit }: {
   useEffect(() => {
     if (!prKey || !repo || prKey === asked.current) return
     asked.current = prKey
-    window.api.gitPrChecks(repo.dir).then((r) => { if (asked.current === prKey) setPr(r) }).catch(() => {})
+    window.api.gitPrMergeInfo(repo.dir).then((r) => {
+      if (asked.current !== prKey) return
+      setPr(r)
+      if (session && isPr(r)) applyPr(session.id, r)
+    }).catch(() => {})
   }, [prKey, repo])
-  const running = isPr(pr) && pr.state === 'OPEN' && pr.checks.state === 'pending'
+  const states = useThreads()
+  const key = session ? threadKey(session) : ''
+  const st = states[key]
+  // re-read every 30 s while the PR is open and something waits on it: running checks, auto-merge, Auto-fix or
+  // Auto-archive
+  const running = !!pr && pr.state === 'OPEN' && (pr.checks.state === 'pending' || !!pr.autoMerge || !!st?.autoFix || !!st?.autoArchive)
   useEffect(() => {
     if (!running) return
     const t = setInterval(() => { if (document.visibilityState === 'visible') setPrN((x) => x + 1) }, 30_000)
@@ -107,7 +121,7 @@ export function ChangesView({ session, diff, shown, onDiff, onOpenGit }: {
   // the thread's header shows the same state beside its PR number
   const sid = session?.id
   useEffect(() => {
-    if (!sid || !isPr(pr)) return
+    if (!sid || !pr) return
     const seen = { num: pr.number, state: prWord(pr) || pr.checks.state, text: checksText(pr.checks) }
     prChecksSeen.set((all) => ({ ...all, [sid]: seen }))
   }, [pr, sid])
@@ -115,12 +129,49 @@ export function ChangesView({ session, diff, shown, onDiff, onOpenGit }: {
   const [ship, setShip] = useState(false)
   const files = rows.filter((r) => !r.agent).length
   const ahead = d?.ahead ?? 0
-  const openPr = isPr(pr) && pr.state === 'OPEN' ? pr : null
+  const openPr = pr && pr.state === 'OPEN' ? pr : null
   const nothing = !files && !ahead && !!d?.upstream
   const doShip = () => {
     if (!session || !d?.branch) return
     send(session.id, shipPrompt({ branch: d.branch, upstream: d.upstream, ahead, files, pr: openPr }), [])
     setShip(false)
+  }
+
+  // the PR's menu, and the confirm for Merge / Merge when ready, holding the info (and head sha) it shows
+  const [menu, setMenu] = useState<Anchor | null>(null)
+  const [confirm, setConfirm] = useState<{ auto: boolean; info: MergeInfo } | null>(null)
+  const [merging, setMerging] = useState(false)
+  const [mergeErr, setMergeErr] = useState('')
+  const refreshPr = () => setPrN((x) => x + 1)
+  const doMerge = async () => {
+    if (!confirm || !repo || merging) return
+    setMerging(true); setMergeErr('')
+    const { auto, info: at } = confirm
+    try {
+      const r = auto ? await window.api.gitPrAutoMerge(repo.dir, at.pr.headRefOid, true) : await window.api.gitPrMerge(repo.dir, at.pr.headRefOid)
+      if (r.ok) { setConfirm(null); notice(auto ? `Auto-merge is on for PR #${r.number}: GitHub merges it (${r.method}) when its checks pass.` : `Merged PR #${r.number} (${r.method}).`); refreshPr() }
+      else setMergeErr(r.reason)
+    } catch (e) { setMergeErr(String((e as Error)?.message ?? e)) }
+    setMerging(false)
+  }
+  const autoOff = async () => {
+    if (!repo || !isPr(info) || merging) return
+    setMerging(true)
+    try {
+      const r = await window.api.gitPrAutoMerge(repo.dir, info.pr.headRefOid, false)
+      notice(r.ok ? `Auto-merge is off for PR #${r.number}.` : `Could not turn auto-merge off: ${r.reason}`)
+    } catch (e) { notice(`Could not turn auto-merge off: ${(e as Error)?.message ?? e}`) }
+    setMerging(false); refreshPr()
+  }
+  const fixChecks = () => {
+    if (!session || !pr) return
+    markSent(key, { sha: pr.headRefOid }) // Auto-fix does not send it again for this head
+    send(session.id, fixChecksPrompt(pr.number, pr.failing ?? []), [])
+  }
+  const archiveNow = () => {
+    if (!session) return
+    archiveKeepingWork(key)
+    offerUndo(`Archived ${session.title}`, () => archive(key, false))
   }
 
   const tot = rows.reduce((a, r) => ({ add: a.add + (r.add ?? 0), del: a.del + (r.del ?? 0) }), { add: 0, del: 0 })
@@ -145,15 +196,33 @@ export function ChangesView({ session, diff, shown, onDiff, onOpenGit }: {
             <button className="pri" onClick={onOpenGit} title="Stage, commit and push in the Git view" data-testid="changes-commit"><Icon name="git-commit" />Commit…</button>
           </span>
         </div>
-        {isPr(pr) && (
+        {isPr(info) && pr && (
           <div className="prchip" data-testid="changes-pr">
             <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title}>PR #{pr.number}</a>
             {prWord(pr) && <span>{prWord(pr)}</span>}
             <span className={`ci-${pr.checks.state}`} data-testid="changes-pr-checks">{pr.checks.state === 'none' ? 'no checks' : pr.checks.state}</span>
             {pr.checks.total > 0 && <span>{checksText(pr.checks)}</span>}
+            {pr.autoMerge && pr.state === 'OPEN' && <span data-testid="changes-pr-automerge">merge when ready</span>}
+            <span className="practs">
+              {openPr && pr.checks.state === 'failing' && (
+                <button onClick={fixChecks} disabled={session.busy} title={session.busy ? 'The thread is working' : `Ask Claude to fix ${pr.failing?.length ? pr.failing.join(', ') : 'the failing checks'} and push to PR #${pr.number}`} data-testid="changes-pr-fix">
+                  <Icon name="wrench" />Fix failing checks
+                </button>
+              )}
+              {openPr && (
+                <button onClick={() => { setMergeErr(''); setConfirm({ auto: false, info }) }} disabled={!!info.block || merging} title={info.block ?? `Merge PR #${pr.number} (${info.method})`} data-testid="changes-pr-merge">
+                  <Icon name="git-merge" />Merge
+                </button>
+              )}
+              {!openPr && (pr.state === 'MERGED' || pr.state === 'CLOSED') && !st?.archivedAt && (
+                <button onClick={archiveNow} title="Archive this thread; its worktree and branch are kept" data-testid="changes-pr-archive"><Icon name="archive" />Archive this thread</button>
+              )}
+              <button onClick={(e) => setMenu(anchorOf(e.currentTarget))} title="Auto-fix, Merge when ready, Auto-archive" aria-label="Pull request options" data-testid="changes-pr-menu"><Icon name="kebab-vertical" /></button>
+            </span>
           </div>
         )}
-        {pr && 'unavailable' in pr && <div className="prchip" title={pr.unavailable} data-testid="changes-pr-unavailable">Pull request status unavailable</div>}
+        {openPr && isPr(info) && info.block && <div className="prchip prblock" data-testid="changes-pr-block">Merge: {info.block}</div>}
+        {info && 'unavailable' in info && <div className="prchip" title={info.unavailable} data-testid="changes-pr-unavailable">Pull request status unavailable</div>}
         <div className="flist">
           {err && <div className="hint">{err}</div>}
           {!err && !d && !edits.length && <div className="hint">Reading changes…</div>}
@@ -169,6 +238,44 @@ export function ChangesView({ session, diff, shown, onDiff, onOpenGit }: {
           ))}
         </div>
       </div>
+      {menu && isPr(info) && pr && (
+        <Popover anchor={menu} onClose={() => setMenu(null)} width={280} align="right" testid="changes-pr-menu-pop">
+          <button className="pop-row" onClick={() => { setPrToggle(key, 'autoFix', !st?.autoFix); setMenu(null) }} data-testid="changes-pr-autofix"
+            title="When this PR's checks fail on a new commit, or a reviewer leaves new comments, ask Claude to fix them and push (once per commit, only while the thread is idle)">
+            <Icon name={st?.autoFix ? 'check' : 'blank'} />Auto-fix
+          </button>
+          <button className="pop-row" disabled={!openPr || merging || (!pr.autoMerge && !!info.autoBlock)} data-testid="changes-pr-automerge-toggle"
+            onClick={() => { setMenu(null); if (pr.autoMerge) void autoOff(); else { setMergeErr(''); setConfirm({ auto: true, info }) } }}
+            title={pr.autoMerge ? "Turn GitHub's auto-merge off for this PR" : info.autoBlock ?? "Turn on GitHub's auto-merge: it merges the PR when its checks pass"}>
+            <Icon name={pr.autoMerge ? 'check' : 'blank'} />Merge when ready
+          </button>
+          <button className="pop-row" onClick={() => { setPrToggle(key, 'autoArchive', !st?.autoArchive); setMenu(null) }} data-testid="changes-pr-autoarchive"
+            title="Archive this thread when its PR merges or closes (not while it is working); its worktree and branch are kept">
+            <Icon name={st?.autoArchive ? 'check' : 'blank'} />Auto-archive after PR merge or close
+          </button>
+          {!pr.autoMerge && info.autoBlock && openPr && <div className="pop-hint">Merge when ready: {info.autoBlock}</div>}
+        </Popover>
+      )}
+      {confirm && (
+        <Modal title={confirm.auto ? `Merge when ready: PR #${confirm.info.pr.number}` : `Merge PR #${confirm.info.pr.number}`} onClose={() => { if (!merging) setConfirm(null) }} testid="changes-merge-modal">
+          <div className="confirm">
+            <div className="confirm-body">
+              <div>{confirm.info.repo} <b>#{confirm.info.pr.number}</b> {confirm.info.pr.title}</div>
+              <div>Into <b>{confirm.info.pr.baseRefName}</b> by <b>{confirm.info.method}</b>, at head <code>{confirm.info.pr.headRefOid.slice(0, 7)}</code></div>
+              <div>Checks: <span className={`ci-${confirm.info.pr.checks.state}`}>{confirm.info.pr.checks.state === 'none' ? 'no checks' : confirm.info.pr.checks.state}</span>{confirm.info.pr.checks.total > 0 ? `, ${confirm.info.pr.checksText}` : ''}</div>
+              <div className="dim">{confirm.auto
+                ? 'GitHub merges it when its required checks pass, unless new commits are pushed first. The branch and the worktree are kept.'
+                : 'GitHub merges it now, only if the head is still the one above. The branch and the worktree are kept.'}</div>
+              {mergeErr && <div className="ship-warn" data-testid="changes-merge-error">{mergeErr}</div>}
+            </div>
+            <div className="drow confirm-acts">
+              <span className="dspace" />
+              <button className="dbtn" autoFocus onClick={() => setConfirm(null)} disabled={merging} data-testid="changes-merge-cancel">Cancel</button>
+              <button className="dbtn primary" onClick={() => void doMerge()} disabled={merging} data-testid="changes-merge-go">{merging ? 'Merging…' : confirm.auto ? 'Merge when ready' : 'Merge'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {ship && d?.branch && (
         <Modal title={openPr ? `Update PR #${openPr.number}` : 'Ship this branch'} onClose={() => setShip(false)} testid="changes-ship-modal">
           <div className="confirm">

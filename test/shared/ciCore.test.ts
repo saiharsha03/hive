@@ -1,7 +1,15 @@
 // a branch's pull request checks, and the message that asks a thread to ship its branch
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { checksText, parsePrView, protectedBranch, prViewError, shipPrompt, summarizeChecks } from '../../src/shared/ciCore'
+import { checksText, failingChecks, parsePrView, protectedBranch, prViewError, shipPrompt, summarizeChecks } from '../../src/shared/ciCore'
+
+test('failingChecks names each failing check run or status once', () => {
+  assert.deepEqual(failingChecks([
+    { name: 'test', status: 'COMPLETED', conclusion: 'FAILURE' }, { name: 'test', status: 'COMPLETED', conclusion: 'TIMED_OUT' },
+    { name: 'lint', status: 'COMPLETED', conclusion: 'SUCCESS' }, { name: 'e2e', status: 'IN_PROGRESS' }, { context: 'ci/x', state: 'FAILURE' }, null,
+  ]), ['test', 'ci/x'])
+  assert.deepEqual(failingChecks(undefined), [])
+})
 
 const run = (status: string, conclusion = '') => ({ __typename: 'CheckRun', name: 'x', status, conclusion })
 const ctx = (state: string) => ({ __typename: 'StatusContext', context: 'y', state })

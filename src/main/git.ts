@@ -13,7 +13,7 @@ import { appName } from '../shared/appName'
 import { blocked, TEST_MODE } from './testMode'
 import { gh, ghWrite } from './gh'
 import { parsePrView, prViewError, type PrChecksResult } from '../shared/ciCore'
-import { capDiff, numstatFiles, parseMergeInfo, runMerge, safeBranch, type MergeInfoResult, type MergeResult } from '../shared/prCore'
+import { capDiff, numstatFiles, parseMergeInfo, runAutoMerge, runMerge, safeBranch, type MergeInfoResult, type MergeResult } from '../shared/prCore'
 
 
 const PARALLEL = 6
@@ -193,7 +193,7 @@ export async function prChecks(dir: string): Promise<PrChecksResult> {
 }
 
 // ---- the phone's review and merge of a thread's branch ----
-const PR_FIELDS = 'number,url,title,state,isDraft,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup'
+const PR_FIELDS = 'number,url,title,state,isDraft,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup,autoMergeRequest,author,comments,reviews'
 const REPO_FIELDS = 'mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,defaultBranchRef,nameWithOwner'
 
 // read-only, live: the folder's PR, its checks, the merge method the repo allows, and whether a merge is allowed now
@@ -259,6 +259,14 @@ export async function prMerge(dir: string, headSha: string): Promise<MergeResult
   const d = await resolve(dir)
   if (TEST_MODE) return { ok: false, reason: blocked('merging a pull request') }
   return runMerge(await prMergeInfo(d), String(headSha), (args) => ghWrite(args, { cwd: d, timeout: 120_000 }))
+}
+
+// "Merge when ready": GitHub's auto-merge on (the same guards as a merge, except the checks, which it waits for) or
+// off. The branch and the worktree are left as they are.
+export async function prAutoMerge(dir: string, headSha: string, on: boolean): Promise<MergeResult> {
+  const d = await resolve(dir)
+  if (TEST_MODE) return { ok: false, reason: blocked('turning auto-merge on or off') }
+  return runAutoMerge(await prMergeInfo(d), String(headSha), !!on, (args) => ghWrite(args, { cwd: d, timeout: 60_000 }))
 }
 
 // the listed repo or worktree a file is in (the deepest one, so a worktree inside a repo folder wins), and the

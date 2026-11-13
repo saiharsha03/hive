@@ -15,6 +15,7 @@ import { onStatusChange } from './statusStore'
 import { setAskFix, setFileOpener } from './EditorView'
 import { insertIntoComposer } from './SessionView'
 import type { Session } from './chat'
+import { startPrAuto } from './prAuto'
 
 // ---- reply text: joined and drawn once per frame, only for the tabs on screen ----
 const deltas = new Map<string, string>()
@@ -77,6 +78,7 @@ let started = false
 export function startEngine() {
   if (started) return
   started = true
+  startPrAuto() // Auto-fix and Auto-archive for threads with a pull request
   void window.api.handoffAt().then((n) => { handoffAtTokens = n }).catch(() => {})
   window.api.workspaceRoot().then(async (root) => {
     const start = root || (await window.api.homeDir())
