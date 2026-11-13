@@ -16,13 +16,13 @@
     "desktop",
     "developer-tools"
   ],
-  "homepage": "https://github.com/saiharsha03/hive#readme",
+  "homepage": "https://github.com/saiharsha03/orbit#readme",
   "bugs": {
-    "url": "https://github.com/saiharsha03/hive/issues"
+    "url": "https://github.com/saiharsha03/orbit/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/saiharsha03/hive.git"
+    "url": "git+https://github.com/saiharsha03/orbit.git"
   },
   "license": "MIT",
   "author": "saiharsha03",

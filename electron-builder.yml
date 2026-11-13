@@ -29,7 +29,7 @@ npmRebuild: false
 publish:
   provider: github
   owner: saiharsha03
-  repo: hive
+  repo: orbit
 
 win:
   icon: build/icon.ico

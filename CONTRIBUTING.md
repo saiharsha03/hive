@@ -14,8 +14,8 @@ You need:
 - Windows is the primary platform. Linux runs CI; macOS is untested.
 
 ```sh
-git clone https://github.com/saiharsha03/hive.git
-cd hive
+git clone https://github.com/saiharsha03/orbit.git
+cd orbit
 npm install
 npm run dev
 ```

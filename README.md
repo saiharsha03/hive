@@ -8,7 +8,7 @@
 A desktop app for running and steering several Claude Code agents at once.</p>
 
 <p align="center">
-  <a href="https://github.com/saiharsha03/hive/actions/workflows/ci.yml"><img src="https://github.com/saiharsha03/hive/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/saiharsha03/orbit/actions/workflows/ci.yml"><img src="https://github.com/saiharsha03/orbit/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" alt="Windows">
 </p>
@@ -335,8 +335,8 @@ Hive uses your Claude subscription. If `ANTHROPIC_API_KEY` is set, the SDK uses 
 **From source**
 
 ```sh
-git clone https://github.com/saiharsha03/hive.git
-cd hive
+git clone https://github.com/saiharsha03/orbit.git
+cd orbit
 npm install
 npm run dev        # development, with hot reload
 npm run build      # production build into out/

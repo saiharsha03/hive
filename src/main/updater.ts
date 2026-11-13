@@ -6,7 +6,7 @@ import { autoUpdater } from 'electron-updater'
 import { isNewer, type UpdateState } from '../shared/versionCore'
 import { TEST_MODE } from './testMode'
 
-const RELEASES = 'https://api.github.com/repos/saiharsha03/hive/releases/latest'
+const RELEASES = 'https://api.github.com/repos/saiharsha03/orbit/releases/latest'
 const EVERY_MS = 6 * 60 * 60_000
 const portable = () => !!process.env.PORTABLE_EXECUTABLE_DIR
 
@@ -21,7 +21,7 @@ async function checkPortable(): Promise<void> {
   if (!res.ok) throw new Error(`GitHub releases: HTTP ${res.status}`)
   const r = (await res.json()) as { tag_name?: string; html_url?: string }
   // only a release page of this repo is ever opened, whatever the answer says
-  const url = r.html_url?.startsWith('https://github.com/saiharsha03/hive/releases/') ? r.html_url : 'https://github.com/saiharsha03/hive/releases/latest'
+  const url = r.html_url?.startsWith('https://github.com/saiharsha03/orbit/releases/') ? r.html_url : 'https://github.com/saiharsha03/orbit/releases/latest'
   if (r.tag_name && isNewer(r.tag_name, app.getVersion())) set({ kind: 'available', version: r.tag_name.replace(/^v/i, ''), url })
 }
 
