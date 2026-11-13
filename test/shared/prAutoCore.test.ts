@@ -36,7 +36,7 @@ test('autoFixNow sends review comments newer than the switch-on and the last sen
   const r = autoFixNow(x({ ...quiet, feedback: [{ author: 'robin', at: 50 }, { author: 'sam', at: 150 }, { author: 'robin', at: 200 }] }), 12)
   assert.equal(r?.kind, 'review')
   assert.equal(r?.kind === 'review' && r.at, 200)
-  assert.ok(r?.text.includes('from dan, kyle'))
+  assert.ok(r?.text.includes('from sam, robin'))
   assert.equal(autoFixNow(x({ ...quiet, feedback: [{ author: 'sam', at: 150 }], sentAt: 150 }), 12), null)
   // failing checks on a new head go first
   assert.equal(autoFixNow(x({ feedback: [{ author: 'sam', at: 150 }] }), 12)?.kind, 'checks')

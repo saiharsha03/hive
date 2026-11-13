@@ -120,15 +120,15 @@ test('reviewFeedback keeps comments from trusted people and apps other than the 
     comments: [
       { author: { login: 'me' }, authorAssociation: 'OWNER', createdAt: at(1) },
       { author: { login: 'stranger' }, authorAssociation: 'NONE', createdAt: at(2) },
-      { author: { login: 'kyle' }, authorAssociation: 'MEMBER', createdAt: at(5) },
+      { author: { login: 'robin' }, authorAssociation: 'MEMBER', createdAt: at(5) },
       { author: { login: 'codecov[bot]' }, authorAssociation: 'NONE', createdAt: at(3) },
     ],
     reviews: [
-      { author: { login: 'dan' }, authorAssociation: 'COLLABORATOR', state: 'APPROVED', body: '', submittedAt: at(4) },
-      { author: { login: 'dan' }, authorAssociation: 'COLLABORATOR', state: 'CHANGES_REQUESTED', body: 'fix', submittedAt: at(6) },
+      { author: { login: 'sam' }, authorAssociation: 'COLLABORATOR', state: 'APPROVED', body: '', submittedAt: at(4) },
+      { author: { login: 'sam' }, authorAssociation: 'COLLABORATOR', state: 'CHANGES_REQUESTED', body: 'fix', submittedAt: at(6) },
     ],
   })
-  assert.deepEqual(f.map((x) => x.author), ['codecov[bot]', 'kyle', 'dan'])
+  assert.deepEqual(f.map((x) => x.author), ['codecov[bot]', 'robin', 'sam'])
   assert.deepEqual(reviewFeedback({}), [])
 })
 

@@ -438,3 +438,10 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .app .needs-note { border-radius: var(--r-row) !important; }
 .needs-note b { color: var(--signal); font-weight: 650; flex: none; }
 .needs-note span { min-width: 0; overflow-wrap: anywhere; }
+
+/* the phone link on the status line: always shown once a relay is set up, with a dot in its state's colour */
+.phone-st { display: inline-flex; align-items: center; gap: 6px; }
+.phone-st i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
+.phone-st.p-on i { background: var(--done); }
+.phone-st.p-off i { background: var(--signal); }
+.phone-st.p-none { color: var(--signal); }

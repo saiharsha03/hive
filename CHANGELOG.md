@@ -4,6 +4,17 @@ All notable changes to Orbit (called Hive until 2.0) are documented here. The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-11-13
+
+### Fixed
+
+- The status line shows the phone link again once a relay is set up: Phone connected, Phone offline or Phone not
+  paired, with a coloured dot. 2.0.0 showed it only when the phone was not paired.
+- Old shortcuts named Hive that start this checkout are renamed Orbit, and the taskbar pin takes Orbit's icon and app
+  id, so the running window groups with it.
+- A watcher's end-of-run check allows a second of slack on file times.
+- Test fixtures use neutral repo and person names.
+
 ## [2.0.0] - 2026-11-13 — Orbit
 
 ### Renamed

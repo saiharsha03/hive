@@ -189,7 +189,9 @@ export function StatusLine() {
       <span className="r" />
       <VersionsLine />
       {allow && ipWord && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `This computer's address: ${allow.ip}. Click for Allow my IP` : allow.error || 'Allow my IP'} data-testid="status-allow">{ipWord}</button>}
-      {phone?.configured && !phone.paired && <button onClick={() => openPage('settings')} title="Pairing and the relay are in Settings" data-testid="status-phone">Phone not paired</button>}
+      {phone?.configured && <button className={`phone-st ${!phone.paired ? 'p-none' : phone.connected ? 'p-on' : 'p-off'}`} onClick={() => openPage('settings')}
+        title={!phone.paired ? 'Pairing and the relay are in Settings' : phone.connected ? 'The phone is connected through the relay' : 'The phone is paired but not connected right now'} data-testid="status-phone">
+        <i aria-hidden />{!phone.paired ? 'Phone not paired' : phone.connected ? 'Phone connected' : 'Phone offline'}</button>}
       {quiet?.on && inQuiet(quiet.from, quiet.to) && <button onClick={() => openPage('settings')} title={`Quiet hours ${quiet.from} to ${quiet.to}: notifications stay silent`} data-testid="status-quiet">Quiet until {quiet.to}</button>}
       {u ? <span className="undo" data-testid="undo-line">{u.text}<button onClick={() => runUndo()} data-testid="undo">Undo</button></span>
         : update && <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Orbit ${update.version} available`}</button>}
