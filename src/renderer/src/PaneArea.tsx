@@ -5,7 +5,8 @@
 import { memo, useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { activate, closeSession, moveToBackground, newSession, visibleNow, setPanes } from './actions'
 import { activate as activateIn, focusPane, moveTab, reconcile, splitWith, MAX_PANES } from './panes'
-import { panes as panesStore, useSessionMetas, useStore, shallowEq, setSessions, getSessions, type SessionMeta } from './store'
+import { agentThreads, panes as panesStore, useSessionMetas, useStore, shallowEq, setSessions, getSessions, type SessionMeta } from './store'
+import { AgentWord } from './AgentWord'
 import { activateSession } from './background'
 import { isDirty, useDirtyVersion } from './EditorView'
 import { TabMenu } from './TabMenu'
@@ -19,7 +20,7 @@ export const TAB_MIME = 'application/x-hive-tab'
 
 // a tab's state word: threads only (files and pages have none)
 export function tabWord(s: SessionMeta, live?: LiveRow): [string, Tone] | null {
-  if (s.tool || s.file) return null
+  if (s.tool || s.file || s.agent) return null // an agent thread shows its own word (AgentWord)
   if (s.compacting) return ['COMPACTING', 'work']
   if (live) { const l = liveLook(live); return [l.word, l.tone] }
   if (s.busy) return ['WORKING', 'work']
@@ -41,6 +42,7 @@ export function splitTabBeside(tab: string, beside: string) {
 export function TabRow() {
   const metas = useSessionMetas()
   const live = useStore(liveStore, (l) => l)
+  const agents = useStore(agentThreads, (a) => a)
   const liveOf = new Map([...live.waiting, ...live.working].map((r) => [r.id, r]))
   const p = useStore(panesStore, (x) => x)
   useDirtyVersion() // a file tab's unsaved mark
@@ -79,7 +81,7 @@ export function TabRow() {
             title={`${s.title}${tabs.length > 1 ? ' (drag onto a pane to move it, onto its edge to split)' : ''}`}
             data-testid="tab" data-id={id} data-index={i}>
             <span className="tab-t">{s.title}</span>
-            {w && (w[1] === 'wait' || w[1] === 'fail') && <State word={w[0]} tone={w[1]} />}
+            {s.agent ? <AgentWord state={agents[id]?.state ?? 'running'} /> : w && (w[1] === 'wait' || w[1] === 'fail') && <State word={w[0]} tone={w[1]} />}
             {dirty && <span className="tab-dirty" data-testid="tab-dirty">M</span>}
             <button className="tab-x" aria-label={`Close ${s.title}`} onClick={(e) => { e.stopPropagation(); onClose(id) }} data-testid={`tab-close-${id}`}>×</button>
           </div>

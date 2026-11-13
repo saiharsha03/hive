@@ -22,6 +22,7 @@ import { buildAnswers, parseQuestions } from '../../shared/askCore'
 import { focusedTab } from './panes'
 import { age, clock, State, type Tone } from './kit'
 import type { ToolTab } from './chat'
+import { AgentRows } from './AgentView'
 
 // at rest a row shows its state word only when it needs you or failed
 const loud = (t: Tone) => t === 'wait' || t === 'fail'
@@ -381,6 +382,7 @@ const RailList = memo(function RailList({ live, focus, shown }: { live: { waitin
             {pausedRows.map((s) => savedRow(s, 'paused'))}
           </div>
         )}
+        <AgentRows focus={focus} />
         <div data-testid="section-recent">
           <div className="rail-gh"><span>Recent</span>
             <span className="rail-head">

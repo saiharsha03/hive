@@ -9,7 +9,8 @@ import '@xterm/xterm/css/xterm.css'
 import { onThemeApplied } from './appearance'
 import { Icon } from './ui'
 
-type Entry = { term: Terminal; fit: FitAddon; host: HTMLDivElement; state: 'opening' | 'live' | 'exited'; cwd: string }
+// agent: an agent thread's terminal runs that agent (Settings > Agents), not a shell
+type Entry = { term: Terminal; fit: FitAddon; host: HTMLDivElement; state: 'opening' | 'live' | 'exited'; cwd: string; agent?: string }
 const entries = new Map<string, Entry>()
 
 const v = (cs: CSSStyleDeclaration, name: string) => cs.getPropertyValue(name).trim()
@@ -39,18 +40,25 @@ function wire() {
     if (!e) return
     if (closed) { e.term.dispose(); e.host.remove(); entries.delete(id); return } // the thread was closed
     e.state = 'exited'
-    e.term.write(`\r\n\x1b[90m[shell exited with code ${code}; press Enter to start a new one]\x1b[0m\r\n`)
+    e.term.write(e.agent ? `\r\n\x1b[90m[${e.agent} exited with code ${code}; Restart starts it again]\x1b[0m\r\n`
+      : `\r\n\x1b[90m[shell exited with code ${code}; press Enter to start a new one]\x1b[0m\r\n`)
   })
 }
 
 async function start(id: string, e: Entry) {
   e.state = 'opening'
   let r: Awaited<ReturnType<typeof window.api.terminalOpen>>
-  try { r = await window.api.terminalOpen(id, e.cwd, e.term.cols, e.term.rows) } catch (err) {
+  try { r = await window.api.terminalOpen(id, e.cwd, e.term.cols, e.term.rows, e.agent) } catch (err) {
     // the shell did not start (a wrong shell path, a folder that is gone): say so, and Enter tries again
     if (entries.get(id) !== e) return
     e.state = 'exited'
     const why = String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    if (e.agent) {
+      // an agent that did not start (not on PATH, a bad argument) has failed; Restart tries again
+      window.dispatchEvent(new CustomEvent('hive:agent-failed', { detail: id }))
+      e.term.write(`\r\n\x1b[31m[${e.agent} did not start: ${why}]\x1b[0m\r\n\x1b[90m[Restart tries again]\x1b[0m\r\n`)
+      return
+    }
     e.term.write(`\r\n\x1b[31m[the shell did not start: ${why}]\x1b[0m\r\n\x1b[90m[press Enter to try again]\x1b[0m\r\n`)
     return
   }
@@ -62,7 +70,7 @@ async function start(id: string, e: Entry) {
   void window.api.terminalResize(id, e.term.cols, e.term.rows)
 }
 
-function create(id: string, cwd: string): Entry {
+function create(id: string, cwd: string, agent?: string): Entry {
   wire()
   const host = document.createElement('div')
   host.className = 'term-host'
@@ -76,7 +84,7 @@ function create(id: string, cwd: string): Entry {
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
-  const e: Entry = { term, fit, host, state: 'opening', cwd }
+  const e: Entry = { term, fit, host, state: 'opening', cwd, agent }
   // Ctrl+C copies when there is a selection (else it is the interrupt), Ctrl+V pastes, Ctrl+` and Ctrl+J belong to the panel
   term.attachCustomKeyEventHandler((ev) => {
     if (ev.type !== 'keydown' || !ev.ctrlKey || ev.altKey) return true
@@ -93,7 +101,7 @@ function create(id: string, cwd: string): Entry {
   })
   term.onData((d) => {
     if (e.state === 'live') void window.api.terminalWrite(id, d)
-    else if (e.state === 'exited' && d === '\r') { term.reset(); void start(id, e) }
+    else if (e.state === 'exited' && d === '\r' && !e.agent) { term.reset(); void start(id, e) }
   })
   term.onResize(({ cols, rows }) => { if (e.state === 'live') void window.api.terminalResize(id, cols, rows) })
   entries.set(id, e)
@@ -133,6 +141,46 @@ export function disposeTerminal(id: string) {
   void window.api.terminalKill(id).catch(() => {})
 }
 
+// an agent thread's Restart: its process stops and starts again under the same id, in the same screen
+export async function restartTerminal(id: string) {
+  const e = entries.get(id)
+  if (!e || e.state === 'opening') return
+  e.state = 'opening'
+  await window.api.terminalKill(id, true).catch(() => {})
+  e.term.reset()
+  await start(id, e)
+}
+// an agent thread's Stop: its process ends, the screen and the tab stay
+export async function stopTerminal(id: string) {
+  const e = entries.get(id)
+  if (!e || e.state !== 'live') return
+  e.state = 'exited'
+  await window.api.terminalKill(id, true).catch(() => {})
+  e.term.write(`\r\n\x1b[90m[stopped; Restart starts it again]\x1b[0m\r\n`)
+}
+
+// lend a terminal the slot (made and started on first use); returns the cleanup that takes it back, not disposes it
+function lend(el: HTMLDivElement, id: string, cwd: string, agent: string | undefined, started: () => void): () => void {
+  const fresh = !entries.has(id)
+  const e = entries.get(id) ?? create(id, cwd, agent)
+  el.appendChild(e.host)
+  if (!e.term.element) e.term.open(e.host)
+  const refit = () => { if (el.offsetHeight > 0 && el.offsetWidth > 0) try { e.fit.fit() } catch { /* not laid out yet */ } }
+  refit()
+  if (fresh) void start(id, e).then(started)
+  const ro = new ResizeObserver(refit)
+  ro.observe(el)
+  return () => { ro.disconnect(); e.host.remove() }
+}
+
+// an agent thread's tab body: its terminal, focused while the tab is
+export function AgentTerminal({ id, cwd, agent, focused }: { id: string; cwd: string; agent: string; focused: boolean }) {
+  const slot = useRef<HTMLDivElement>(null)
+  useEffect(() => { const el = slot.current; return el ? lend(el, id, cwd, agent, () => {}) : undefined }, [id, cwd, agent])
+  useEffect(() => { if (focused) entries.get(id)?.term.focus() }, [focused, id])
+  return <div className="term-slot" ref={slot} data-testid="agent-terminal" />
+}
+
 // The Terminal tab: the focused thread's shell, with a switcher when several chats are on screen
 export function TerminalView({ targets, current, onPick, onSendToChat, focus }: {
   targets: TermTarget[]; current: string | null; onPick: (tabId: string) => void; onSendToChat: (tabId: string, text: string) => void; focus?: number
@@ -145,16 +193,7 @@ export function TerminalView({ targets, current, onPick, onSendToChat, focus }: 
   useEffect(() => {
     const el = slot.current
     if (!t || !el) return
-    const fresh = !entries.has(t.tabId)
-    const e = entries.get(t.tabId) ?? create(t.tabId, t.cwd)
-    el.appendChild(e.host)
-    if (!e.term.element) e.term.open(e.host)
-    const refit = () => { if (el.offsetHeight > 0 && el.offsetWidth > 0) try { e.fit.fit() } catch { /* not laid out yet */ } }
-    refit()
-    if (fresh) void start(t.tabId, e).then(() => bump((n) => n + 1))
-    const ro = new ResizeObserver(refit)
-    ro.observe(el)
-    return () => { ro.disconnect(); e.host.remove() }
+    return lend(el, t.tabId, t.cwd, undefined, () => bump((n) => n + 1))
   }, [t?.tabId, t?.cwd])
   // Ctrl+` or the Terminal button: focus the shell
   useEffect(() => { if (t && focus) entries.get(t.tabId)?.term.focus() }, [focus])

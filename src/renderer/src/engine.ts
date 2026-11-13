@@ -35,7 +35,7 @@ function flushDeltas(which: (tab: string) => boolean) {
 export type HandoffState = { total: number; offer: boolean; dismissed?: { total: number; compactions: number }; pending?: { file: string; since: number }; failed?: boolean }
 export const handoffs = createStore<Record<string, HandoffState>>({})
 let handoffAtTokens = HANDOFF_AT_DEFAULT
-const canHandOff = (s: Session) => !s.tool && !s.file && !isWatcherTab(s.id)
+const canHandOff = (s: Session) => !s.tool && !s.file && !s.agent && !isWatcherTab(s.id)
 const linksToSession = new Map<string, string>() // new tab id -> the old thread's session id (worktree links)
 async function startHandoffThread(from: Session, file: string) {
   handoffs.set((all) => { const { [from.id]: _gone, ...rest } = all; return rest })
@@ -197,7 +197,7 @@ export function startEngine() {
     const all = getSessions()
     for (const id of [...sentBackground.keys()]) if (!all.some((s) => s.id === id)) sentBackground.delete(id)
     for (const s of all) {
-      if (s.tool || s.file || sentBackground.get(s.id) === s.background) continue
+      if (s.tool || s.file || s.agent || sentBackground.get(s.id) === s.background) continue
       sentBackground.set(s.id, s.background)
       void window.api.chatSetBackground(s.id, s.background)
     }

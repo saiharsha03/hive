@@ -38,6 +38,7 @@ export type Session = {
   history?: { count: number; more: boolean }
   file?: string // a file tab (id "file:<path>"): the editor, not a conversation
   tool?: ToolTab // a tool tab (id "tool:<name>"): that panel, full size
+  agent?: string // an agent thread (id "agent:<n>"): that agent's own terminal (Settings > Agents name); not kept across restarts
   background: boolean // live but hidden from the tab bar
   waitingReason?: string // why the user is needed (Claude's words, or Finished / Failed + first line)
   waitingSince?: number

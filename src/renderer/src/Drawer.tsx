@@ -66,7 +66,7 @@ export function Drawer() {
   const metas = useSessionMetas()
   const shown = useStore(panesStore, (p) => p.panes.map((x) => x.active ?? '').join(' '))
   const focus = useStore(panesStore, focusedTab)
-  const threads: TermTarget[] = shown.split(' ').map((id) => metas.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s && !s.tool && !s.file)
+  const threads: TermTarget[] = shown.split(' ').map((id) => metas.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s && !s.tool && !s.file && !s.agent)
     .map((s) => ({ tabId: s.id, title: s.title, cwd: s.worktrees?.at(-1)?.path ?? s.cwd ?? '' }))
   const targets = [...mine, ...threads]
   const current = targets.find((t) => t.tabId === d.termTab) ?? mine.at(-1) ?? targets[0] ?? null

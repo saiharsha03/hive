@@ -44,8 +44,8 @@ export function useInspected(): SessionMeta | undefined {
   const metas = useSessionMetas()
   const focus = useStore(panesStore, focusedTab)
   const f = metas.find((s) => s.id === focus)
-  if (f && !f.tool && !f.file) lastThread = f.id
-  return f && !f.tool && !f.file ? f : metas.find((s) => s.id === lastThread)
+  if (f && !f.tool && !f.file && !f.agent) lastThread = f.id
+  return f && !f.tool && !f.file && !f.agent ? f : metas.find((s) => s.id === lastThread)
 }
 
 export const Inspector = memo(function Inspector() {

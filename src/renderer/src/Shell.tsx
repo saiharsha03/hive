@@ -23,6 +23,7 @@ import {
 } from './actions'
 import { PAGE_LABEL, PAGE_KEYS, type ToolTab } from './chat'
 import { CloseAsk } from './CloseAsk'
+import { AgentAsk, AgentPane, agentDefs, askAgentThread } from './AgentView'
 import { panes as panesStore, setSessions, useSessionMetas, useStore } from './store'
 import { focusedTab, activate as activateIn } from './panes'
 import { RunningPage } from './pages/RunningPage'
@@ -67,6 +68,7 @@ export function Shell() {
   const pv = useStore(preview, (p) => p)
   const toasts = useStore(notices, (n) => n)
   const quarry = useQuarry() // Quarry's page only when it is installed and usable
+  const agents = useStore(agentDefs, (a) => a)
 
   // the deploy wizard's and the scripts' rows join the threads in Needs you / Working
   useEffect(() => { setExtraRows([...(deploy.liveRow ? [deploy.liveRow] : []), ...scripts.liveRows]) }, [deploy.liveRow, scripts.liveRows])
@@ -80,6 +82,9 @@ export function Shell() {
     { id: 'view:settings', group: 'Views', label: PAGE_LABEL.settings, hint: keysOf('settings'), run: () => openPage('settings') },
     { id: 'new', group: 'Actions', label: 'New thread', hint: 'Ctrl+N', run: () => newSession() },
     { id: 'new-beside', group: 'Actions', label: 'New thread beside', hint: 'Ctrl+\\', run: () => newBeside() },
+    // another command-line agent in a tab of its own (Settings > Agents)
+    ...(agents.length ? agents.map((d): Command => ({ id: `agent:${d.name}`, group: 'Actions', label: `New agent thread: ${d.name}`, hint: d.command, run: () => askAgentThread(d.name) }))
+      : [{ id: 'agent-setup', group: 'Actions' as const, label: 'New agent thread (add an agent in Settings first)', run: () => { pickSettingsSection('agents'); openPage('settings') } }]),
     { id: 'next-needs', group: 'Actions', label: 'Next thread that needs me', hint: 'Ctrl+.', run: () => nextNeedsMe() },
     { id: 'reopen', group: 'Actions', label: 'Reopen the last closed thread', hint: 'Ctrl+Shift+T', run: () => reopenClosed() },
     { id: 'stop-all', group: 'Actions', label: 'Stop everything', hint: 'Ctrl+Alt+Esc', run: () => void stopEverything() },
@@ -93,14 +98,14 @@ export function Shell() {
     { id: 'theme-next', group: 'Actions', label: 'Next theme', hint: 'Ctrl+Alt+T', run: () => { cycleTheme(1) } },
     ...UI_FONTS.map((f): Command => ({ id: `font:${f.id}`, group: 'Actions', label: `UI font: ${f.label}`, run: () => setFonts({ ui: f.id }) })),
     ...CODE_FONTS.map((f): Command => ({ id: `code-font:${f.id}`, group: 'Actions', label: `Code font: ${f.label}`, run: () => setFonts({ code: f.id }) })),
-    ...(focus && focused && !focused.tool && !focused.file ? [
+    ...(focus && focused && !focused.tool && !focused.file && !focused.agent ? [
       { id: 'bg', group: 'Actions' as const, label: 'Move this thread to the background', run: () => moveToBackground(focus) },
       { id: 'close', group: 'Actions' as const, label: 'Close this tab', hint: 'Ctrl+W', run: () => closeSession(focus) },
       { id: 'export', group: 'Actions' as const, label: 'Export this thread as Markdown', run: () => window.dispatchEvent(new CustomEvent('hive:export', { detail: focus })) },
     ] : []),
     { id: 'quit', group: 'Actions', label: 'Quit Hive (threads stop; closing the window only hides it)', hint: 'Ctrl+Q', run: () => void window.api.quitApp() },
     { id: 'update', group: 'Actions', label: 'Check for Hive updates', run: () => void window.api.updateCheck().then(() => window.api.updateState()).then((u) => notice(u ? `Hive ${u.version} is ${u.kind === 'ready' ? 'downloaded: restart from the status line' : 'available'}` : 'No newer Hive release')).catch(() => {}) },
-  ], [live, metas, focus, focused, quarry?.available])
+  ], [live, metas, focus, focused, quarry?.available, agents])
   const src: PaletteSources = useMemo(() => ({
     commands,
     files: async (q) => {
@@ -119,7 +124,7 @@ export function Shell() {
       if (v === 'settings-claude') { pickSettingsSection('claude'); return openPage('settings') }
       if (v) return openPage(v as ToolTab)
       // anything else goes into the focused thread's message box, ready to send (a new thread when none)
-      const id = focused && !focused.tool && !focused.file ? focused.id : newSession()
+      const id = focused && !focused.tool && !focused.file && !focused.agent ? focused.id : newSession()
       insertIntoComposer(id, `/${c.name} `)
     },
   }), [commands, focused])
@@ -237,6 +242,7 @@ export function Shell() {
     if (!s) return null
     if (s.file) return <FileEditor key={s.id} path={s.file} onClosed={() => closeSession(s.id)} />
     if (s.tool) return <Boundary key={s.id} name={PAGE_LABEL[s.tool]}><PageFor page={s.tool} deploy={deploy} onAccounts={() => setAccountsOpen(true)} /></Boundary>
+    if (s.agent) return <Boundary key={s.id} name={s.title}><AgentPane id={s.id} focused={isFocused} /></Boundary>
     return <Boundary key={s.id} name="This thread"><ThreadPane id={s.id} focused={isFocused} /></Boundary>
   }
   const empty = <Welcome onPalette={() => setPaletteN((n) => n + 1)} />
@@ -285,6 +291,7 @@ export function Shell() {
       )}
       {dropped && <DropPrompt path={dropped} choices={dropChoices} onPick={(c) => startFromFile(c, dropped)} onCancel={() => setDropped(null)} />}
       <CloseAsk />
+      <AgentAsk />
       {toasts.length > 0 && (
         <div className="toasts" role="status">
           {toasts.map((n) => (

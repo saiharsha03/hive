@@ -864,11 +864,15 @@ handle('clipboard:dismiss', (_e, id: string) => dismissClipboard(String(id)))
 setTerminalSink({
   data: (id, chunk) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('terminal:data', id, chunk) },
   exit: (id, code, closed) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('terminal:exit', id, code, closed) },
+  // an agent thread's guessed state (running, waiting, exited, failed)
+  state: (id, state) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('agent:state', id, state) },
 })
-handle('terminal:open', (_e, id: string, cwd: string, cols: number, rows: number) => openTerminal(String(id), String(cwd ?? ''), cols, rows))
+// agent: the name of an agent in Settings > Agents, for an agent thread's tab (its command runs instead of a shell)
+handle('terminal:open', (_e, id: string, cwd: string, cols: number, rows: number, agent?: string) => openTerminal(String(id), String(cwd ?? ''), cols, rows, agent ? String(agent) : undefined))
 handle('terminal:write', (_e, id: string, data: string) => writeTerminal(String(id), String(data)))
 handle('terminal:resize', (_e, id: string, cols: number, rows: number) => resizeTerminal(String(id), cols, rows))
-handle('terminal:kill', (_e, id: string) => killTerminal(String(id)))
+// quiet: a restart, so the view is not told it ended (it opens the same id again)
+handle('terminal:kill', (_e, id: string, quiet?: boolean) => killTerminal(String(id), !!quiet))
 handle('dialog:folder', async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender)!
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
@@ -1104,7 +1108,8 @@ function makeTray(): void {
   ]))
   tray.on('click', showWindow)
 }
-app.on('before-quit', () => { quitting = true; saveSearchNow(); stopQuarry() })
+// terminals and agent threads stop with the app (Quit does not always pass through window-all-closed)
+app.on('before-quit', () => { quitting = true; saveSearchNow(); stopQuarry(); killAllTerminals() })
 
 // one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one
 if (!TEST_MODE && !app.requestSingleInstanceLock()) app.quit()

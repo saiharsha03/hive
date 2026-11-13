@@ -8,6 +8,7 @@ import { isAbsolute, join } from 'node:path'
 import { parseDependabotConfig, parseTime } from './dependabotCore'
 import { parseDeployConfig } from './deployCore'
 import { parseDevConfig } from './devCore'
+import { parseAgents, type AgentDef } from './agentThreadCore'
 import { parseScriptsConfig } from './scriptsCore'
 import { EFFORTS } from './statusCore'
 import { trackerOrigin } from './trackerCore'
@@ -25,10 +26,11 @@ export type Effort = (typeof EFFORTS)[number]
 // advisorModel: the model of Claude Code's server-side advisor tool for new threads (an alias or a full id; '' = off)
 // quarryPath: the Quarry exe ('' = find the installed one, 'off' = no Quarry in Hive)
 // workflows: Claude Code's Workflows feature for new threads: 'on', 'off', or '' = Claude Code's own default (by plan)
+// agents: other command-line agents an agent thread can run (none until added)
 export type General = {
   shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean; desktopNotify: boolean
   bgModel: string; bgEffort: Effort | ''; teamModel: string; teamEffort: Effort | ''; idleCloseMinutes: number; teamMemoryKb: number
-  advisorModel: string; workflows: '' | 'on' | 'off'; quarryPath: string
+  advisorModel: string; workflows: '' | 'on' | 'off'; quarryPath: string; agents: AgentDef[]
 }
 export const DEFAULT_IDLE_CLOSE_MINUTES = 30
 export const DEFAULT_TEAM_MEMORY_KB = 6
@@ -43,7 +45,7 @@ export type Settings = {
 export const emptyGeneral = (): General => ({
   shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true, desktopNotify: true,
   bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: DEFAULT_IDLE_CLOSE_MINUTES, teamMemoryKb: DEFAULT_TEAM_MEMORY_KB,
-  advisorModel: '', workflows: '', quarryPath: '',
+  advisorModel: '', workflows: '', quarryPath: '', agents: [],
 })
 
 // what the panel edits and gets back
@@ -105,6 +107,7 @@ export function normalizeSettings(v: unknown): Settings | null {
       advisorModel: str(g.advisorModel),
       workflows: g.workflows === 'on' || g.workflows === 'off' ? g.workflows : '',
       quarryPath: str(g.quarryPath),
+      agents: parseAgents(g.agents),
     },
   }
 }

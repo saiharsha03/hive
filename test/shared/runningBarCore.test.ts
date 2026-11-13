@@ -47,6 +47,12 @@ test('the resting label: none, one, several, mixed kinds, and all four', () => {
     { total: 5, text: '5 running: 2 subagents, 1 workflow, 1 shell, 1 monitor' })
 })
 
+test('agent threads started from the thread count first in the label', () => {
+  assert.deepEqual(runningLabel([], 1), { total: 1, text: '1 agent thread running' })
+  assert.deepEqual(runningLabel([task({ id: '1' })], 2), { total: 3, text: '2 agent threads and 1 subagent running' })
+  assert.equal(runningLabel([task({ id: '1' }), task({ kind: 'local_workflow' }), task({ kind: 'local_bash' })], 1).text, '4 running: 1 agent thread, 1 subagent, 1 workflow, 1 shell')
+})
+
 test('taskDetail reads the type, model and prompt from the tool call that started the task', () => {
   const items = [
     { kind: 'user', text: 'go' },

@@ -23,7 +23,7 @@ export function BoardPage() {
   }, [])
   useEffect(load, [load])
 
-  const threads = useMemo(() => metas.filter((m) => !m.tool && !m.file), [metas])
+  const threads = useMemo(() => metas.filter((m) => !m.tool && !m.file && !m.agent), [metas])
   const cards = board?.state === 'ok' ? board.cards : NONE
   const columns = useMemo(() => columnsOf(filterCards(cards, query)), [cards, query])
   const shown = columns.reduce((n, c) => n + c.cards.length, 0)

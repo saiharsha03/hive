@@ -25,13 +25,15 @@ export function nextShellDue(tasks: Task[], now: number): number | null {
 }
 
 const WORDS: Record<RunKind, [string, string]> = { agent: ['subagent', 'subagents'], workflow: ['workflow', 'workflows'], shell: ['shell', 'shells'], monitor: ['monitor', 'monitors'] }
-// "3 subagents running", "2 subagents, 1 shell and 1 monitor running", "5 running: 2 subagents, 1 workflow, 1 shell, 1 monitor"
-export function runningLabel(listed: Task[]): { total: number; text: string } {
+// "3 subagents running", "2 subagents, 1 shell and 1 monitor running", "5 running: 2 subagents, 1 workflow, 1 shell, 1 monitor";
+// agentThreads: the agent threads started from this thread that run or may want you, counted first
+export function runningLabel(listed: Task[], agentThreads = 0): { total: number; text: string } {
   const running = listed.filter((t) => t.status === 'running')
-  const parts = ORDER.map((k) => { const n = running.filter((t) => runKind(t) === k).length; return n ? `${n} ${WORDS[k][n === 1 ? 0 : 1]}` : '' }).filter(Boolean)
-  const total = running.length
+  const parts = [agentThreads ? `${agentThreads} agent thread${agentThreads === 1 ? '' : 's'}` : '',
+    ...ORDER.map((k) => { const n = running.filter((t) => runKind(t) === k).length; return n ? `${n} ${WORDS[k][n === 1 ? 0 : 1]}` : '' })].filter(Boolean)
+  const total = running.length + agentThreads
   if (!total) return { total, text: 'Nothing running' }
-  if (parts.length === ORDER.length) return { total, text: `${total} running: ${parts.join(', ')}` }
+  if (parts.length >= ORDER.length) return { total, text: `${total} running: ${parts.join(', ')}` }
   return { total, text: `${parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]} running` }
 }
 // the heading over a group of rows, drawn only when more than one group is listed

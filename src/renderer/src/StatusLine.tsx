@@ -142,7 +142,7 @@ function VersionsLine() {
 export function StatusLine() {
   const metas = useSessionMetas()
   const focus = useStore(panesStore, focusedTab)
-  const f = metas.find((s) => s.id === focus && !s.tool && !s.file)
+  const f = metas.find((s) => s.id === focus && !s.tool && !s.file && !s.agent)
   const u = useStore(undoStore, (x) => x)
   const [ctx, setCtx] = useState<{ total: number; max: number } | null>(null)
   const [allow, setAllow] = useState<AllowStatus | null>(null)

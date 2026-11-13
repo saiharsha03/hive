@@ -34,6 +34,9 @@ body { background: var(--bg); color: var(--ink); font: var(--t-ui); font-feature
 .sw { font: var(--t-state); white-space: nowrap; color: var(--faint); }
 .sw-wait { color: var(--signal); } .sw-fail { color: var(--fail); }
 .sw-work, .sw-done, .sw-hold, .sw-idle, .sw-accent { color: var(--dim); }
+/* an agent thread's state word (AgentView.tsx) */
+.agent-st { font: var(--t-state); white-space: nowrap; }
+.agent-st.running { color: var(--work); } .agent-st.waiting { color: var(--signal); } .agent-st.failed { color: var(--fail); } .agent-st.exited { color: var(--dim); }
 .keys { font: 500 11px var(--sans); color: var(--faint); padding: 0; white-space: nowrap; }
 .btn { font: 500 12.5px/1 var(--sans); height: 28px; padding: 0 14px; border: 0; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; }
 .btn-primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }

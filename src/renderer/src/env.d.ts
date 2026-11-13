@@ -270,10 +270,11 @@ interface Window {
     devStop: (name: string) => Promise<string>
     devLogs: (name: string) => Promise<string>
     onDevUpdate: (cb: (s: import('../../shared/devCore').DevState) => void) => () => void
-    terminalOpen: (id: string, cwd: string, cols: number, rows: number) => Promise<{ scrollback: string; fresh: boolean; shell: string; cwd: string }>
+    terminalOpen: (id: string, cwd: string, cols: number, rows: number, agent?: string) => Promise<{ scrollback: string; fresh: boolean; shell: string; cwd: string; state?: import('../../shared/agentThreadCore').AgentState }>
     terminalWrite: (id: string, data: string) => Promise<void>
     terminalResize: (id: string, cols: number, rows: number) => Promise<void>
-    terminalKill: (id: string) => Promise<void>
+    terminalKill: (id: string, quiet?: boolean) => Promise<void>
+    onAgentState: (cb: (id: string, state: import('../../shared/agentThreadCore').AgentState) => void) => () => void
     onTerminalData: (cb: (id: string, chunk: string) => void) => () => void
     onTerminalExit: (cb: (id: string, code: number, closed: boolean) => void) => () => void
     // per-thread status: model / effort switches, the lists the session offers, stopping background work

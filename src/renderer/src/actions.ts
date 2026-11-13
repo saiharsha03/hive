@@ -4,7 +4,7 @@
 import { activateSession, findSession, liveRows, type LiveRow } from './background'
 import { PAGE_LABEL, workingOn, type Session, type ToolTab } from './chat'
 import { activate as activateIn, addPaneFor, focusedTab, moveTab, reconcile, splitWith, type PaneState } from './panes'
-import { createStore, getSessions, panes, setSessions } from './store'
+import { agentThreads, createStore, getSessions, panes, setSessions } from './store'
 import { clearSnooze, keepVisible } from './threads'
 import { draftEmpty, prefillDraft, type Attachment } from './SessionView'
 import { fileOfTab, fileTabId, openInEditor, releaseFile } from './EditorView'
@@ -261,7 +261,11 @@ export function closeTabs(closing: string[]) {
   }
   if (closed.length > 20) closed.splice(0, closed.length - 20)
   setSessions((cur) => cur.filter((s) => !closing.includes(s.id)))
-  closing.forEach((id) => { if (!fileOfTab(id) && !id.startsWith('tool:')) { void window.api.chatClose(id); onClosedTab?.(id); forgetStatus(id); forgetSent(id) } })
+  closing.forEach((id) => {
+    // an agent thread ends with its tab: its process and its screen (AgentView does it, so this file stays free of xterm)
+    if (id.startsWith('agent:')) { window.dispatchEvent(new CustomEvent('hive:agent-closed', { detail: id })); agentThreads.set((a) => { const { [id]: _gone, ...rest } = a; return rest }) }
+    else if (!fileOfTab(id) && !id.startsWith('tool:')) { void window.api.chatClose(id); onClosedTab?.(id); forgetStatus(id); forgetSent(id) }
+  })
 }
 // a thread still working (a turn running, or a subagent / shell / workflow of its own) asks first: keep it going in
 // the background, or close it (stops it). An idle one just closes. Several at once (Close all) queue up.

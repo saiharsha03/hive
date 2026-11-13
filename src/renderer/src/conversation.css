@@ -199,6 +199,8 @@
 .runbar-g { display: flex; align-items: center; gap: var(--s1); width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: 650 12.5px/1.4 var(--sans); color: var(--label); padding: var(--s3) var(--s2) var(--s1); }
 .runbar-g:hover { color: var(--hi); }
 .runbar-g .codicon { font-size: 13px; }
+.runbar-agent { display: flex; align-items: baseline; gap: var(--s2); width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; color: var(--ink); padding: var(--s1) var(--s2); }
+.runbar-agent:hover { color: var(--hi); }
 .runbar-gn { margin-left: var(--s2); color: var(--dim); font-weight: 500; font-variant-numeric: tabular-nums; }
 .runbar .item { grid-template-columns: 56px minmax(0, 1fr); padding: var(--s1) var(--s2); font-size: 12.5px; }
 .runbar .item.st-failed .tm { color: var(--fail); }

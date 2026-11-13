@@ -18,11 +18,13 @@ import { ENVS } from '../../shared/deployCore'
 import { appName } from '../../shared/appName'
 import { setClipboardOn, useClipboardOn } from './clipboardOffer'
 import { applyGeneral } from './appSettings'
+import { setAgentDefs } from './AgentView'
+import { splitArgs, type AgentDef } from '../../shared/agentThreadCore'
 import { Confirm } from './ui'
 
 const SECTIONS = [
   ['watch', 'Watchers'], ['dependabot', 'Dependabot'], ['scripts', 'Scripts'], ['deploy', 'Deploy'],
-  ['dev', 'Dev stack and Pull latest'], ['general', 'General'], ['appearance', 'Appearance'], ['accounts', 'Accounts'],
+  ['dev', 'Dev stack and Pull latest'], ['general', 'General'], ['agents', 'Agents'], ['appearance', 'Appearance'], ['accounts', 'Accounts'],
   ['phone', 'Phone'], ['claude', 'Claude Code'], ['notify', 'Notifications'], ['other', 'Other keys'],
 ] as const
 type Sec = (typeof SECTIONS)[number][0]
@@ -153,6 +155,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
       }
       if (clip !== clipOn) setClipboardOn(clip)
       applyGeneral(draft.general)
+      setAgentDefs(draft.general.agents)
       setNotes(['Saved. Dependabot, Deploy, Dev stack, Pull latest, Scripts, the app name, tagline and appearance use it now.', ...r.notes, ...extra])
       await load()
     } catch (e) { setErr(clean(e)) } finally { setBusy(false) }
@@ -400,6 +403,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
         </Row>
       </>
     ),
+    agents: g && <AgentsSection key={saved} agents={g.agents} onChange={(agents) => setGeneral({ agents })} />,
     // UI and Theme apply live and are kept with the other page preferences (each UI remembers its own theme), so they
     // are not part of the Save below
     appearance: (
@@ -526,6 +530,32 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
         )}
       </div>
     </div>
+  )
+}
+
+// Settings > Agents: other command-line agents an agent thread runs. The arguments are one space-separated line here; an
+// entry without a name or a command is dropped on save. The examples are placeholders only: nothing is added by default.
+const AGENT_EXAMPLES = [{ name: 'codex', command: 'codex' }, { name: 'opencode', command: 'opencode' }]
+function AgentsSection({ agents, onChange }: { agents: AgentDef[]; onChange: (a: AgentDef[]) => void }) {
+  const [rows, setRows] = useState(() => agents.map((a) => ({ name: a.name, command: a.command, args: a.args.join(' ') })))
+  const put = (next: typeof rows) => { setRows(next); onChange(next.map((r) => ({ name: r.name, command: r.command, args: splitArgs(r.args) }))) }
+  const edit = (i: number, r: Partial<(typeof rows)[number]>) => put(rows.map((x, j) => (j === i ? { ...x, ...r } : x)))
+  return (
+    <>
+      <div className="dnote">Other command-line coding agents (Codex CLI, OpenCode, Gemini CLI, any command) to run as agent threads: each runs in its own terminal tab, in a folder you pick. Start one from the command palette (Ctrl+K): New agent thread. Each uses its own sign-in and permission rules, and its usage is not counted in {appName()}'s limits.</div>
+      {rows.map((r, i) => {
+        const ex = AGENT_EXAMPLES[i % AGENT_EXAMPLES.length]
+        return (
+          <div key={i} className="sline" data-testid="settings-agent">
+            <input className="sin" placeholder={ex.name} aria-label="Name" value={r.name} onChange={(e) => edit(i, { name: e.target.value })} />
+            <input className="sin mono" placeholder={ex.command} aria-label="Command" spellCheck={false} value={r.command} onChange={(e) => edit(i, { command: e.target.value })} />
+            <input className="sin wide mono" placeholder="arguments, space-separated (optional)" aria-label="Arguments" spellCheck={false} value={r.args} onChange={(e) => edit(i, { args: e.target.value })} />
+            <button className="dlink" onClick={() => put(rows.filter((_, j) => j !== i))}>Remove</button>
+          </div>
+        )
+      })}
+      <button className="dbtn" onClick={() => put([...rows, { name: '', command: '', args: '' }])} data-testid="settings-agent-add">Add agent</button>
+    </>
   )
 }
 

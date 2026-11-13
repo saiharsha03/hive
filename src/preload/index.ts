@@ -320,10 +320,16 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('dev:update', fn)
   },
   // terminal drawer: one shell per tab
-  terminalOpen: (id: string, cwd: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:open', id, cwd, cols, rows),
+  // agent: an agent thread's agent (Settings > Agents) runs instead of a shell; quiet kill: a restart
+  terminalOpen: (id: string, cwd: string, cols: number, rows: number, agent?: string) => ipcRenderer.invoke('terminal:open', id, cwd, cols, rows, agent),
   terminalWrite: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
   terminalResize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
-  terminalKill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
+  terminalKill: (id: string, quiet?: boolean) => ipcRenderer.invoke('terminal:kill', id, !!quiet),
+  onAgentState: (cb: (id: string, state: string) => void) => {
+    const fn = (_e: unknown, id: string, state: string) => cb(id, state)
+    ipcRenderer.on('agent:state', fn)
+    return () => ipcRenderer.removeListener('agent:state', fn)
+  },
   onTerminalData: (cb: (id: string, chunk: string) => void) => {
     const fn = (_e: unknown, id: string, chunk: string) => cb(id, chunk)
     ipcRenderer.on('terminal:data', fn)

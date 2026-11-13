@@ -5,6 +5,7 @@
 import { useCallback, useRef, useSyncExternalStore } from 'react'
 import type { Session } from './chat'
 import { emptyPanes, type PaneState } from './panes'
+import type { AgentState } from '../../shared/agentThreadCore'
 
 type Listener = () => void
 export type Store<T> = { get: () => T; set: (v: T | ((cur: T) => T)) => void; subscribe: (l: Listener) => () => void }
@@ -61,13 +62,13 @@ export const useSession = (id: string | null | undefined): Session | undefined =
   useStore(sessions, useCallback((all: Session[]) => (id ? all.find((s) => s.id === id) : undefined), [id]))
 
 // what the shell needs of every thread: no items, no streaming text
-export type SessionMeta = Pick<Session, 'id' | 'title' | 'cwd' | 'sessionId' | 'path' | 'busy' | 'background' | 'waitingReason' | 'waitingSince' | 'file' | 'tool' | 'worktrees' | 'mode' | 'compactions' | 'loaded' | 'endedRun' | 'compacting'>
+export type SessionMeta = Pick<Session, 'id' | 'title' | 'cwd' | 'sessionId' | 'path' | 'busy' | 'background' | 'waitingReason' | 'waitingSince' | 'file' | 'tool' | 'agent' | 'worktrees' | 'mode' | 'compactions' | 'loaded' | 'endedRun' | 'compacting'>
 const metaCache = new WeakMap<Session, SessionMeta>()
 export function metaOf(s: Session): SessionMeta {
   let m = metaCache.get(s)
   if (!m) {
     m = { id: s.id, title: s.title, cwd: s.cwd, sessionId: s.sessionId, path: s.path, busy: s.busy, background: s.background, waitingReason: s.waitingReason, waitingSince: s.waitingSince,
-      file: s.file, tool: s.tool, worktrees: s.worktrees, mode: s.mode, compactions: s.compactions, loaded: s.loaded, endedRun: s.endedRun, compacting: s.compacting }
+      file: s.file, tool: s.tool, agent: s.agent, worktrees: s.worktrees, mode: s.mode, compactions: s.compactions, loaded: s.loaded, endedRun: s.endedRun, compacting: s.compacting }
     metaCache.set(s, m)
   }
   return m
@@ -79,6 +80,10 @@ export const useSessionMetas = (): SessionMeta[] => useStore(sessions, allMeta, 
 // ---- panes ----
 export const panes = createStore<PaneState>(emptyPanes())
 export const usePanes = (): PaneState => useStore(panes, (p) => p)
+
+// ---- agent threads (AgentView.tsx), by tab id: the guessed state, and the thread in front when it started (its running
+// bar counts it) ----
+export const agentThreads = createStore<Record<string, { state: AgentState; from: string | null }>>({})
 
 // ---- the check state the Changes panel last read for a thread's pull request (by tab id), for the thread's header ----
 export const prChecksSeen = createStore<Record<string, { num: number; state: string; text: string }>>({})
