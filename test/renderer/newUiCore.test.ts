@@ -3,7 +3,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { DEFAULT_FONTS, DEFAULT_LAYOUT, migrate, themeOf } from '../../src/renderer/src/layoutCore'
-import { errorLine, nowLine, sinceSummary, toolResult, toolVerb } from '../../src/renderer/src/conversationCore'
+import { dropImageTag, errorLine, exitOnly, historyStep, imageTag, nowLine, promptHistory, sinceSummary, toolResult, toolVerb } from '../../src/renderer/src/conversationCore'
 import { createStore, listEq, metaOf, shallowEq } from '../../src/renderer/src/store'
 
 test('old layouts and themes fold into the one layout and three themes without an error', () => {
@@ -67,4 +67,37 @@ test('stores: a selector over the threads keeps its value while only a reply str
   const same = s.get()
   s.set(same)
   assert.equal(calls, 2, 'setting the same value notifies no one')
+})
+
+test('a shell command that only ended with a non-zero exit code says the code, and is not a failure', () => {
+  // a search that found nothing, a process already gone
+  assert.equal(exitOnly('Bash', 'error', 'Exit code 1\nsome output'), 1)
+  assert.equal(exitOnly('PowerShell', 'error', 'Exit code 128\nERROR: no running instance'), 128)
+  // not that case: a finished command, another tool, an error with no exit code
+  assert.equal(exitOnly('Bash', 'done', 'Exit code 1'), null)
+  assert.equal(exitOnly('Edit', 'error', 'Exit code 1'), null)
+  assert.equal(exitOnly('Bash', 'error', 'Command timed out after 2m'), null)
+  assert.equal(exitOnly('Bash', 'error', 'BLOCKED by user rule: tests run inside Docker'), null)
+  assert.equal(exitOnly('Bash', 'error', undefined), null)
+})
+
+test('Up and Down walk the thread\'s earlier prompts from an empty box, and leave a box with text alone', () => {
+  const items = [{ kind: 'user', text: 'first' }, { kind: 'assistant', text: 'ok' }, { kind: 'user', text: 'second' }, { kind: 'user', text: 'second' }, { kind: 'user', text: '  ' }]
+  assert.deepEqual(promptHistory(items), ['second', 'first']) // newest first, repeats and blanks dropped
+  assert.equal(historyStep('ArrowUp', -1, 2, true), 0) // empty box: the newest prompt
+  assert.equal(historyStep('ArrowUp', 0, 2, false), 1) // already walking: the one before
+  assert.equal(historyStep('ArrowUp', 1, 2, false), null) // the oldest: nowhere further
+  assert.equal(historyStep('ArrowUp', -1, 2, false), null) // text of its own: the arrow moves the cursor
+  assert.equal(historyStep('ArrowDown', 1, 2, false), 0)
+  assert.equal(historyStep('ArrowDown', 0, 2, false), -1) // back to what was being typed
+  assert.equal(historyStep('ArrowDown', -1, 2, true), null)
+  assert.equal(historyStep('ArrowUp', -1, 0, true), null) // nothing sent yet
+})
+
+test('image tags: taking a picture away removes its tag and renumbers the later ones', () => {
+  assert.equal(imageTag(2), '[Image 2]')
+  assert.equal(dropImageTag('compare [Image 1] with [Image 2] and [Image 3]', 2), 'compare [Image 1] with and [Image 2]')
+  assert.equal(dropImageTag('[Image 1] look', 1), 'look')
+  assert.equal(dropImageTag('no tags here', 1), 'no tags here')
+  assert.equal(dropImageTag('[Image 10] and [Image 1]', 1), '[Image 9] and ') // 10 is not mistaken for 1
 })

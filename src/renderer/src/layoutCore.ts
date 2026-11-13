@@ -35,7 +35,8 @@ export const codeFontStack = (id: CodeFont) => (CODE_FONTS.find((x) => x.id === 
 
 export type Appearance = { theme: ThemeId; layout: Layout; fonts: Fonts }
 
-export const DEFAULT_LAYOUT: Layout = { rail: true, inspector: true, drawer: false, focus: false, railRight: false }
+// the detail panel (Changes, Activity, Rewind) rests closed: the thread header's buttons open it
+export const DEFAULT_LAYOUT: Layout = { rail: true, inspector: false, drawer: false, focus: false, railRight: false }
 
 // a theme id from any version: one of the ten as it is; the old five (default, mono, colour, light, hc) fold in,
 // and anything unknown is Quiet ('dark', the default)

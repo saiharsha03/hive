@@ -21,16 +21,29 @@ import { useSlashMenu } from './SlashMenu'
 import { useMentionMenu } from './MentionMenu'
 import { mentionText } from '../../shared/mentionCore'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
-import { Modal, useEscape } from './ui'
+import { Icon, Modal, useEscape } from './ui'
 import { conversationMarkdown } from '../../shared/exportCore'
 import { AskCard } from './AskCard'
+import { PATH_MIME } from './FileTree'
 import { wakeLabel, CONTINUE_PROMPT } from '../../shared/continueCore'
-import { sinceSummary, toolVerb, toolResult, errorLine } from './conversationCore'
-import { State, Btn, Pins, clock, dur } from './kit'
+import { sinceSummary, toolVerb, toolResult, errorLine, exitOnly, historyStep, promptHistory, imageTag, dropImageTag } from './conversationCore'
+import { State, Btn, Pins, clock } from './kit'
 import { untilText } from '../../shared/cronCore'
+import { RunningBar } from './RunningBar'
+import { ComingBar } from './ComingBar'
 
 export type Attachment = { url: string; mediaType: string; data: string }
 export type SendMode = 'steer' | 'queue' | 'interrupt'
+export type PanelTab = 'changes' | 'activity' | 'rewind'
+// Tab queues only while Claude works: an idle thread's queued message is an ordinary send, so there Tab just moves the focus
+export const tabQueues = (e: { key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean }, busy: boolean, hasDraft: boolean) =>
+  busy && hasDraft && e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey
+// a steered message Claude has not taken in yet (no echo of it so far)
+export const unreadSteer = (it: Item) => it.kind === 'user' && !!it.steer && !!it.uuid && !it.seen && !it.queue?.pending && !it.failed
+// Ctrl+Shift+Enter with an empty box sends what waits (queued, or steered and not read) now: only while Claude works
+// and something of yours waits; with a draft it stops Claude and sends the draft, as before
+export const sendsWaiting = (busy: boolean, hasDraft: boolean, items: Item[]) =>
+  busy && !hasDraft && items.some((it) => it.kind === 'user' && (!!it.queue?.pending || unreadSteer(it)))
 
 const attachmentOf = (url: string): Attachment => ({ url, mediaType: url.slice(5, url.indexOf(';')), data: url.slice(url.indexOf(',') + 1) })
 
@@ -146,14 +159,15 @@ function InlineDiff({ hunks, label, onOpen }: { hunks: Hunk[]; label: string; on
   )
 }
 
-// a tool call's row: verb, what it touched, result; it opens to the command and output (a failed one opens on the
-// error lines, an edit on its first lines of diff). Open state lives here so opening does not rebuild the transcript.
+// a tool call's row: verb, what it touched, result; a click opens it to the command and output (a failed one on its
+// error lines, an edit on its first lines of diff). Every row rests closed, a failed one too: its line already says
+// FAILED in the fail colour, and a long command with its output opening by itself pushed the conversation away.
+// Open state lives here so opening does not rebuild the transcript.
 function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<Item, { kind: 'tool' }>; status: string; bg?: string; cwd?: string; onDiff: (spec: import('./DiffPanel').DiffSpec) => void; onBackground: (id: string) => void }) {
-  const [open, setOpen] = useState(status === 'error' && !!it.output)
+  const [open, setOpen] = useState(false)
   const out = useRef<HTMLDivElement>(null)
-  // a row that fails while on screen opens on its error lines
-  useEffect(() => { if (status === 'error' && it.output) setOpen(true) }, [status, it.output])
   const v = toolVerb(it.name)
+  const exit = exitOnly(it.name, status, it.output)
   const file = FILE_TOOLS.includes(it.name) && it.status !== 'error' && typeof it.input?.file_path === 'string' ? it.input.file_path as string : null
   const hunks = file ? hunksOf(it) : null
   const c = hunks ? counts(hunks) : null
@@ -172,13 +186,14 @@ function ToolRow({ it, status, bg, cwd, onDiff, onBackground }: { it: Extract<It
   }, [open, status, it.output])
   const result = bg === 'running' ? <><span className="dimt">background </span><State word="WORKING" tone="work" /></>
     : status === 'running' ? <State word="WORKING" tone="work" />
+      : exit !== null ? <State word={`exit ${exit}`} tone="idle" title="The command ended with this exit code. Its output is in the row" testid="tool-exit" />
       : status === 'error' ? <State word="FAILED" tone="fail" />
         : c ? <><span className="add-t">+{c.add}</span> <span className="del-t">-{c.del}</span></>
           : v.tone === 'agent' ? <State word="DONE" tone="done" />
             : toolResult(it)
   return (
     <div className={`toolbox${open ? ' open' : ''}`}>
-      <div className={`trow${status === 'error' ? ' failed' : ''}${can ? ' can' : ''}`} role={can ? 'button' : undefined} tabIndex={can ? 0 : undefined} aria-expanded={can ? open : undefined}
+      <div className={`trow${status === 'error' && exit === null ? ' failed' : ''}${can ? ' can' : ''}`} role={can ? 'button' : undefined} tabIndex={can ? 0 : undefined} aria-expanded={can ? open : undefined}
         onClick={can ? () => setOpen((o) => !o) : undefined} onKeyDown={can ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((o) => !o) } } : undefined}
         data-testid={spec ? 'chat-diff-row' : 'tool-row'}>
         <span className={`tv t-${v.tone}`}>{v.word}</span>
@@ -317,25 +332,33 @@ export type ThreadCallbacks = {
   onSend: (text: string, images: Attachment[], mode?: SendMode) => void
   onDequeue: (queueId: string) => Promise<boolean>
   onPromote: (queueId: string) => void
+  onSendNow: (id?: string) => void // a queued message's id, an unread steered one's uuid, or everything waiting
   onStop: () => void
   onBackground: (toolUseId?: string) => void
   onRunInBackground: () => void
   onOpen: (pathOrDataUrl: string) => void
   onDiff: (spec: import('./DiffPanel').DiffSpec) => void
   onTerminal: () => void
-  onChanges: () => void
+  onPanel: (tab: PanelTab) => void // Changes, Activity, Rewind: open the detail panel on that tab, or close it
   onSplit?: () => void
   onLoadEarlier: () => void
   onRewound: (index: number) => void
   onStatusView: () => void // /status and /usage typed in the box open the Status and usage page
+  onScheduled: () => void // the Scheduled page, from the header's coming-up list
 }
-type Props = ThreadCallbacks & { session: Session; mode: string; focused: boolean; banner?: ReactNode }
+type Props = ThreadCallbacks & { session: Session; mode: string; focused: boolean; banner?: ReactNode; panel?: PanelTab | null }
+// the header buttons that open the detail panel; in a narrow pane they rest as icons (conversation.css)
+const PANEL_ACTS: { tab: PanelTab; label: string; icon: string; title: string }[] = [
+  { tab: 'changes', label: 'Changes', icon: 'diff', title: 'Changed files, beside the conversation' },
+  { tab: 'activity', label: 'Activity', icon: 'pulse', title: 'What runs for this thread: subagents, shells, workflows' },
+  { tab: 'rewind', label: 'Rewind', icon: 'history', title: 'Go back to an earlier message' },
+]
 
 // the conversation, built only when it changes: typing in the box re-renders the view on every key
-const Transcript = memo(function Transcript({ session, limit, setLimit, st, startRewind, editQueued }: {
+const Transcript = memo(function Transcript({ session, limit, setLimit, st, startRewind }: {
   session: Session; limit: number; setLimit: (f: (n: number) => number) => void
-  st: { loadEarlier: () => void; open: (p: string) => void; diff: ThreadCallbacks['onDiff']; background: (id: string) => void }
-  startRewind: (it: UserItem, i: number) => void; editQueued: (it: UserItem) => void
+  st: { loadEarlier: () => void; open: (p: string) => void; diff: ThreadCallbacks['onDiff']; background: (id: string) => void; sendNow: (id: string) => void }
+  startRewind: (it: UserItem, i: number) => void
 }) {
   const tasks = useThreadStatus(session.id).tasks
   const bgOf = useMemo(() => {
@@ -343,7 +366,6 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     const now = new Map(tasks.filter((t) => t.toolUseId && t.backgrounded).map((t) => [t.toolUseId!, t.status]))
     return new Map([...bgEnded, ...now])
   }, [tasks])
-  void editQueued
   const base = session.history?.count ?? 0
   const used = new Set<string>()
   const keyOf = (it: Item, i: number): string => {
@@ -366,7 +388,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     if (it.kind === 'tool' && it.name !== SHOW && it.name !== CODEX && it.name !== 'AskUserQuestion') {
       const bg = bgOf.get(it.id)
       const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
-      tools.push({ key, item: it, word: toolVerb(it.name).word, failed: status === 'error', running: status === 'running', node:<ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
+      tools.push({ key, item: it, word: toolVerb(it.name).word, failed: status === 'error' && exitOnly(it.name, status, it.output) === null, running: status === 'running', node:<ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
       return
     }
     // a note a hook printed after a tool call goes with that call, inside the run (open it to read); a hook that blocks
@@ -382,7 +404,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
           {it.images.length > 0 && <div className="imgs">{it.images.map((src, j) => <button key={j} className="thumb" onClick={() => st.open(src)} data-testid="chat-image"><img src={src} alt="" /></button>)}</div>}
           {it.text && <div className="body">{it.text}</div>}
           {it.seen ? <span className="seen" title="Claude has read this message" data-testid="msg-seen">Seen by Claude{it.seenAt ? ` ${clock(it.seenAt)}` : ''}</span>
-            : it.steer && it.uuid && session.busy && <span className="seen" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">Not read yet</span>}
+            : it.steer && it.uuid && session.busy && <span className="seen" title="Claude reads it at its next step, when the running tool call ends" data-testid="msg-unseen">Not read yet{unreadSteer(it) && <Btn kind="link" onClick={() => st.sendNow(it.uuid!)} testid="msg-send-now" title="Stops the tool call Claude is in the middle of, so it reads this message now">Send now</Btn>}</span>}
           {it.failed && <span className="seen s-fail" title={it.failed} data-testid="msg-failed">Not sent: {it.failed}</span>}
           {it.uuid && session.sessionId && !session.busy && !it.steer && (
             <button className="rewindb" onClick={() => startRewind(it, i)} title="Go back to before this message: put back the files Claude changed since, and edit the message" data-testid="msg-rewind">Rewind</button>
@@ -393,7 +415,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     }
     // the time Claude wrote it, small under the reply (a day and the time once it is not today)
     if (it.kind === 'assistant') { out.push(<div key={key} className="msg cl" data-testid="msg-assistant"><MdBody text={it.text} />{it.at ? <span className="msg-at" title={new Date(it.at).toLocaleString()} data-testid="msg-time">{replyTime(it.at)}</span> : null}</div>); return }
-    if (it.kind === 'tool' && it.name === 'AskUserQuestion') { out.push(<div key={key} className="qwrap"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} /></div>); return }
+    if (it.kind === 'tool' && it.name === 'AskUserQuestion') { out.push(<div key={key} className="qwrap"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} result={it.output} /></div>); return }
     if (it.kind === 'show') { out.push(<div key={key} className="msg"><ShowCard path={it.path} onOpen={st.open} /></div>); return }
     if (it.kind === 'note') { out.push(<div key={key} className="note">{it.text}</div>); return }
     if (it.kind === 'summary') { out.push(<SummaryRow key={key} text={it.text} />); return }
@@ -438,10 +460,16 @@ export function SessionView(p: Props) {
     open: (x: string) => latest.current.onOpen(x),
     diff: (x: import('./DiffPanel').DiffSpec) => latest.current.onDiff(x),
     background: (id: string) => latest.current.onBackground(id),
+    sendNow: (id: string) => latest.current.onSendNow(id),
   }), [])
   const status = useThreadStatus(session.id)
   // after a usage limit: when this thread continues by itself
   const [wakeAt, setWakeAt] = useState<number | null>(null)
+  // its two actions, for the line under the header and the header's coming-up list (kept stable: that list is memoised)
+  const wakeActs = useMemo(() => {
+    const cancel = () => { const s = latest.current.session; return window.api.chatCancelContinue(s.sessionId ?? s.id).then(() => setWakeAt(null)) }
+    return { cancel, resume: () => cancel().then(() => latest.current.onSend(CONTINUE_PROMPT, [])), scheduled: () => latest.current.onScheduled() }
+  }, [])
   useEffect(() => {
     let on = true
     window.api.chatContinueAt(session.sessionId ?? session.id).then((at) => { if (on) setWakeAt(at) }).catch(() => {})
@@ -532,9 +560,19 @@ export function SessionView(p: Props) {
   // the focused pane takes the keyboard when it becomes focused
   useEffect(() => { if (focused) box.current?.focus({ preventScroll: true }) }, [focused])
 
+  const imageCount = useRef(0) // pictures attached so far, known at once (the state lags by a render)
+  imageCount.current = images.length
+  const removeImage = (j: number) => { setImages(images.filter((_, k) => k !== j)); setDraft((d) => dropImageTag(d, j + 1)) }
   const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'))
-    if (imgs.length) { const read = await Promise.all(imgs.map(readImage)); setImages((cur) => [...cur, ...read]) }
+    if (imgs.length) {
+      const read = await Promise.all(imgs.map(readImage))
+      const first = imageCount.current + 1
+      imageCount.current += read.length
+      setImages((cur) => [...cur, ...read])
+      // each picture is named in the text at the cursor, so the message can say which one it means
+      insertText(read.map((_im, i) => `${imageTag(first + i)} `).join(''))
+    }
     // Claude reads other files by path, so the path in the text is enough
     const paths = files.filter((f) => !f.type.startsWith('image/')).map((f) => window.api.pathForFile(f)).filter(Boolean)
     if (!paths.length) return
@@ -552,6 +590,9 @@ export function SessionView(p: Props) {
     if (files.some((f) => f.type.startsWith('image/'))) { e.preventDefault(); void addFiles(files) }
   }
   const onDrop = (e: DragEvent) => {
+    // a row from the Files tree: its path goes in at the cursor, the way a file dropped from Explorer does
+    const dragged = e.dataTransfer.getData(PATH_MIME)
+    if (dragged) { e.preventDefault(); e.stopPropagation(); insertText(mentionText(dragged)); return }
     if (!e.dataTransfer.types.includes('Files')) return
     e.preventDefault(); e.stopPropagation(); void addFiles([...e.dataTransfer.files])
   }
@@ -567,7 +608,12 @@ export function SessionView(p: Props) {
     return () => { alive = false }
   }, [clip, draft])
   const shownClip = focused && clipOn && clip && !sameAsBox ? clip : null
+  const hist = useRef({ at: -1, own: '' }) // where Up / Down stand in this thread's earlier prompts
   const dismissClip = () => { if (clip) void window.api.clipboardDismiss(clip.id); clearOffer() }
+  // Copied text short enough to show is offered inside an empty box, as its placeholder: Tab puts it in. A screenshot
+  // or a long text cannot be shown that way, so those keep the line above the box.
+  const clipHint = shownClip && shownClip.kind === 'text' && !shownClip.big && !draft && !images.length ? shownClip : null
+  const clipChip = shownClip && (shownClip.kind === 'image' || shownClip.big) ? shownClip : null
   const pasteClip = async () => {
     if (!clip) return
     clearOffer()
@@ -643,15 +689,30 @@ export function SessionView(p: Props) {
     setImages([])
     scrolls.set(session.id, { top: 0, bottom: true })
   }
-  // Enter steers (or sends), Tab queues, Ctrl+Enter sends and moves the thread to the background,
-  // Ctrl+Shift+Enter stops Claude and sends this at once, Shift+Enter a new line, Esc stops the turn (the queue holds)
+  // Enter steers (or sends), Tab queues while Claude works, Ctrl+Enter sends and moves the thread to the background,
+  // Ctrl+Shift+Enter stops Claude and sends this at once (an empty box: what already waits goes now), Shift+Enter a
+  // new line, Esc stops the turn (the queue holds)
+  const flushes = sendsWaiting(session.busy, !!draft.trim() || images.length > 0, session.items)
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (slash.onKey(e)) return
     if (mention.onKey(e)) return
-    if (e.key === 'Enter' && e.ctrlKey && e.shiftKey) { e.preventDefault(); submit('interrupt'); return }
+    // Up / Down: earlier prompts of this thread, starting from an empty box; what was being typed comes back at the end
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      const past = promptHistory(session.items)
+      const to = historyStep(e.key, hist.current.at, past.length, !draft)
+      if (to !== null) {
+        e.preventDefault()
+        if (hist.current.at < 0) hist.current.own = draft
+        hist.current.at = to
+        setDraft(to < 0 ? hist.current.own : past[to])
+        return
+      }
+    } else if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter') hist.current.at = -1 // edited or sent: it is the box's own text now
+    if (e.key === 'Enter' && e.ctrlKey && e.shiftKey) { e.preventDefault(); if (flushes) p.onSendNow(); else submit('interrupt'); return }
     if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); if (draft.trim() || images.length) submit(); p.onRunInBackground(); return }
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey) { e.preventDefault(); submit('steer'); return }
-    if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && (draft.trim() || images.length)) { e.preventDefault(); submit('queue'); return }
+    if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && clipHint) { e.preventDefault(); void pasteClip(); return }
+    if (tabQueues(e, session.busy, !!draft.trim() || images.length > 0)) { e.preventDefault(); submit('queue'); return }
     if (e.key === 'Escape' && session.busy) { e.preventDefault(); p.onStop() }
   }
 
@@ -679,37 +740,55 @@ export function SessionView(p: Props) {
   const wt = session.worktrees?.at(-1)
   const folder = wt ? `${wt.repo} on ${wt.branch}` : (session.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? ''
   const running = session.items.filter((i) => i.kind === 'tool' && i.status === 'running').at(-1)
+  const runningTasks = status.tasks.filter((t) => t.status === 'running').length
   const stopGoal = async () => { if (session.busy) { p.onStop(); p.onSend('/goal clear', [], 'queue') } else p.onSend('/goal clear', []) }
   const pinRows: [string, ReactNode][] = [
     ...pins.map((x, i): [string, ReactNode] => ['Pinned', <span key={i}>{x} <button className="pin-x" aria-label="Unpin" onClick={() => savePins(pins.filter((_, j) => j !== i))}>×</button></span>]),
-    ...(goal ? [['Goal', <span key="g">{goal.condition} <span className="dimt">{goal.status === 'met' ? 'met' : `${untilText(nowTick - goal.setAt).replace(/ 0s$/, '')}`}</span> {goal.status === 'active'
-      ? <button className="pin-x" onClick={() => void stopGoal()} data-testid="goal-stop">Stop goal</button>
-      : <button className="pin-x" onClick={() => dismissGoal(session.id)} data-testid="goal-dismiss">Dismiss</button>}</span>] as [string, ReactNode]] : []),
-    ...(status.crons.length ? [['Loop', <span key="l">{status.crons.map((c) => c.prompt).join('; ')}</span>] as [string, ReactNode]] : []),
   ]
 
   return (
-    <main className={focused ? 'session focused' : 'session'} onFocusCapture={() => { /* the pane focuses itself */ }} data-testid={`chat-${session.id}`}>
+    <main className={focused ? 'session focused' : 'session'} data-testid={`chat-${session.id}`}>
       <header className="phead">
-        <div className="phead-t">
+        {/* what is coming up for the thread sits on the title's line, at the right */}
+        <div className="phead-h">
           <h1 title={session.title}>{session.title}</h1>
-          <span className="phead-acts">
-            <Btn kind="link" onClick={() => setPinning('')} testid="pin-add" title="Pin a fact to this thread's header">Pin</Btn>
-            <Btn kind="link" onClick={p.onTerminal} testid="terminal-toggle" title="This thread's terminal (Ctrl+`)">Terminal</Btn>
-            <Btn kind="link" onClick={p.onChanges} testid="chat-changes" title="Changed files">Changes</Btn>
-            {p.onSplit && <Btn kind="link" onClick={p.onSplit} testid="chat-split" title="A new thread beside this one (Ctrl+\)">Split</Btn>}
-            <Btn kind="link" onClick={() => setMenu((m) => !m)} testid="chat-export" title="Export, find, background">More</Btn>
+          <span className="phead-r">
+            {goal && (
+              <span className={`goal-chip${goal.status === 'met' ? ' met' : ''}`} title={`Goal: ${goal.condition}`} data-testid="goal-chip">
+                <b>Goal</b><span className="goal-t">{goal.condition}</span>
+                <span className="goal-s">{goal.status === 'met' ? 'met' : untilText(nowTick - goal.setAt).replace(/ 0s$/, '')}</span>
+                {goal.status === 'active'
+                  ? <button className="pin-x" onClick={() => void stopGoal()} data-testid="goal-stop">Stop</button>
+                  : <button className="pin-x" onClick={() => dismissGoal(session.id)} data-testid="goal-dismiss">Dismiss</button>}
+              </span>
+            )}
+            <ComingBar tabId={session.id} sessionId={session.sessionId} onResume={wakeActs.resume} onCancelContinue={wakeActs.cancel} onScheduled={wakeActs.scheduled} />
           </span>
         </div>
-        {menu && (
-          <div className="phead-menu" role="menu" data-testid="export-menu">
-            <Btn kind="link" onClick={() => { setMenu(false); void exportAs('copy') }} testid="export-copy">Copy as Markdown</Btn>
-            <Btn kind="link" onClick={() => { setMenu(false); void exportAs('save') }} testid="export-save">Save as Markdown</Btn>
-            <Btn kind="link" onClick={() => { setMenu(false); setFinding(true) }}>Find (Ctrl+F)</Btn>
-            <Btn kind="link" onClick={() => { setMenu(false); p.onRunInBackground() }} testid="chat-run-background">Move to the background</Btn>
+        <div className="phead-t">
+          <div className="phead-l">
+            {folder && <div className="phead-sub" title={session.cwd} data-testid="folder-picker">{wt ? <>{wt.repo} on <b>{wt.branch}</b></> : folder}</div>}
           </div>
-        )}
-        {folder && <div className="phead-sub" title={session.cwd} data-testid="folder-picker">{wt ? <>{wt.repo} on <b>{wt.branch}</b></> : folder}</div>}
+          <span className="phead-acts">
+            {PANEL_ACTS.map((a) => (
+              <button key={a.tab} type="button" className="btn pact fold" aria-pressed={p.panel === a.tab} aria-label={a.label} onClick={() => p.onPanel(a.tab)} title={a.title} data-testid={`chat-${a.tab}`}>
+                <Icon name={a.icon} /><span>{a.label}</span>{a.tab === 'activity' && runningTasks > 0 && <b className="num" data-testid="chat-activity-count">{runningTasks}</b>}
+              </button>
+            ))}
+            <button type="button" className="btn pact fold2" aria-label="Terminal" onClick={p.onTerminal} title="This thread's terminal (Ctrl+`)" data-testid="terminal-toggle"><Icon name="terminal" /><span>Terminal</span></button>
+            <button type="button" className="btn pact" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)} title="Pin, split, export, find, background" data-testid="chat-export">More</button>
+            {menu && (
+              <div className="phead-menu" role="menu" data-testid="export-menu">
+                <Btn kind="link" onClick={() => { setMenu(false); setPinning('') }} testid="pin-add" title="Pin a fact to this thread's header">Pin a fact</Btn>
+                {p.onSplit && <Btn kind="link" onClick={() => { setMenu(false); p.onSplit?.() }} testid="chat-split" title="A new thread beside this one (Ctrl+\)">Split</Btn>}
+                <Btn kind="link" onClick={() => { setMenu(false); void exportAs('copy') }} testid="export-copy">Copy as Markdown</Btn>
+                <Btn kind="link" onClick={() => { setMenu(false); void exportAs('save') }} testid="export-save">Save as Markdown</Btn>
+                <Btn kind="link" onClick={() => { setMenu(false); setFinding(true) }}>Find (Ctrl+F)</Btn>
+                <Btn kind="link" onClick={() => { setMenu(false); p.onRunInBackground() }} testid="chat-run-background">Move to the background</Btn>
+              </div>
+            )}
+          </span>
+        </div>
         <Pins pins={pinRows.slice(0, 3)} />
         {pinning !== null && (
           <input className="uline pin-in" autoFocus value={pinning} placeholder="A fact to keep in view, Enter pins it" onChange={(e) => setPinning(e.target.value)}
@@ -719,8 +798,8 @@ export function SessionView(p: Props) {
       {sinceLine && <div className="since" data-testid="since-line"><b>Since you looked at {clock(since!.at)}</b>{sinceLine}</div>}
       {wakeAt && (
         <div className="hold-line" data-testid="auto-continue">Paused: usage limit reached. Continues by itself at {wakeLabel(wakeAt, Date.now())}.
-          <Btn kind="quiet" onClick={() => { void window.api.chatCancelContinue(session.sessionId ?? session.id).then(() => { setWakeAt(null); p.onSend(CONTINUE_PROMPT, []) }) }} testid="auto-continue-now">Resume now</Btn>
-          <Btn kind="link" className="x" onClick={() => { void window.api.chatCancelContinue(session.sessionId ?? session.id).then(() => setWakeAt(null)) }} testid="auto-continue-cancel">Cancel</Btn>
+          <Btn kind="quiet" onClick={() => void wakeActs.resume()} testid="auto-continue-now">Resume now</Btn>
+          <Btn kind="link" className="x" onClick={() => void wakeActs.cancel()} testid="auto-continue-cancel">Cancel</Btn>
         </div>
       )}
       {session.endedRun && !session.busy && (
@@ -728,7 +807,7 @@ export function SessionView(p: Props) {
       )}
       {finding && <FindBar onClose={() => { setFinding(false); box.current?.focus({ preventScroll: true }) }} />}
       <div className="thread conv" ref={thread} onScroll={onScroll}>
-        <Transcript session={session} limit={limit} setLimit={setLimit} st={st} startRewind={startRewind} editQueued={editQueued} />
+        <Transcript session={session} limit={limit} setLimit={setLimit} st={st} startRewind={startRewind} />
         {session.streaming && <div className="msg cl streaming"><MdBody text={session.streaming} copy={false} /></div>}
       </div>
 
@@ -739,6 +818,7 @@ export function SessionView(p: Props) {
           <Btn kind="link" onClick={() => p.onBackground()} testid="chat-background-tasks" title="Move what runs to the background (Ctrl+B)">Background tasks</Btn>
         </div>
       )}
+      <RunningBar tabId={session.id} items={session.items} busy={session.busy} onSend={p.onSend} />
       {btws.map((b, i) => (
         <div key={i} className="btw" data-testid="btw-answer">
           <div className="btw-q"><span className="kind-word">btw</span> {b.q}<Btn kind="link" onClick={() => setBtws((all) => all.filter((_, j) => j !== i))} testid="btw-dismiss">Dismiss</Btn></div>
@@ -754,7 +834,8 @@ export function SessionView(p: Props) {
               <span className="qn">{i + 1}</span>
               <span className="qt" title={q.text}>{q.text || '(image)'}{q.interrupt ? <span className="dimt">, interrupting Claude, sends next</span> : null}</span>
               <span className="qa">
-                <Btn kind="link" onClick={() => p.onPromote(q.queue!.id)} testid="queued-send-now">Send now</Btn>
+                <Btn kind="link" onClick={() => p.onSendNow(q.queue!.id)} disabled={!session.busy} testid="queued-send-now" title="Stops the tool call Claude is in the middle of and sends this next, ahead of the other queued messages">Send now</Btn>
+                <Btn kind="link" onClick={() => p.onPromote(q.queue!.id)} testid="queued-next-step" title="Delivered at Claude's next step, when the running tool call ends; nothing is stopped">At next step</Btn>
                 <Btn kind="link" onClick={() => void editQueued(q)} testid="queued-edit">Edit</Btn>
                 <Btn kind="link" onClick={() => void p.onDequeue(q.queue!.id)} testid="queued-remove">Remove</Btn>
               </span>
@@ -766,15 +847,15 @@ export function SessionView(p: Props) {
         </div>
       )}
       {rewind && <RewindModal r={rewind} onFiles={() => void doRewind(true)} onChat={() => void doRewind(false)} onClose={() => setRewind(null)} />}
-      <div className="composer" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }} onDrop={onDrop}>
+      <div className="composer" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes(PATH_MIME)) e.preventDefault() }} onDrop={onDrop}>
         {slash.menu}
         {mention.menu}
-        {(shownClip || images.length > 0) && (
+        {(clipChip || images.length > 0) && (
           <div className="atts">
             {images.map((im, j) => (
-              <div key={j} className="att"><img src={im.url} alt="" /><button className="att-x" aria-label="Remove image" onClick={() => setImages(images.filter((_, k) => k !== j))} data-testid={`composer-remove-image-${j}`}>×</button></div>
+              <div key={j} className="att" title={`${imageTag(j + 1)} in your message`}><img src={im.url} alt={`Image ${j + 1}`} /><span className="att-n" data-testid={`composer-image-n-${j}`}>Image {j + 1}</span><button className="att-x" aria-label={`Remove image ${j + 1}`} onClick={() => removeImage(j)} data-testid={`composer-remove-image-${j}`}>×</button></div>
             ))}
-            {shownClip && <ClipChip offer={shownClip} onPaste={() => void pasteClip()} onDismiss={dismissClip} />}
+            {clipChip && <ClipChip offer={clipChip} onPaste={() => void pasteClip()} onDismiss={dismissClip} />}
           </div>
         )}
         <div className="cbox">
@@ -783,7 +864,7 @@ export function SessionView(p: Props) {
           <textarea
             ref={box} rows={1} className={ultra ? 'ultra' : undefined} aria-label="Message Claude"
             onScroll={(e) => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop }}
-            placeholder={session.busy ? 'Steer Claude' : session.asks?.length ? 'Answer above, or reply here' : 'Reply to Claude'}
+            placeholder={clipHint ? clipHint.preview : session.busy ? 'Steer Claude' : session.asks?.length ? 'Answer above, or reply here' : 'Reply to Claude'}
             value={draft}
             onChange={(e) => { setDraft(e.target.value); setCaret(e.target.selectionStart) }}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
@@ -793,7 +874,9 @@ export function SessionView(p: Props) {
           <span className="cin-keys">
             {restored.current && draft.trim() && <span data-testid="draft-kept">Draft kept</span>}
             <span><span className="keys">Enter</span> {session.busy ? 'steer' : 'send'}</span>
-            {session.busy && <span><span className="keys">Tab</span> queue</span>}
+            {clipHint && <span data-testid="keys-clip"><span className="keys">Tab</span> paste what you copied <Btn kind="link" onClick={dismissClip} testid="composer-clip-dismiss" title="Hide this suggestion">Hide</Btn></span>}
+            {session.busy && !clipHint && <span><span className="keys">Tab</span> queue</span>}
+            {flushes && <span title="Stops the tool call Claude is in the middle of; what waits goes in at once, in order" data-testid="keys-send-waiting"><span className="keys">Ctrl+Shift+Enter</span> send waiting now</span>}
           </span>
         </div>
         <div className="crow">
@@ -803,9 +886,11 @@ export function SessionView(p: Props) {
           <Btn kind="link" onClick={() => fileInput.current?.click()} testid="composer-attach" title="Attach files or images">Attach</Btn>
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />
           <span className="cbtns">
-            <Btn kind="link" disabled={!session.busy} onClick={() => submit('queue')} testid="send-queue" title={session.busy ? 'Held until Claude finishes, then starts a new turn (Tab)' : 'Queue: while Claude works, holds your message until it finishes (Tab)'}>Queue</Btn>
-            <Btn kind="link" disabled={!session.busy} onClick={() => submit('interrupt')} testid="send-interrupt" title={session.busy ? 'Stops what Claude is doing and sends this at once (Ctrl+Shift+Enter)' : 'Interrupt: while Claude works, stops it and sends your message at once (Ctrl+Shift+Enter)'}>Interrupt</Btn>
-            <Btn kind="link" disabled={!session.busy} onClick={p.onStop} testid="chat-stop" title={session.busy ? 'Stop this turn; the queue holds (Esc)' : 'Stop: while Claude works, stops the turn (Esc)'}>Stop</Btn>
+            {session.busy && <>
+              <Btn kind="link" onClick={() => submit('queue')} testid="send-queue" title="Held until Claude finishes, then starts a new turn (Tab)">Queue</Btn>
+              <Btn kind="link" onClick={() => submit('interrupt')} testid="send-interrupt" title="Stops what Claude is doing and sends this at once (Ctrl+Shift+Enter)">Interrupt</Btn>
+              <Btn kind="link" onClick={p.onStop} testid="chat-stop" title="Stop this turn; the queue holds (Esc)">Stop</Btn>
+            </>}
             <Btn kind="primary" className={draft.trim() || images.length ? '' : 'idle'} onClick={() => submit('steer')} testid="send" title={session.busy ? 'Delivered at Claude\'s next step, inside the running turn (Enter)' : 'Send (Enter)'}>{session.busy ? 'Steer' : 'Send'}</Btn>
           </span>
         </div>
@@ -814,6 +899,3 @@ export function SessionView(p: Props) {
     </main>
   )
 }
-
-// a running tool's age for rows that know when it started (none today): kept for the Activity list
-export const sinceText = (t: number) => dur(Date.now() - t)

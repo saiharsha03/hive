@@ -406,7 +406,7 @@ await page.waitForTimeout(900)
 await send([['chat:event', 't-invoice', assistant(text('Good call. A lookup leaves a window between the read and the insert. The migration now adds `UniqueConstraint(fields=["payment", "retry_key"])`, and the create path catches `IntegrityError` and returns the row that won.'))]])
 await box.fill('')
 // a fact pinned to the thread's header
-await page.locator('[data-testid="chat-t-invoice"] .phead').hover()
+await page.locator('[data-testid="chat-t-invoice"] [data-testid="chat-export"]').click()
 await page.locator('[data-testid="chat-t-invoice"] [data-testid="pin-add"]').click()
 await page.locator('[data-testid="chat-t-invoice"] [data-testid="pin-input"]').fill('Unique constraint on (payment, retry_key)')
 await page.keyboard.press('Enter')
@@ -419,16 +419,31 @@ if (process.env.SIDE) {
   const D = resolve(process.env.SIDE)
   mkdirSync(D, { recursive: true })
   const d = async (name) => { await page.waitForTimeout(900); await page.screenshot({ path: join(D, `${name}.png`) }); console.log('side', name) }
-  for (const v of ['files', 'threads', 'git', 'codex', 'env', 'allow', 'deploy', 'notes', 'todo', 'watchers', 'running', 'scheduled', 'pull', 'scripts', 'dependabot', 'usage']) { await page.locator(`[data-testid="abar-${v}"]`).click(); await d(v) }
-  await page.locator('[data-testid="abar-todo"]').click()
-  await d('closed')
+  // the whole window in the picture, and a line saying whether the page is taller or wider than the window
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1440, 900))
+  await page.waitForTimeout(500)
+  console.log('fit', JSON.stringify(await page.evaluate(() => ({ inner: [window.innerWidth, window.innerHeight], scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight], status: document.querySelector('[data-testid="status-bar"]')?.getBoundingClientRect().bottom ?? null, settings: document.querySelector('[data-testid="abar-settings"]')?.getBoundingClientRect().bottom ?? null }))))
+  await d('main-full')
+  // a section that is not on the rail is a row of the More menu
+  const go = async (v) => { const b = page.locator(`[data-testid="abar-${v}"]`); if (!(await b.isVisible().catch(() => false))) await page.locator('[data-testid="abar-more"]').click(); await b.click() }
+  await page.locator('[data-testid="abar-more"]').click(); await d('more-menu'); await page.keyboard.press('Escape')
+  for (const v of ['files', 'threads', 'git', 'codex', 'env', 'allow', 'deploy', 'notes', 'todo', 'watchers', 'running', 'scheduled', 'pull', 'scripts', 'dependabot', 'usage']) { await go(v); await d(v) }
+  await go('threads')
+  // the detail panel on each tab, the running bar open, the model control expanded
+  const inv = page.locator('[data-testid="chat-t-invoice"]')
+  for (const t of ['chat-changes', 'chat-activity', 'chat-rewind']) { await inv.locator(`[data-testid="${t}"]`).click(); await d(`panel-${t.slice(5)}`) }
+  await page.locator('[data-testid="insp-close"]').click()
+  if (await inv.locator('[data-testid="running-bar"]').isVisible().catch(() => false)) { await inv.locator('[data-testid="running-bar"]').click(); await d('running-bar'); await inv.locator('[data-testid^="running-row-"]').first().click().catch(() => {}); await d('running-row'); await inv.locator('[data-testid="running-bar"]').click() }
+  if (await inv.locator('[data-testid="coming-bar"]').isVisible().catch(() => false)) { await inv.locator('[data-testid="coming-bar"]').click(); await d('coming-bar'); await page.keyboard.press('Escape') }
+  await inv.locator('[data-testid="model-summary"]').click().catch(() => {}); await d('model-expanded')
   await page.locator('[data-testid="abar-threads"]').click()
   await page.locator('[data-testid="abar-terminal"]').click()
   await page.waitForTimeout(2500)
   await page.locator('[data-testid="terminal-new"]').click()
   await page.waitForTimeout(1500)
   await d('terminal')
-  await app.close(); process.exit(0)
+  // closing can wait on the "a thread is working" question: give it a moment, then end the run anyway
+  await Promise.race([app.close(), new Promise((r) => setTimeout(r, 5000))]); process.exit(0)
 }
 
 // QUIET=<folder>: the quiet desk's proof (main, main-clear, each page, the editor, narrow, every theme); QUIET_MAIN=1 stops after main

@@ -3,13 +3,15 @@
 // The page reads the same values through appSettings. Package name, folders and paths stay "hive".
 import { DEFAULT_APP_NAME, DEFAULT_APP_TAGLINE } from './settingsCore'
 
-let name = DEFAULT_APP_NAME
-let tagline = DEFAULT_APP_TAGLINE
+// null until main or the page sets them: the defaults are read on use, not when this file loads, because settingsCore
+// reaches this file through devCore before it has defined them (a run from source loads the files in that order)
+let name: string | null = null
+let tagline: string | null = null
 
-export const appName = (): string => name
-export const appTagline = (): string => tagline
+export const appName = (): string => name ?? DEFAULT_APP_NAME
+export const appTagline = (): string => tagline ?? DEFAULT_APP_TAGLINE
 // the window title: the name (the tagline shows beside the brand in the page)
-export const windowTitle = (): string => name
+export const windowTitle = (): string => appName()
 
 export function setAppName(n: string | undefined | null, t?: string | undefined | null): void {
   name = (n ?? '').trim() || DEFAULT_APP_NAME

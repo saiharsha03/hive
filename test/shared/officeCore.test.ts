@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { boardFit, boardOf, bubbleText, chatOf, floorsOf, kindOf, knowledgeNote, markOf, newSince, parsePlan, peopleOf, todoCount, trimQueue } from '../../src/shared/officeCore'
+import { boardOf, chatOf, markOf, newSince, parsePlan, peopleOf, todoCount } from '../../src/shared/officeCore'
 import type { Todo } from '../../src/shared/teamTodoCore'
 import type { LogEntry, TeamView } from '../../src/shared/teamCore'
 
@@ -19,19 +19,12 @@ const view = (): TeamView => ({
   log: [], plan: '', knowledge: '', todos: [],
 })
 
-test('the room is the Lead then members in join order; no Owner; unknown state is closed', () => {
+test('the roster is the Lead then members in join order; no Owner; unknown state is closed', () => {
   const p = peopleOf(view())
   assert.deepEqual(p.map((x) => x.id), ['lead', 'b1', 'b2', 'r1', 'q1'])
   assert.deepEqual(p.map((x) => x.state), ['working', 'waiting', 'closed', 'closed', 'closed'])
-  assert.deepEqual(p.map((x) => x.look.kind), ['lead', 'builder', 'builder', 'reviewer', 'qa'])
-  assert.notEqual(p[1].look.shirt, p[2].look.shirt)
-  assert.notEqual(p[1].look.hat, p[2].look.hat)
-  assert.equal(new Set(p.map((x) => x.look.shirt)).size, p.length)
-})
-
-test('roles map to looks by keyword', () => {
-  assert.deepEqual(['Senior dev', 'test runner', 'QA tester', 'Code reviewer', 'researcher', 'dbt validator'].map(kindOf),
-    ['builder', 'validator', 'qa', 'reviewer', 'plain', 'validator'])
+  assert.deepEqual(p.map((x) => [x.name, x.role]), [['Lead', 'lead'], ['Builder API', 'Builder'], ['Builder Web', 'builder'], ['Rev', 'reviewer'], ['QA', 'qa']])
+  assert.equal(p[1].doing, 'Edit')
 })
 
 test('plan table rows become board rows; known states uppercase, others as written', () => {
@@ -44,12 +37,6 @@ test('plan table rows become board rows; known states uppercase, others as writt
   assert.deepEqual(parsePlan('# x\n\n| Part | Owner | State | Notes |\n|---|---|---|---|\n'), [])
 })
 
-test('knowledge note is the last two bullets without the stamp', () => {
-  const md = '# Learned\n\n- one (Lead, 2026-11-05 10:00)\n- two (QA, 2026-11-05 10:01)\nplain\n* three (keeps parens) (Rev, 2026-11-05 10:02)\n'
-  assert.deepEqual(knowledgeNote(md), ['two', 'three (keeps parens)'])
-  assert.deepEqual(knowledgeNote('# Learned\n\n'), [])
-})
-
 test('only entries after the mark are new, even with equal timestamps and a trimmed tail', () => {
   const e = (at: number, text: string): LogEntry => ({ at, from: 'x', fromName: 'X', to: [], text })
   const old = [e(1, 'a'), e(2, 'b'), e(2, 'c')]
@@ -58,25 +45,6 @@ test('only entries after the mark are new, even with equal timestamps and a trim
   assert.deepEqual(newSince(mark, old), [])
   assert.deepEqual(newSince(mark, [e(2, 'b'), e(2, 'c'), e(2, 'd'), e(3, 'e')]).map((x) => x.text), ['d', 'e'])
   assert.deepEqual(markOf([]), { at: 0, n: 0 })
-})
-
-test('bubbles are one line, cut with three dots; the queue keeps the latest two once past four', () => {
-  assert.equal(bubbleText('a\n  b'), 'a b')
-  const long = bubbleText('x'.repeat(100))
-  assert.equal(long.length, 70)
-  assert.ok(long.endsWith('...'))
-  assert.deepEqual(trimQueue([1, 2, 3, 4]), [1, 2, 3, 4])
-  assert.deepEqual(trimQueue([1, 2, 3, 4, 5]), [4, 5])
-})
-
-test('floors hold six desks at most and stay balanced; the board cuts to "+N more"', () => {
-  assert.deepEqual(floorsOf(1), [[0]])
-  assert.deepEqual(floorsOf(6).map((f) => f.length), [6])
-  assert.deepEqual(floorsOf(7).map((f) => f.length), [4, 3])
-  assert.deepEqual(floorsOf(11).map((f) => f.length), [6, 5])
-  assert.deepEqual(floorsOf(11)[1], [6, 7, 8, 9, 10])
-  assert.deepEqual(boardFit(3, 5), { shown: 3, more: 0 })
-  assert.deepEqual(boardFit(9, 5), { shown: 4, more: 5 })
 })
 
 test('the chat with one member: their posts, posts to them, what you sent and the last reply, newest last', () => {
@@ -94,7 +62,7 @@ test('the chat with one member: their posts, posts to them, what you sent and th
   assert.deepEqual(chatOf(v, 'lead').map((l) => [l.kind, l.text]), [['them', 'take the API'], ['to', 'not mine']])
 })
 
-test('the whiteboard shows the team board of major to-dos when there are any, else the plan', () => {
+test('the board is the team board of major to-dos when there are any, else the plan', () => {
   const v = view()
   v.plan = '| Part | Owner | State |\n|-|-|-|\n| API | Builder API | doing |'
   assert.equal(boardOf(v).title, 'Plan')

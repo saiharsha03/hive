@@ -10,6 +10,7 @@ import { parseDeployConfig } from './deployCore'
 import { parseDevConfig } from './devCore'
 import { parseScriptsConfig } from './scriptsCore'
 import { EFFORTS } from './statusCore'
+import { trackerOrigin } from './trackerCore'
 
 // one list for the Settings default and the thread's own picker (statusCore.ts)
 export { EFFORTS }
@@ -197,6 +198,9 @@ export function validateSettings(d: { env: Record<string, string>; scripts: unkn
     const n = d.general[k]
     if (n !== undefined && !(typeof n === 'number' && Number.isInteger(n) && n >= 0)) err(`general.${k}`, `${n} is not a whole number of ${k === 'idleCloseMinutes' ? 'minutes' : 'KB'}`)
   }
+  // the Board: the token is sent to this address, so https only
+  if (v('HIVE_TRACKER_SITE') && !trackerOrigin(v('HIVE_TRACKER_SITE'))) err('HIVE_TRACKER_SITE', `${v('HIVE_TRACKER_SITE')} is not an https address`)
+  path('HIVE_TRACKER_TOKEN_FILE', 'Token file')
   const cap = v('HIVE_DEPENDABOT_MAX_REVIEWS')
   if (cap && !(Number.isInteger(Number(cap)) && Number(cap) > 0)) err('HIVE_DEPENDABOT_MAX_REVIEWS', `${cap} is not a whole number above 0`)
   if (d.general.appName.length > 40) err('general.appName', 'App name is longer than 40 characters')

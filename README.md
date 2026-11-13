@@ -41,8 +41,8 @@ It started as a personal replacement for an editor plus a terminal, and is share
 - **Agents that talk to each other.** Through Hive's own MCP server, an agent can start a new thread, message
   another one, wait for its answer, or hand work to Codex.
 - **Teams.** Ask for a team and a Lead thread plans the job on a shared board, picks teammates from a role library
-  (Builder, Reviewer, ...), and runs them in parallel, each in its own worktree. Watch them work in an animated
-  office, chat with any teammate, pause and resume the whole team. Every role keeps a memory across teams.
+  (Builder, Reviewer, ...), and runs them in parallel, each in its own worktree. Watch each one's state and
+  latest post, chat with any teammate, pause and resume the whole team. Every role keeps a memory across teams.
 - **Wake-ups that survive restarts.** A thread can schedule its own follow-up ("check the deploy at 3 PM"); Hive
   keeps it on disk and wakes the thread even after the app was closed or the laptop slept.
 - **A worktree per thread.** Any thread can ask for its own git worktree, so parallel agents never edit the same
@@ -165,8 +165,8 @@ reports back. The Lead breaks the job into items on a shared to-do board, picks 
 worktree. A team lives in `~/.hive/hive/teams/<id>/`: `team.json` (who is in it), `plan.md`, `knowledge.md` (what
 the team learned) and `log.jsonl` (every post).
 
-- **Team view** in the bottom panel, or popped out into its own window: an animated office (Side or Plan view) with
-  each member's state and latest post, the log, the plan, the boards and what was learned. Message any member or a
+- **Team view** in the bottom panel, or popped out into its own window: a roster with each member's role,
+  state and latest post, beside the log, the plan, the boards and what was learned. Message any member or a
   whole role from there.
 - **Role library** in `~/.hive/hive/roles/`: each role has editable instructions and a memory of what everyone in
   that role learned, kept across teams, plus one shared memory for all roles.

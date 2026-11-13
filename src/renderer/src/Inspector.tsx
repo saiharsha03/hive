@@ -1,28 +1,31 @@
 // The inspector: the focused thread's Activity as a timeline (a time column, then a name and one mono line of what it
-// is doing; actions on the hovered or focused item): Running now, Coming up, Earlier in this thread, and Elsewhere
-// folded to one line with a count plus any failure. Then its Changes (git for its repo: stage, commit, push), its Files (tree with git colours) and a short
-// Status. With a page or a file focused it keeps showing the thread that was last on screen.
+// is doing; actions on the hovered or focused item): what runs now and what is coming up, each kind under its own
+// heading only when it has something, Earlier in this thread, and Elsewhere folded to one line with its counts. Then
+// its Changes (git for its repo: stage, commit, push) and Rewind. It rests closed and opens from the thread header.
+// With a page or a file focused it keeps showing the thread that was last on screen.
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { activate, diffSpec, inspectorTab, openPage, send, setPreview, showDiff, type InspectorTab } from './actions'
+import { setLayout } from './appearance'
 import { useAllStatus, useThreadStatus } from './statusStore'
 import { panes as panesStore, sessions, shallowEq, useSessionMetas, useStore, type SessionMeta } from './store'
 import type { Session } from './chat'
 import { focusedTab } from './panes'
-import { Btn, Bar, KV, dur, clock, relative, tokens as fmtTokens } from './kit'
-import { shellName, taskHeading, type Task } from '../../shared/taskCore'
+import { Btn, clock, relative } from './kit'
+import { elsewhereListed, isReviewTask, shellName, taskHeading, worthListing, type Task } from '../../shared/taskCore'
 import { describer, useNow } from './ThreadStatus'
-import { nextRun, describeCron } from '../../shared/cronCore'
+import { TaskItem } from './TaskItem'
+import { useComingUp } from './ComingBar'
+import { taskDetail, type TaskDetail } from '../../shared/runningBarCore'
 import { modelLabel } from '../../shared/statusCore'
-import { modeLabel } from '../../shared/modeCore'
 import { counts, FILE_TOOLS } from '../../shared/diffCore'
 import { hunksOf, shortPath } from './SessionView'
 import { ChangesView } from './ChangesView'
 import { GitPanel } from './GitPanel'
 import { FileTree } from './FileTree'
 import { getPref, setPref } from './prefs'
-import { wakeupsList, onWakeupsChanged, type Wakeups } from './api/next'
 
 type ITab = InspectorTab
+const TABS: ITab[] = ['activity', 'changes', 'rewind']
 
 // the parts of a thread the inspector draws: they do not change while a reply streams, so a token re-renders nothing here
 type Slice = Pick<Session, 'id' | 'title' | 'items' | 'cwd' | 'worktrees' | 'sessionId' | 'busy' | 'background' | 'loaded' | 'streaming'>
@@ -48,98 +51,44 @@ export function useInspected(): SessionMeta | undefined {
 export const Inspector = memo(function Inspector() {
   const s = useInspected()
   const stored = useStore(inspectorTab, (t) => t)
-  const tab: ITab = stored === 'files' || stored === 'status' ? 'activity' : stored // Files lives in the side bar; the status block heads Activity
+  const tab: ITab = TABS.includes(stored) ? stored : 'activity' // a tab stored by an older version (Files, Status, PR gate) is no longer here
   const setTab = (t: ITab) => { inspectorTab.set(t); setPref('inspector.tab', t) }
   const st = useThreadStatus(s?.id)
-  const running = st.tasks.filter((t) => t.status === 'running').length
+  const now = Date.now()
+  const running = st.tasks.filter((t) => t.status === 'running' && worthListing(t, now)).length
   return (
     <aside className="insp" data-testid="inspector" aria-label="Inspector">
       <div className="itabs" role="tablist">
-        {(['activity', 'changes', 'rewind', 'gate'] as ITab[]).map((t) => (
+        {TABS.map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={`itab${tab === t ? ' on' : ''}`} onClick={() => setTab(t)} data-testid={`insp-${t}`}>
-            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : t === 'rewind' ? 'Rewind' : 'PR gate'}
+            {t === 'activity' ? 'Activity' : t === 'changes' ? 'Changes' : 'Rewind'}
             {t === 'activity' && running > 0 && <span className="n">{running}</span>}
           </button>
         ))}
+        <button className="iclose" onClick={() => setLayout({ inspector: false })} aria-label="Close the panel" title="Close the panel" data-testid="insp-close"><i className="codicon codicon-close" aria-hidden /></button>
       </div>
       <div className="ibody">
-        {tab === 'activity' && <>{s && <MiniStatus s={s} />}<Activity s={s} /></>}
+        {tab === 'activity' && <Activity s={s} />}
         {tab === 'changes' && (s ? <Changes id={s.id} /> : <div className="iempty">Open a thread to see its changes.</div>)}
         {tab === 'rewind' && (s ? <RewindView s={s} /> : <div className="iempty">Open a thread to rewind it.</div>)}
-        {tab === 'gate' && (s ? <GateView s={s} /> : <div className="iempty">Open a thread to see its PR gate.</div>)}
       </div>
     </aside>
   )
 })
 
 // ---- Activity ----
-// What a subagent, workflow or Codex run was started with, read from the tool call that started it.
-type TaskDetail = { type: string; model: string; prompt: string }
-const kindName = (t: Task) => (t.kind === 'codex' ? 'Codex' : /workflow/.test(t.kind) ? 'Workflow' : /bash|shell/.test(t.kind) ? 'Shell' : /monitor/.test(t.kind) ? 'Monitor' : /agent/.test(t.kind) ? 'Subagent' : t.kind)
-
-// One piece of background work, folded to a line: its kind and name. Open, it says which model runs it, what it is
-// doing now, what it was asked (the prompt), and how much it has used; Stop and Message are there too.
-function TaskItem({ t, tabId, thread, busy, elsewhere, detail }: { t: Task; tabId: string; thread?: string; busy: boolean; elsewhere?: boolean; detail?: TaskDetail }) {
-  const [msg, setMsg] = useState<string | null>(null)
-  const [open, setOpen] = useState(false)
-  const now = Date.now()
-  const last = t.now || t.lastTool || t.summary || t.error || ''
-  const isAgent = /agent/.test(t.kind)
-  const go = () => {
-    const v = (msg ?? '').trim()
-    if (!v) return
-    send(tabId, `[To subagent "${t.name ? `${t.name}: ` : ''}${t.title}" (task ${t.id})] ${v}`, [], busy ? 'steer' : undefined)
-    setMsg(null)
-  }
-  const type = [kindName(t), detail?.type || (t.kind !== 'codex' ? t.name : '')].filter(Boolean).join(', ')
-  const model = detail?.model || (t.kind === 'codex' ? t.name : '') || ''
-  const used = [t.tokens ? `${fmtTokens(t.tokens)} tokens` : '', t.toolUses ? `${t.toolUses} tool calls` : '', t.durationMs ? dur(t.durationMs) : ''].filter(Boolean).join(', ')
-  return (
-    <div className={`item tk st-${t.status}${open ? ' open' : ''}${t.status === 'failed' ? ' failed' : ''}`} data-testid="activity-item">
-      <div className="tm">{t.status === 'running' ? dur(now - t.startedAt) : clock(t.endedAt ?? t.startedAt)}</div>
-      <div>
-        <button className="tk-head" onClick={() => (elsewhere ? activate(tabId) : setOpen(!open))} aria-expanded={open} title={taskHeading(t)} data-testid="task-toggle">
-          {!elsewhere && <i className={`codicon codicon-chevron-${open ? 'down' : 'right'}`} aria-hidden />}
-          <span className="nm">{elsewhere ? `${taskHeading(t)}${t.status === 'failed' ? ' failed' : ''} in ${thread}` : taskHeading(t)}</span>
-        </button>
-        {!open && last && <div className="ds" title={last}>{last}</div>}
-        {open && (
-          <div className="tk-body" data-testid="task-detail">
-            <div className="tk-row"><i>Type</i><span>{type}</span></div>
-            <div className="tk-row"><i>Model</i><span>{model ? modelLabel(model) : "the thread's model"}</span></div>
-            <div className="tk-row"><i>Now</i><span>{t.status === 'running' ? (t.now || t.lastTool || 'working') : t.status}</span></div>
-            {used && <div className="tk-row"><i>Used</i><span>{used}</span></div>}
-            {(t.error || t.summary) && <div className="tk-row"><i>{t.error ? 'Error' : 'Result'}</i><span>{t.error || t.summary}</span></div>}
-            {t.agents.length > 0 && <div className="tk-row"><i>Agents</i><span>{t.agents.map((a) => `${a.label}: ${a.state}${a.result ? `, ${a.result}` : ''}`).join('\n')}</span></div>}
-            <div className="tk-row tk-prompt"><i>Prompt</i><pre>{detail?.prompt || t.title}</pre></div>
-          </div>
-        )}
-        {msg !== null && (
-          <div className="ac"><input className="uline" style={{ flex: 1 }} autoFocus value={msg} placeholder="Message this subagent (Claude passes it on)" onChange={(e) => setMsg(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go() } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setMsg(null) } }} data-testid={`agent-chat-${t.id}`} /></div>
-        )}
-        <div className="ac">
-          {elsewhere && <Btn kind="link" onClick={() => activate(tabId)}>Open</Btn>}
-          {t.status === 'running' && <Btn kind="link" onClick={() => void window.api.chatStopTask(tabId, t.id)} testid={`task-stop-${t.id}`}>Stop</Btn>}
-          {t.status === 'running' && isAgent && msg === null && <Btn kind="link" onClick={() => setMsg('')}>Message</Btn>}
-          {elsewhere && t.status === 'failed' && <Btn kind="link" onClick={() => send(tabId, `Retry the task that failed: ${t.title}`, [], busy ? 'queue' : undefined)}>Retry</Btn>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function Activity({ s }: { s?: SessionMeta }) {
   const all = useAllStatus()
   const metas = useSessionMetas()
   const session = useThreadSlice(s?.id)
   const now = useNow(true)
   const st = s ? all.get(s.id) : undefined
-  // Elsewhere rests folded to one line with its counts; a failure there stays in view
+  // Elsewhere rests folded to one line with its counts
   const [showElsewhere, setShowElsewhere] = useState(false)
   const name = useMemo(() => describer(session?.items ?? []), [session?.items])
   const tasks = (st?.tasks ?? []).map((t) => ({ ...t, title: shellName(t, name) }))
-  const runningHere = tasks.filter((t) => t.status === 'running')
+  // a quick shell command is already a row in the chat: listing it here would flash a heading for a second
+  const runningHere = tasks.filter((t) => t.status === 'running' && worthListing(t, now))
   const today = new Date().setHours(0, 0, 0, 0)
   const finishedHere = tasks.filter((t) => t.status !== 'running' && (t.endedAt ?? 0) >= today).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
   // this thread's edits as finished rows ("Edit billing/invoice.py +31 -8, open the diff")
@@ -150,37 +99,20 @@ function Activity({ s }: { s?: SessionMeta }) {
     const label = shortPath(it.input.file_path, session?.cwd)
     return [{ id: it.id, label, c, spec: { t: 'edit' as const, file: it.input.file_path as string, label, tool: it.name, hunks: h } }]
   }).slice(-6).reverse(), [session?.items, session?.cwd])
-  const [wakes, setWakes] = useState<Wakeups | null>(null)
-  useEffect(() => {
-    const load = () => void wakeupsList().then((r) => setWakes(r.ok ? r.data : null))
-    load()
-    return onWakeupsChanged(load)
-  }, [])
+  // what is coming up: the same list the thread's header shows. The thread's own wake-up is the "Wakes in" line below
   type Due = { what: string; how: string; at: string }
-  const loops: Due[] = []
-  const wakeups: Due[] = []
-  for (const j of st?.crons ?? []) { const n = nextRun(j.schedule, new Date(now)); loops.push({ what: j.prompt, how: describeCron(j.schedule), at: n ? clock(n) : '' }) }
-  if (st?.nextWake) wakeups.push({ what: 'Claude wakes this thread', how: 'wake-up', at: clock(st.nextWake) })
-  for (const w of wakes?.wakeups ?? []) if (s?.sessionId && w.sessionId === s.sessionId) wakeups.push({ what: w.prompt, how: 'wake-up', at: clock(Date.parse(w.wakeAt)) })
-  for (const c of wakes?.continues ?? []) if (s && (c.tabId === s.id || c.key === s.sessionId)) wakeups.push({ what: 'Continues after the usage limit resets', how: 'automatic continue', at: clock(c.at) })
-  const detailOf = (t: Task): TaskDetail | undefined => {
-    for (const it of session?.items ?? []) {
-      if (it.kind === 'tool' && t.toolUseId && it.id === t.toolUseId) return { type: String(it.input?.subagent_type ?? it.input?.name ?? ''), model: String(it.input?.model ?? ''), prompt: String(it.input?.prompt ?? it.input?.command ?? it.input?.description ?? '') }
-      if (it.kind === 'codex' && t.kind === 'codex' && (it.task === t.title || t.id === `codex:${it.id}`)) return { type: it.allowEdits ? 'can edit files' : 'read only', model: it.model, prompt: it.task }
-    }
-    return undefined
-  }
-  // what runs now, by kind: each has its own heading, with its count, whether or not anything is in it
+  const coming = useComingUp(s?.id, s?.sessionId).rows
+  const dueOf = (r: (typeof coming)[number]): Due => ({ what: r.what, how: r.kind === 'wake' ? 'wake-up' : r.kind === 'continue' ? 'automatic continue' : r.how, at: r.at !== null ? clock(r.at) : '' })
+  const loops = coming.filter((r) => r.kind === 'loop').map(dueOf)
+  const wakeups = coming.filter((r) => r.kind !== 'loop' && !r.own).map(dueOf)
+  const detailOf = (t: Task): TaskDetail | undefined => taskDetail(session?.items ?? [], t)
+  const sendTo = (tab: string) => (text: string, mode?: 'steer' | 'queue') => send(tab, text, [], mode)
+  // what runs now, by kind: each has its own heading with its count, drawn only when something is in it
   const isShell = (t: Task) => /bash|shell/.test(t.kind)
   const isMonitor = (t: Task) => /monitor/.test(t.kind)
   const shells = runningHere.filter(isShell)
   const monitors = runningHere.filter(isMonitor)
-  // a review: a Codex run, or a subagent asked to review, audit or scan (its name, title or prompt says so)
-  const isReview = (t: Task) => {
-    if (isShell(t) || isMonitor(t)) return false
-    const d = detailOf(t)
-    return t.kind === 'codex' || /\b(review|reviewer|audit|security[- ]scan|verify|verdict)\b/i.test(`${t.name ?? ''} ${t.title} ${d?.type ?? ''} ${(d?.prompt ?? '').slice(0, 400)}`)
-  }
+  const isReview = (t: Task) => isReviewTask(t, detailOf(t))
   const reviews = runningHere.filter(isReview)
   const reviewsDone = finishedHere.filter(isReview).slice(0, 4)
   const agents = runningHere.filter((t) => !isShell(t) && !isMonitor(t) && !isReview(t))
@@ -194,32 +126,40 @@ function Activity({ s }: { s?: SessionMeta }) {
         : agents.length ? { tone: 'agent', text: `${s.busy ? 'Waiting on' : 'Running'} ${agents.length === 1 ? `a subagent: ${taskHeading(agents[0])}` : `${agents.length} subagents`}` }
           : shells.length ? { tone: 'shell', text: `${shells.length === 1 ? 'A shell command is' : `${shells.length} shell commands are`} running in the background` }
             : s.busy ? { tone: 'work', text: 'Claude is working' } : null
-  const sec = (label: string, n: number, tone = '') => <div className={`isec isec-k${n > 0 ? ` on k-${tone}` : ''}`}><span>{label}</span><span className="n">{n}</span></div>
+  const sec = (label: string, n: number, tone = '', shown = n > 0) => shown && <div className={`isec isec-k${n > 0 ? ` on k-${tone}` : ''}`}><span>{label}</span><span className="n">{n}</span></div>
   const due = (x: Due, i: number) => (
     <div key={i} className="item" tabIndex={0}><div className="tm">{x.at}</div>
       <div><div className="nm" title={x.what}>{x.what}</div><div className="ds">{x.how}</div>
         <div className="ac"><Btn kind="link" onClick={() => openPage('scheduled')}>Scheduled</Btn></div></div></div>
   )
-  const elsewhere = [...all].filter(([tab]) => tab !== s?.id).flatMap(([tab, x]) => x.tasks.filter((t) => t.status === 'running' || (t.status === 'failed' && now - (t.endedAt ?? 0) < 3_600_000)).map((t) => ({ t, tab })))
+  const elsewhere = [...all].filter(([tab]) => tab !== s?.id).flatMap(([tab, x]) => x.tasks.filter((t) => elsewhereListed(t, now)).map((t) => ({ t, tab })))
   const titleOf = (tab: string) => metas.find((m) => m.id === tab)?.title ?? tab
   const elseRunning = elsewhere.filter((x) => x.t.status === 'running').length
-  const elseFailed = elsewhere.filter((x) => x.t.status === 'failed')
+  const elseFailed = elsewhere.length - elseRunning
   const earlier = finishedHere.length + edits.length
+  const nothing = !waitingOn && !runningHere.length && !reviewsDone.length && !wakeups.length && !loops.length && !earlier && !st?.goal && !st?.nextWake
   return (
     <div data-testid="inspector-activity">
-      {!s && <div className="iempty" style={{ paddingTop: 16 }}>No thread on screen.</div>}
+      {!s && <div className="iempty first">No thread on screen.</div>}
+      {s && nothing && <div className="iempty first" data-testid="insp-empty">Nothing running in this thread.</div>}
       {s && <>
         {waitingOn && <div className={`waiting w-${waitingOn.tone}`} data-testid="insp-waiting"><span>{waitingOn.text}</span><i aria-hidden /></div>}
-        {sec('Reviews', reviews.length, 'review')}
-        {reviews.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
-        {reviewsDone.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {(st?.goal || st?.nextWake) && (
+          <div className="inote" data-testid="inspector-status">
+            {st.goal && <div title={st.goal.condition}>Goal: {st.goal.condition}</div>}
+            {st.nextWake && <div>Wakes {relative(st.nextWake)}.</div>}
+          </div>
+        )}
+        {sec('Reviews', reviews.length, 'review', reviews.length + reviewsDone.length > 0)}
+        {reviews.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} send={sendTo(s.id)} />)}
+        {reviewsDone.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} send={sendTo(s.id)} />)}
         {advising && <div className="item"><div className="tm" /><div><div className="nm">Advisor{advisorModel ? `, ${advisorModel}` : ''}</div><div className="ds">Reading the conversation to advise Claude</div></div></div>}
         {sec('Subagents', agents.length, 'agent')}
-        {agents.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {agents.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} send={sendTo(s.id)} />)}
         {sec('Shells', shells.length, 'shell')}
-        {shells.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {shells.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} send={sendTo(s.id)} />)}
         {sec('Monitors', monitors.length, 'monitor')}
-        {monitors.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {monitors.map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} send={sendTo(s.id)} />)}
         {sec('Wake-ups', wakeups.length, 'wake')}
         {wakeups.map(due)}
         {sec('Loops', loops.length, 'loop')}
@@ -228,56 +168,19 @@ function Activity({ s }: { s?: SessionMeta }) {
       {earlier > 0 && s && <>
         <div className="irule" />
         <div className="isec" data-testid="insp-finished"><span>Earlier in this thread</span></div>
-        {finishedHere.filter((t) => !isReview(t)).slice(0, 6).map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} />)}
+        {finishedHere.filter((t) => !isReview(t)).slice(0, 6).map((t) => <TaskItem key={t.id} t={t} tabId={s.id} busy={s.busy} detail={detailOf(t)} send={sendTo(s.id)} />)}
         {edits.map((e) => (
           <div key={e.id} className="item" tabIndex={0}><div className="tm" />
             <div><div className="nm" title={e.label}>Edited {e.label}</div><div className="ds"><span className="add-t">+{e.c.add}</span> <span className="del-t">{'\u2212'}{e.c.del}</span></div>
               <div className="ac"><Btn kind="link" onClick={() => showDiff(e.spec)}>Open the diff</Btn></div></div></div>
         ))}
       </>}
-      <div className="irule" />
-      <button className="ifold" onClick={() => setShowElsewhere((x) => !x)} aria-expanded={showElsewhere} data-testid="insp-elsewhere"><span>Elsewhere</span>
-        <span>{elsewhere.length ? [elseRunning ? `${elseRunning} running` : '', elseFailed.length ? `${elseFailed.length} failed` : ''].filter(Boolean).join(', ') : 'nothing running'}</span></button>
-      {showElsewhere
-        ? elsewhere.slice(0, 12).map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)
-        : elseFailed.map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere />)}
-    </div>
-  )
-}
-
-// ---- PR gate: the workspace's review checklist for the commit this thread's checkout is on, read again every few
-// seconds, so each item turns as the review writes its line ----
-function GateView({ s }: { s: SessionMeta }) {
-  const dir = s.worktrees?.at(-1)?.path ?? s.cwd ?? ''
-  const [g, setG] = useState<import('../../main/gate').Gate | null>(null)
-  const [open, setOpen] = useState<string | null>(null)
-  useEffect(() => {
-    let alive = true
-    setG(null)
-    const load = () => void window.api.gateRead(dir).then((x) => { if (alive) setG(x) }).catch(() => {})
-    load()
-    const t = setInterval(load, 3000)
-    return () => { alive = false; clearInterval(t) }
-  }, [dir])
-  if (!g) return <div className="iempty" style={{ paddingTop: 16 }}>Reading the gate.</div>
-  if (g.error) return <div className="iempty" style={{ paddingTop: 16 }}>{g.error}</div>
-  if (!g.checklist && !g.marker) return <div className="iempty" style={{ paddingTop: 16 }}>No review checklist (.claude/known-misses.md) above this folder, so nothing gates a PR here.</div>
-  const all = g.items.length
-  const passed = all > 0 && g.done === all
-  return (
-    <div className="gate" data-testid="inspector-gate">
-      <div className="gate-head">
-        <span className={passed ? 'gate-ok' : g.marker ? 'gate-part' : 'gate-none'}>{passed ? 'Reviewed' : g.marker ? `${g.done} of ${all} done` : 'Not reviewed yet'}</span>
-        <span className="gate-sha" title={g.sha ?? ''}>{g.branch ? `${g.branch} ` : ''}{g.sha?.slice(0, 7)}</span>
-      </div>
-      <div className="gate-note">{g.marker ? `The marker for this commit was written ${g.markerAt ? clock(g.markerAt) : ''}. A new commit needs a new review.` : 'No review marker for this commit. Opening or pushing a PR is blocked until /pr-review --self has checked it.'}</div>
-      {g.items.map((i) => (
-        <button key={i.id} className={`gate-row${i.state ? '' : ' todo'}${open === i.id ? ' open' : ''}`} onClick={() => setOpen(open === i.id ? null : i.id)} aria-expanded={open === i.id} data-testid="gate-item">
-          <span className="gate-id">{i.id}</span>
-          <span className="gate-t">{i.title || 'Not in the checklist'}{open === i.id && <span className="gate-ev">{i.evidence || 'Not checked for this commit yet.'}</span>}</span>
-          <span className={`gate-s ${i.state ? `gate-${i.state.toLowerCase()}` : 'gate-wait'}`}>{i.state ? (i.state === 'NA' ? 'n/a' : i.state === 'FIXED' ? 'fixed' : 'pass') : 'to do'}</span>
-        </button>
-      ))}
+      {elsewhere.length > 0 && <>
+        <div className="irule" />
+        <button className="ifold" onClick={() => setShowElsewhere((x) => !x)} aria-expanded={showElsewhere} data-testid="insp-elsewhere"><span>Elsewhere</span>
+          <span>{[elseRunning ? `${elseRunning} running` : '', elseFailed ? `${elseFailed} failed` : ''].filter(Boolean).join(', ')}</span></button>
+        {showElsewhere && elsewhere.slice(0, 12).map(({ t, tab }) => <TaskItem key={`${tab}:${t.id}`} t={t} tabId={tab} thread={titleOf(tab)} busy={false} elsewhere send={sendTo(tab)} onOpen={() => activate(tab)} />)}
+      </>}
     </div>
   )
 }
@@ -289,7 +192,7 @@ function RewindView({ s }: { s: SessionMeta }) {
   if (!points.length) return <div className="iempty" style={{ paddingTop: 16 }}>Nothing to rewind to yet. Each message you send becomes a point to go back to.</div>
   return (
     <div data-testid="inspector-rewind">
-      <div className="gate-note" style={{ paddingTop: 14 }}>Go back to before one of your messages: the files Claude changed since are put back, and the message is ready to edit.</div>
+      <div className="inote">Go back to before one of your messages: the files Claude changed since are put back, and the message is ready to edit.</div>
       {points.map((p) => (
         <div key={p.uuid} className="item" tabIndex={0}><div className="tm">{p.at ? clock(p.at) : ''}</div>
           <div><div className="nm rw" title={p.text}>{p.text || 'A message with only attachments'}</div>
@@ -341,41 +244,6 @@ export function Files({ s, onOpenFile = setPreview }: { s?: SessionMeta; onOpenF
         {own && !same(dir, own) && <button className="btn-link" onClick={() => setRoot(own)} title={own} data-testid="files-thread">Thread folder</button>}
       </div>
       <FileTree root={dir} onOpenFolder={() => void window.api.pickFolder().then((f) => f && setRoot(f))} selected={null} onOpenFile={(p) => onOpenFile(p)} />
-    </div>
-  )
-}
-
-// ---- Status: the thread in a few lines; the full page is one click away ----
-function MiniStatus({ s }: { s: SessionMeta }) {
-  const st = useThreadStatus(s.id)
-  const [ctx, setCtx] = useState<{ total: number; max: number } | null>(null)
-  useEffect(() => {
-    let alive = true
-    const load = () => void window.api.chatContext(s.id).then((c) => { if (alive) setCtx(c) }).catch(() => {})
-    load()
-    const t = setInterval(load, 15_000)
-    return () => { alive = false; clearInterval(t) }
-  }, [s.id, s.busy])
-  const pct = ctx && ctx.max ? (ctx.total / ctx.max) * 100 : null
-  const wt = s.worktrees?.at(-1)
-  return (
-    <div style={{ padding: '14px 22px' }} data-testid="inspector-status">
-      <KV rows={[
-        ['Model', st.model ? `${modelLabel(st.model)}` : 'default'],
-        ['Effort', st.ultrathink ? 'max for this turn' : st.effort ?? 'default'],
-        ['Mode', modeLabel(s.mode ?? (s.background ? 'auto' : 'default')).replace(/ mode$/i, '').toLowerCase()],
-        ['Folder', wt ? `${wt.repo} worktree on ${wt.branch}` : s.cwd ?? ''],
-        ['Goal', st.goal ? `${st.goal.condition}` : 'none'],
-        ['Compacted', String(s.compactions ?? 0)],
-      ]} />
-      <div style={{ marginTop: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--dim)', marginBottom: 4 }}>
-          <span>Context</span><span className="num" style={{ color: 'var(--hi)' }}>{ctx ? `${fmtTokens(ctx.total)}${ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}` : 'not read yet'}</span>
-        </div>
-        {pct !== null && <Bar pct={pct} />}
-      </div>
-      {st.nextWake && <div className="empty-line">Wakes {relative(st.nextWake)}.</div>}
-      <div style={{ marginTop: 12 }}><Btn kind="plain" onClick={() => openPage('status')}>Status and usage</Btn></div>
     </div>
   )
 }

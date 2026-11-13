@@ -8,14 +8,48 @@
 
 /* header: title, where it works, pinned facts */
 .phead { padding: 22px var(--pane-pad) 0; position: relative; flex: none; }
-.phead-t { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; }
-.phead-t h1 { font: var(--t-title); letter-spacing: -.018em; color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.phead-sub { color: var(--dim); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.phead h1 { font: var(--t-title); letter-spacing: -.018em; color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.phead-t { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); margin-top: var(--s2); }
+.phead-sub { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .phead-sub b { color: var(--ink); font-weight: 500; }
-.phead-acts { display: flex; gap: 14px; position: absolute; right: var(--pane-pad); top: 26px; padding-left: 16px; background: var(--bg); box-shadow: -12px 0 12px var(--bg); opacity: 0; transition: opacity .12s; }
-.phead:hover .phead-acts, .phead:focus-within .phead-acts { opacity: 1; }
-.phead-acts .btn-link { font-size: 12.5px; }
-.phead-menu { position: absolute; right: var(--pane-pad); top: 50px; z-index: 30; background: var(--raised); box-shadow: var(--overlay-shadow); display: flex; flex-direction: column; padding: 6px; min-width: 210px; outline: 1px solid var(--edge); }
+.phead-l { display: flex; align-items: baseline; gap: var(--s3); min-width: 0; flex: 1 1 auto; }
+/* what is coming up for this thread (loops, wake-ups, an automatic continue): one quiet link beside the folder; its list
+   opens over the conversation, so nothing below moves */
+.phead-h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s4); min-width: 0; }
+.phead-h h1 { flex: 1 1 auto; }
+/* at the right of the title: the thread's goal, then what is coming up (loops, wake-ups) */
+.phead-r { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 1 auto; min-width: 0; max-width: 60%; font-size: 12.5px; }
+/* the goal, the loops and the wake-ups each have a line of their own */
+.coming-b { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.coming-ln { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal-chip { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; color: var(--dim); }
+.goal-chip b { color: var(--k-review); font-weight: 600; flex: none; }
+.goal-chip.met b { color: var(--done); }
+.goal-t { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.goal-s { flex: none; font-variant-numeric: tabular-nums; }
+.goal-chip .pin-x { flex: none; text-decoration: underline; text-decoration-color: var(--rule2); text-underline-offset: 3px; }
+.coming { display: flex; flex: none; min-width: 0; position: relative; font-size: 12.5px; }
+.coming-b { background: none; border: 0; padding: 0; font: inherit; color: var(--dim); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-decoration: underline; text-decoration-color: var(--rule2); text-underline-offset: 3px; }
+.coming-b:hover, .coming-b[aria-expanded="true"] { color: var(--hi); }
+.coming-list { position: absolute; right: 0; left: auto; top: 100%; margin-top: var(--s1); z-index: 30; width: min(460px, 80vw); max-height: 280px; overflow-y: auto; background: var(--raised); box-shadow: var(--overlay-shadow); outline: 1px solid var(--edge); padding: var(--s2); border-radius: var(--r-block); font-size: 12.5px; }
+.coming-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); align-items: start; padding: var(--s1) var(--s2); }
+.coming-h { display: grid; gap: 2px; background: none; border: 0; padding: 0; font: inherit; color: var(--ink); text-align: left; cursor: pointer; min-width: 0; }
+.coming-k { color: var(--dim); }
+.coming-k b { color: var(--hi); font-weight: 500; margin-right: var(--s2); }
+.coming-w { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.coming-w.full { display: block; white-space: pre-wrap; }
+.coming-a { display: flex; gap: var(--s3); }
+.coming-a .btn-link, .coming-f .btn-link { font-size: 12.5px; }
+.coming-f { padding: var(--s1) var(--s2); }
+.coming-note { padding: var(--s1) var(--s2) var(--s2); color: var(--signal); }
+.coming-b.held { color: var(--signal); }
+/* the header's actions, always in view: small bordered buttons on one line; the pressed one is the open panel's tab */
+.phead-acts { display: flex; gap: var(--s2); flex: none; position: relative; }
+.pact { height: 26px; padding: 0 var(--s3); gap: 6px; background: none; color: var(--hi); box-shadow: inset 0 0 0 1px var(--rule2); }
+.pact:hover, .pact[aria-pressed="true"], .pact[aria-expanded="true"] { background: var(--lift2); }
+.pact b { color: var(--dim); font-weight: 400; }
+.pact .codicon { display: none; font-size: 14px; }
+.phead-menu { position: absolute; right: 0; top: calc(100% + var(--s1)); z-index: 30; background: var(--raised); box-shadow: var(--overlay-shadow); display: flex; flex-direction: column; padding: 6px; min-width: 210px; outline: 1px solid var(--edge); }
 .phead-menu .btn-link { text-align: left; padding: 6px 10px; color: var(--ink); font-size: 13px; }
 .phead-menu .btn-link:hover { background: var(--lift2); color: var(--hi); }
 .pin-x { background: none; border: 0; color: var(--faint); cursor: pointer; font: inherit; padding: 0 2px; }
@@ -35,12 +69,14 @@
 .msg.you .body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg.you .seen { display: block; font: 400 11.5px/1.4 var(--sans); color: var(--faint); margin-top: 4px; }
 .msg.you .seen.s-fail { color: var(--fail); }
+.msg.you .seen .btn-link { font: inherit; margin-left: var(--s2); }
 .msg-note { font: 400 12px/1.5 var(--sans); color: var(--dim); margin-top: 4px; }
 .msg.from .msg-note { margin: 0 0 4px; }
 .msg.cl.from { padding-left: 14px; border-left: 2px solid var(--rule2); }
-.rewindb { position: absolute; right: 12px; bottom: 9px; background: none; border: 0; color: var(--dim); font: 12px var(--sans); cursor: pointer; opacity: 0; }
-.msg.you:hover .rewindb, .rewindb:focus-visible { opacity: 1; }
-.rewindb:hover { color: var(--hi); }
+.rewindb { position: absolute; right: 12px; bottom: 9px; background: none; border: 0; color: var(--faint); font: 12px var(--sans); cursor: pointer; }
+/* Rewind rests in view, quieter than the text; a message with no "Seen" line leaves it a line of its own */
+.msg.you:hover .rewindb, .rewindb:hover, .rewindb:focus-visible { color: var(--hi); }
+.msg.you:has(.rewindb):not(:has(.seen)) { padding-bottom: 30px; }
 .msg.cl { color: var(--ink); }
 .msg.err { font-size: 13.5px; color: var(--fail); }
 .msg .imgs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -86,6 +122,10 @@
 .trow .tr .btn-link { font: 12px var(--sans); }
 .trow .tv { color: var(--faint); overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); }
 .trow.failed .tp, .trow.failed .tv { color: var(--fail); }
+/* the advisor: a second model was asked. Its own colour and a bar at the left, so it is not read as one more tool call */
+.trow .tv.t-advisor { color: color-mix(in srgb, var(--k-advisor) 75%, var(--hi)); font-weight: 600; }
+.toolbox:has(.t-advisor) { box-shadow: inset 2px 0 0 var(--k-advisor); padding-left: var(--s2); background: color-mix(in srgb, var(--k-advisor) 7%, transparent); }
+.toolbox:has(.t-advisor) .trow .tp { color: var(--ink); }
 .tchev { display: none; }
 .toolout { margin: 4px 0 10px 76px; display: flex; flex-direction: column; gap: 6px; position: relative; }
 .toolout .log { max-height: 320px; font-size: 12px; line-height: 18px; }
@@ -143,6 +183,29 @@
 .btw-q .btn-link { margin-left: auto; }
 .btw-a { margin-top: 4px; font-size: 13.5px; }
 
+/* what runs now (subagents, workflows, shells, monitors): one quiet line above the queue and the composer. Open, a row
+   per task; the list is capped and scrolls inside itself, so the message box stays on screen */
+.runbar { flex: none; display: flex; flex-direction: column; min-height: 0; max-height: 40%; margin: 0 var(--pane-pad); border-top: 1px solid var(--rule); font-size: 12.5px; color: var(--dim); }
+.runbar-b { display: flex; gap: var(--s2); align-items: center; width: 100%; flex: none; background: none; border: 0; padding: var(--s2) 0; font: inherit; color: var(--dim); cursor: pointer; text-align: left; }
+.runbar-b:hover, .runbar.open .runbar-b { color: var(--hi); }
+.runbar-b b { color: var(--hi); font-weight: 550; }
+.runbar-b .codicon { font-size: 13px; }
+.runbar-h { margin-left: auto; color: var(--faint); font-size: 12px; }
+.runbar-list { overflow-y: auto; min-height: 0; padding-bottom: var(--s2); }
+/* the group's name over its rows: bold, in the app's label colour, so Shells and Monitors read as headings */
+.runbar-g { display: flex; align-items: center; gap: var(--s1); width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: 650 12.5px/1.4 var(--sans); color: var(--label); padding: var(--s3) var(--s2) var(--s1); }
+.runbar-g:hover { color: var(--hi); }
+.runbar-g .codicon { font-size: 13px; }
+.runbar-gn { margin-left: var(--s2); color: var(--dim); font-weight: 500; font-variant-numeric: tabular-nums; }
+.runbar .item { grid-template-columns: 56px minmax(0, 1fr); padding: var(--s1) var(--s2); font-size: 12.5px; }
+.runbar .item.st-failed .tm { color: var(--fail); }
+.runbar .tk-head { display: flex; align-items: baseline; gap: var(--s1); width: 100%; padding: 0; background: none; border: 0; color: var(--hi); font: inherit; text-align: left; cursor: pointer; }
+.runbar .tk-head .codicon { font-size: 13px; color: var(--dim); flex: none; align-self: center; }
+.runbar .tk-head .nm { min-width: 0; flex: 0 1 auto; }
+.runbar .tk-ty { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: var(--s2); min-width: 72px; flex: 0 2 auto; }
+.runbar .item.open .tk-head .nm { white-space: normal; }
+.runbar .tk-row pre { max-height: 160px; }
+
 /* queued messages: numbered lines just above the composer */
 .queue { margin: 0 var(--pane-pad); border-top: 1px solid var(--rule); padding: 10px 0; font-size: 12.5px; color: var(--dim); flex: none; max-height: 30%; overflow-y: auto; position: relative; }
 .qh { position: absolute; right: 0; top: 8px; display: flex; gap: 12px; font-size: 12px; color: var(--faint); visibility: hidden; }
@@ -178,13 +241,17 @@ span.pick { cursor: default; }
 .crow > .pick:first-child, .crow > span:first-child .pick:first-child { color: var(--ink); font-weight: 500; }
 button.pick:hover { color: var(--hi); }
 .pick.ultra { color: var(--signal); }
-.pick.warn { color: var(--fail); }
+/* bypass permissions is the one mode that asks nothing: it reads in the fail colour, not as a mild warning */
+.pick.warn { color: var(--fail); background: color-mix(in srgb, var(--fail) 14%, transparent); font-weight: 500; padding: 3px var(--s2); border-radius: var(--r-row); }
+.pick-done { color: var(--faint); }
+.pick-on { color: var(--ink); }
 .pick-err { color: var(--fail); font-size: 12px; }
 .pick.wide { display: none; }
 .crow .btn-link { font-size: 12.5px; }
 .cbtns { margin-left: auto; display: flex; gap: 14px; align-items: center; }
 .atts { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 6px 8px; align-items: center; }
 .att { position: relative; }
+.att-n { display: block; font-size: 11px; color: var(--dim); text-align: center; margin-top: 2px; }
 .att img { height: 48px; display: block; border-radius: var(--r-row); }
 .att-x { position: absolute; top: 0; right: 0; background: var(--raised); color: var(--hi); border: 0; cursor: pointer; padding: 0 4px; line-height: 16px; }
 .clipline { display: flex; gap: 12px; align-items: baseline; font-size: 12px; min-width: 0; }
@@ -214,7 +281,12 @@ button.pick:hover { color: var(--hi); }
   .msg, .tools, .qwrap, .queue, .note, .warnrow, .sumrow, .btw, .hold-line, .findbar { margin-left: 14px; margin-right: 14px; }
   .composer { padding-left: 8px; padding-right: 8px; }
   .toolout { margin-left: 0; }
+  .runbar { margin-left: 14px; margin-right: 14px; }
+  .coming-list { left: 14px; width: calc(100% - 28px); }
 }
+/* the header's buttons fold to icons before they can push past the pane: the three panel buttons first, then Terminal */
+@container pane (max-width: 620px) { .pact.fold { padding: 0 6px; min-width: 26px; justify-content: center; } .pact.fold .codicon { display: inline; } .pact.fold span:not(.codicon) { display: none; } }
+@container pane (max-width: 440px) { .pact.fold2 { padding: 0 6px; min-width: 26px; justify-content: center; } .pact.fold2 .codicon { display: inline; } .pact.fold2 span:not(.codicon) { display: none; } }
 
 /* the editor in a pane: breadcrumb with the language server, Problems bar (Monaco itself keeps VS Code's look) */
 .ed-crumb { min-height: 32px; padding: 0 18px; gap: 10px; background: var(--bg); }

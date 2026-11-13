@@ -1,19 +1,20 @@
-// The Team view: one team at a time, as an animated office (side cutaway or floor plan, see office/) beside the
-// plan, the team log and what the team learned. Reads teams:view, refreshed on teams:changed and every 2 s for the
-// members' live states. New team posts play in the office; click a person to talk to them in a docked chat panel.
+// The Team view: one team at a time, as a roster of its people (state and latest post each) beside the plan, the
+// team log and what the team learned. Reads teams:view, refreshed on teams:changed and every 2 s for the members'
+// live states. Click a person to talk to them in a docked chat panel.
 import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { MemberState, TeamView as View } from '../../shared/teamCore'
-import { STATE_WORD, boardOf, chatOf, knowledgeNote, markOf, nameIn, newSince, peopleOf, sortTodos, todoCount, type LogMark } from '../../shared/officeCore'
+import { STATE_WORD, boardOf, chatOf, markOf, nameIn, newSince, peopleOf, sortTodos, todoCount, type LogMark } from '../../shared/officeCore'
 import { openOf, type Todo } from '../../shared/teamTodoCore'
-import { Office, type Mode } from './office/engine'
+import { State, type Tone } from './kit'
 import { Icon } from './ui'
+import './team.css'
 
 type Row = { id: string; name: string; goal: string; createdAt: number; endedAt?: number; members: number }
 const STATE_CLASS: Record<MemberState, string> = { working: 's-work', waiting: 's-wait', idle: 's-idle', closed: 's-idle' }
+const STATE_TONE: Record<MemberState, Tone> = { working: 'work', waiting: 'wait', idle: 'idle', closed: 'idle' }
 const time = (at: number) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-const MODE_KEY = 'hive.teamOffice'
 type Sent = Record<string, { at: number; text: string }[]>
 type Say = (threadId: string, text: string) => boolean | Promise<boolean>
 
@@ -25,30 +26,24 @@ export const pickTeam = (id: string) => { wanted = id; pickers.forEach((f) => f(
 export const wantedTeam = () => wanted
 export const onTeamPicked = (f: (id: string) => void) => { pickers.add(f); return () => { pickers.delete(f) } }
 
-// the scene itself is plain DOM/SVG driven by office/engine; React owns only the container
-function OfficeScene({ v, mode, onPick, nod }: { v: View; mode: Mode; onPick: (id: string) => void; nod: { id: string; n: number } | null }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const office = useRef<Office | null>(null)
-  const pick = useRef(onPick)
-  pick.current = onPick
-  const seen = useRef<{ team: string; mark: LogMark } | null>(null)
-  useEffect(() => {
-    const o = new Office(ref.current!, (id) => pick.current(id))
-    office.current = o
-    return () => { o.destroy(); office.current = null; seen.current = null }
-  }, [])
-  useEffect(() => {
-    const o = office.current
-    if (!o) return
-    const b = boardOf(v)
-    o.set({ mode, people: peopleOf(v), title: b.title, count: b.count, board: b.rows, goal: v.team.goal, knowledge: knowledgeNote(v.knowledge) })
-    const was = seen.current
-    if (was && was.team === v.team.id) { const fresh = newSince(was.mark, v.log); if (fresh.length) o.play(fresh) } // history is never replayed
-    else o.clear()
-    seen.current = { team: v.team.id, mark: markOf(v.log) }
-  }, [v, mode])
-  useEffect(() => { if (nod) office.current?.nod(nod.id) }, [nod])
-  return <div className="ofc" ref={ref} data-testid="team-office" />
+// who is on the team: one row per person with their role, own to-dos done, state and latest post; a row opens the chat
+function Roster({ v, chat, onPick }: { v: View; chat: string | null; onPick: (id: string) => void }) {
+  const lastBy = new Map(v.log.map((e) => [e.from, e])) // the log is oldest first, so the latest post wins
+  return (
+    <div className={`tv-roster${chat ? ' chatting' : ''}`} data-testid="team-roster">
+      {peopleOf(v).map((p) => {
+        const last = lastBy.get(p.id)
+        return (
+          <button key={p.id} className={`rail-row${chat === p.id ? ' on' : ''}${p.state === 'working' ? ' busy' : ''}`} aria-pressed={chat === p.id}
+            title={`${p.name} (${p.role})${p.doing ? `: ${p.doing}` : ''}. Click to talk`} onClick={() => onPick(p.id)} data-testid={`team-person-${p.id}`}>
+            <span className="rail-l1"><span className="rail-t"><span className="tt">{p.name}</span></span><em>{p.role}</em>
+              {p.todo && <em title="Own to-dos done">{p.todo}</em>}<State word={STATE_WORD[p.state]} tone={STATE_TONE[p.state]} /></span>
+            {last && <span className="rail-l2"><span className="tv-t">{time(last.at)}</span> {last.text}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 // one to-do: a small checkbox (empty open, filled doing, ticked done, struck through dropped), the text, the state
@@ -87,7 +82,7 @@ function Todos({ v }: { v: View }) {
   )
 }
 
-// talking to one teammate without leaving the office: what passed between you, and a box straight into its thread
+// talking to one teammate without leaving the team: what passed between you, and a box straight into its thread
 function Chat({ v, id, sent, onSend, onOpen, onClose }: { v: View; id: string; sent: { at: number; text: string }[]; onSend: (text: string) => Promise<boolean>; onOpen: () => void; onClose: () => void }) {
   const p = peopleOf(v).find((x) => x.id === id)
   const [text, setText] = useState('')
@@ -146,11 +141,11 @@ export function TeamView({ onActivate, onMessage, inWindow, bare }: { onActivate
   const [pick, setPick] = useState<string | null>(wanted)
   const [v, setV] = useState<View | null>(null)
   const [side, setSide] = useState<'plan' | 'log' | 'knowledge' | 'todos'>('log')
-  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem(MODE_KEY) === 'plan' ? 'plan' : 'side'))
   const [chat, setChat] = useState<string | null>(null)
   const [sent, setSent] = useState<Sent>({})
-  const [nod, setNod] = useState<{ id: string; n: number } | null>(null)
-  const pickMode = (m: Mode) => { setMode(m); localStorage.setItem(MODE_KEY, m) }
+  // posts that came in while another tab was up: counted on the Log tab until it is looked at
+  const seen = useRef<{ team: string; mark: LogMark } | null>(null)
+  const [fresh, setFresh] = useState(0)
   const id = pick ?? teams.find((t) => !t.endedAt)?.id ?? teams[0]?.id ?? null
 
   useEffect(() => {
@@ -163,7 +158,7 @@ export function TeamView({ onActivate, onMessage, inWindow, bare }: { onActivate
   useEffect(() => {
     if (!id) { setV(null); return }
     let on = true
-    // the 2 s refresh mostly answers what is already on screen: then nothing re-renders (plan, log, office)
+    // the 2 s refresh mostly answers what is already on screen: then nothing re-renders (plan, log, roster)
     let last = ''
     const load = () => void window.api.teamView(id).then((x) => { const j = JSON.stringify(x); if (on && j !== last) { last = j; setV(x) } }).catch(() => {})
     load()
@@ -171,6 +166,12 @@ export function TeamView({ onActivate, onMessage, inWindow, bare }: { onActivate
     const t = setInterval(load, 2000)
     return () => { on = false; off(); clearInterval(t) }
   }, [id])
+  useEffect(() => {
+    if (!v) return
+    const was = seen.current
+    if (side === 'log' || was?.team !== v.team.id) { seen.current = { team: v.team.id, mark: markOf(v.log) }; setFresh(0) }
+    else setFresh(newSince(was.mark, v.log).length)
+  }, [v, side])
 
   if (!teams.length) return <div className="pane-empty" data-testid="team-empty">No teams yet. Ask a thread to start one, e.g. "make a team to finish the billing migration".</div>
   return (
@@ -183,26 +184,24 @@ export function TeamView({ onActivate, onMessage, inWindow, bare }: { onActivate
         )}
         {v && <span className="tv-goal" title={v.team.goal}>{v.team.goal}</span>}
         {v?.team.owner && <button className="link" onClick={() => onActivate(v.team.owner!.id)} title="The thread that started this team; the Lead reports to it">Owner: {v.team.owner.title}</button>}
-        <div className="seg" title="How the office is drawn">{(['side', 'plan'] as const).map((m) => <button key={m} className={mode === m ? 'on' : ''} onClick={() => pickMode(m)} data-testid={`team-mode-${m}`}>{m === 'side' ? 'Side' : 'Plan'}</button>)}</div>
         {v && !v.team.endedAt && <PauseButton v={v} />}
         {!inWindow && <button className="ibtn" onClick={() => void window.api.teamOpenWindow(id ?? undefined)} title="Open in its own window" data-testid="team-open-window">{bare ? 'Open in window' : <Icon name="link-external" />}</button>}
         {v && <span className="tv-meta">{v.team.members.length + 1} members, started {time(v.team.createdAt)}{v.team.endedAt ? `, ended ${time(v.team.endedAt)}` : ''}</span>}
       </div>
       {v && (
         <div className="tv-body">
-          <div className="ofc-wrap">
-            <OfficeScene v={v} mode={mode} onPick={setChat} nod={nod} />
+          <div className="tv-main">
+            <Roster v={v} chat={chat} onPick={setChat} />
             {chat && <Chat v={v} id={chat} sent={sent[chat] ?? []} onClose={() => setChat(null)} onOpen={() => onActivate(chat)}
               onSend={async (text) => {
                 if (!(await onMessage(chat, text))) return false
                 setSent((x) => ({ ...x, [chat]: [...(x[chat] ?? []), { at: Date.now(), text }] }))
-                setNod((x) => ({ id: chat, n: (x?.n ?? 0) + 1 }))
                 return true
               }} />}
           </div>
           <div className="tv-side">
             <div className="tv-tabs">
-              {(['log', 'todos', 'plan', 'knowledge'] as const).map((k) => <button key={k} className={side === k ? 'on' : ''} onClick={() => setSide(k)} data-testid={`team-tab-${k}`}>{k === 'log' ? `Log (${v.log.length})` : k === 'todos' ? `To-dos (${openOf(v.todos ?? []).length})` : k === 'plan' ? 'Plan' : 'Learned'}</button>)}
+              {(['log', 'todos', 'plan', 'knowledge'] as const).map((k) => <button key={k} className={side === k ? 'on' : ''} onClick={() => setSide(k)} data-testid={`team-tab-${k}`}>{k === 'log' ? `Log (${v.log.length}${fresh ? `, ${fresh} new` : ''})` : k === 'todos' ? `To-dos (${openOf(v.todos ?? []).length})` : k === 'plan' ? 'Plan' : 'Learned'}</button>)}
               <span className="tv-dir" title={v.team.dir}><Icon name="folder" /></span>
             </div>
             <div className="tv-pane">

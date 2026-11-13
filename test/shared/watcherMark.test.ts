@@ -2,6 +2,7 @@
 // is called; transcripts written before the mark (the "[<app> watcher run: <name>]" header alone) are still known.
 import { afterEach, describe, expect, it } from 'vitest'
 import { setAppName } from '../../src/shared/appName'
+import { PRODUCT } from '../../src/shared/edition'
 import { WATCHER_MARK, headerName, isWatcherStart, isWatcherTranscript } from '../../src/shared/readOnlyCore'
 import { emptyState, foldersOf, nameProblem, wakeMessage, watcherHeader } from '../../src/shared/watchersCore'
 
@@ -15,8 +16,8 @@ afterEach(() => setAppName(undefined))
 
 describe('the watcher mark', () => {
   it('starts every run header and wake-up', () => {
-    expect(header('Deploy health').split('\n')[0]).toBe(`${WATCHER_MARK} [Hive watcher run: Deploy health]`)
-    expect(wake('Selfie').startsWith(`${WATCHER_MARK} [Hive wake-up: Selfie] Now: `)).toBe(true)
+    expect(header('Deploy health').split('\n')[0]).toBe(`${WATCHER_MARK} [${PRODUCT} watcher run: Deploy health]`)
+    expect(wake('Selfie').startsWith(`${WATCHER_MARK} [${PRODUCT} wake-up: Selfie] Now: `)).toBe(true)
   })
 
   it('is recognised whatever the app is called, brackets included', () => {

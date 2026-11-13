@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { lookup, type Decorations } from '../../shared/fileDecoCore'
 
+// a row dragged into a message box drops as its path (plain text too, so it also works in a terminal or another app)
+export const PATH_MIME = 'application/x-hive-path'
+const dragPath = (e: React.DragEvent, path: string) => { e.dataTransfer.setData(PATH_MIME, path); e.dataTransfer.setData('text/plain', path); e.dataTransfer.effectAllowed = 'copy' }
+
 // which file is open in Preview, how to open one, the git decorations, and a counter that goes up when the folders
 // should be read again; shared by every row in the tree
 const EMPTY: Decorations = { files: {}, dirs: {}, inherit: {} }
@@ -59,7 +63,7 @@ function DirRow({ entry, depth }: { entry: FsEntry; depth: number }) {
   const flip = () => { if (open) openDirs.delete(entry.path); else openDirs.add(entry.path); setOpen(!open) }
   return (
     <>
-      <button data-testid="file-dir" data-name={entry.name} className={`frow${d ? ` g-${d.kind}` : ''}`} style={{ paddingLeft: 8 + depth * 12 }} aria-expanded={open} onClick={flip}>
+      <button data-testid="file-dir" data-name={entry.name} className={`frow${d ? ` g-${d.kind}` : ''}`} style={{ paddingLeft: 8 + depth * 12 }} aria-expanded={open} onClick={flip} draggable onDragStart={(e) => dragPath(e, entry.path)}>
         <span className={open ? 'chev open' : 'chev'}>›</span>
         <span className="fname">{entry.name}</span>
         {d && d.kind !== 'ignored' && <span className="gdot" />}
@@ -74,7 +78,7 @@ function FileRow({ entry, depth }: { entry: FsEntry; depth: number }) {
   const d = lookup(deco, entry.path, false)
   const [glyph, color] = icon(entry.name)
   return (
-    <button data-testid="file-row" data-name={entry.name} className={`frow file${selected === entry.path ? ' sel' : ''}${d ? ` g-${d.kind}` : ''}`} style={{ paddingLeft: 8 + depth * 12 }} title={entry.path} onClick={() => open(entry.path)}>
+    <button data-testid="file-row" data-name={entry.name} className={`frow file${selected === entry.path ? ' sel' : ''}${d ? ` g-${d.kind}` : ''}`} style={{ paddingLeft: 8 + depth * 12 }} title={`${entry.path} (drag it into a message to add its path)`} onClick={() => open(entry.path)} draggable onDragStart={(e) => dragPath(e, entry.path)}>
       <span className={`ficon ${color}`}>{glyph}</span>
       <span className="fname">{entry.name}</span>
       {d?.letter && <span className="gletter">{d.letter}</span>}

@@ -3,6 +3,7 @@
 // a Preview toggle for Markdown and HTML. Models live here, so a tab keeps its edits, cursor and scroll while it is
 // hidden. A file changed on disk reloads by itself when it has no unsaved edits, and asks when it has.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { Modal } from './ui'
 import { monaco } from './monacoSetup'
 import { attach, registerLanguageFeatures, saved, setEnsureModel } from './lspBridge'
 import { langOf, monacoLanguageOf } from '../../shared/editorCore'
@@ -90,14 +91,19 @@ setEnsureModel(async (path) => { await load(path); opener(path) })
 
 // closing a tab: a file with unsaved edits stays open and asks first (closeRequests); otherwise its model goes
 const closeRequests = new Set<string>()
+// how many times its close was asked for: each further click on the tab's x draws the question again, with the focus
+// back on it, so the click is never met with nothing
+const closeAsked = new Map<string, number>()
 export function releaseFile(path: string): boolean {
-  if (isDirty(path)) { closeRequests.add(path); dirtyChanged(); return false }
+  if (isDirty(path)) { closeRequests.add(path); closeAsked.set(path, (closeAsked.get(path) ?? 0) + 1); dirtyChanged(); return false }
   discard(path)
   return true
 }
 function discard(path: string) {
+  closeRequests.delete(path) // answered: a file opened again later must not come back still asking
   const d = docs.get(path)
-  if (d) { d.sync.dispose(); d.model.dispose(); docs.delete(path) }
+  // the entry goes first, so a dispose that throws can never leave the tab unable to close
+  if (d) { docs.delete(path); try { d.sync.dispose() } catch { /* the model still goes */ } d.model.dispose() }
   closeRequests.delete(path)
   dirtyChanged()
 }
@@ -252,12 +258,17 @@ export function FileEditor({ path, onClosed }: { path: string; onClosed: () => v
         {!media && <button className="dlink" onClick={() => void window.api.openInVsCode(path, ed.current?.getPosition()?.lineNumber ?? 1)} data-testid="editor-vscode">Open in VS Code</button>}
       </div>
       {closing && (
-        <div className="ed-bar" data-testid="editor-unsaved">
-          {base(path)} has unsaved changes.
-          <button className="dlink" onClick={() => void save().then((ok) => { if (ok) { discard(path); onClosed() } })}>Save</button>
-          <button className="dlink" onClick={() => { discard(path); onClosed() }} data-testid="editor-discard">Discard</button>
-          <button className="dlink" onClick={() => { closeRequests.delete(path); dirtyChanged() }}>Cancel</button>
-        </div>
+        <Modal key={closeAsked.get(path) ?? 0} title={`Close ${base(path)}?`} onClose={() => { closeRequests.delete(path); dirtyChanged() }} testid="editor-unsaved">
+          <div className="confirm">
+            <div className="confirm-body">It has unsaved changes. Save them before closing, or discard them.</div>
+            <div className="drow confirm-acts">
+              <span className="dspace" />
+              <button className="dbtn" autoFocus onClick={() => { closeRequests.delete(path); dirtyChanged() }} data-testid="editor-keep">Keep editing</button>
+              <button className="dbtn danger" onClick={() => { discard(path); onClosed() }} data-testid="editor-discard">Discard changes</button>
+              <button className="dbtn primary" onClick={() => void save().then((ok) => { if (ok) { discard(path); onClosed() } })} data-testid="editor-save-close">Save and close</button>
+            </div>
+          </div>
+        </Modal>
       )}
       {changed && (
         <div className="ed-bar" data-testid="editor-changed">

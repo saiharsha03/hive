@@ -3,7 +3,7 @@
 // or the deploy / scripts rows change, never for a streaming reply.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { TitleBar, type Command, type PaletteSources } from './TitleBar'
-import { ActivityBar, FullSections, SideBar, Welcome, isFull, showSide, sideView } from './Workbench'
+import { ActivityBar, FullSections, PAGE_SECTION, SideBar, VIEWS, Welcome, isFull, showSide, sideView, type SideView } from './Workbench'
 import { Panes, TabRow } from './PaneArea'
 import { Inspector } from './Inspector'
 import { StatusLine, runPull } from './StatusLine'
@@ -44,6 +44,13 @@ const SLASH_VIEW: Record<string, ToolTab | 'accounts' | 'settings-claude'> = {
   hooks: 'settings-claude', permissions: 'settings-claude', memory: 'settings-claude', config: 'settings', settings: 'settings',
 }
 
+// the page a section is also known as (its shortcut is the section's), and a shortcut as the palette writes it
+const SECTION_PAGE = Object.fromEntries(Object.entries(PAGE_SECTION).map(([page, v]) => [v, page])) as Partial<Record<SideView, ToolTab>>
+const keysOf = (page?: ToolTab) => (page ? PAGE_KEYS[page]?.replace(/ /g, '+') : undefined)
+// Escape leaves a whole-page section only when the user is not typing somewhere and nothing is open over the window
+const TYPING = 'input, textarea, select, [contenteditable], .monaco-editor, .xterm'
+const OVERLAY = '.pop, .tmenu, .scrim, .palette, .pv-full'
+
 export function Shell() {
   const { layout } = useAppearance()
   const metas = useSessionMetas()
@@ -67,7 +74,9 @@ export function Shell() {
   const commands: Command[] = useMemo(() => [
     ...[...live.waiting, ...live.working].map((r): Command => ({ id: `live:${r.id}`, group: 'Threads', label: r.title, hint: r.state === 'working' ? 'working' : 'needs you', run: () => activate(r.id) })),
     ...metas.filter((s) => !s.tool && !s.file && ![...live.waiting, ...live.working].some((r) => r.id === s.id)).map((s): Command => ({ id: `open:${s.sessionId ?? s.id}`, group: 'Threads', label: s.title, hint: 'open', run: () => activate(s.id) })),
-    ...(['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings', ...(quarry?.available ? ['quarry'] : [])] as ToolTab[]).map((v): Command => ({ id: `view:${v}`, group: 'Views', label: PAGE_LABEL[v], hint: PAGE_KEYS[v]?.replace(/ /g, '+'), run: () => openPage(v) })),
+    // every section by name (the ones that are also a page keep that page's shortcut as the hint), then Settings
+    ...VIEWS.filter((v) => v.id !== 'quarry' || quarry?.available).map((v): Command => ({ id: `view:${v.id}`, group: 'Views', label: v.label, hint: keysOf(SECTION_PAGE[v.id]), run: () => showSide(v.id) })),
+    { id: 'view:settings', group: 'Views', label: PAGE_LABEL.settings, hint: keysOf('settings'), run: () => openPage('settings') },
     { id: 'new', group: 'Actions', label: 'New thread', hint: 'Ctrl+N', run: () => newSession() },
     { id: 'new-beside', group: 'Actions', label: 'New thread beside', hint: 'Ctrl+\\', run: () => newBeside() },
     { id: 'next-needs', group: 'Actions', label: 'Next thread that needs me', hint: 'Ctrl+.', run: () => nextNeedsMe() },
@@ -138,6 +147,8 @@ export function Shell() {
   // ---- keyboard ----
   useEffect(() => {
     const inTermOrEditor = () => !!(document.activeElement as HTMLElement | null)?.closest('.xterm, .monaco-editor')
+    // Ctrl+Alt+digit switches the login only on a second press of the same digit, so a slip of the hand does not
+    let armed: { n: number; at: number } | null = null
     const key = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase()
       const ctrl = e.ctrlKey && !e.metaKey
@@ -148,20 +159,28 @@ export function Shell() {
       if (ctrl && e.altKey && e.code === 'KeyT') { e.preventDefault(); notice(`Theme: ${cycleTheme(e.shiftKey ? -1 : 1).label}`); return }
       if (ctrl && e.altKey && /^[1-9]$/.test(k)) {
         e.preventDefault()
+        const n = Number(k)
+        const again = armed?.n === n && Date.now() - armed.at <= 4000
+        armed = again ? null : { n, at: Date.now() }
         void accountsList().then(async (r) => {
           if (!r.ok) { notice(r.reason); return }
-          const a = r.data[Number(k) - 1]
+          const a = r.data[n - 1]
           if (!a) return
+          if (!again) { notice(`Press Ctrl+Alt+${n} again to switch new threads to ${a.label}`); return }
           const done = await accountUse(a.id)
           notice(done.ok ? `New threads use ${a.label}` : done.reason)
         })
         return
       }
       if (e.altKey && !e.ctrlKey && /^[1-4]$/.test(k)) { e.preventDefault(); focusPaneAt(Number(k) - 1); return }
+      // Escape on a whole-page section goes back to Threads, unless the key belongs to a field, an editor, a terminal or
+      // something open over the window (an open layer has already taken it: ui.tsx's Escape stack)
+      if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.defaultPrevented && isFull(sideView.get()) && !getAppearance().layout.focus
+        && !(e.target as HTMLElement | null)?.closest?.(TYPING) && !document.querySelector(OVERLAY)) { e.preventDefault(); showSide('threads'); return }
       if (!ctrl) return
       if (!e.shiftKey && !e.altKey && k === 'k') { e.preventDefault(); setPaletteN((n) => n + 1) }
       else if (!e.shiftKey && e.key === '.') { e.preventDefault(); nextNeedsMe() }
-      else if (!e.shiftKey && (e.key === '[' || (k === 'b' && !e.altKey && !inTermOrEditor()))) { e.preventDefault(); toggleLayout('rail') }
+      else if (!e.shiftKey && e.key === '[') { e.preventDefault(); toggleLayout('rail') }
       else if (!e.shiftKey && e.key === ']') { e.preventDefault(); toggleLayout('inspector') }
       else if (!e.shiftKey && !e.altKey && e.code === 'Backquote') { e.preventDefault(); toggleTerminal() }
       else if (!e.shiftKey && e.key === ',') { e.preventDefault(); openPage('settings') }
@@ -218,14 +237,21 @@ export function Shell() {
   }
   const empty = <Welcome onPalette={() => setPaletteN((n) => n + 1)} />
   const currentPage = focused?.tool ?? null
-  // a whole-page section (Codex, Environments, Allow IP, Deploy, Notes, To do, Quarry) takes the window: no side bar,
-  // tabs or inspector beside it. A tab that opens or takes the focus meanwhile (a thread from a notification, a diff,
-  // a file) brings the tab area back, under Threads.
+  // a whole-page section (Running, Scheduled, Notes, Deploy, ...) takes the tab area: the thread list stays beside it,
+  // the tabs and the inspector do not. A tab the user opens or picks meanwhile (a thread, a diff, a file) brings the
+  // tab area back, under Threads. One that takes the focus by itself (a notification, a background event) does not:
+  // the window never rearranges itself, so the change must follow a click or a key press by about a second.
   const section = useStore(sideView, (v) => v)
   const full = isFull(section) && !layout.focus
   const lastFocus = useRef(focus)
+  const lastGesture = useRef(0)
   useEffect(() => {
-    if (focus && focus !== lastFocus.current && isFull(sideView.get())) showSide('threads')
+    const mark = () => { lastGesture.current = Date.now() }
+    window.addEventListener('pointerdown', mark, true); window.addEventListener('keydown', mark, true)
+    return () => { window.removeEventListener('pointerdown', mark, true); window.removeEventListener('keydown', mark, true) }
+  }, [])
+  useEffect(() => {
+    if (focus && focus !== lastFocus.current && isFull(sideView.get()) && Date.now() - lastGesture.current < 1000) showSide('threads')
     lastFocus.current = focus
   }, [focus])
   const showRail = layout.rail && !layout.focus
@@ -238,7 +264,7 @@ export function Shell() {
       <TitleBar src={src} paletteN={paletteN} accountsOpen={false} setAccountsOpen={setAccountsOpen} />
       <div className={`body${layout.railRight ? ' rail-right' : ''}`}>
         {!layout.focus && <ActivityBar />}
-        {showRail && !full && <SideBar currentPage={currentPage} />}
+        {showRail && <SideBar currentPage={currentPage} />}
         <FullSections deploy={deploy} />
         <div className="centre" style={full ? { display: 'none' } : undefined}>
           <TabRow />
@@ -266,6 +292,8 @@ export function Shell() {
   )
 }
 
+// Running, Scheduled, Deploys, Status and Watchers are sections now (openPage goes there); they stay here so a tab
+// saved before that still draws
 function PageFor({ page, deploy, onAccounts }: { page: ToolTab; deploy: ReturnType<typeof useDeploy>; onAccounts: () => void }) {
   switch (page) {
     case 'running': return <RunningPage />

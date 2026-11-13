@@ -1,0 +1,24 @@
+/* Board page. Only bd- classes; theme, type (--t-*) and spacing (--s1..--s7) tokens only. No rules between cards. */
+.bd { display: flex; flex-direction: column; }
+.bd-bar { display: flex; gap: var(--s3); align-items: center; margin: var(--s2) 0 var(--s4); }
+.bd-filter { flex: 1; min-width: 0; max-width: 360px; }
+.bd-err { display: flex; gap: var(--s3); align-items: baseline; padding: var(--s2) 0; font: var(--t-ui); color: var(--ink); }
+.bd-note { font: var(--t-label); color: var(--faint); padding-bottom: var(--s2); }
+.bd-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: var(--s5); align-items: start; overflow-x: auto; padding-bottom: var(--s2); }
+.bd-col { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.bd-col-head { display: flex; gap: var(--s2); align-items: baseline; padding-bottom: var(--s1); }
+.bd-col-t { font: var(--t-state); color: var(--hi); }
+.bd-col-n { font: var(--t-label); color: var(--faint); font-variant-numeric: tabular-nums; }
+.bd-card { background: var(--raised); border-radius: var(--r-row); padding: var(--s2) var(--s3); display: flex; flex-direction: column; gap: var(--s1); outline: none; min-width: 0; }
+.bd-card:hover { background: var(--hover); }
+.bd-card:focus-visible { box-shadow: inset 0 0 0 1px var(--rule2); }
+.bd-top { display: flex; gap: var(--s2); align-items: baseline; font: var(--t-label); }
+.bd-key { font-family: var(--mono); color: var(--dim); white-space: nowrap; }
+.bd-status { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bd-age { margin-left: auto; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bd-sum { font: var(--t-ui); color: var(--hi); overflow-wrap: anywhere; }
+.bd-meta { display: flex; gap: var(--s3); align-items: baseline; font: var(--t-label); color: var(--faint); }
+.bd-meta > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bd-meta .btn-link { font: var(--t-label); color: var(--dim); }
+.bd-meta .btn-link:hover { color: var(--hi); }
+.bd-meta .btn-link:focus-visible { outline: none; text-decoration: underline; color: var(--hi); }

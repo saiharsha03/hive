@@ -8,6 +8,7 @@ import {
 import { DEFAULT_TIERS, parseTiers, pickTier } from '../../src/shared/watchCore'
 import { loadSettings, saveSettings, threadDefaults } from '../../src/main/settings'
 import { loadConfig, readDotEnv } from '../../src/main/devConfig'
+import { PRODUCT } from '../../src/shared/edition'
 
 // test/support/setup.ts points the store and the .env into this throwaway folder
 const FIX = process.env.HIVE_TEST_STATE_DIR!
@@ -31,7 +32,7 @@ test('seed from .env and scripts.json: every non-secret key, the scripts array a
   assert.deepEqual(s.env, rest)
   assert.deepEqual(s.scripts, SCRIPTS) // the bad entry is kept, so nothing is lost
   assert.deepEqual(s.general, {
-    shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true, desktopNotify: true,
+    shell: '', model: '', effort: '', ui: '', theme: '', appName: PRODUCT, appTagline: 'One desk, many agents', chrome: true, desktopNotify: true,
     bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: 30, teamMemoryKb: 6, advisorModel: '', workflows: '', quarryPath: '',
   })
   assert.equal(seedSettings(DOT, null).scripts, null)
@@ -159,10 +160,10 @@ test('tier parsing and picking: default table, boundaries, unreadable usage', ()
 test('seeding from env: credentials stay out, defaults for the app name and tagline', () => {
   const s = seedSettings({ HIVE_REPOS_ROOT: 'C:/r', HIVE_GH_TOKEN: 'x', DB_PASSWORD: 'y', HIVE_TRACKER_TOKEN_FILE: '~/.t' }, null)
   assert.deepEqual(s.env, { HIVE_REPOS_ROOT: 'C:/r', HIVE_TRACKER_TOKEN_FILE: '~/.t' })
-  assert.equal(s.general.appName, 'Hive')
+  assert.equal(s.general.appName, PRODUCT)
   assert.equal(s.general.appTagline, 'One desk, many agents')
   const n = normalizeSettings({ general: { appName: '  ', appTagline: '' } })!
-  assert.equal(n.general.appName, 'Hive') // empty name falls back
+  assert.equal(n.general.appName, PRODUCT) // empty name falls back
   assert.equal(n.general.appTagline, '') // an emptied tagline stays empty
   assert.equal(normalizeSettings({ general: { appName: 'Desk', ui: 'compact', theme: 'dark' } })!.general.appName, 'Desk')
 })

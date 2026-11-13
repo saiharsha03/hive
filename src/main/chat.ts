@@ -18,7 +18,8 @@ import { ORGANIZE_ACTIONS, checkOrganize, localNow } from './organize'
 import { searchInSession, searchSessions, sessionMeta } from './search'
 import { formatChunks, formatSessions } from './searchCore'
 import { inOrder, promptNeverChecked, turnQueue } from './queueCore'
-import { addTodo } from './todos'
+import { addTodo, listTodos } from './todos'
+import { formatTodos as formatPersonalTodos } from '../shared/todoListCore'
 import { addToNote } from './notes'
 import { listSessions, sessionTouched } from './sessions'
 import { formatThreads, formatWait, labelFromThread, listThreads, resolveThread, statusOf, waitIdle, type From } from '../shared/threadTalkCore'
@@ -73,7 +74,7 @@ const notifyUser = (title: string, body: string, thread: string): void => { noti
 
 // a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
 // worktrees) or runs services, so nothing it reaches through Hive escapes read-only
-const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread', 'agent_status'])
+const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'list_todos', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread', 'agent_status'])
 const forThread = <T extends { name: string }>(watcher: boolean, tools: T[]): T[] => (watcher ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
 // a watcher's tab, or a watcher's session resumed under any other tab id (the sidebar, the phone, message_thread,
 // after a restart): read-only either way. It reads until the first user message is complete; still undecided = read-only
@@ -122,6 +123,7 @@ const append = () => [
   'mcp__hive__codex runs OpenAI Codex as a subagent on one task (a second opinion, a review, research, or an implementation). It runs in the background',
   'and its answer arrives later as a message starting "[Codex finished"; end your turn or keep working meanwhile. The user watches it live.',
   'You can add an item to the user\'s personal to-do list with mcp__hive__add_todo when the user asks, or when something clearly needs the user\'s follow-up later.',
+  'mcp__hive__list_todos reads that personal list (open items by status, with due dates); use it when the user asks what is on their list or what is due. It is not todo_list, which is a team\'s list.',
   'add_todo can also set a due date (YYYY-MM-DD; turn words like "Monday" or "next week" into a date using the current date) and a status:',
   '"talk" when the user needs to talk to someone about it ("need to talk"), "holding" to hold it off for now, otherwise leave it as "todo".',
   'When the user asks you to note or save something to their Notes, use mcp__hive__add_note (it adds to the note with that title, or makes one).',
@@ -166,6 +168,8 @@ type Live = {
   // the message that started the current turn, until Claude starts answering it: an interrupt that lands while its
   // prompt hooks still run ends the turn with "prompt_check" and the message never reaches Claude, so it goes again
   unchecked?: SDKUserMessage | null
+  stopped?: boolean // the user stopped the running turn (Stop, Interrupt, Send now): its end is not a failure
+  sentNow?: boolean // Send now stopped the turn so a waiting message is answered at once
   lastOk: boolean | null // whether the last finished turn succeeded (null: none yet)
   onIdle: Set<() => void> // wait_for_thread callers, told when the thread has no turn running and nothing queued
   emit: (event: unknown) => void // an event to this thread's tab
@@ -191,6 +195,8 @@ type Gone = { tabId: string; sessionId: string; cwd: string; title: string; last
 const gone = new Map<string, Gone>()
 const findGone = (ref: string) => [...gone.values()].find((g) => g.tabId === ref || g.sessionId === ref)
 const wake = (s: Live) => { for (const cb of [...s.onIdle]) cb() }
+// what follows a Send now whose message was taken into the stopped turn and left unanswered
+const SEND_NOW_NUDGE = 'Carry on: answer my last message above.'
 const userMsg = (text: string, uuid: string = randomUUID()) => ({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] }, parent_tool_use_id: null, uuid }) as SDKUserMessage
 // a message on its way to Claude: kept until Claude takes it in, so a process that ends first gives it back
 const track = (s: Live, m: SDKUserMessage, source: Unsent['source'], queueId?: string) => {
@@ -320,6 +326,20 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           await addTodo(text, 'claude', { due, status })
           send({ type: 'hive_todos_changed' })
           return { content: [{ type: 'text', text: `Added to the user's to-do list: ${text}${due ? ` (due ${due})` : ''}${status ? ` [${status}]` : ''}` }] }
+        },
+      ),
+      tool(
+        'list_todos',
+        `Read the user's personal to-do list (the To do page of ${appName()}): the open items grouped by status (to do, need to talk, holding), each with its due date and whether it is overdue. Read-only. Use when the user asks what is on their list, what is due, or before adding something that may already be there. This is the user's own list, not a team's (that is todo_list).`,
+        { done: z.boolean().optional().describe('Also list items finished in the last 14 days (default false)') },
+        async ({ done }) => {
+          try {
+            const d = new Date()
+            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+            return { content: [{ type: 'text', text: formatPersonalTodos(await listTodos(), { done: !!done, now: d.getTime(), today }) }] }
+          } catch (e: any) {
+            return { content: [{ type: 'text', text: `list_todos failed: ${e?.message ?? e}` }], isError: true }
+          }
         },
       ),
       tool(
@@ -1104,7 +1124,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     },
   })
   // messages queued while Claude works wait here until the turn's result (priority 'later' once handed over)
-  // a queued message handed over (sent, or steered by "Send now") stays on disk until Claude reads it or its turn ends
+  // a queued message handed over (sent, or steered by "At next step") stays on disk until Claude reads it or its turn ends
   const turns = turnQueue<SDKUserMessage>(
     (m, priority, id) => {
       track(s, m, s.queuedFrom.get(id) ?? 'hive', id)
@@ -1155,6 +1175,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           if (uuid) { s.outbox.delete(uuid); pendingSeen(uuid); send({ type: 'hive_seen', uuid }) }
           continue
         }
+        if (m.type === 'result' && s.stopped) (m as any).hive_stopped = true
         send(m)
         // a command only the interactive CLI runs (/design-login, /login, /mcp, ...): run it there, in this
         // thread's terminal, instead of leaving "isn't available in this environment" (not for watchers)
@@ -1211,6 +1232,13 @@ ${s.lastReply}`, Date.now())
           if (lost) s.push({ ...lost, uuid: randomUUID() } as SDKUserMessage)
           s.turns.turnEnded()
           if (lost) { s.turns.markBusy(); s.unchecked = lost }
+          // Send now on a steered message: the stop lands after Claude Code has put the message into the turn it
+          // then ends, so the message is in the conversation with no answer and nothing starts the next turn. When
+          // the queue hands nothing over either, one short line asks for that answer. (Seen 2026-11-12: the thread
+          // sat idle after Send now, with the stop reported as a failure.)
+          const nudge = s.sentNow && !lost && !s.turns.isBusy()
+          s.sentNow = false; s.stopped = false
+          if (nudge) { s.push(userMsg(SEND_NOW_NUDGE)); s.turns.markBusy(); send({ type: 'hive_nudged' }) }
           if (!s.turns.isBusy()) wake(s)
           // signed in to another account while this turn ran: the process closes now if nothing else of it runs
           if (s.recycle && !busyWith(activity(tabId, s)).length) retire(s, 'account')
@@ -1726,9 +1754,23 @@ export function dequeue(tabId: string, queueId: string): boolean {
   return live.get(tabId)?.turns.remove(queueId) ?? false
 }
 
-// "Send now": a queued message steers the running turn instead of waiting for it to end
+// "At next step": a queued message steers the running turn instead of waiting for it to end
 export function promote(tabId: string, queueId: string): boolean {
   return live.get(tabId)?.turns.promote(queueId) ?? false
+}
+
+// "Send now": the running turn is stopped, so what waits goes in as soon as it ends (what an interrupting send does).
+// id = a queued message: it goes to the front of the queue first. id = the uuid of a steered message Claude has not
+// read: only the stop. No id: everything queued is handed over as steers, in order. Hive never sends a steer again:
+// the CLI keeps the messages it holds through a plain interrupt (the SDK's still_queued) and runs them as the next turn.
+// false, and nothing is stopped, when that message (or anything at all) no longer waits
+export async function sendNow(tabId: string, id?: string): Promise<boolean> {
+  const s = live.get(tabId)
+  if (!s || !s.turns.isBusy()) return false
+  if (!(id ? s.turns.first(id) || s.outbox.has(id) : s.turns.flush() + s.outbox.size > 0)) return false
+  s.sentNow = true
+  await interrupt(tabId).catch(() => { /* turn already over */ })
+  return true
 }
 
 // Ctrl+B: move running commands / subagents to the background (one tool call, or all of them);
@@ -1759,6 +1801,8 @@ export async function background(tabId: string, toolUseId?: string): Promise<boo
 
 export async function interrupt(tabId: string): Promise<void> {
   cancelAsks(tabId) // Stop also ends an open question
+  const cur = live.get(tabId)
+  if (cur?.turns.isBusy()) cur.stopped = true
   forceStopLater(tabId)
   await live.get(tabId)?.q.interrupt()
 }

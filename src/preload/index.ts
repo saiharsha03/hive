@@ -89,6 +89,7 @@ contextBridge.exposeInMainWorld('api', {
   chatRewindApply: (tabId: string, cwd: string, sessionId: string, uuid: string, files: string[] | null) => ipcRenderer.invoke('chat:rewindApply', tabId, cwd, sessionId, uuid, files),
   chatDequeue: (tabId: string, queueId: string) => ipcRenderer.invoke('chat:dequeue', tabId, queueId),
   chatPromote: (tabId: string, queueId: string) => ipcRenderer.invoke('chat:promote', tabId, queueId),
+  chatSendNow: (tabId: string, id?: string) => ipcRenderer.invoke('chat:sendNow', tabId, id),
   chatInterrupt: (tabId: string) => ipcRenderer.invoke('chat:interrupt', tabId),
   chatContinueAt: (id: string): Promise<number | null> => ipcRenderer.invoke('chat:continueAt', id),
   chatCancelContinue: (id: string): Promise<boolean> => ipcRenderer.invoke('chat:cancelContinue', id),
@@ -232,6 +233,7 @@ contextBridge.exposeInMainWorld('api', {
   pullRun: (dry: boolean) => ipcRenderer.invoke('pull:run', dry),
   allowStatus: () => ipcRenderer.invoke('allow:status'),
   allowRun: () => ipcRenderer.invoke('allow:run'),
+  trackerBoard: () => ipcRenderer.invoke('tracker:board'),
   codexRun: (task: string, folder: string, edits: boolean) => ipcRenderer.invoke('codex:run', task, folder, edits),
   codexStop: () => ipcRenderer.invoke('codex:stop'),
   onCodexLine: (cb: (line: string) => void) => {

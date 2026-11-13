@@ -120,7 +120,11 @@ let ticking = false
 // Nothing is dropped or moved: what came due meanwhile fires once on resume, saying how late it is, as after a
 // restart. Kept on disk (next to the table), so a pause outlives Hive closing too.
 const pauseFile = () => `${wakeupsFile()}.paused`
-export const wakeupsPaused = (): boolean => { try { readFileSync(pauseFile()); return true } catch { return false } }
+// Off (the app sets this at start from WAKEUPS_OFF in edition.ts): nothing fires by itself, as if always paused. The
+// automatic continue after a usage limit reads the same answer, so it is held too. Run now still works: that is asked for.
+let off = false
+export const setWakeupsOff = (b: boolean): void => { off = b }
+export const wakeupsPaused = (): boolean => { if (off) return true; try { readFileSync(pauseFile()); return true } catch { return false } }
 export function pauseWakeups(on: boolean): void {
   try {
     if (on) { mkdirSync(dirname(pauseFile()), { recursive: true }); writeFileSync(pauseFile(), new Date().toISOString()) } else rmSync(pauseFile(), { force: true })

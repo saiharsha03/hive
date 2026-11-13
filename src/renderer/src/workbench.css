@@ -1,14 +1,42 @@
-/* The workbench frame: an icon bar, then one side bar for the view its icon names, the way a code editor lays it out. */
+/* The workbench frame: a slim rail of labelled destinations, then one side bar for the section its button names. */
 
-/* ---------- icon bar ---------- */
-.abar { width: 48px; flex: none; display: flex; flex-direction: column; align-items: stretch; background: var(--side); border-right: 1px solid var(--rule); }
-.abar-item { position: relative; height: 48px; flex: none; display: grid; place-items: center; background: none; border: 0; border-left: 2px solid transparent; border-right: 2px solid transparent; color: var(--faint); cursor: pointer; }
-.abar-item .codicon { font-size: 24px; }
-.abar-item:hover { color: var(--hi); }
-.abar-item.on { color: var(--hi); border-left-color: var(--accent); }
-.abar-item:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
-.abar-mark { position: absolute; right: 5px; bottom: 6px; font: 650 11px/1 var(--sans); color: var(--signal); font-variant-numeric: tabular-nums; }
+/* ---------- the rail: an icon with its name under it, the same size at every window height ---------- */
+.abar { width: 48px; flex: none; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: var(--s1); padding: var(--s2) 0; overflow-y: auto; scrollbar-width: none; background: var(--side); border-right: 1px solid var(--rule); }
+.abar::-webkit-scrollbar { display: none; }
+.abar-item { position: relative; width: 40px; height: 40px; flex: none; display: grid; justify-items: center; align-content: center; gap: var(--s1); background: none; border: 0; color: var(--dim); font: var(--t-label); cursor: pointer; }
+.app .abar-item { border-radius: var(--r-row) !important; }
+.abar-item .codicon { font-size: 20px; }
+/* icons only: the name stays for a screen reader, and is the button's tooltip */
+.abar-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.abar-item:hover { color: var(--hi); background: var(--lift2); }
+.abar-item.on { color: var(--hi); background: var(--raised); }
+.abar-mark { position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 var(--s1); background: var(--signal); color: var(--bg); font: 600 11px/16px var(--sans); font-variant-numeric: tabular-nums; text-align: center; }
+.app .abar-mark, .ovl .abar-mark { border-radius: 8px !important; }
+.abar-mark.in-menu { position: static; }
 .abar-gap { flex: 1; }
+/* the usage limits: one tall level per window in the empty stretch of the rail above Terminal and Settings, its
+   percentage above it and a short name below. The levels are long and straight: they take all the free height of the
+   rail, and never less than a readable one */
+.abar-gap:has(+ .lim) { flex: 0 0 var(--s4); }
+.lim { display: flex; gap: 4px; align-items: stretch; justify-content: center; width: 44px; min-height: 96px; padding: 8px 0; flex: 1 1 auto; background: none; border: 0; cursor: pointer; color: var(--dim); }
+.app .lim { border-radius: var(--r-row) !important; }
+.lim:hover { background: var(--lift2); color: var(--hi); }
+.lim:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.lim-c { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 13px; min-height: 0; }
+.lim-n, .lim-k { font: 500 10px/1 var(--sans); font-variant-numeric: tabular-nums; flex: none; }
+.lim-n { color: var(--ink); }
+.lim-g { position: relative; width: 4px; flex: 1 1 auto; min-height: 0; background: var(--rule2); display: block; }
+/* each window has its own colour (the app's kind colours), on its level and its name, so the three are told apart
+   at a glance; ahead of pace, the level and its number turn the wait colour whichever window it is */
+.lim-c { --lim: var(--k-loop); }
+.lim-c:nth-child(2) { --lim: var(--k-monitor); }
+.lim-c:nth-child(3) { --lim: var(--k-review); }
+.lim-c:nth-child(n+4) { --lim: var(--k-advisor); }
+.lim-g i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--lim); }
+.lim-k { color: var(--lim); }
+.lim-c.ahead .lim-g i { background: var(--signal); }
+.lim-c.ahead .lim-n { color: var(--signal); }
+.lim-g u { position: absolute; left: -3px; right: -3px; height: 1px; background: var(--hi); }
 
 /* ---------- side bar ---------- */
 .side { position: relative; flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--side); border-right: 1px solid var(--rule); }
@@ -70,6 +98,10 @@ body.side-drag { cursor: col-resize; user-select: none; }
 
 /* ---------- whole-page sections ---------- */
 .full-sec { background: var(--bg); }
+/* the way back to the threads, said above every whole page */
+.full-back { flex: none; align-self: flex-start; display: flex; align-items: center; gap: var(--s2); margin: var(--s3) 20px 0; padding: 0; background: none; border: 0; color: var(--dim); font: var(--t-ui); cursor: pointer; }
+.full-back:hover { color: var(--hi); }
+.full-back .codicon { font-size: 14px; }
 .full-page { padding: 26px 36px 40px; }
 .full-col { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
 .full-col.wide { max-width: 1280px; }
@@ -176,20 +208,7 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .panel .term-slot { padding-left: 12px; }
 .panel .term-bar { padding: 3px 12px; }
 
-/* the icon bar: the sections scroll when there are more than fit (a short window, the panel open); Terminal, Accounts
-   and Settings stay in view at the bottom */
-.abar { min-height: 0; }
-.abar-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; scrollbar-width: none; }
-.abar-list::-webkit-scrollbar { display: none; }
-.abar-item { height: 40px; }
-.abar-item .codicon { font-size: 22px; }
-.abar > .abar-item:first-of-type { border-top: 1px solid var(--rule); }
-
 /* ---------- the frame adapts to the window ---------- */
-/* shorter windows: smaller icons before any of them has to scroll out of view */
-@media (max-height: 1000px) { .abar-item { height: 34px; } .abar-item .codicon { font-size: 20px; } .abar-item .brand-icon { width: 19px; height: 19px; } }
-@media (max-height: 780px) { .abar-item { height: 28px; } .abar-item .codicon { font-size: 18px; } .abar-item .brand-icon { width: 17px; height: 17px; } .abar { width: 40px; } }
-@media (max-height: 620px) { .abar-item { height: 24px; } .abar-item .codicon { font-size: 16px; } .abar-item .brand-icon { width: 15px; height: 15px; } }
 /* the bottom panel never takes more than half of a short window */
 .drawer.panel { max-height: 50vh; }
 /* narrower windows: the side bar gives way first, then the right-hand panel goes, so the conversation keeps its room */
@@ -201,21 +220,6 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .insp .isec.isec-k { padding: 12px 22px 2px; color: var(--label); font: 600 12px var(--sans); }
 .insp .isec.isec-k .n { color: var(--dim); font-weight: 400; font-variant-numeric: tabular-nums; }
 
-/* ---------- PR gate in the right-hand panel ---------- */
-.gate { padding: 14px 0 16px; }
-.gate-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 0 22px 4px; }
-.gate-ok { color: var(--git-added); font-weight: 600; } .gate-part { color: var(--signal); font-weight: 600; } .gate-none { color: var(--fail); font-weight: 600; }
-.gate-sha { font: 12px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.gate-note { padding: 0 22px 10px; font-size: 12px; color: var(--dim); line-height: 1.45; }
-.gate-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; width: 100%; padding: 4px 22px; background: none; border: 0; text-align: left; color: var(--ink); font: 400 13px var(--sans); cursor: pointer; }
-.gate-row:hover { background: var(--raised); }
-.gate-id { font: 12px var(--mono); color: var(--dim); }
-.gate-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gate-row.open .gate-t { white-space: normal; }
-.gate-ev { display: block; margin-top: 4px; font-size: 12px; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-.gate-s { font-size: 12px; font-weight: 600; white-space: nowrap; }
-.gate-pass, .gate-fixed { color: var(--git-added); } .gate-na { color: var(--dim); font-weight: 400; } .gate-wait { color: var(--signal); }
-.gate-row.todo .gate-t { color: var(--hi); }
 
 /* ---------- Environments as a page: each stack named, its buttons beside the name, every stack's table on the same columns ---------- */
 .full-col .dstack .drow .dtitle { display: inline; font: 600 14px var(--sans); color: var(--hi); }
@@ -267,6 +271,13 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .ask2-own { cursor: text; grid-template-columns: 24px minmax(0, 1fr); }
 .ask2-input { width: 100%; background: none; border: 0; outline: 0; color: var(--hi); font: 13px var(--sans); padding: 2px 0; }
 .ask2-input::placeholder { color: var(--dim); }
+/* an answered card: what was picked or typed, as a row that is not a button */
+.ask2-given { display: flex; flex-direction: column; gap: 6px; }
+.ask2-was { grid-template-columns: 24px minmax(0, 1fr); cursor: default; }
+.ask2-was:hover { border-color: var(--accent); }
+.ask2-typed { font-weight: 500; white-space: pre-wrap; }
+.askcard.ask2.done { opacity: 1; }
+.askcard.ask2.done .asktext { color: var(--ink); }
 .ask2-foot { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 12px; color: var(--dim); }
 .ask2-foot .hint { flex: 1; min-width: 0; }
 .ask2-foot button.primary { background: var(--accent); color: var(--on-accent); border: 0; font: 600 13px var(--sans); height: 28px; padding: 0 18px; cursor: pointer; border-radius: 4px !important; }

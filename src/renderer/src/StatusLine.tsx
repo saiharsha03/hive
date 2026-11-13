@@ -1,6 +1,7 @@
-// The status line, all faint: the focused thread's branch, its context and the 7-day use each with a small meter; then
-// on the right where this computer's address stands (in the signal colour only when it is not allowed: that needs
-// you), the phone, quiet hours, and the Undo of the last list action or an update or Pull latest.
+// The status line, all faint. At rest it says three things: the focused thread's branch, its context and the 5-hour
+// use, each with a small meter. Anything else is here only while it needs attention: another limit above the warning
+// level, a Claude Code or SDK update, an address that is not allowed, a phone that is not paired, quiet hours in
+// effect; then the Undo of the last list action, or an app update.
 import { useEffect, useState } from 'react'
 import { createStore, panes as panesStore, useSessionMetas, useStore } from './store'
 import { focusedTab } from './panes'
@@ -124,17 +125,16 @@ function VersionsLine() {
     void window.api.versionsGet().then(setV).catch(() => {})
     return window.api.onVersions(setV)
   }, [])
-  if (!v || (!v.claude.version && !v.sdk.version)) return null
+  if (!v) return null
   const newer = (a: string | null, b: string | null) => !!a && !!b && a !== b && a.localeCompare(b, undefined, { numeric: true }) > 0
   const claude = v.claude.state === 'updating' ? ', updating' : v.claude.state === 'failed' ? ', update failed' : newer(v.claude.latest, v.claude.version) ? `, ${v.claude.latest} available` : ''
   const sdk = v.sdk.state === 'updating' ? ', updating' : v.sdk.state === 'failed' ? ', update failed' : v.sdk.waiting ? `, restart for ${v.sdk.waiting}` : newer(v.sdk.latest, v.sdk.version) ? `, ${v.sdk.latest} available` : ''
-  const said = (w: string) => (w ? 'warm' : '')
   const check = () => void window.api.versionsCheck().then(setV).catch(() => {})
   const title = 'The installed Claude Code and the Agent SDK this app runs threads with. Newer versions are installed by themselves; a new SDK is used from the next start. Click to check now'
   return (
     <>
-      {v.claude.version && <button className={said(claude)} onClick={check} title={title} data-testid="status-claude-version">Claude Code {v.claude.version}{claude}</button>}
-      {v.sdk.version && <button className={said(sdk)} onClick={check} title={title} data-testid="status-sdk-version">SDK {v.sdk.version}{sdk}</button>}
+      {v.claude.version && claude && <button className="warm" onClick={check} title={title} data-testid="status-claude-version">Claude Code {v.claude.version}{claude}</button>}
+      {v.sdk.version && sdk && <button className="warm" onClick={check} title={title} data-testid="status-sdk-version">SDK {v.sdk.version}{sdk}</button>}
     </>
   )
 }
@@ -144,11 +144,9 @@ export function StatusLine() {
   const focus = useStore(panesStore, focusedTab)
   const f = metas.find((s) => s.id === focus && !s.tool && !s.file)
   const u = useStore(undoStore, (x) => x)
-  const [status, setStatus] = useState<Status | null>(null)
   const [ctx, setCtx] = useState<{ total: number; max: number } | null>(null)
   const [allow, setAllow] = useState<AllowStatus | null>(null)
   const [allowOpen, setAllowOpen] = useState(false)
-  const [busyPull, setBusyPull] = useState(false)
   const [update, setUpdate] = useState<UpdateState | null>(null)
   const [phone, setPhone] = useState<{ configured: boolean; paired: boolean; connected: boolean } | null>(null)
   const quiet = useQuietHours()
@@ -157,14 +155,11 @@ export function StatusLine() {
     return window.api.onMobileStatus(setPhone)
   }, [])
   useEffect(() => {
-    const load = () => void window.api.getStatus().then(setStatus).catch(() => {})
-    load()
-    const t = setInterval(load, 15_000)
     void window.api.allowStatus().then(setAllow).catch(() => {})
     const offAllow = window.api.onAllowStatus(setAllow)
     void window.api.updateState().then(setUpdate).catch(() => {})
     const offUpd = window.api.onUpdateState(setUpdate)
-    return () => { clearInterval(t); offAllow(); offUpd() }
+    return () => { offAllow(); offUpd() }
   }, [])
   useEffect(() => {
     setCtx(null)
@@ -176,33 +171,20 @@ export function StatusLine() {
     return () => { alive = false; clearInterval(t) }
   }, [f?.id, f?.busy])
   const branch = f ? (f.worktrees?.at(-1)?.branch ?? (f.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? '') : ''
-  const ipWord = !allow ? '' : allow.running ? 'Allowing this address' : allow.changed ? 'New address, not allowed' : allow.ip ? 'Address allowed' : allow.unreadable ? 'Address not read' : 'Allow my IP'
+  // the address is said only when it needs you: being allowed, changed, or not readable
+  const ipWord = !allow?.configured ? '' : allow.running ? 'Allowing this address' : allow.changed ? 'New address, not allowed' : allow.unreadable ? 'Address not read' : ''
   return (
     <footer className="sline" data-testid="status-bar">
       {branch && <b className="branch" data-testid="status-branch">{branch}</b>}
       {ctx && <span data-testid="status-context">Context {fmtTokens(ctx.total)}{ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}{ctx.max ? <Meter pct={(ctx.total / ctx.max) * 100} /> : null}</span>}
-      {(status?.usage ?? []).map((u) => {
-        const name = u.key === 'five_hour' ? '5-hour' : u.key === 'seven_day' ? '7-day' : `7-day ${u.label.match(/\((.+)\)/)?.[1] ?? u.key.replace(/^(seven_day|model)_/, '')}`
-        const at = u.resetsAt ? new Date(u.resetsAt) : null
-        // the day always said: today, tomorrow, a weekday within the week, else the date
-        const day = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime() }
-        const days = at ? Math.round((day(at) - day(new Date())) / 86_400_000) : 0
-        const time = at ? at.toLocaleTimeString([], { hour: 'numeric', minute: at.getMinutes() ? '2-digit' : undefined }) : ''
-        const when = !at ? '' : days <= 0 ? `today ${time}` : days === 1 ? `tomorrow ${time}` : days < 7 ? `${at.toLocaleDateString([], { weekday: 'short' })} ${time}` : `${at.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`
-        return (
-          <button key={u.key} className={u.pct > WARN_PCT ? 'warm' : ''} onClick={() => openPage('status')} title={`${u.label}${at ? `: resets ${at.toLocaleString()}` : ''}. Click for status and usage`} data-testid={`status-${u.key}`}>
-            {name} {Math.round(u.pct)}%<Meter pct={u.pct} />{when && <span className="lim-reset">resets {when}</span>}
-          </button>
-        )
-      })}
+      {/* the usage limits are the gauges at the foot of the rail (LimitGauges) */}
       <span className="r" />
       <VersionsLine />
-      {allow?.configured && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `This computer's address: ${allow.ip}. Click for Allow my IP` : allow.error || 'Allow my IP'} data-testid="status-allow">{ipWord}</button>}
-      {phone?.configured && <button onClick={() => openPage('settings')} title={phone.connected ? 'The phone app is connected' : 'Pairing and the relay are in Settings'} data-testid="status-phone">{phone.paired ? 'Phone paired' : 'Phone not paired'}</button>}
-      {quiet?.on && <button onClick={() => openPage('settings')} title={`Quiet hours ${quiet.from} to ${quiet.to}: notifications stay silent`} data-testid="status-quiet">{inQuiet(quiet.from, quiet.to) ? `Quiet until ${quiet.to}` : `Quiet from ${quiet.from}`}</button>}
+      {allow && ipWord && <button className={allow.changed ? 'warm' : ''} onClick={() => setAllowOpen(true)} title={allow.ip ? `This computer's address: ${allow.ip}. Click for Allow my IP` : allow.error || 'Allow my IP'} data-testid="status-allow">{ipWord}</button>}
+      {phone?.configured && !phone.paired && <button onClick={() => openPage('settings')} title="Pairing and the relay are in Settings" data-testid="status-phone">Phone not paired</button>}
+      {quiet?.on && inQuiet(quiet.from, quiet.to) && <button onClick={() => openPage('settings')} title={`Quiet hours ${quiet.from} to ${quiet.to}: notifications stay silent`} data-testid="status-quiet">Quiet until {quiet.to}</button>}
       {u ? <span className="undo" data-testid="undo-line">{u.text}<button onClick={() => runUndo()} data-testid="undo">Undo</button></span>
-        : update ? <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Hive ${update.version} available`}</button>
-          : <button onClick={() => void runPull(setBusyPull)} disabled={busyPull} data-testid="status-pull">{busyPull ? 'Pulling' : 'Pull latest'}</button>}
+        : update && <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Hive ${update.version} available`}</button>}
       {allowOpen && allow && <AllowPop allow={allow} onClose={() => setAllowOpen(false)} />}
     </footer>
   )

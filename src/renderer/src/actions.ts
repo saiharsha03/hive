@@ -78,6 +78,15 @@ export function showDiffBeside(d: DiffSpec | null) {
 export type InspectorTab = 'activity' | 'changes' | 'files' | 'status' | 'gate' | 'rewind'
 export const inspectorTab = createStore<InspectorTab>('activity')
 export function showInspector(t: InspectorTab) { inspectorTab.set(t); setLayout({ inspector: true, focus: false }) }
+/** a thread header button: opens the detail panel on that tab; the same button again closes it */
+export function toggleInspector(t: InspectorTab) {
+  if (getAppearance().layout.inspector && inspectorTab.get() === t) setLayout({ inspector: false })
+  else showInspector(t)
+}
+
+// Pages that are sections of the workbench (Running, Scheduled, Deploy, Usage, Watchers) open there, not as a second
+// copy in a tab. The workbench sets this once it has loaded (it imports this file, so the link runs this way round).
+export const sectionRoute: { go?: (page: ToolTab) => boolean } = {}
 
 // ---- drawer: terminal tabs and stack logs ----
 export const drawer = createStore<{ tab: 'terminal' | 'stacks'; termTab: string | null; focusN: number; stack: string | null }>({ tab: 'terminal', termTab: null, focusN: 0, stack: null })
@@ -160,6 +169,7 @@ export function openBeside(id: string) {
 
 // a page opens as a tab (one tab per page)
 export function openPage(page: ToolTab) {
+  if (sectionRoute.go?.(page)) return
   const id = `tool:${page}`
   setSessions((all) => (all.some((s) => s.id === id) ? all : [...all, {
     id, tool: page, title: PAGE_LABEL[page], items: [], streaming: '', busy: false, loaded: true, background: false,
@@ -330,6 +340,14 @@ export function send(targetId: string, text: string, images: Attachment[], mode?
   window.api.chatSend(target.id, target.cwd || place.get().folder, target.sessionId, {
     uuid, title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background, ...(interrupt ? { interrupt: true } : {}),
   }).catch(sendFailed(target.id, uuid, !!target.busy))
+}
+
+// "Send now": the running turn is stopped so what waits goes in at once. id = a queued message (it goes ahead of the
+// other queued ones, and its row says so) or a steered one Claude has not read; none = everything waiting, in order
+export function sendNow(tabId: string, id?: string) {
+  if (id) setSessions((all) => all.map((s) => (s.id === tabId && s.items.some((it) => it.kind === 'user' && it.queue?.pending && it.queue.id === id)
+    ? { ...s, items: s.items.map((it) => (it.kind === 'user' && it.queue?.id === id ? { ...it, interrupt: true } : it)) } : s)))
+  void window.api.chatSendNow(tabId, id).catch(() => false)
 }
 
 // ---- new threads with a prepared first message (not sent) ----

@@ -137,7 +137,7 @@ test.describe('panels', () => {
     // closing it with unsaved edits asks instead of closing
     await tab.click({ button: 'middle' })
     await expect(h.id('editor-unsaved')).toBeVisible()
-    await h.id('editor-unsaved').getByRole('button', { name: 'Cancel' }).click()
+    await h.id('editor-unsaved').getByRole('button', { name: 'Keep editing' }).click()
     await editor.locator('.view-lines').click()
     await l.page.keyboard.press('Control+s')
     await expect(tab.getByTestId('tab-dirty')).toHaveCount(0)

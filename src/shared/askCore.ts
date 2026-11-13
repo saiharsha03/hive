@@ -42,3 +42,37 @@ export function cleanAnswers(qs: AskQuestion[], raw: unknown): Record<string, st
   }
   return out
 }
+
+// What was answered, read back from the tool's result ("...: "<question>"="<answer>", "<question>"="<answer>". ..."),
+// so an answered card can say it after a reload too. The questions are known, so each answer runs from its own
+// question to the next one, or to the last quote for the final one. Empty when the result holds no answer (declined,
+// or replied to in the chat instead).
+export function answersFromResult(qs: AskQuestion[], result: unknown): Record<string, string> {
+  const text = typeof result === 'string' ? result : ''
+  const out: Record<string, string> = {}
+  for (const q of qs) {
+    const head = `"${q.question}"="`
+    const at = text.indexOf(head)
+    if (at < 0) continue
+    const from = at + head.length
+    const nexts = qs.filter((x) => x !== q).map((x) => text.indexOf(`", "${x.question}"="`, from)).filter((i) => i >= 0)
+    const to = nexts.length ? Math.min(...nexts) : text.lastIndexOf('"')
+    if (to > from) out[q.question] = text.slice(from, to)
+  }
+  return out
+}
+
+// an answer as the card shows it: the options it names (with their descriptions), and whatever else was typed
+export function answerParts(q: AskQuestion, answer: string): { picked: AskOption[]; typed: string } {
+  const whole = q.options.find((o) => o.label === answer)
+  if (whole) return { picked: [whole], typed: '' }
+  if (!q.multiSelect) return { picked: [], typed: answer }
+  const picked: AskOption[] = []
+  let rest = answer
+  for (const o of q.options) {
+    for (const form of [`${o.label}, `, o.label]) {
+      if (rest.startsWith(form)) { picked.push(o); rest = rest.slice(form.length); break }
+    }
+  }
+  return { picked, typed: rest.trim() }
+}

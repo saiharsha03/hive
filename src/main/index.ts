@@ -8,10 +8,10 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
 import trayIco from '../../build/icon.ico?asset'
-import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, setThreadMode, THREAD_MODES, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
+import { background, closeAll, closeTab, contextUsage, dequeue, interrupt, liveUsage, promote, PERMISSION_MODE, setThreadMode, THREAD_MODES, recycleThreads, rewindApply, rewindPreview, runInThread, sendMessage, sendNow, setBackground, startBackgroundThread, threadState, transcriptPath, type BackgroundThread, type Outgoing } from './chat'
 import { busyTranscript, configureChat, liveQuery, resumeEverything, runningEverywhere, stopEverything, stoppedQueues, threadFacts, unreadOf, liveTabOf, liveThreads, messageThread, pauseTeam, resumeTeam, setWatcherStop, stopCodex, teamStates, threadTasks } from './chat'
 import { getTeam, listTeams, onTeamChange, readLog, readTeamFile } from './teams'
-import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, pauseWakeups, runWakeupNow, tick as wakeupsTick, wakeupsPaused } from './threadWakeups'
+import { cancelWakeup, initThreadWakeups, listWakeups, onWakeupsChanged, pauseWakeups, runWakeupNow, setWakeupsOff, tick as wakeupsTick, wakeupsPaused } from './threadWakeups'
 import { quietHours, setQuietHours } from './quietHours'
 import type { PhoneAsk, QuietHours } from '../shared/phoneCore'
 import { phoneTasks, phoneTeams, phoneWakeups } from '../shared/phoneCore'
@@ -26,8 +26,9 @@ import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, re
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
 import { allowStatus, forgetAllowed, initAllowlist, markAllowed, runAllowlist } from './ipAllow'
 import { setWatcherPosts } from './readOnly'
+import { initTracker, trackerBoard } from './tracker'
 import { cancelSwitch, switchAccount } from './account'
-import { listAccounts, otherClaudeProcesses, realAccountPaths, removeAccount, saveCurrent, switchAccount as switchProfile } from './accounts'
+import { currentEmail, listAccounts, otherClaudeProcesses, realAccountPaths, removeAccount, saveCurrent, switchAccount as switchProfile } from './accounts'
 import { askBtw } from './btw'
 import { deleteNote, listNotes, saveNote, watchNotes } from './notes'
 import { editorMtime, editorRead, editorWrite, vsCodeUrl } from './editorFiles'
@@ -70,7 +71,7 @@ import { killAllTerminals, killTerminal, openTerminal, resizeTerminal, setTermin
 import type { Source } from '../shared/devCore'
 import { appName, setAppName, windowTitle } from '../shared/appName'
 import { runCodex } from './codex'
-import { APP_ID, NEXT, PRODUCT } from '../shared/edition'
+import { APP_ID, NEXT, PRODUCT, WAKEUPS_OFF } from '../shared/edition'
 import { blocked, dataDir, TEST_MODE } from './testMode'
 import { handoffAt, handoffName } from '../shared/handoffCore'
 import { isAppPage, rosterOf, teamWindowSearch } from '../shared/teamSidebarCore'
@@ -134,6 +135,7 @@ initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview, activeR
 // IP allowlist button: on when the public IP changed since the configured command last succeeded
 const allowChanged = (st: AllowStatus) => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('allow:status', st) }
 initAllowlist(appConfig.env, allowChanged)
+initTracker(appConfig.env)
 setWatcherPosts(appConfig.env)
 configureChat(appConfig.env, chatRoots())
 setWatcherStop(watcherStopReason)
@@ -388,7 +390,8 @@ initMobile(appConfig.env, mobileDeps())
 // Wake-ups and automatic continues, for the window's list: every pending one, cancel one, and a nudge on any change
 const wakeupsChanged = () => { for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('wakeups:changed') }
 onWakeupsChanged(wakeupsChanged)
-// paused wake-ups hold the automatic continues too
+// this build may wake nothing by itself (edition.ts); paused wake-ups hold the automatic continues too
+setWakeupsOff(WAKEUPS_OFF)
 setContinuesPaused(wakeupsPaused)
 // Stop everything (the phone and the window): every working thread and background task; pause: also hold the
 // wake-ups and automatic continues until they are resumed (nothing is dropped; what came due fires once on resume)
@@ -446,6 +449,7 @@ function applySettings() {
   initDependabot(appConfig.env, appConfig.config?.root ?? '', startReview, activeReviews)
   configureWatchers(appConfig.config?.root ?? '', appConfig.env)
   initAllowlist(appConfig.env, allowChanged)
+  initTracker(appConfig.env)
   setWatcherPosts(appConfig.env)
   configureChat(appConfig.env, chatRoots())
   void configureQuarry(settings.general.quarryPath)
@@ -559,6 +563,7 @@ handle('chat:rewindApply', (_e, tabId: string, cwd: string, sessionId: string, u
   rewindApply(String(tabId), String(cwd), String(sessionId), String(uuid), Array.isArray(files) ? files.map(String) : null))
 handle('chat:dequeue', (_e, tabId: string, queueId: string) => dequeue(tabId, queueId))
 handle('chat:promote', (_e, tabId: string, queueId: string) => promote(tabId, queueId))
+handle('chat:sendNow', (_e, tabId: string, id?: string) => sendNow(tabId, id))
 handle('chat:interrupt', (_e, tabId: string) => interrupt(tabId))
 handle('chat:continueAt', (_e, id: string) => continueAt(String(id)))
 handle('chat:cancelContinue', (_e, id: string) => cancelContinue(String(id)))
@@ -681,6 +686,8 @@ handle('pull:run', (_e, dry: boolean) => {
 })
 handle('allow:status', () => allowStatus())
 handle('allow:run', () => runAllowlist())
+// the Board: the signed-in user's Jira tickets as cards (a read; the token never leaves this process)
+handle('tracker:board', () => trackerBoard())
 // Codex from the side bar: one `codex exec` run in a folder; its activity lines go to the page as they come
 let codexProc: import('node:child_process').ChildProcess | null = null
 handle('codex:run', async (e, task: unknown, folder: unknown, edits: unknown) => {
@@ -741,8 +748,16 @@ handle('account:switch', async (e, email: string) => {
   keepProfile() // the account signed in now keeps its newest tokens
   const r = await switchAccount(String(email ?? ''), (t) => { if (!e.sender.isDestroyed()) e.sender.send('account:output', t) })
   if (!r.ok) return r
-  keepProfile()
-  await movedToNewLogin()
+  // The sign-in writes the new tokens first and the identity (whose email names the profile) a moment later. Saved in
+  // between, the new tokens would go under the OLD account's name, and the list would show the old account in use.
+  // So the profile is saved only once the identity names the account the engine reports; never on a mismatch.
+  const m = await movedToNewLogin()
+  const want = (m.account ?? '').toLowerCase()
+  const named = () => (currentEmail(realAccountPaths()) ?? '').toLowerCase()
+  for (let i = 0; i < 20 && want && named() !== want; i++) await new Promise((res) => setTimeout(res, 500))
+  if (!want || named() === want) keepProfile()
+  else console.warn('accounts: the new login was not saved as a profile: the identity file still names another account')
+  accountsChanged()
   return r
 })
 // the saved accounts: id, email, plan, when saved and last used, and which one is signed in (never a token)

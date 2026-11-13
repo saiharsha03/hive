@@ -2,14 +2,14 @@
 // (popovers) in the message box, and its background work (workflows, subagents, Codex runs) above the message box.
 // Plain views over statusStore; the logic is in shared/*Core.
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { advisorChecked, advisorItems, advisorModelOf, advisorWord, isAdvisorValue } from '../../shared/advisorCore'
+import { advisorChecked, advisorItems, advisorModelOf, advisorWord, isAdvisorValue, latestPerClass } from '../../shared/advisorCore'
 import { describeCron, nextRun, untilText } from '../../shared/cronCore'
 import { EFFORTS, modelLabel } from '../../shared/statusCore'
 import { createStore, useStore } from './store'
 import { getPref, setPref } from './prefs'
 import { kindLabel, type Task } from '../../shared/taskCore'
 import { dismissGoal, setPicked, useThreadStatus } from './statusStore'
-import { Icon, Popover, anchorOf, type Anchor } from './ui'
+import { Icon, Popover, anchorOf, useEscape, type Anchor } from './ui'
 
 type Send = (text: string, images: never[], mode?: 'steer' | 'queue') => void
 
@@ -153,10 +153,10 @@ function PickList({ anchor, items, value, isOn, onPick, onClose, testid, loading
         {items.map((m, i) => (
           <Fragment key={m.value}>
             {m.group && m.group !== items[i - 1]?.group && <div className="pop-group" data-testid={`${testid}-group`}>{m.group}</div>}
-            <button className={on(m.value) ? 'pop-row on' : 'pop-row'} onClick={() => { onPick(m.value); onClose() }} data-testid={`${testid}-${m.value}`}>
+            {/* a note goes under its label: beside it on one line, the note took the width and cut the label to a few letters */}
+            <button className={`pop-row${on(m.value) ? ' on' : ''}${m.note ? ' two' : ''}`} onClick={() => { onPick(m.value); onClose() }} data-testid={`${testid}-${m.value}`}>
               <Icon name={on(m.value) ? 'check' : 'blank'} />
-              <span className="pop-label">{m.label}</span>
-              {m.note && <span className="pop-note">{m.note}</span>}
+              <span className="pop-label"><span className="pop-name">{m.label}</span>{m.note && <span className="pop-note">{m.note}</span>}</span>
             </button>
           </Fragment>
         ))}
@@ -197,7 +197,9 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
     const now = { model: st.model, effort: st.effort ?? seen.effort }
     if (now.model !== seen.model || now.effort !== seen.effort) { setSeen(now); setPref('default.seen', now) }
   }, [st.model, st.effort])
-  const [models, setModels] = useState<{ value: string; displayName: string }[] | null>(null)
+  const [allModels, setModels] = useState<{ value: string; displayName: string }[] | null>(null)
+  // the lists show the newest model of each class; the thread's own model stays listed whatever its age
+  const models = allModels && latestPerClass(allModels, st.model ?? '')
   const [open, setOpen] = useState<'model' | 'effort' | 'advisor' | null>(null)
   const [err, setErr] = useState('')
   const mref = useRef<HTMLButtonElement>(null)
@@ -228,18 +230,47 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
     setPicked(tabId, { advisorPick: v, advisor: undefined })
     window.api.chatSetAdvisor(tabId, advisorModelOf(v, dflt)).catch((x) => { setPicked(tabId, was); setErr(String(x?.message ?? x)) })
   }
+  // at rest one button, "Sonnet, high"; a click opens the three pickers in its place, Done or Escape folds them again
+  const [more, setMore] = useState(false)
+  const folded = useRef(false)
+  // the focus goes back to the one button, unless you are typing in the message box
+  const fold = () => { folded.current = !(document.activeElement instanceof HTMLTextAreaElement); setOpen(null); setMore(false) }
+  useEscape(fold, more && !open)
+  const modelText = st.model ? modelLabel(st.model) : dfl.model ? `${nameOf(dfl.model)} (default)` : seen.model ? `${modelLabel(seen.model)} (default)` : 'default'
+  const effortText = thinking ? 'max, ultrathink' : st.effort ?? (dfl.own.effort ? `${dfl.own.effort} (default)` : seen.effort ? `${seen.effort} (default)` : 'medium (default)')
+  const short = (x: string) => x.replace(/ \(default\)$/, '')
+  const failed = (err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>
+  if (!more) return (
+    <>
+      <button className={thinking ? 'pick ultra' : 'pick'} autoFocus={folded.current} onClick={() => setMore(true)} aria-expanded={false}
+        title={`Model ${modelText}, effort ${effortText}: click to change them`} data-testid="model-summary">
+        {modelText === 'default' ? 'default model' : short(modelText)}, {short(effortText)}
+      </button>
+      {/* the advisor keeps its own place in the row: whether a second model is being asked is worth seeing at a glance */}
+      <button ref={aref} className={word ? 'pick pick-on' : 'pick'} onClick={openAdvisor} title="The advisor for this thread: a second model Claude can ask for advice. Click to turn it on or off" aria-haspopup="listbox" data-testid="advisor-picker">
+        {word || 'advisor off'}
+      </button>
+      {failed}
+      {open === 'advisor' && (
+        <PickList anchor={anchorOf(aref.current)} isOn={(v) => v === advisorOn} loading={!models && !loadErr} testid="advisor-list" onClose={() => setOpen(null)}
+          items={models ? advisorItems(models, dflt, modelLabel, st.model || dfl.model || seen.model || '') : []}
+          onPick={(v) => pickAdvisor(v)} />
+      )}
+    </>
+  )
   return (
     <>
-      <button ref={mref} className="pick" onClick={openModels} title={err || 'Model for this thread'} aria-haspopup="listbox" data-testid="model-picker">
-        <i>Model</i>{st.model ? modelLabel(st.model) : dfl.model ? `${nameOf(dfl.model)} (default)` : seen.model ? `${modelLabel(seen.model)} (default)` : 'default'}
+      <button ref={mref} className="pick" autoFocus onClick={openModels} title={err || 'Model for this thread'} aria-haspopup="listbox" data-testid="model-picker">
+        <i>Model</i>{modelText}
       </button>
       <button ref={eref} className={thinking ? 'pick ultra' : 'pick'} onClick={() => setOpen(open === 'effort' ? null : 'effort')} title={thinking ? 'ultrathink: max effort for this turn' : 'Effort for this thread'} aria-haspopup="listbox" data-testid="effort-picker">
-        <i>Effort</i>{thinking ? 'max, ultrathink' : st.effort ?? (dfl.own.effort ? `${dfl.own.effort} (default)` : seen.effort ? `${seen.effort} (default)` : 'medium (default)')}
+        <i>Effort</i>{effortText}
       </button>
       <button ref={aref} className="pick" onClick={openAdvisor} title="The advisor for this thread: a second model Claude can ask for advice" aria-haspopup="listbox" data-testid="advisor-picker">
-        <i>Advisor</i>{word ? word.replace(/^advisor /, 'advisor ') : 'advisor off'}
+        <i>Advisor</i>{word || 'advisor off'}
       </button>
-      {(err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>}
+      <button className="pick pick-done" onClick={fold} title="Fold the model, effort and advisor back into one (Esc)" data-testid="model-collapse">Done</button>
+      {failed}
       {open === 'model' && (
         <PickList anchor={anchorOf(mref.current)} isOn={(v) => (v.startsWith(DEFAULT_PICK) ? v.slice(DEFAULT_PICK.length) === dfl.own.model : isAdvisorValue(v) ? v === advisorOn : v === st.model)} loading={!models && !loadErr} testid="model-list" onClose={() => setOpen(null)}
           items={[...(st.model && models && !models.some((m) => m.value === st.model) ? [{ value: st.model, label: modelLabel(st.model) }] : []), ...(models ?? []).map((m) => ({ value: m.value, label: m.displayName })),
@@ -248,7 +279,7 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
       )}
       {open === 'advisor' && (
         <PickList anchor={anchorOf(aref.current)} isOn={(v) => v === advisorOn} loading={!models && !loadErr} testid="advisor-list" onClose={() => setOpen(null)}
-          items={models ? advisorItems(models, dflt, modelLabel) : []}
+          items={models ? advisorItems(models, dflt, modelLabel, st.model || dfl.model || seen.model || '') : []}
           onPick={(v) => pickAdvisor(v)} />
       )}
       {open === 'effort' && (
@@ -275,7 +306,8 @@ export function ModePicker({ tabId, mode, error }: { tabId: string; mode: string
   const row = MODE_ROWS.find((m) => m.value === mode)
   return (
     <>
-      <button ref={ref} className={mode === 'bypassPermissions' ? 'pick warn' : 'pick'} onClick={() => setOpen(!open)} title={error || err || 'Permission mode of this thread: click to change it'} aria-haspopup="listbox" data-testid="mode-picker">
+      <button ref={ref} className={mode === 'bypassPermissions' ? 'pick warn' : 'pick'} onClick={() => setOpen(!open)} aria-haspopup="listbox" data-testid="mode-picker"
+        title={error || err || (mode === 'bypassPermissions' ? 'Bypass permissions: Claude runs everything without asking. Click to change the mode' : 'Permission mode of this thread: click to change it')}>
         <i>Mode</i>{(row?.label ?? mode).toLowerCase()}{error || err ? ', switch failed' : ''}
       </button>
       {open && (
@@ -284,16 +316,5 @@ export function ModePicker({ tabId, mode, error }: { tabId: string; mode: string
           onPick={(v) => { setErr(''); window.api.chatSetMode(tabId, v).catch((x) => setErr(String(x?.message ?? x))) }} />
       )}
     </>
-  )
-}
-
-// the active thread's model and effort, for the status bar
-export function ModelBadge({ tabId }: { tabId: string | null | undefined }) {
-  const st = useThreadStatus(tabId)
-  if (!tabId || (!st.model && !st.effort)) return null
-  return (
-    <span className="sbi" title="Model and effort of the focused thread (change them in the message box)" data-testid="top-model">
-      <Icon name="sparkle" className="mk-model" />{modelLabel(st.model)}{st.effort ? `, ${st.effort}${st.ultrathink ? ' (ultrathink)' : ''}` : ''}
-    </span>
   )
 }

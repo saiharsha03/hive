@@ -169,7 +169,9 @@ export function kindLabel(kind: string): string {
 export const SHELL_AFTER_MS = 15_000
 export function worthListing(t: Task, now: number): boolean {
   if (t.kind !== 'local_bash') return true
-  return t.status === 'running' && now - t.startedAt >= SHELL_AFTER_MS
+  // a shell started in the background (a monitor's command is one) is background work from its first second; only a
+  // foreground command has to outlast the wait before it is listed
+  return t.status === 'running' && (t.backgrounded === true || now - t.startedAt >= SHELL_AFTER_MS)
 }
 
 // what the thread's own lists show: running work, and finished work for a minute after it ended (it then drops out
@@ -177,6 +179,23 @@ export function worthListing(t: Task, now: number): boolean {
 export const DONE_SHOWN_MS = 60_000
 export const inThreadList = (t: Task, now: number): boolean =>
   worthListing(t, now) && (t.status === 'running' || (!!t.endedAt && now - t.endedAt < DONE_SHOWN_MS))
+
+// What the Activity panel lists from the other threads: their running work, and a subagent, workflow or Codex run that
+// failed within the hour. A shell that "failed" only exited non-zero (normal for a check that is meant to fail one
+// way) and its output is in its own chat, so it is never listed as a failure, nor is a monitor.
+export const FAILED_SHOWN_MS = 3_600_000
+export function elsewhereListed(t: Task, now: number): boolean {
+  if (!worthListing(t, now)) return false
+  if (t.status === 'running') return true
+  return t.status === 'failed' && !/bash|shell|monitor/.test(t.kind) && now - (t.endedAt ?? 0) < FAILED_SHOWN_MS
+}
+
+// a review: a Codex run, or a subagent or workflow asked to review, audit or scan (its name, title, type or the start
+// of its prompt says so). Never a shell or a monitor.
+export function isReviewTask(t: Pick<Task, 'kind' | 'title' | 'name'>, detail?: { type?: string; prompt?: string }): boolean {
+  if (/bash|shell|monitor/.test(t.kind)) return false
+  return t.kind === 'codex' || /\b(review|reviewer|audit|security[- ]scan|verify|verdict)\b/i.test(`${t.name ?? ''} ${t.title} ${detail?.type ?? ''} ${(detail?.prompt ?? '').slice(0, 400)}`)
+}
 
 // a shell's name: the short description its command was run with, when the thread's tool rows have it
 export function shellName(t: Task, describe: (command: string) => string | undefined): string {

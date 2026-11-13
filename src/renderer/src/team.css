@@ -1,0 +1,6 @@
+/* Team view roster: the sidebar's rows (shell.css .rail-row) in the main column, beside the log / plan panes.
+   The docked chat (.ofc-chat) sits over its right edge, so the rows make room while it is open. */
+.tv-main { position: relative; min-width: 0; min-height: 0; display: flex; }
+.tv-roster { flex: 1; min-width: 0; overflow-y: auto; padding: 6px 0 10px; }
+.tv-roster.chatting { padding-right: calc(min(360px, 70%) + 8px); }
+.tv-roster .rail-l2 { display: block; }

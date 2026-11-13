@@ -2,14 +2,15 @@
 // as rows you can click or pick with the number keys, a row for your own answer, then Answer. Enter sends once every
 // question has an answer. Typing in the chat instead also ends it (Claude reads that message).
 import { useRef, useState } from 'react'
-import { buildAnswers, parseQuestions } from '../../shared/askCore'
+import { answerParts, answersFromResult, buildAnswers, parseQuestions } from '../../shared/askCore'
 
-export function AskCard({ tabId, id, input, open }: { tabId: string; id: string; input: unknown; open: boolean }) {
+export function AskCard({ tabId, id, input, open, result }: { tabId: string; id: string; input: unknown; open: boolean; result?: unknown }) {
   const qs = parseQuestions(input)
   const [picks, setPicks] = useState<string[][]>(() => (qs ?? []).map(() => []))
   const [other, setOther] = useState<string[]>(() => (qs ?? []).map(() => ''))
   const [err, setErr] = useState('')
   const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState<Record<string, string> | null>(null)
   const box = useRef<HTMLDivElement>(null)
   if (!qs) return null
   const answers = buildAnswers(qs, picks, other)
@@ -21,7 +22,7 @@ export function AskCard({ tabId, id, input, open }: { tabId: string; id: string;
     if (!answers) return
     setSending(true); setErr('')
     const ok = await window.api.chatAnswer(tabId, id, answers).catch(() => false)
-    if (!ok) { setErr('That question is no longer open'); setSending(false) }
+    if (!ok) { setErr('That question is no longer open'); setSending(false) } else setSent(answers)
   }
   // the question the number keys pick for: the first one with no answer yet, else the first
   const target = () => { const i = qs.findIndex((_q, j) => !picks[j].length && !other[j].trim()); return i < 0 ? 0 : i }
@@ -34,6 +35,8 @@ export function AskCard({ tabId, id, input, open }: { tabId: string; id: string;
       if (o) { e.preventDefault(); e.stopPropagation(); toggle(i, o.label, qs[i].multiSelect) }
     }
   }
+  // answered: what was said, from the tool's result (it survives a reload), else what this card just sent
+  const given = open ? {} : { ...(sent ?? {}), ...answersFromResult(qs, result) }
   const picked = (i: number, label: string) => picks[i].includes(label) && !(!qs[i].multiSelect && other[i].trim())
   return (
     <div className={`askcard ask2${open ? '' : ' done'}`} data-testid="ask-card" ref={box} tabIndex={open ? 0 : -1} onKeyDown={keys}>
@@ -57,11 +60,30 @@ export function AskCard({ tabId, id, input, open }: { tabId: string; id: string;
               </label>
             </div>
           )}
+          {!open && given[q.question] !== undefined && (() => {
+            const a = answerParts(q, given[q.question])
+            return (
+              <div className="ask2-given" data-testid="ask-given">
+                {a.picked.map((o) => (
+                  <div key={o.label} className="ask2-opt on ask2-was">
+                    <span className="ask2-key"><i className="codicon codicon-check" aria-hidden /></span>
+                    <span className="ask2-body"><span className="ask2-label">{o.label}</span>{o.description && <span className="ask2-desc">{o.description.replace(/\.$/, '')}</span>}</span>
+                  </div>
+                ))}
+                {a.typed && (
+                  <div className="ask2-opt on ask2-was">
+                    <span className="ask2-key"><i className="codicon codicon-edit" aria-hidden /></span>
+                    <span className="ask2-body"><span className="ask2-desc">You typed</span><span className="ask2-label ask2-typed">{a.typed}</span></span>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       ))}
       {open
         ? <div className="ask2-foot"><span className="hint">{qs.some((q) => q.multiSelect) ? 'Pick any that apply' : 'Pick one'} with a click or the number keys. Enter sends. Or just reply below.</span>{err && <span className="s-fail">{err}</span>}<button className="primary" disabled={!answers || sending} onClick={() => void submit()} data-testid="ask-submit">{sending ? 'Sending' : 'Answer'}</button></div>
-        : <div className="hint">Question answered</div>}
+        : <div className="hint">{qs.every((q) => given[q.question] !== undefined) ? 'Answered' : qs.some((q) => given[q.question] !== undefined) ? 'Partly answered' : 'Closed without an answer from this card: declined, or replied to in the chat'}</div>}
     </div>
   )
 }

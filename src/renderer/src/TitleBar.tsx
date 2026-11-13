@@ -118,7 +118,7 @@ function AccountButton({ open, setOpen }: { open: boolean; setOpen: (b: boolean)
   const a = useAccountSummary()
   return (
     <>
-      <button className={`tb-acct${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title="Accounts (Ctrl+Alt+1..3 switches)" data-testid="account-button">
+      <button className={`tb-acct${open ? ' open' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} title="Accounts (Ctrl+Alt+1..9, pressed twice, switches)" data-testid="account-button">
         <b>{a.label || 'Account'}</b>
       </button>
       {open && <AccountSwitcher onClose={() => setOpen(false)} />}

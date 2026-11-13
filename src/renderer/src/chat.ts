@@ -249,8 +249,11 @@ export function applyEvent(s: Session, ev: any): Session {
     }
     case 'result': {
       // the turn is over: any tool still marked running never got its result (stopped or failed)
-      const items: Item[] = settle(s.items, ev.is_error ? 'error' : 'done')
-      if (ev.is_error) {
+      // a turn the user stopped (Stop, Interrupt, Send now) ended as asked: its unfinished tools are stopped, not
+      // failed, and no failure line is added
+      const stopped = ev.hive_stopped === true
+      const items: Item[] = settle(s.items, ev.is_error && !stopped ? 'error' : 'done')
+      if (ev.is_error && !stopped) {
         const why = [...(ev.errors ?? []), ev.result].filter(Boolean).join('\n')
         // the engine's internal end-of-turn diagnostic: say what it means, keep the raw line for reference
         const text = why.startsWith('[ede_diagnostic]') ? `The turn stopped before Claude finished (usually a full context: it compacts and carries on). ${why}` : why
@@ -259,6 +262,9 @@ export function applyEvent(s: Session, ev: any): Session {
       // still busy while a compaction runs after the turn
       return { ...s, items, busy: !!s.compacting, turnOpen: false, streaming: '' }
     }
+    case 'hive_nudged':
+      // main asked Claude to answer the message Send now pushed through: the thread is working again
+      return { ...s, busy: true, turnOpen: true }
     case 'hive_error':
       return { ...s, busy: false, compacting: false, turnOpen: false, streaming: '', items: [...settle(s.items, 'error'), { kind: 'error', text: ev.message }] }
     case 'hive_closed':

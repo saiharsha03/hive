@@ -25,6 +25,16 @@ export function turnQueue<T>(deliver: (msg: T, priority: Priority | undefined, i
     const i = waiting.findIndex((w) => w.id === id)
     return i < 0 ? null : waiting.splice(i, 1)[0]
   }
+  // "At next step": a queued message becomes a steer into the running turn (or starts one if Claude went idle)
+  const promote = (id: string): boolean => {
+    const n = take(id)
+    if (!n) return false
+    const running = busy
+    busy = true
+    deliver(n.msg, running ? 'next' : undefined, n.id)
+    notify(id, 'steered')
+    return true
+  }
   return {
     // a turn is running (or about to): the user sent a message, or Claude started on its own
     markBusy: () => { busy = true },
@@ -44,15 +54,20 @@ export function turnQueue<T>(deliver: (msg: T, priority: Priority | undefined, i
       notify(id, 'removed')
       return true
     },
-    // "Send now": a queued message becomes a steer into the running turn (or starts one if Claude went idle)
-    promote(id: string): boolean {
+    promote,
+    // "Send now": a waiting message moves ahead of the others, so the end of the running turn hands that one over
+    // (the caller stops the turn). A hold still decides what may go. false when it is not waiting any more
+    first(id: string): boolean {
       const n = take(id)
       if (!n) return false
-      const running = busy
-      busy = true
-      deliver(n.msg, running ? 'next' : undefined, n.id)
-      notify(id, 'steered')
+      waiting.unshift(n)
       return true
+    },
+    // everything that may go now (held: only the user's own), in order, as steers into the running turn; how many
+    flush(): number {
+      const ids = waiting.filter((w) => !held || w.free).map((w) => w.id)
+      for (const id of ids) promote(id)
+      return ids.length
     },
     // the turn's result arrived, success, error or interrupt alike: start the next queued message (held: the next of
     // the user's own, if any)

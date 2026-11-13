@@ -95,6 +95,11 @@ export function saveCurrent(p: AccountPaths, now = Date.now()): AccountEntry | n
   return entry
 }
 
+/** the email of the login the engine has now, from its identity file; null when there is none or it cannot be read */
+export function currentEmail(p: AccountPaths): string | null {
+  try { return live(p).email } catch { return null }
+}
+
 export function listAccounts(p: AccountPaths): AccountRow[] {
   let email: string | null = null
   try { email = live(p).email } catch { /* no login */ }

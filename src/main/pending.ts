@@ -53,7 +53,7 @@ export const resendText = (p: Pending) => (p.images?.length ? `${p.text}${p.text
 export const pendingDelivered = (key: string) => drop((p) => p.key !== key)
 // Claude took this message in (the CLI's echo of it): quitting now must not send it again
 export const pendingSeen = (uuid: string) => drop((p) => p.uuid !== uuid)
-// "Send now" on a queued message: it now rides the running turn, so it goes when that turn ends (like any steer)
+// "At next step" on a queued message (or Ctrl+Shift+Enter sending all that waits): it now rides the running turn, so it goes when that turn ends (like any steer)
 export function pendingIsSteer(key: string): void {
   const all = read()
   if (all.some((p) => p.key === key && p.mode !== 'steer')) write(all.map((p) => (p.key === key ? { ...p, mode: 'steer' as const } : p)))

@@ -87,3 +87,16 @@ test('the window hears every change: added, cancelled, fired', async () => {
   expect(w.listWakeups().map((r) => r.id)).not.toContain(a.id)
   w.onWakeupsChanged(() => {})
 })
+
+test('switched off for the whole app, a due wake-up waits and nothing is dropped; back on, it fires once', async () => {
+  w.addWakeup({ sessionId: 's9', title: 'T', at: new Date(T0), prompt: 'check the deploy' })
+  w.setWakeupsOff(true)
+  try {
+    expect(w.wakeupsPaused()).toBe(true)
+    expect(await w.tick(T0 + 10_000)).toBe(0)
+    expect(sent).toEqual([])
+    expect(w.listWakeups().length).toBe(1)
+  } finally { w.setWakeupsOff(false) }
+  expect(await w.tick(T0 + 20_000)).toBe(1)
+  expect(sent[0].sessionId).toBe('s9')
+})

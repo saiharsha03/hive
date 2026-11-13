@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAnswers, cleanAnswers, parseQuestions } from '../../src/shared/askCore'
+import { answerParts, answersFromResult, buildAnswers, cleanAnswers, parseQuestions } from '../../src/shared/askCore'
 import { answerAsk, cancelAsks, openAsks, replyInChat, waitForAnswer } from '../../src/main/asks'
 
 const input = { questions: [
@@ -53,5 +53,26 @@ describe('asks', () => {
     const ab = waitForAnswer('t', 'c', qs, ac.signal)
     ac.abort()
     expect(await ab).toEqual({ kind: 'cancelled' })
+  })
+})
+
+describe('an answered question says what was answered', () => {
+  const qs = parseQuestions(input)!
+  it('reads each answer back from the tool result, in either wording the engine uses', () => {
+    expect(answersFromResult(qs, 'Your questions have been answered: "Which DB?"="Postgres", "Which features?"="A, B". You can now continue.')).toEqual({ 'Which DB?': 'Postgres', 'Which features?': 'A, B' })
+    expect(answersFromResult(qs, 'The user answered: "Which DB?"="you recommend", "Which features?"="A". Read the answers carefully.')).toEqual({ 'Which DB?': 'you recommend', 'Which features?': 'A' })
+  })
+  it('keeps quotes and commas inside a typed answer', () => {
+    expect(answersFromResult(qs, 'Your questions have been answered: "Which DB?"="the "old" one, for now", "Which features?"="B". Done.')['Which DB?']).toBe('the "old" one, for now')
+  })
+  it('is empty when the result holds no answer', () => {
+    expect(answersFromResult(qs, 'The user declined to answer.')).toEqual({})
+    expect(answersFromResult(qs, undefined)).toEqual({})
+  })
+  it('splits an answer into the options it names and what was typed', () => {
+    expect(answerParts(qs[0], 'Postgres')).toEqual({ picked: [qs[0].options[0]], typed: '' })
+    expect(answerParts(qs[0], 'you recommend')).toEqual({ picked: [], typed: 'you recommend' })
+    expect(answerParts(qs[1], 'A, B')).toEqual({ picked: qs[1].options, typed: '' })
+    expect(answerParts(qs[1], 'A, something else')).toEqual({ picked: [qs[1].options[0]], typed: 'something else' })
   })
 })

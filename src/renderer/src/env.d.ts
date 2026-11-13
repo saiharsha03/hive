@@ -132,6 +132,7 @@ interface Window {
     chatRewindApply: (tabId: string, cwd: string, sessionId: string, uuid: string, files: string[] | null) => Promise<{ ok: boolean; error?: string; partial?: { missing: string[]; skipped: number } }>
     chatDequeue: (tabId: string, queueId: string) => Promise<boolean>
     chatPromote: (tabId: string, queueId: string) => Promise<boolean>
+    chatSendNow: (tabId: string, id?: string) => Promise<boolean>
     chatInterrupt: (tabId: string) => Promise<void>
     chatContinueAt: (id: string) => Promise<number | null>
     chatCancelContinue: (id: string) => Promise<boolean>
@@ -209,6 +210,7 @@ interface Window {
     handoffReady: (file: string, since: number) => Promise<boolean>
     pullRun: (dry: boolean) => Promise<{ repo: string; result: string }[]>
     allowStatus: () => Promise<import('../../shared/allowCore').AllowStatus>
+    trackerBoard: () => Promise<import('../../shared/trackerCore').Board>
     allowForget: (address: string) => Promise<import('../../shared/allowCore').AllowStatus>
     allowMark: () => Promise<import('../../shared/allowCore').AllowStatus>
     versionsGet: () => Promise<import('../../main/versions').Versions>

@@ -85,6 +85,7 @@ export function TabRow() {
           </div>
         )
       })}
+      <button type="button" className="tab-new" onClick={() => newSession()} title="New thread (Ctrl+N)" aria-label="New thread" data-testid="tab-new"><i className="codicon codicon-add" aria-hidden /></button>
       <span className="tabrow-sp" />
       {menu && byId.has(menu.id) && (
         <TabMenu ids={paneTabsOf(menu.id)} target={menu.id} x={menu.x} y={menu.y}

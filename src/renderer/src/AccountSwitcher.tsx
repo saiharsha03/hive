@@ -67,6 +67,9 @@ export function useAccountSummary(): { label: string; plan: string; five: number
   return sum
 }
 
+// the sign-in address in the engine's output, for when the browser did not open
+const signInUrl = (out: string): string | null => out.match(/https:\/\/\S+/)?.[0] ?? null
+
 // page: drawn in place as a whole page (the Accounts section), not as a pop-up over the window
 export function AccountSwitcher({ onClose, page = false }: { onClose: () => void; page?: boolean }) {
   const idle = useRef<HTMLDivElement>(null)
@@ -201,7 +204,14 @@ export function AccountSwitcher({ onClose, page = false }: { onClose: () => void
           )}
           {flow !== 'off' && flow !== 'ask' && (
             <>
-              <pre className="log acct-log" data-testid="account-log">{out || (flow === 'signing' ? 'Finish signing in in the browser.' : '')}</pre>
+              {/* the engine's own output is a long sign-in address and prompts: while signing in, one plain line and a way
+                  to copy that address if the browser did not open; the raw text only when the sign-in failed */}
+              {flow === 'signing' && (
+                <div className="acct-dim" data-testid="account-log">Finish signing in in the browser.
+                  {signInUrl(out) && <> <Btn kind="link" onClick={() => { void navigator.clipboard.writeText(signInUrl(out)!); notice('Sign-in address copied') }} testid="account-copy-link">Copy the sign-in address</Btn></>}
+                </div>
+              )}
+              {flow === 'failed' && out && <pre className="log acct-log" data-testid="account-log">{out}</pre>}
               <div className="acct-flow">
                 {flow === 'signing' && <Btn kind="plain" onClick={cancel} testid="account-cancel">Cancel</Btn>}
                 {flow === 'done' && <span className="acct-dim" data-testid="account-done">{moved ? `Switched to ${moved.account ?? 'the new account'}${moved.waiting ? `; ${moved.waiting} thread${moved.waiting > 1 ? 's' : ''} move when ${moved.waiting > 1 ? 'they finish' : 'it finishes'}` : ''}.` : 'Signed in. Moving the threads to the new login.'}</span>}
