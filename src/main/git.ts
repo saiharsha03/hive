@@ -11,6 +11,8 @@ import type { Loaded } from './devConfig'
 import { scanRepos } from './pull'
 import { appName } from '../shared/appName'
 import { blocked, TEST_MODE } from './testMode'
+import { gh } from './gh'
+import { parsePrView, prViewError, type PrChecksResult } from '../shared/ciCore'
 
 
 const PARALLEL = 6
@@ -175,6 +177,18 @@ export async function gitPush(dir: string): Promise<string> {
 export async function gitFetch(dir: string): Promise<string> {
   const d = await resolve(dir)
   return said(await run(d, ['fetch', '--prune'], 120_000)) || 'Fetched.'
+}
+
+// read-only: the pull request for the folder's current branch and its checks; never throws (the panel shows nothing
+// when gh cannot tell)
+export async function prChecks(dir: string): Promise<PrChecksResult> {
+  if (TEST_MODE) return null
+  try {
+    const d = await resolve(dir)
+    return parsePrView(await gh(['pr', 'view', '--json', 'number,url,state,isDraft,title,statusCheckRollup'], { cwd: d, timeout: 15_000 }))
+  } catch (e) {
+    return prViewError((e as Error).message)
+  }
 }
 
 // the listed repo or worktree a file is in (the deepest one, so a worktree inside a repo folder wins), and the

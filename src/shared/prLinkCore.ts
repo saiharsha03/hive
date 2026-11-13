@@ -9,7 +9,10 @@ const GH_URL = /^https?:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/(?:pull|issues)\/(\
 // a URL (only a github pull or issue one is linked) | owner/repo#N or owner/repo #N | a bare #N
 const REFS = /(https?:\/\/[^\s<>]+)|(?<![\w./\\-])([A-Za-z0-9][\w.-]*\/[\w.-]+) ?#(\d+)(?![\w/])|(?<![\w/\\&#])#(\d+)(?![\w/])/g
 
-const issueUrl = (repo: string, num: string) => `https://github.com/${repo}/issues/${num}`
+// ordinary word pairs: "and/or #5" is not a repo; only its #5 can link (as a bare #N)
+const WORD_PAIRS = new Set(['and/or', 'either/or', 'yes/no', 'true/false', 'on/off', 'read/write', 'input/output', 'he/she', 'his/her', 'w/o', 'n/a', 'client/server', 'before/after'])
+
+const issueUrl =(repo: string, num: string) => `https://github.com/${repo}/issues/${num}`
 
 // a piece of plain text cut into text and links; a bare #N is linked only when the thread's repo is known
 export function prPieces(text: string, repo?: string): Piece[] {
@@ -26,8 +29,13 @@ export function prPieces(text: string, repo?: string): Piece[] {
       if (!u) continue
       push(start, { text: u[0], url: u[0] })
       at = start + u[0].length
+    } else if (m[2] && m[0].includes(' #') && WORD_PAIRS.has(m[2].toLowerCase())) {
+      if (!repo) continue
+      const hash = start + m[0].indexOf('#')
+      push(hash, { text: `#${m[3]}`, url: issueUrl(repo, m[3]) })
+      at = hash + m[3].length + 1
     } else if (m[2]) {
-      push(start, { text: m[0], url: issueUrl(m[2], m[3]) })
+      push(start,{ text: m[0], url: issueUrl(m[2], m[3]) })
       at = start + m[0].length
     } else if (repo) {
       push(start, { text: m[0], url: issueUrl(repo, m[4]) })

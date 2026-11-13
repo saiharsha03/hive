@@ -33,6 +33,13 @@ test('a bare #N links only when the thread repo is known', () => {
   assert.deepEqual(links('fixed in #42, and &#43;', 'o/r'), [{ text: '#42', url: 'https://github.com/o/r/issues/42' }])
 })
 
+test('a common word pair before a spaced #N is not a repo; only its #N links once the repo is known', () => {
+  assert.deepEqual(links('use this and/or #5, yes/no #6, N/A #7'), [])
+  assert.deepEqual(prPieces('fix and/or #5.', 'o/r'), ['fix and/or ', { text: '#5', url: 'https://github.com/o/r/issues/5' }, '.'])
+  // the unspaced form is still a repo reference
+  assert.equal(links('on/off#3').length, 1)
+})
+
 test('in markdown: code spans, code blocks and existing links are left alone', () => {
   const tree = fromMarkdown('See o/r#1 and `o/r#2` and [o/r#3](https://x.test) and https://github.com/o/r/pull/4\n\n```\no/r#5\n```\n', { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] })
   linkPrTree(tree as never)

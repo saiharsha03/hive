@@ -14,6 +14,7 @@
 .phead-sub b { color: var(--ink); font-weight: 500; }
 .phead-pr { color: var(--accent-text); white-space: nowrap; flex: none; text-decoration: none; }
 .phead-pr:hover { text-decoration: underline; }
+.phead-ci { white-space: nowrap; flex: none; font-size: 12px; }
 .phead-l { display: flex; align-items: baseline; gap: var(--s3); min-width: 0; flex: 1 1 auto; }
 /* what is coming up for this thread (loops, wake-ups, an automatic continue): one quiet link beside the folder; its list
    opens over the conversation, so nothing below moves */

@@ -801,6 +801,7 @@ handle('git:show', (_e, dir: string, sha: string) => gitPanel.gitShow(String(dir
 handle('git:push', (_e, dir: string) => gitPanel.gitPush(String(dir)))
 handle('git:fetch', (_e, dir: string) => gitPanel.gitFetch(String(dir)))
 handle('git:locate', (_e, file: string) => gitPanel.gitLocate(String(file)))
+handle('git:prChecks', (_e, dir: string) => gitPanel.prChecks(String(dir)))
 // Scripts: plain commands from scripts.json; the page names a script and an option, never a command
 handle('scripts:config', () => scriptsConfig())
 handle('scripts:state', () => scriptsState())

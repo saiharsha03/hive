@@ -33,6 +33,7 @@ import { RunningBar } from './RunningBar'
 import { needsNote } from './background'
 import { ComingBar } from './ComingBar'
 import { threadPrs } from '../../shared/prLinkCore'
+import { prChecksSeen, useStore } from './store'
 
 export type Attachment = { url: string; mediaType: string; data: string }
 export type SendMode = 'steer' | 'queue' | 'interrupt'
@@ -746,7 +747,10 @@ export function SessionView(p: Props) {
   // the pull requests this thread opened: the latest on the header, the rest in its tooltip
   const prs = useMemo(() => threadPrs(session.items), [session.items])
   const pr = prs.at(-1)
-  const running = session.items.filter((i) => i.kind === 'tool' && i.status === 'running').at(-1)
+  // its checks as the Changes panel last read them (only when that panel is about this same PR)
+  const seen = useStore(prChecksSeen, (all) => all[session.id])
+  const ci = seen && pr && seen.num === pr.num ? seen : null
+  const running =session.items.filter((i) => i.kind === 'tool' && i.status === 'running').at(-1)
   const runningTasks = status.tasks.filter((t) => t.status === 'running').length
   const stopGoal = async () => { if (session.busy) { p.onStop(); p.onSend('/goal clear', [], 'queue') } else p.onSend('/goal clear', []) }
   const pinRows: [string, ReactNode][] = [
@@ -779,6 +783,7 @@ export function SessionView(p: Props) {
               <a className="phead-pr" href={pr.url} target="_blank" rel="noreferrer" data-testid="thread-pr"
                 title={[`${pr.repo} #${pr.num}`, ...prs.slice(0, -1).reverse().map((x, i) => `${i ? '' : 'Earlier: '}${x.repo} #${x.num}`)].join('\n')}>PR #{pr.num}</a>
             )}
+            {pr && ci && ci.state !== 'none' && <span className={`phead-ci ci-${ci.state}`} title={`Checks: ${ci.text} (as last read in Changes)`} data-testid="thread-pr-checks">{ci.state}</span>}
           </div>
           <span className="phead-acts">
             {PANEL_ACTS.map((a) => (

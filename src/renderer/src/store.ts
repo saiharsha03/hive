@@ -79,3 +79,6 @@ export const useSessionMetas = (): SessionMeta[] => useStore(sessions, allMeta, 
 // ---- panes ----
 export const panes = createStore<PaneState>(emptyPanes())
 export const usePanes = (): PaneState => useStore(panes, (p) => p)
+
+// ---- the check state the Changes panel last read for a thread's pull request (by tab id), for the thread's header ----
+export const prChecksSeen = createStore<Record<string, { num: number; state: string; text: string }>>({})

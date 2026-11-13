@@ -191,6 +191,7 @@ interface Window {
     gitPush: (dir: string) => Promise<string>
     gitFetch: (dir: string) => Promise<string>
     gitLocate: (file: string) => Promise<{ dir: string; name: string; path: string } | null>
+    gitPrChecks: (dir: string) => Promise<import('../../shared/ciCore').PrChecksResult>
     deployConfig: () => Promise<{ config: import('../../shared/deployCore').DeployConfig | null; message: string }>
     deployDiffs: (suite: string, fetch?: boolean) => Promise<DeployDiffs>
     onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean; from?: { id: string; title: string }; sessionId?: string; path?: string; queueId?: string }) => void) => () => void

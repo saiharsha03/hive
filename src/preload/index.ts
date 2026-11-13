@@ -196,6 +196,7 @@ contextBridge.exposeInMainWorld('api', {
   gitPush: (dir: string) => ipcRenderer.invoke('git:push', dir),
   gitFetch: (dir: string) => ipcRenderer.invoke('git:fetch', dir),
   gitLocate: (file: string) => ipcRenderer.invoke('git:locate', file),
+  gitPrChecks: (dir: string) => ipcRenderer.invoke('git:prChecks', dir),
   deployConfig: () => ipcRenderer.invoke('deploy:config'),
   deployDiffs: (suite: string, fetch?: boolean) => ipcRenderer.invoke('deploy:diffs', suite, fetch),
   // a background thread Hive started by itself (Dependabot reviewer)
