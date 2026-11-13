@@ -1,7 +1,7 @@
 package dev.hive.mobile
 
 // The 3.0 screens: a thread's mode, model and effort, the notes, the to-dos and the watchers. Like Screens.kt, drawn
-// from plain values and callbacks; MainActivity.kt wires them to the relay. Each is offered only when Hive on the
+// from plain values and callbacks; MainActivity.kt wires them to the relay. Each is offered only when Orbit on the
 // computer says it can do it (hello's "can").
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

@@ -9,7 +9,7 @@
 
     <application
         android:name=".HiveApp"
-        android:label="Hive"
+        android:label="Orbit"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false"

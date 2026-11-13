@@ -1,6 +1,6 @@
 package dev.hive.mobile
 
-// The rules behind the screens (Model.kt), on the JVM: what Hive's JSON becomes, ages and clock times, the usage
+// The rules behind the screens (Model.kt), on the JVM: what Orbit's JSON becomes, ages and clock times, the usage
 // forecast, quiet hours, and what a notification's buttons do.
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,7 +18,7 @@ class ModelTest {
     private fun at(iso: String) = Instant.parse(iso).toEpochMilli()
 
     @Test fun agesAreShort() {
-        assertEquals("", Words.age(0, now)) // an older Hive sends no time
+        assertEquals("", Words.age(0, now)) // an older Orbit sends no time
         assertEquals("38s", Words.age(now - 38_000, now))
         assertEquals("6m", Words.age(now - 6 * 60_000, now))
         assertEquals("3h", Words.age(now - 183 * 60_000, now))
@@ -65,7 +65,7 @@ class ModelTest {
         assertEquals("At this rate you reach 100% at 14:25", Usage.forecast(five, now, utc))
         // 62% at the same point lasts past the reset: nothing to warn about
         assertEquals("", Usage.forecast(five.copy(pct = 62.0), now, utc))
-        // nearly empty, already full, barely begun, no reset time, or a window Hive does not describe: no forecast
+        // nearly empty, already full, barely begun, no reset time, or a window Orbit does not describe: no forecast
         assertEquals("", Usage.forecast(five.copy(pct = 5.0), now, utc))
         assertEquals("", Usage.forecast(five.copy(pct = 100.0), now, utc))
         assertEquals("", Usage.forecast(five.copy(pct = 30.0), at("2026-11-09T10:05:00Z"), utc))
@@ -125,7 +125,7 @@ class ModelTest {
     private fun ask(vararg opts: Pair<String, Boolean>) = JSONObject().put("id", "a1").put("opts", JSONArray(opts.map { (l, open) -> JSONObject().put("l", l).apply { if (open) put("open", true) } }))
 
     @Test fun aNotificationsButtons() {
-        // a question: its choices; the ones Hive marked open the app instead of answering
+        // a question: its choices; the ones Orbit marked open the app instead of answering
         val q = note { put("ask", ask("Wait to 14:00" to false, "Promote now" to true)) }
         assertEquals(listOf(NoteButton("Wait to 14:00", "answer", "a1"), NoteButton("Promote now", "open", "a1")), NoteButtons.of(q))
         assertEquals(emptyList<NoteButton>(), NoteButtons.of(q, buttons = false)) // switched off in Settings
@@ -164,12 +164,12 @@ class ModelTest {
         assertEquals(1, box.coming.size) // the same wake-up twice is one row
         assertNull(box.coming[0].every)
         assertEquals(Counts(2, 10, 7, 5, 0), box.counts)
-        assertEquals(Inbox(), Read.inbox(JSONObject())) // an older Hive: nothing, not a crash
+        assertEquals(Inbox(), Read.inbox(JSONObject())) // an older Orbit: nothing, not a crash
 
         val v = Read.thread(JSONObject("""{"title":"Ship","working":true,"items":[{"k":"you","t":"go","seen":true},{"k":"you","t":"and this","seen":false},{"k":"claude","t":"ok"}],
           "asks":[{"id":"a1","questions":[{"question":"Promote?","header":"Deploy","multiSelect":false,"options":[{"label":"Now","description":"ships 14 commits"}]}]},{"id":"a2","questions":[]}],
           "tasks":[{"id":"b1","kind":"Shell","title":"pytest","now":"PASSED"}]}"""))
-        assertEquals(listOf(true, false, null), v.items.map { it.seen }) // seen only where Hive says
+        assertEquals(listOf(true, false, null), v.items.map { it.seen }) // seen only where Orbit says
         assertEquals(listOf("a1"), v.asks.map { it.id }) // an ask without questions is not a card
         assertEquals("ships 14 commits", v.asks[0].questions[0].options[0].description)
         assertTrue(v.working)

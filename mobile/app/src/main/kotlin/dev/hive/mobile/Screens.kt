@@ -1,6 +1,6 @@
 package dev.hive.mobile
 
-// Every screen, drawn from plain values and callbacks: nothing here talks to Hive, so the same code is what the
+// Every screen, drawn from plain values and callbacks: nothing here talks to Orbit, so the same code is what the
 // app shows and what the screenshot tests render (src/test, ScreensTest). MainActivity.kt wires them to the relay.
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,7 +34,7 @@ import org.json.JSONObject
 // ---------------------------------------------------------------- Needs me
 
 // What needs the user, each with its one or two direct actions, then what is coming up.
-// right: a word for the head (the account and its 5-hour use, when Hive says). busy: the thread an action is running for.
+// right: a word for the head (the account and its 5-hour use, when Orbit says). busy: the thread an action is running for.
 @Composable
 fun InboxScreen(
     box: Inbox, now: Long, right: String = "", notice: String = "", busy: String = "", loaded: Boolean = true,
@@ -76,7 +76,7 @@ fun ThreadsScreen(
 ) {
     val q = query.trim()
     val shown = if (q.isEmpty()) rows else rows.filter { it.title.contains(q, true) || it.folder.contains(q, true) }
-    // Hive sends each thread's section; an older Hive sends none, so the list stays flat
+    // Orbit sends each thread's section; an older Orbit sends none, so the list stays flat
     val groups = shown.groupBy { it.section }.toList().sortedBy { (k, _) -> sectionOrder.indexOf(k).let { if (it < 0) sectionOrder.size else it } }
     Column(Modifier.fillMaxSize()) {
         Head("Threads", count = rows.size.takeIf { it > 0 }?.toString() ?: "", right = "New thread", rightColor = if (canNew) C.link else C.faint, onRight = if (canNew) onNew else null)
@@ -105,7 +105,7 @@ fun ThreadsScreen(
 @Composable
 private fun ItemRow(it: Item) {
     when (it.k) {
-        // your own message: a band across the pane, a little heavier; whether Claude has taken it in, when Hive says
+        // your own message: a band across the pane, a little heavier; whether Claude has taken it in, when Orbit says
         "you" -> Box(Modifier.fillMaxWidth().padding(start = 56.dp, end = Pad, top = 6.dp, bottom = 6.dp), contentAlignment = Alignment.CenterEnd) {
             Column(Modifier.background(C.sel, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 12.dp, bottomEnd = 2.dp)).padding(horizontal = 12.dp, vertical = 8.dp), horizontalAlignment = Alignment.End) {
                 SelectionContainer { Text(it.t, style = T.conv.copy(color = C.hi)) }
@@ -250,7 +250,7 @@ fun ThreadScreen(
 
 // ---------------------------------------------------------------- Running
 
-// stopAll: null = no question open; else whether "also pause wake-ups" is switched on. canPause: Hive can do that.
+// stopAll: null = no question open; else whether "also pause wake-ups" is switched on. canPause: Orbit can do that.
 @Composable
 fun RunningScreen(
     rows: List<RunRow>, notice: String = "", busy: Set<String> = emptySet(), stopAll: Boolean? = null, canPause: Boolean = false, threads: Int = 0, scheduled: Int = 0, loaded: Boolean = true,
@@ -361,7 +361,7 @@ fun MoreScreen(
 
 // ---------------------------------------------------------------- Usage and accounts
 
-// accounts: null when this Hive has no account profiles (the zone is left out). switching: the account asked about.
+// accounts: null when this Orbit has no account profiles (the zone is left out). switching: the account asked about.
 @Composable
 fun UsageScreen(
     limits: List<Limit>?, now: Long, plan: String = "", accounts: List<Account>? = null, notice: String = "", error: String = "", switching: Account? = null, busy: Boolean = false,
@@ -398,7 +398,7 @@ fun UsageScreen(
         }
         if (accounts != null) {
             Group("Accounts", if (accounts.size > 1) "tap to switch" else "")
-            if (switching != null) ConfirmBar("Switch to ${switching.name}?", "Hive signs in as ${switching.detail.ifEmpty { switching.name }}. Threads that are working keep the account they started with.", if (busy) "Switching" else "Switch", onCancel = onCancelSwitch, onConfirm = { if (!busy) onSwitch(switching) })
+            if (switching != null) ConfirmBar("Switch to ${switching.name}?", "Orbit signs in as ${switching.detail.ifEmpty { switching.name }}. Threads that are working keep the account they started with.", if (busy) "Switching" else "Switch", onCancel = onCancelSwitch, onConfirm = { if (!busy) onSwitch(switching) })
             accounts.forEach { a ->
                 Column(Modifier.fillMaxWidth().clickable(enabled = !a.inUse && !busy) { onPick(a) }.selected(a.inUse).padding(horizontal = Pad, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -463,7 +463,7 @@ fun TeamsScreen(teams: List<Team>?, notice: String = "", error: String = "", bus
 
 // ---------------------------------------------------------------- New thread
 
-// folders: null until Hive has said which there are
+// folders: null until Orbit has said which there are
 @Composable
 fun NewThreadScreen(
     folders: List<String>?, folder: String = "", text: String = "", busy: Boolean = false, online: Boolean = true, error: String = "", notice: String = "", leaving: Boolean = false,
@@ -474,22 +474,22 @@ fun NewThreadScreen(
         Notice(notice)
         Notice(error)
         if (leaving) ConfirmBar("Leave without starting?", "What you typed is kept here as a draft.", "Leave", cancel = "Stay", onCancel = onStay, onConfirm = onLeave)
-        Group("Repo", if (folders == null) "asking Hive" else "")
-        // the folders Hive can start a thread in: the picked one takes the selection fill and bar
+        Group("Repo", if (folders == null) "asking Orbit" else "")
+        // the folders Orbit can start a thread in: the picked one takes the selection fill and bar
         (folders ?: emptyList()).forEach { f ->
             Row(Modifier.fillMaxWidth().clickable { onFolder(f) }.selected(f == folder).padding(horizontal = Pad, vertical = 9.dp)) {
                 Text(Words.folderName(f), style = T.title.copy(fontWeight = if (f == folder) FontWeight.Medium else FontWeight.Normal, color = if (f == folder) C.hi else C.ink), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Rule()
         }
-        if (folders != null && folders.isEmpty()) { Empty("Hive has no workspace folder set, so the thread starts in its default folder."); Rule() }
+        if (folders != null && folders.isEmpty()) { Empty("Orbit has no workspace folder set, so the thread starts in its default folder."); Rule() }
         Column(Modifier.padding(start = Pad, end = Pad, top = 12.dp)) {
             Text("What should Claude do?", style = T.label)
             UnderlineInput(text, onText, "Say what you want done", minLines = 4, maxLines = 10, style = T.title.copy(fontWeight = FontWeight.Normal))
         }
         Row(Modifier.padding(horizontal = Pad, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Btn("Mic", Modifier.width(78.dp), onClick = onMic)
-            // not before Hive has listed the folders: a thread is never started in a folder nobody chose
+            // not before Orbit has listed the folders: a thread is never started in a folder nobody chose
             Btn(if (busy) "Starting" else "Start in background", Modifier.weight(1f), primary = true, enabled = text.isNotBlank() && !busy && folders != null && online, onClick = onStart)
         }
     }
@@ -497,7 +497,7 @@ fun NewThreadScreen(
 
 // ---------------------------------------------------------------- Settings
 
-// syncs: Hive on the computer keeps the same quiet hours. unpair: the question is open.
+// syncs: Orbit on the computer keeps the same quiet hours. unpair: the question is open.
 @Composable
 fun SettingsScreen(
     quiet: Quiet, buttons: Boolean, relay: String, linkWord: String, clock: String, syncs: Boolean = false, unpair: Boolean = false, online: Boolean = true, notice: String = "", version: String = "", computer: String = "",
@@ -507,17 +507,17 @@ fun SettingsScreen(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Head("Settings", onBack = onBack)
         Notice(notice)
-        SettingRow("Quiet hours", "${quiet.from} to ${quiet.to}. Failures still ring." + if (syncs) " Hive on the computer keeps the same hours." else "", on = quiet.on, onChange = onQuiet)
+        SettingRow("Quiet hours", "${quiet.from} to ${quiet.to}. Failures still ring." + if (syncs) " Orbit on the computer keeps the same hours." else "", on = quiet.on, onChange = onQuiet)
         SettingRow("Quiet from", "Notifications arrive without sound after this", word = quiet.from, onClick = onFrom)
         SettingRow("Quiet until", "", word = quiet.to, onClick = onTo)
         SettingRow("Questions from Claude", "With answer buttons. A choice that ships, deletes or pays opens the app instead.", on = buttons, onChange = onButtons)
         SettingRow("Unlock with fingerprint", "Always on. Locks after 2 minutes away.", word = "on")
         SettingRow("Relay", listOf(relay, clock).filter { it.isNotEmpty() }.joinToString(", "), word = linkWord)
         if (unpair) ConfirmBar("Unpair this phone?",
-            "This phone forgets the pairing, and Hive on your computer is told to drop it too" + (if (online) "." else ". The computer is not reachable now: unpair there as well, in Settings, Phone app.") + " To use the app again you pair it anew in Hive.",
+            "This phone forgets the pairing, and Orbit on your computer is told to drop it too" + (if (online) "." else ". The computer is not reachable now: unpair there as well, in Settings, Phone app.") + " To use the app again you pair it anew in Orbit.",
             "Unpair", danger = true, onCancel = onCancelUnpair, onConfirm = onUnpair)
         else SettingRow("Unpair this phone", "", onClick = onAskUnpair)
-        if (version.isNotEmpty()) Text("Hive $version", Modifier.padding(horizontal = Pad, vertical = 12.dp), style = T.mono)
+        if (version.isNotEmpty()) Text("Orbit $version", Modifier.padding(horizontal = Pad, vertical = 12.dp), style = T.mono)
         if (computer.isNotEmpty()) Text("On the computer: $computer", Modifier.padding(horizontal = Pad).padding(bottom = 12.dp), style = T.mono)
     }
 }
@@ -528,11 +528,11 @@ fun SettingsScreen(
 @Composable
 fun PairScreen(note: String = "", error: String = "", text: String = "", paste: Boolean = false, onScan: () -> Unit = {}, onPasteMode: () -> Unit = {}, onText: (String) -> Unit = {}, onPair: () -> Unit = {}) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Head("Pair with Hive", mark = true)
+        Head("Pair with Orbit", mark = true)
         Notice(note, C.wait)
         val steps = listOf(
-            "In Hive on your computer open Settings, General, Phone app and press Pair.",
-            "Point this phone's camera at the code Hive shows.",
+            "In Orbit on your computer open Settings, General, Phone app and press Pair.",
+            "Point this phone's camera at the code Orbit shows.",
             "The phone reaches the relay and checks its clock against the computer's.",
             "From then on a fingerprint or the screen lock opens the app.",
         )
@@ -548,7 +548,7 @@ fun PairScreen(note: String = "", error: String = "", text: String = "", paste: 
         Btn("Scan the code", Modifier.fillMaxWidth().padding(horizontal = Pad, vertical = 12.dp), primary = true, onClick = onScan)
         if (!paste) Text("No camera? Paste the code instead.", Modifier.clickable(onClick = onPasteMode).padding(horizontal = Pad, vertical = 6.dp), style = T.note)
         else Column(Modifier.padding(horizontal = Pad)) {
-            UnderlineInput(text, onText, "Paste the code from Hive", minLines = 2, maxLines = 5)
+            UnderlineInput(text, onText, "Paste the code from Orbit", minLines = 2, maxLines = 5)
             Btn("Pair", Modifier.fillMaxWidth().padding(top = 12.dp), enabled = text.isNotBlank(), onClick = onPair)
         }
         if (error.isNotEmpty()) Text(error, Modifier.padding(horizontal = Pad, vertical = 10.dp), style = T.note, color = C.fail)
@@ -558,11 +558,11 @@ fun PairScreen(note: String = "", error: String = "", text: String = "", paste: 
 @Composable
 fun LockedScreen(note: String = "", broken: Boolean = false, onUnlock: () -> Unit = {}, onForget: () -> Unit = {}) {
     Column(Modifier.fillMaxSize()) {
-        Head("Hive", right = "locked", mark = true)
+        Head("Orbit", right = "locked", mark = true)
         Column(Modifier.padding(horizontal = Pad, vertical = 16.dp)) {
             if (broken) {
                 // the Keystore dropped the key (the screen lock was removed or reset): the pairing cannot be read again
-                Text("The pairing saved on this phone can no longer be opened, because the screen lock changed. Pair this phone again in Hive on your computer.", style = T.body)
+                Text("The pairing saved on this phone can no longer be opened, because the screen lock changed. Pair this phone again in Orbit on your computer.", style = T.body)
                 Btn("Pair again", Modifier.fillMaxWidth().padding(top = 16.dp), primary = true, onClick = onForget)
             } else {
                 Text("Unlock with your fingerprint or the screen lock. The app locks again after 2 minutes away.", style = T.body)

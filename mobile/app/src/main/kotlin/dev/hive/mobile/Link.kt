@@ -1,10 +1,10 @@
 package dev.hive.mobile
 
-// The sealed link to Hive, the same as Hive's src/main/mobileLink.ts: AES-256-GCM with the key from pairing, a fresh
+// The sealed link to Orbit, the same as Orbit's src/main/mobileLink.ts: AES-256-GCM with the key from pairing, a fresh
 // 12-byte nonce per message, "<pair>:<dir>" as associated data (p2d = phone to desk, d2p = desk to phone, d2n = a
 // notification under the notification key), and a counter in every message so an old one replayed by the relay is
 // refused. The relay only ever sees the base64 blob.
-// Nothing here touches Android, so the unit tests (src/test) run it on the JVM against the same fixture Hive's tests open.
+// Nothing here touches Android, so the unit tests (src/test) run it on the JVM against the same fixture Orbit's tests open.
 import org.json.JSONObject
 import java.net.URI
 import java.security.SecureRandom
@@ -32,7 +32,7 @@ object Seal {
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
         c.updateAAD("$pair:$dir".toByteArray(Charsets.UTF_8))
-        val body = c.doFinal(msg.toString().toByteArray(Charsets.UTF_8)) // ciphertext then the 16-byte tag, as Hive expects
+        val body = c.doFinal(msg.toString().toByteArray(Charsets.UTF_8)) // ciphertext then the 16-byte tag, as Orbit expects
         return b64(nonce + body)
     }
 
@@ -48,7 +48,7 @@ object Seal {
     } catch (e: Exception) { null }
 }
 
-// what pairing gave the phone (the QR Hive shows: {v, relay, pair, token, key})
+// what pairing gave the phone (the QR Orbit shows: {v, relay, pair, token, key})
 class Pairing(val relay: String, val pair: String, val token: String, val key: ByteArray) {
     val notifyKey: ByteArray by lazy { Seal.notifyKey(key) }
     val ws: String get() = "wss" + relay.removePrefix("https")
@@ -65,14 +65,14 @@ class Pairing(val relay: String, val pair: String, val token: String, val key: B
 
         // the pairing in a scanned or pasted code, or why it is not one
         fun read(qr: String): Pair<Pairing?, String> {
-            val no = "That is not a Hive pairing code"
+            val no = "That is not an Orbit pairing code"
             val j = try { JSONObject(qr.trim()) } catch (e: Exception) { return null to no }
             if (j.optInt("v") != 1) return null to no
             val relay = j.optString("relay").trimEnd('/')
             val pair = j.optString("pair")
             val token = j.optString("token")
             val key = try { Seal.unb64(j.optString("key")) } catch (e: Exception) { return null to no }
-            if (!relay.startsWith("https://")) return null to "The relay address in this code is not https. Set an https relay address in Hive and pair again."
+            if (!relay.startsWith("https://")) return null to "The relay address in this code is not https. Set an https relay address in Orbit and pair again."
             if (!relayOk(relay)) return null to "The relay address in this code is not valid"
             if (!PAIR.matches(pair) || !TOKEN.matches(token) || key.size != 32) return null to no
             return Pairing(relay, pair, token, key) to ""
@@ -82,7 +82,7 @@ class Pairing(val relay: String, val pair: String, val token: String, val key: B
     }
 }
 
-// What the phone remembers of Hive's counter. Each message (over the socket or in a push) is taken once. The two
+// What the phone remembers of Orbit's counter. Each message (over the socket or in a push) is taken once. The two
 // channels arrive out of order (a push can land after later socket replies, and a notification can come both ways), so
 // it keeps the seq numbers seen within the last WINDOW and refuses repeats and anything older than that.
 data class SeqState(val top: Long = 0, val seen: Set<Long> = emptySet(), val floor: Long = 0)
@@ -97,7 +97,7 @@ object Seq {
         return SeqState(top, (st.seen + seq).filter { it > top - WINDOW }.toSet(), st.floor)
     }
 
-    // the phone's own counter: the clock in ms, never at or below the last one sent (kept across restarts, so Hive
+    // the phone's own counter: the clock in ms, never at or below the last one sent (kept across restarts, so Orbit
     // never sees a number go back); a counter left far ahead by a clock that was wrong and has been corrected starts
     // again from the clock
     fun nextOut(last: Long, now: Long): Long = maxOf((if (last > now + 120_000) 0L else last) + 1, now)

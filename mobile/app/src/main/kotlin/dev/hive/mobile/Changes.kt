@@ -2,7 +2,7 @@ package dev.hive.mobile
 
 // 3.2: a thread's changes. Its branch, its pull request (checks, and why it cannot be merged when it cannot), the files
 // it changes with their counts, one file's diff, and merging the PR after a second tap that shows exactly what merges.
-// Hive decides whether a merge is allowed (and checks again when it runs); the app only shows it.
+// Orbit decides whether a merge is allowed (and checks again when it runs); the app only shows it.
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -25,7 +25,7 @@ import org.json.JSONObject
 
 // area: "branch" (committed, against the PR's base), "staged", "unstaged" or "untracked" (not committed yet)
 data class ChangeFile(val path: String, val add: Int, val del: Int, val binary: Boolean, val area: String)
-// block: why Hive will not merge it now ("" = it will). checks: none, pending, failing or passing.
+// block: why Orbit will not merge it now ("" = it will). checks: none, pending, failing or passing.
 data class PrCard(val number: Int, val url: String, val title: String, val state: String, val draft: Boolean, val headSha: String, val base: String, val checks: String, val checksText: String, val repo: String, val method: String, val block: String)
 data class Changes(val branch: String, val upstream: String, val ahead: Int, val behind: Int, val files: List<ChangeFile>, val more: Int, val note: String, val pr: PrCard?, val prUnavailable: String)
 data class DiffView(val text: String, val totalLines: Int, val shown: Int, val truncated: Boolean)
@@ -51,9 +51,9 @@ object ReadChanges {
 
     fun diff(j: JSONObject?): DiffView = if (j == null) DiffView("", 0, 0, false) else DiffView(j.str("text"), j.optInt("totalLines"), j.optInt("shown"), j.optBoolean("truncated"))
 
-    // what Hive said about a merge: (true, "Merged #12 (squash).") or (false, its reason)
+    // what Orbit said about a merge: (true, "Merged #12 (squash).") or (false, its reason)
     fun merge(j: JSONObject?): Pair<Boolean, String> {
-        if (j == null) return false to "Hive did not say whether it merged."
+        if (j == null) return false to "Orbit did not say whether it merged."
         return if (j.optBoolean("ok")) true to "Merged #${j.optInt("number")} (${j.str("method")})." else false to j.str("reason").ifEmpty { "Not merged." }
     }
 
@@ -73,7 +73,7 @@ object ReadChanges {
 private fun checksColor(s: String): Color = when (s) { "passing" -> C.done; "failing" -> C.fail; "pending" -> C.wait; else -> C.dim }
 private fun areaWord(a: String): String = when (a) { "staged" -> "staged"; "unstaged" -> "uncommitted"; "untracked" -> "new, uncommitted"; else -> "" }
 
-// canMerge: this Hive merges from the phone and the computer is online. confirming: the PR the confirm shows (as it
+// canMerge: this Orbit merges from the phone and the computer is online. confirming: the PR the confirm shows (as it
 // was on screen when Merge was tapped). result: what the last merge said, ok or not.
 @Composable
 fun ChangesScreen(

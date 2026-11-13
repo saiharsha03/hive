@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Nothing of this app leaves the phone: not to a cloud backup, not in a transfer to a new phone. The pairing is
      wrapped by Keystore keys that stay behind anyway, so a copy of these files could not be opened; a new phone is
-     paired anew in Hive. (allowBackup="false" alone does not stop device-to-device transfer on Android 12 and up.) -->
+     paired anew in Orbit. (allowBackup="false" alone does not stop device-to-device transfer on Android 12 and up.) -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" path="." />

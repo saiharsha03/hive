@@ -3,12 +3,12 @@ package dev.hive.mobile
 // Where the pairing is kept on the phone, in two parts, both under keys that live in the Android Keystore (they never
 // leave this phone: not in a backup, not in a transfer to a new phone, not in a copy of the app's files):
 //
-// - the pairing key (it seals every request to Hive) is wrapped by an RSA key that the Keystore lets work only after
+// - the pairing key (it seals every request to Orbit) is wrapped by an RSA key that the Keystore lets work only after
 //   the fingerprint or the screen lock: the prompt that opens the app is what releases it (a CryptoObject), so there
 //   is no check in the app's own code to step around. Wrapping needs only the public half, so pairing asks nothing.
 // - the relay address, the pair id, the relay token and the notification key are wrapped by an AES key without that
 //   condition, so a push can be opened and the push token registered while the app is closed. They show
-//   notifications; they cannot make a request to Hive.
+//   notifications; they cannot make a request to Orbit.
 //
 // Android 10 cannot release a key through the screen-lock screen, so there the RSA key works for 30 seconds after any
 // fingerprint or screen-lock check instead (still the Keystore's rule, not the app's).
@@ -121,7 +121,7 @@ object Vault {
         c.init(Cipher.ENCRYPT_MODE, openKey())
         val open = c.iv + c.doFinal(body.toString().toByteArray(Charsets.UTF_8))
         val e = prefs(ctx).edit().remove("pairing").putString("open", Seal.b64(open)).putString("locked", Seal.b64(locked))
-        // Hive's counter starts again only with another pairing: scanning the same code twice must not let the relay
+        // Orbit's counter starts again only with another pairing: scanning the same code twice must not let the relay
         // replay what this phone has already taken
         if (prefs(ctx).getString("seqPair", null) != p.pair) e.putString("seqPair", p.pair).putLong("seqIn", 0).putString("seen", "").putLong("floor", 0)
         if (!e.commit()) throw IllegalStateException("could not save the pairing")
@@ -158,7 +158,7 @@ object Vault {
     }
 
     // ---- the counters (not secret) ----
-    // true when this message from Hive is new; written before it is used, so a restart cannot take it twice
+    // true when this message from Orbit is new; written before it is used, so a restart cannot take it twice
     fun takeSeq(ctx: Context, seq: Long): Boolean = synchronized(this) {
         val p = prefs(ctx)
         val top = p.getLong("seqIn", 0)

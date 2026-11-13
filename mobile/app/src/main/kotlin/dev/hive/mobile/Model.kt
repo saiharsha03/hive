@@ -1,6 +1,6 @@
 package dev.hive.mobile
 
-// What the screens show, read from Hive's JSON, and the small rules around it (ages, clock times, the usage forecast,
+// What the screens show, read from Orbit's JSON, and the small rules around it (ages, clock times, the usage forecast,
 // quiet hours, what a notification's buttons do). Nothing here touches Android, so the unit tests run it on the JVM.
 import org.json.JSONArray
 import org.json.JSONObject
@@ -28,7 +28,7 @@ data class Account(val id: String, val name: String, val detail: String, val not
 data class Member(val open: String, val name: String, val role: String, val state: String)
 data class Post(val from: String, val text: String)
 data class Team(val id: String, val name: String, val goal: String, val word: String, val members: List<Member>, val posts: List<Post>)
-// seen: on your own message, whether Claude has taken it in; null when Hive does not say
+// seen: on your own message, whether Claude has taken it in; null when Orbit does not say
 data class Item(val k: String, val t: String, val seen: Boolean? = null)
 data class Choice(val label: String, val description: String)
 data class Question(val question: String, val header: String, val options: List<Choice>, val multi: Boolean)
@@ -89,7 +89,7 @@ object Words {
     private val day = DateTimeFormatter.ofPattern("EEE HH:mm", Locale.ENGLISH)
     private val date = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
 
-    // how long ago, short: 38s, 6m, 3h, 2d ("" when Hive sent no time)
+    // how long ago, short: 38s, 6m, 3h, 2d ("" when Orbit sent no time)
     fun age(ms: Long, now: Long): String {
         if (ms <= 0) return ""
         val s = maxOf(0L, (now - ms) / 1000)
@@ -147,7 +147,7 @@ object Words {
 
 // ---- usage ----
 object Usage {
-    // how long a limit's window is, from Hive's key for it (five_hour, seven_day, seven_day_opus ...)
+    // how long a limit's window is, from Orbit's key for it (five_hour, seven_day, seven_day_opus ...)
     fun windowMs(key: String): Long? = when {
         key.startsWith("five_hour") -> 5 * 3_600_000L
         key.startsWith("seven_day") -> 7 * 86_400_000L
@@ -220,12 +220,12 @@ object QuietHours {
 }
 
 // ---- a notification's buttons ----
-// op: "answer" (Hive takes the choice, no need to open the app), "open" (this choice needs the app and its
+// op: "answer" (Orbit takes the choice, no need to open the app), "open" (this choice needs the app and its
 // fingerprint), "stop"
 data class NoteButton(val label: String, val op: String, val ask: String = "")
 
 object NoteButtons {
-    // from the notification Hive sent: its question's choices (Hive marks the ones that need the app), else Stop.
+    // from the notification Orbit sent: its question's choices (Orbit marks the ones that need the app), else Stop.
     // Android shows three at most. buttons: the user's setting (off = none: the notification just opens the app).
     fun of(m: JSONObject, buttons: Boolean = true): List<NoteButton> {
         if (!buttons || m.optString("thread").isEmpty()) return emptyList()

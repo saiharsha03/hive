@@ -1,6 +1,6 @@
 package dev.hive.mobile
 
-// Changes.kt's reading of Hive's changes, diff and merge replies, on the JVM
+// Changes.kt's reading of Orbit's changes, diff and merge replies, on the JVM
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

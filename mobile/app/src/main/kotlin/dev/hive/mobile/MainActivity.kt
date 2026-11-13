@@ -1,7 +1,7 @@
 package dev.hive.mobile
 
-// The app: a fingerprint to open it, pairing (scan the QR Hive shows, or paste it), then five tabs (Needs me,
-// Threads, Running, Scheduled, More) and the screens behind them. This file is the wiring: it asks Hive on the
+// The app: a fingerprint to open it, pairing (scan the QR Orbit shows, or paste it), then five tabs (Needs me,
+// Threads, Running, Scheduled, More) and the screens behind them. This file is the wiring: it asks Orbit on the
 // computer through the relay (sealed) and hands plain values to the screens in Screens.kt.
 import android.Manifest
 import android.content.Intent
@@ -50,7 +50,7 @@ object Drafts {
     val text = mutableStateMapOf<String, String>()
     var newFolder by mutableStateOf("")
     // the last send per thread that has no answer yet: its text and message id. Sending the same text again uses the
-    // same id, so Hive runs it once even when the first try did arrive
+    // same id, so Orbit runs it once even when the first try did arrive
     val pending = mutableMapOf<String, Pair<String, String>>()
 
     fun midFor(thread: String, text: String): String =
@@ -136,7 +136,7 @@ class MainActivity : FragmentActivity() {
             broken.value = true
             return
         } catch (e: Exception) {
-            lockNote.value = "Hive could not open the saved pairing. Try again."
+            lockNote.value = "Orbit could not open the saved pairing. Try again."
             return
         }
         lockNote.value = ""
@@ -161,8 +161,8 @@ class MainActivity : FragmentActivity() {
     @Suppress("DEPRECATION") // createConfirmDeviceCredentialIntent is the Android 10 way; newer ones use the prompt
     private fun useScreenLock() {
         val km = getSystemService(android.app.KeyguardManager::class.java)
-        val ask = km.createConfirmDeviceCredentialIntent("Open Hive", null)
-        if (ask == null) lockNote.value = "Set a screen lock (PIN, pattern or password) on this phone to open Hive."
+        val ask = km.createConfirmDeviceCredentialIntent("Open Orbit", null)
+        if (ask == null) lockNote.value = "Set a screen lock (PIN, pattern or password) on this phone to open Orbit."
         else screenLock.launch(ask)
     }
 
@@ -174,7 +174,7 @@ class MainActivity : FragmentActivity() {
             // the Keystore dropped the key for good (the screen lock was removed), or it is not there
             catch (e: KeyPermanentlyInvalidatedException) { broken.value = true; return }
             catch (e: IllegalStateException) { broken.value = true; return }
-            catch (e: Exception) { lockNote.value = "Hive could not reach the phone's key store. Try again."; return }
+            catch (e: Exception) { lockNote.value = "Orbit could not reach the phone's key store. Try again."; return }
         } else null
         val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = opened(result.cryptoObject?.cipher)
@@ -188,7 +188,7 @@ class MainActivity : FragmentActivity() {
         })
         // a strong biometric, with the screen lock as fallback. Android 10 cannot combine the two in one prompt, so
         // there the prompt is the strong biometric alone and its button (or no fingerprint at all) opens the screen lock
-        val info = BiometricPrompt.PromptInfo.Builder().setTitle("Open Hive")
+        val info = BiometricPrompt.PromptInfo.Builder().setTitle("Open Orbit")
         if (android.os.Build.VERSION.SDK_INT >= 30) info.setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
         else info.setAllowedAuthenticators(BIOMETRIC_STRONG).setNegativeButtonText("Use screen lock")
         try {
@@ -201,7 +201,7 @@ class MainActivity : FragmentActivity() {
 }
 
 // One request with its failure in words ("" = it worked). A screen that went away is not a failure: cancellation
-// passes through. what: the screen's name, for a Hive on the computer too old to know the request.
+// passes through. what: the screen's name, for an Orbit on the computer too old to know the request.
 private suspend fun attempt(what: String = "", block: suspend () -> Unit): String = try {
     block()
     ""
@@ -209,12 +209,12 @@ private suspend fun attempt(what: String = "", block: suspend () -> Unit): Strin
     throw e
 } catch (e: RelayError) {
     val m = e.message ?: "Failed"
-    if (what.isNotEmpty() && m.contains("unknown request", true)) "Update Hive on the computer to see $what" else m
+    if (what.isNotEmpty() && m.contains("unknown request", true)) "Update Orbit on the computer to see $what" else m
 } catch (e: Exception) {
-    "Hive sent something this app does not understand. Update the app or Hive."
+    "Orbit sent something this app does not understand. Update the app or Orbit."
 }
 
-// A screen's loader: runs when the computer is online, again when Hive sends something unasked or the screen asks
+// A screen's loader: runs when the computer is online, again when Orbit sends something unasked or the screen asks
 // (the function it returns), and every `every()` ms while that is above zero. One request at a time: a slow answer is
 // waited for, never cancelled by the next tick.
 @Composable
@@ -252,14 +252,14 @@ private fun linkNotice(): String {
     val skew by Relay.skew.collectAsState()
     val link = when (s) {
         Relay.State.Online -> ""
-        Relay.State.RelayOnly -> "The computer is offline (Hive is closed or asleep)."
+        Relay.State.RelayOnly -> "The computer is offline (Orbit is closed or asleep)."
         Relay.State.Connecting -> "Connecting to the computer."
         Relay.State.Off -> "Not connected. Trying again."
-        Relay.State.Unpaired -> "This phone is no longer paired. Unpair it in More, Settings, then pair again in Hive."
+        Relay.State.Unpaired -> "This phone is no longer paired. Unpair it in More, Settings, then pair again in Orbit."
     }
-    // Hive refuses requests dated more than two minutes off its own clock
+    // Orbit refuses requests dated more than two minutes off its own clock
     val min = kotlin.math.abs(skew) / 60_000
-    val clock = if (kotlin.math.abs(skew) <= 90_000) "" else "This phone's clock is ${if (min < 1) "over a minute" else "$min min"} ${if (skew > 0) "behind" else "ahead of"} the computer's. Hive refuses requests when they differ by more than 2 minutes: set the phone's clock to automatic."
+    val clock = if (kotlin.math.abs(skew) <= 90_000) "" else "This phone's clock is ${if (min < 1) "over a minute" else "$min min"} ${if (skew > 0) "behind" else "ahead of"} the computer's. Orbit refuses requests when they differ by more than 2 minutes: set the phone's clock to automatic."
     return listOf(trouble, link, clock).filter { it.isNotEmpty() }.joinToString(" ")
 }
 
@@ -302,8 +302,8 @@ private fun App(openThread: MutableState<String?>, openPane: MutableState<String
             box = Read.inbox(r)
             boxLoaded = true
         }
-        // a Hive from before the inbox: the tabs still work, their counts come from the lists
-        if (boxError.contains("unknown request", true)) { boxError = "Update Hive on the computer for the Needs me inbox."; boxLoaded = true }
+        // an Orbit from before the inbox: the tabs still work, their counts come from the lists
+        if (boxError.contains("unknown request", true)) { boxError = "Update Orbit on the computer for the Needs me inbox."; boxLoaded = true }
     }
     // Android 13+ asks before an app may show notifications
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -339,7 +339,7 @@ private fun App(openThread: MutableState<String?>, openPane: MutableState<String
                 Drafts.clear()
                 closeDetail()
                 tab = 0
-                pairNote = if (told) "" else "Hive on the computer could not be told. Unpair there too: Settings, General, Phone app."
+                pairNote = if (told) "" else "Orbit on the computer could not be told. Unpair there too: Settings, General, Phone app."
                 paired = false
             })
             "new" -> NewThreadRoute(notice, online, onDone = { id -> pane = ""; if (id != null) openThread.value = id })
@@ -385,8 +385,8 @@ private fun PairRoute(note: String, onPaired: () -> Unit) {
     }
     val scan = rememberLauncherForActivityResult(ScanContract()) { r -> r.contents?.let(take) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) scan.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Scan the code in Hive: Settings, General, Phone app").setBeepEnabled(false))
-        else { err = "Hive needs the camera to scan the code. Allow it, or paste the code instead."; paste = true }
+        if (ok) scan.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Scan the code in Orbit: Settings, General, Phone app").setBeepEnabled(false))
+        else { err = "Orbit needs the camera to scan the code. Allow it, or paste the code instead."; paste = true }
     }
     PairScreen(note, err, text, paste, onScan = { camera.launch(Manifest.permission.CAMERA) }, onPasteMode = { paste = true }, onText = { text = it }, onPair = { take(text) })
 }
@@ -448,7 +448,7 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collec
         if (follow && v.items.isNotEmpty()) list.scrollToItem(v.items.size - 1 + v.asks.size)
         follow = false
     }
-    // an action and its failure, said: Stop that did not reach Hive must not look like it worked
+    // an action and its failure, said: Stop that did not reach Orbit must not look like it worked
     val act: (String, Map<String, Any>, (Boolean) -> Unit) -> Unit = { op, extra, done ->
         scope.launch {
             err = attempt { Relay.ask(op, extra) }
@@ -469,7 +469,7 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collec
     LaunchedEffect(id, v.working, v.tasks.size) { loadMore() }
     LaunchedEffect(id, v.working) { while (v.working) { kotlinx.coroutines.delay(6_000); loadMore() } }
     val sendHow: (String, String) -> Unit = { text, how ->
-        // the same text sent again after a try that got no answer carries the same id: Hive runs it once
+        // the same text sent again after a try that got no answer carries the same id: Orbit runs it once
         val mid = Drafts.midFor(id, text)
         follow = true
         // not this screen's own scope: a send that fails after the screen is left still puts the text back
@@ -507,7 +507,7 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collec
 }
 
 // A thread's branch, PR and files; a file's diff; the merge. Merge sends what the confirm showed (the PR's head sha as
-// it was on screen) with a fresh mid and confirm = "merge"; Hive checks everything again before it merges.
+// it was on screen) with a fresh mid and confirm = "merge"; Orbit checks everything again before it merges.
 @Composable
 private fun ChangesRoute(id: String, notice: String, online: Boolean, canMerge: Boolean, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -689,7 +689,7 @@ private fun UsageRoute(notice: String, canAccounts: Boolean, working: Int, onBac
             val u = Relay.ask("usage").optJSONObject("usage") ?: JSONObject()
             plan = if (u.isNull("plan")) "" else u.optString("plan").replaceFirstChar { it.uppercase() }
             limits = Read.limits(u)
-            // the accounts only when this Hive has account profiles; otherwise the zone is not drawn at all
+            // the accounts only when this Orbit has account profiles; otherwise the zone is not drawn at all
             accounts = if (canAccounts) Read.accounts(Relay.ask("accounts")) else null
             // the guard names the wake-ups due before the reset: asked for only while a window is close to its limit
             if (Usage.guard(limits ?: emptyList(), System.currentTimeMillis()) != null) wakes = Read.wakes(Relay.ask("wakeups"))
@@ -715,11 +715,11 @@ private fun TeamsRoute(notice: String, onOpen: (String) -> Unit, onBack: () -> U
     })
 }
 
-// onDone: the new thread's id when Hive said which one it started (it is opened), null for Back or an older Hive
+// onDone: the new thread's id when Orbit said which one it started (it is opened), null for Back or an older Orbit
 @Composable
 private fun NewThreadRoute(notice: String, online: Boolean, onDone: (String?) -> Unit) {
     val scope = rememberCoroutineScope()
-    var folders by remember { mutableStateOf<List<String>?>(null) } // null until Hive has said which there are
+    var folders by remember { mutableStateOf<List<String>?>(null) } // null until Orbit has said which there are
     var err by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
@@ -764,7 +764,7 @@ private fun SettingsRoute(notice: String, online: Boolean, syncs: Boolean, onBac
     var unpair by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf("") }
     BackHandler(onBack = onBack)
-    // when Hive keeps quiet hours too, the two are one setting: read from Hive on opening, written to it on a change
+    // when Orbit keeps quiet hours too, the two are one setting: read from Orbit on opening, written to it on a change
     rememberLoader(syncs) {
         if (!syncs) return@rememberLoader
         err = attempt { Read.quiet(Relay.ask("quiet").optJSONObject("quiet"))?.let { quiet = it; Settings.setQuiet(ctx, it) } }

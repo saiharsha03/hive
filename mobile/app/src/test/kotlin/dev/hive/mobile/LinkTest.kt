@@ -1,7 +1,7 @@
 package dev.hive.mobile
 
-// The sealed link on the JVM. link-fixture.json (src/test/resources) is the one file both sides open: Hive's tests
-// (test/relay/linkFixture.test.ts) with mobileLink.ts, these with Link.kt. Its "cases" and "bad" were sealed by Hive,
+// The sealed link on the JVM. link-fixture.json (src/test/resources) is the one file both sides open: Orbit's tests
+// (test/relay/linkFixture.test.ts) with mobileLink.ts, these with Link.kt. Its "cases" and "bad" were sealed by Orbit,
 // its "fromApp" by this code (run the tests with HIVE_LINK_FIXTURE_OUT=<file> to seal a fresh set).
 import org.json.JSONArray
 import org.json.JSONObject
@@ -70,7 +70,7 @@ class LinkTest {
         assertEquals(50, (1..50).map { Seal.seal(key, pair, "p2d", msg).take(16) }.toSet().size)
     }
 
-    // not a check: writes blobs sealed by this code, for Hive's tests to open (they are then pasted into the fixture)
+    // not a check: writes blobs sealed by this code, for Orbit's tests to open (they are then pasted into the fixture)
     @Test fun sealForTheFixture() {
         val out = System.getenv("HIVE_LINK_FIXTURE_OUT") ?: return
         val request = JSONObject().put("op", "send").put("id", "t1").put("text", "héllo 漢字 🙂 \"q\" / \\ \n").put("mid", "a1b2c3").put("rid", 1700000000002L).put("seq", 1700000000002L)

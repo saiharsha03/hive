@@ -63,7 +63,7 @@ fun ThreadMoreBar(m: ThreadMore, pane: String, now: Long, online: Boolean, rewin
             tabs.forEach { (k, label) ->
                 Text(label, Modifier.clickable { onPane(if (pane == k) "" else k) }, style = T.label.copy(fontWeight = if (pane == k) FontWeight.SemiBold else FontWeight.Normal), color = if (pane == k) C.link else C.dim)
             }
-            // 3.2: the thread's branch, files and PR on their own screen (only when this Hive answers for them)
+            // 3.2: the thread's branch, files and PR on their own screen (only when this Orbit answers for them)
             if (onChanges != null) Text("Changes", Modifier.clickable(onClick = onChanges), style = T.label, color = C.dim)
         }
         if (m.waiting.isNotEmpty()) {

@@ -172,5 +172,5 @@ class ScreensTest {
         Box(Modifier.size(108.dp).background(Color(0xFF14161A))) { Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize()) }
     }
 
-    @Test fun offline() = shot("inbox-offline", 0) { InboxScreen(Inbox(), now, notice = "The computer is offline (Hive is closed or asleep).") }
+    @Test fun offline() = shot("inbox-offline", 0) { InboxScreen(Inbox(), now, notice = "The computer is offline (Orbit is closed or asleep).") }
 }
