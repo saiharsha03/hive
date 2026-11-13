@@ -1,8 +1,87 @@
 # Changelog
 
-All notable changes to Hive are documented here. The format follows
+All notable changes to Orbit (called Hive until 2.0) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.0.0] - 2026-11-13 — Orbit
+
+### Renamed
+
+- **Hive is now Orbit.** Product name, app id, installer names, tray and taskbar identity.
+- Orbit's state lives in `~/.orbit`. On the first start, `~/.hive` and Electron's storage (`%APPDATA%\Hive`) are copied
+  to Orbit's places. The old folders are left untouched, and the phone keeps its pairing.
+- The in-process tools are `mcp__orbit__*` now (were `mcp__hive__*`). Old transcripts that used the old names still
+  read.
+- The repo is `saiharsha03/orbit`; the update feed and releases follow it. The phone APK on a release is
+  `Orbit-Phone-<version>.apk`.
+- New Satellite logo, drawn in the theme's colours: app icon, tray, title bar, Android launcher and notification
+  icons.
+
+### New layout
+
+- An icon rail down the left: Threads, Running, Scheduled, Files, and a **More** menu for every other section.
+  Terminal and Settings sit at the foot.
+- A running bar above the message box: what the thread has going now, one line, a row per task when opened.
+- Header lines for a thread's goal, its loops, and what is coming up (loops, wake-ups, a pending automatic continue).
+- The plan's 5-hour and 7-day limits as small gauges on the rail.
+- One layout with toggles (rail, inspector, drawer, Focus) and ten themes. Colour across the app; a thread says why it
+  is marked waiting.
+
+### Claude Code parity
+
+- **Plan approval card** when Claude finishes a plan: approve into accept edits or manual, or keep planning with
+  feedback. The phone sees it as a question.
+- **Shift+Tab** cycles the permission mode (Manual, Accept edits, Plan).
+- Thinking rows in the conversation; **Alt+T** opens them by default. **Alt+O** turns fast mode on or off.
+- A context meter with **Compact**.
+- `/mcp`, `/agents`, `/permissions`, `/hooks`, `/memory`, `/resume`, `/branch` and `/add-dir` open in the app.
+- **Ctrl+R** searches earlier prompts, **Ctrl+S** puts the draft aside and brings it back, **Alt+P** opens the model
+  picker, **Tab** takes Claude Code's suggested next prompt.
+- Comments on diff lines go to the thread as one message.
+- **Worktree toggle** under the prompt box of a new thread (off by default, remembered per repo), a **Branch prefix**
+  setting, and `.worktreeinclude`: the git-ignored files it names are copied into every worktree Orbit makes.
+
+### Pull requests
+
+- PR references in Claude's replies link to GitHub; a pull request a thread opened shows on its header.
+- Changes shows the branch's pull request and the state of its checks (passing, failing, pending or none).
+- **Ship** asks the thread to ship by the project's own rules; with a PR open it becomes **Update PR**.
+- **Merge** with a confirm, **Merge when ready** (GitHub auto-merge), **Fix failing checks**, and **Auto-fix** (asks the
+  thread once per head commit for failing checks, and once for new review comments).
+- **Archive this thread**, and **Auto-archive** after the PR merges or closes. The worktree and branch are kept.
+
+### Agent threads
+
+- Another command-line agent (Codex CLI, OpenCode, any command) runs in a terminal tab of its own. Add it in
+  Settings > Agents. Its state is a guess from the terminal and shows in the tab, the rail and the running bar.
+  Restart and Stop are on the tab.
+
+### Jira board
+
+- **Board**: your Jira tickets as one column per status, done work left out, stage and type colours. A thread starts
+  from a card. Read-only; set `HIVE_TRACKER_SITE`, `HIVE_TRACKER_EMAIL` and a token (see `.env.example`).
+
+### Phone
+
+- **Changes** screen for a thread: branch, pull request card, files, and one file's diff.
+- **Merge** from the phone, with a confirm. A second tap before the screen redraws sends nothing.
+- The app is named Orbit. Version 2.0.0 (code 10).
+
+### Fixed
+
+- A sign-in failure on a turn is retried once and said once.
+- A thread says why it is marked waiting.
+- Escape closes a file or picture a thread opened.
+- **Send now** on a message Claude has not read yet, or on a queued one, stops the running tool call and sends it.
+- A reference such as `and/or #3` is no longer read as a repo.
+- Wake-ups and the Agent SDK auto-update are on again.
+
+### Removed
+
+- The office animation in the team view.
+- The four old layouts (Default, Workbench, Thread strip & dock, Focus) and their per-layout themes. Saved choices are
+  folded into the one layout.
 
 ## [1.1.5] - 2026-11-12
 
