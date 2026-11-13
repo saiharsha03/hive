@@ -192,7 +192,7 @@ export function StatusLine() {
       {phone?.configured && !phone.paired && <button onClick={() => openPage('settings')} title="Pairing and the relay are in Settings" data-testid="status-phone">Phone not paired</button>}
       {quiet?.on && inQuiet(quiet.from, quiet.to) && <button onClick={() => openPage('settings')} title={`Quiet hours ${quiet.from} to ${quiet.to}: notifications stay silent`} data-testid="status-quiet">Quiet until {quiet.to}</button>}
       {u ? <span className="undo" data-testid="undo-line">{u.text}<button onClick={() => runUndo()} data-testid="undo">Undo</button></span>
-        : update && <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Hive ${update.version} available`}</button>}
+        : update && <button className="hi" onClick={() => void window.api.updateApply()} data-testid="status-update">{update.kind === 'ready' ? `Restart to update to ${update.version}` : `Orbit ${update.version} available`}</button>}
       {allowOpen && allow && <AllowPop allow={allow} onClose={() => setAllowOpen(false)} />}
     </footer>
   )

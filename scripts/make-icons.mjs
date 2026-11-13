@@ -1,4 +1,4 @@
-// Generates the Hive app icon: the mark the window's title bar draws (a hexagon, one cell of the hive, holding an H
+// Generates the Orbit app icon: the mark the window's title bar draws (a hexagon, one cell of the hive, holding an H
 // whose bar is in the accent) on a dark rounded square. Writes the SVG sources, PNGs for every size and a multi-size ICO.
 //   node scripts/make-icons.mjs
 // Sizes up to 32 px use heavier strokes and less margin so the shape still reads in a taskbar or tab.

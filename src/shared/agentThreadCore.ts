@@ -1,5 +1,5 @@
 // Agent threads: another command-line coding agent (Codex CLI, OpenCode, Gemini CLI, any command) run in a terminal
-// that is a tab of its own. Hive cannot read its conversation, so its state is a guess from the terminal: output means
+// that is a tab of its own. Orbit cannot read its conversation, so its state is a guess from the terminal: output means
 // it works, a bell or a quiet prompt means it may want you, the exit code says how it ended. Pure, so it is tested
 // without a pty.
 import { stripAnsi } from './devCore'

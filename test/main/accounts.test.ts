@@ -118,15 +118,15 @@ test('backups: the last five switches are kept; removing an account deletes only
   assert.equal(removeAccount(p, a), false)
 })
 
-test('other Claude sessions: the ones Hive did not start (a terminal, an IDE) are counted for the warning', async () => {
+test('other Claude sessions: the ones Orbit did not start (a terminal, an IDE) are counted for the warning', async () => {
   const { othersOf } = await import('../../src/main/accounts')
   const hive = 100
-  // 201, 202: Hive's threads; 203: a claude one of them started; 300: a terminal's; 301: started by that terminal session
+  // 201, 202: Orbit's threads; 203: a claude one of them started; 300: a terminal's; 301: started by that terminal session
   assert.equal(othersOf([[201, hive], [202, hive], [203, 201], [300, 50], [301, 300]], hive), 2)
   assert.equal(othersOf([], hive), 0)
 })
 
-test('a login Hive cannot switch (an API key, no tokens file) is refused before anything is touched', () => {
+test('a login Orbit cannot switch (an API key, no tokens file) is refused before anything is touched', () => {
   write({ claudeAiOauth: tok('a'), mcpOAuth: mcp }, { oauthAccount: acct('a@example.com') })
   saveCurrent(p, 1)
   // now the engine runs on an API key: no claudeAiOauth in the tokens file

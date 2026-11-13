@@ -70,7 +70,7 @@ export function planWake(resetAt: number, others: number[], now: number): number
   return at
 }
 
-// wakes due at start-up (Hive was closed at their time) go out spaced too, the first a minute after start
+// wakes due at start-up (Orbit was closed at their time) go out spaced too, the first a minute after start
 export function catchUp(wakes: Wake[], now: number): Wake[] {
   let next = now + AFTER_RESET_MS
   return [...wakes].sort((a, b) => a.at - b.at).map((w) => {

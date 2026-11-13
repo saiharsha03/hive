@@ -99,7 +99,7 @@ export function DeploysPage({ deploy }: { deploy: Deploy }) {
 
   return (
     <div className="page" data-testid="page-deploys">
-      <PageHead title="Deploys" desc="Your deploy scripts do the work. Hive shows what ships and checks it landed." right={<span className="dep-right">{head}</span>} />
+      <PageHead title="Deploys" desc="Your deploy scripts do the work. Orbit shows what ships and checks it landed." right={<span className="dep-right">{head}</span>} />
       {!cfg && <Empty>Reading the deploy settings...</Empty>}
       {cfg && !dc && (
         <div data-testid="deploy-config-error" className="dep-cfg">
@@ -176,7 +176,7 @@ export function DeploysPage({ deploy }: { deploy: Deploy }) {
                     <ConfirmBar actions={<>
                       <Btn testid="deploy-copy" kind="quiet" onClick={() => { void navigator.clipboard.writeText(deployMessage(w.output || w.changelog)).then(() => setCopied(true)) }}>{copied ? 'Copied' : 'Copy message'}</Btn>
                       {stop('deploy-button-6')}<Btn testid="deploy-next" kind="primary" onClick={() => act({ t: 'next' })}>Team approved, next</Btn></>}>
-                      {w.output ? 'Hive copied this message to your clipboard.' : 'Copy this message.'} Post it to the team, then continue once you have their approval.
+                      {w.output ? 'Orbit copied this message to your clipboard.' : 'Copy this message.'} Post it to the team, then continue once you have their approval.
                     </ConfirmBar>
                   </>
                 )}
@@ -246,7 +246,7 @@ export function DeploysPage({ deploy }: { deploy: Deploy }) {
           <div ref={hist}>
             <Section title="History" note="This session" testid="deploy-history">
               {!history.length
-                ? <Empty>Nothing has been deployed from Hive since it opened.</Empty>
+                ? <Empty>Nothing has been deployed from Orbit since it opened.</Empty>
                 : (
                   <table className="dt">
                     <thead><tr><th>When</th><th>Repo</th><th>Target</th><th>Commit</th><th>Result</th><th className="num">Took</th><th>Landed</th></tr></thead>

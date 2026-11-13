@@ -70,7 +70,7 @@ test('new only: an item is offered once', () => {
   assert.equal(shouldOffer(s, 'i:b'), true)
 })
 
-test('what the clipboard held when Hive lost focus is not offered back (copied inside Hive)', () => {
+test('what the clipboard held when Orbit lost focus is not offered back (copied inside Orbit)', () => {
   let s = offered(emptySeen(), 't:a')
   s = blurred(s, 't:mine')
   assert.equal(shouldOffer(s, 't:mine'), false)

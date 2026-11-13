@@ -1,4 +1,4 @@
-// Clipboard suggestions: when the Hive window gains focus, offer what was copied elsewhere as a one-click paste.
+// Clipboard suggestions: when the Orbit window gains focus, offer what was copied elsewhere as a one-click paste.
 // The clipboard is read only on focus (plus once when the page turns the feature on) and, as a hash only, on blur.
 // The content stays in this process until the click; the page gets a thumbnail or a short preview, never the
 // full item, and nothing is written to disk or logged.

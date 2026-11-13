@@ -4,13 +4,13 @@
 import { expect, test } from '@playwright/test'
 import { join } from 'node:path'
 import { close, deployEnvFile, launch, RUN, shot } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 test('deploy shows diffs.sh output and the run step is a stub', async () => {
   const envFile = deployEnvFile()
   test.skip(!envFile, 'opt-in: set HIVE_E2E_DEPLOY_ENV to a .env with the repos root and the HIVE_DEPLOY_* keys')
   const l = await launch({ envFile: envFile!, data: join(RUN, 'data-deploy') })
-  const h = new Hive(l.page)
+  const h = new Orbit(l.page)
   try {
     await h.open('deploy')
     await h.id('deploy-suite').first().click()

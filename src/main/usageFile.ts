@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 // ~/.claude/usage/latest.json: the plan-limit snapshot a usage-guard hook reads. The terminal's usage-file plugin writes
-// it, but Hive turns that plugin off in its own sessions, so with no terminal open the hook would go quiet; Hive writes
+// it, but Orbit turns that plugin off in its own sessions, so with no terminal open the hook would go quiet; Orbit writes
 // the same file, in the same shape, from every real usage reading status.ts keeps (never a placeholder, never in test
-// mode, at most once a minute). It only feeds the hook: nothing in Hive reads it back.
+// mode, at most once a minute). It only feeds the hook: nothing in Orbit reads it back.
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { realLimits } from '../shared/usageCore'
@@ -41,7 +41,7 @@ export function writeUsageFile(limits: any, now = Date.now(), opts: { test?: boo
   return true
 }
 
-// The newest reading in the usage file, whoever wrote it (another Hive, a status line hook), as the limits object the
+// The newest reading in the usage file, whoever wrote it (another Orbit, a status line hook), as the limits object the
 // status code keeps. Null when there is none or it is older than maxAgeMs.
 export function readUsageFile(maxAgeMs: number, now = Date.now()): { limits: any; at: number } | null {
   try {

@@ -13,14 +13,14 @@ describe('shutdownNames', () => {
     expect(shutdownNames(shop, [shop, admin], live)).toEqual(['db', 'core_api', 'shop_api'])
   })
 
-  it('keeps shared services another running stack still uses, and skips ones run outside Hive', () => {
+  it('keeps shared services another running stack still uses, and skips ones run outside Orbit', () => {
     const live = [svc('db', 'running'), svc('core_api', 'running'), svc('shop_api', 'running'), svc('shop_web', 'running', true), svc('admin_web', 'running')]
     expect(shutdownNames(shop, [shop, admin], live)).toEqual(['shop_api'])
   })
 })
 
-describe('shutdownNames with a stack run outside Hive', () => {
-  it('keeps shared services when the other stack runs only outside Hive', () => {
+describe('shutdownNames with a stack run outside Orbit', () => {
+  it('keeps shared services when the other stack runs only outside Orbit', () => {
     const live = [svc('db', 'running'), svc('core_api', 'running'), svc('shop_api', 'running'), svc('shop_web', 'stopped'), svc('admin_web', 'running', true)]
     expect(shutdownNames(shop, [shop, admin], live)).toEqual(['shop_api'])
   })

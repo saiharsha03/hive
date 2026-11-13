@@ -41,8 +41,8 @@ describe('isSecretKey', () => {
 describe('the app name', () => {
   const check = (appName: string) => validateSettings({ env: {}, scripts: null, general: { ...emptyGeneral(), appName } }, () => true).filter((p) => p.key === 'general.appName')
   it('cannot hold brackets or a line break (it sits inside one-line [..] headers)', () => {
-    expect(check('Hive')).toEqual([])
-    expect(check('Hive (work)')).toEqual([])
-    for (const bad of ['Hive [work]', 'Hive]', '[Hive', 'Hive\nwork']) expect(check(bad).map((p) => p.level), bad).toEqual(['error'])
+    expect(check('Orbit')).toEqual([])
+    expect(check('Orbit (work)')).toEqual([])
+    for (const bad of ['Orbit [work]', 'Orbit]', '[Orbit', 'Orbit\nwork']) expect(check(bad).map((p) => p.level), bad).toEqual(['error'])
   })
 })

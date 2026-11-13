@@ -6,8 +6,8 @@ import { cleanRun } from './cleanup'
 export default async function globalTeardown(): Promise<void> {
   const run = process.env.HIVE_E2E_RUN
   if (!run) return
-  if (process.env.HIVE_E2E_KEEP === '1') { console.log(`Hive e2e: kept ${run} and its transcripts (HIVE_E2E_KEEP=1)`); return }
+  if (process.env.HIVE_E2E_KEEP === '1') { console.log(`Orbit e2e: kept ${run} and its transcripts (HIVE_E2E_KEEP=1)`); return }
   const { removed, kept } = cleanRun(run)
-  console.log(`Hive e2e: removed ${removed.length} folder${removed.length === 1 ? '' : 's'} of this run`)
-  for (const k of kept) console.warn(`Hive e2e: could not remove ${k}`)
+  console.log(`Orbit e2e: removed ${removed.length} folder${removed.length === 1 ? '' : 's'} of this run`)
+  for (const k of kept) console.warn(`Orbit e2e: could not remove ${k}`)
 }

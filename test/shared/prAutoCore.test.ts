@@ -1,4 +1,4 @@
-// Auto-fix and Auto-archive: when a thread's PR makes Hive send the fix prompt, or archive the thread
+// Auto-fix and Auto-archive: when a thread's PR makes Orbit send the fix prompt, or archive the thread
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { autoArchiveNow, autoFixNow, fixChecksPrompt, fixReviewPrompt, type AutoFixIn } from '../../src/shared/prAutoCore'

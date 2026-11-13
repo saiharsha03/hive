@@ -151,7 +151,7 @@ export async function runAutoMerge(info: MergeInfoResult, headSha: string, on: b
   return { ok: true, number: info.pr.number, method: info.method ?? 'squash' }
 }
 
-// The only GitHub writes Hive makes, exactly: a merge of PR n by one method at a given head, the same with --auto, and
+// The only GitHub writes Orbit makes, exactly: a merge of PR n by one method at a given head, the same with --auto, and
 // turning auto-merge off. No --delete-branch, --admin or anything else.
 export function allowedGhWrite(a: string[]): boolean {
   const method = /^--(squash|merge|rebase)$/

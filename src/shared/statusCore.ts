@@ -7,12 +7,12 @@ export type LoopJob = { id: string; schedule: string; recurring: boolean; prompt
 
 export type ThreadStatus = {
   model?: string
-  effort?: string | null // the level the session runs at (Stop hook, or what Hive set)
+  effort?: string | null // the level the session runs at (Stop hook, or what Orbit set)
   ultrathink?: boolean // max effort for this one turn
   effortError?: string
   advisor?: string | null // the advisor model main reported (hive_advisor); null = none, undefined = not told yet
   advisorPick?: string // the Advisor row picked in the model menu (advisorCore.ts), shown before main answers
-  fast?: boolean // fast mode asked for in Hive (hive_fast)
+  fast?: boolean // fast mode asked for in Orbit (hive_fast)
   fastError?: string // the last fast switch failed
   fastState?: string // what the engine says at the end of a turn: off, cooldown, on (fast_mode_state)
   fastReason?: string // why it cannot serve now (fast_mode_disabled_reason)

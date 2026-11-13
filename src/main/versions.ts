@@ -37,7 +37,7 @@ function sdkOnDisk(): string | null {
 }
 async function latestSdk(): Promise<string | null> {
   try {
-    const res = await fetch(`https://registry.npmjs.org/${SDK}/latest`, { headers: { 'User-Agent': 'Hive' } })
+    const res = await fetch(`https://registry.npmjs.org/${SDK}/latest`, { headers: { 'User-Agent': 'Orbit' } })
     const v = res.ok ? ((await res.json()) as { version?: string }).version : undefined
     return v && /^\d+\.\d+\.\d+$/.test(v) ? v : null
   } catch { return null }

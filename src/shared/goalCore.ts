@@ -5,7 +5,7 @@
 export type Goal = {
   condition: string
   status: 'active' | 'met'
-  setAt: number // Hive's own clock when "Goal set:" arrived, or the transcript time for a resumed session
+  setAt: number // Orbit's own clock when "Goal set:" arrived, or the transcript time for a resumed session
   metAt?: number
   reason?: string // the evaluator's last reason (met, or not yet met)
   iterations?: number

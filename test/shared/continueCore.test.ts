@@ -26,7 +26,7 @@ describe('continueCore', () => {
     expect(planWake(reset, [reset + AFTER_RESET_MS, reset + AFTER_RESET_MS + STAGGER_MS], now)).toBe(reset + AFTER_RESET_MS + 2 * STAGGER_MS)
     expect(planWake(now - 10_000, [], now)).toBe(now + AFTER_RESET_MS) // a reset already past
   })
-  it('spaces wakes that came due while Hive was closed', () => {
+  it('spaces wakes that came due while Orbit was closed', () => {
     const w = (key: string, at: number) => ({ key, tabId: key, cwd: '', title: key, at })
     const out = catchUp([w('b', now - 1000), w('a', now - 5000), w('c', now + 3_600_000)], now)
     expect(out.map((x) => [x.key, x.at])).toEqual([['a', now + AFTER_RESET_MS], ['b', now + AFTER_RESET_MS + STAGGER_MS], ['c', now + 3_600_000]])

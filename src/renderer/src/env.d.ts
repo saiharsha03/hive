@@ -38,7 +38,7 @@ type Item =
   | { kind: 'error'; text: string }
   | { kind: 'note'; text: string }
   | { kind: 'agent'; from: string; text: string } // a message another agent sent in (e.g. Codex via codex-panel)
-  // a message another Hive thread sent in (message_thread / start_thread)
+  // a message another Orbit thread sent in (message_thread / start_thread)
   | { kind: 'thread'; fromId: string; fromTitle: string; text: string; steer?: boolean; queue?: { id: string; pending: boolean } }
   // a Codex subagent run started through the codex tool, streamed live
   | { kind: 'codex'; id: string; task: string; model: string; allowEdits: boolean; status: 'running' | 'done' | 'error'; lines: string[]; answer: string }

@@ -1,4 +1,4 @@
-// Hive's mark beside the name: a hexagon (one cell of the hive) holding an H whose bar is in the brand token (the
+// Orbit's mark beside the name: a hexagon (one cell of the hive) holding an H whose bar is in the brand token (the
 // signal colour where the theme has one). Colours are theme tokens, so it reads in every theme.
 export function HiveMark({ size = 20 }: { size?: number }) {
   return (

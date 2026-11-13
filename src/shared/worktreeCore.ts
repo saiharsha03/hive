@@ -72,7 +72,7 @@ export const validRepoName = (repo: string) =>
 
 export const WIP_MESSAGE = 'WIP: auto-saved when thread closed'
 
-// `git status --porcelain` output: is there anything to save? Hive's own copies (untracked root .env files and the
+// `git status --porcelain` output: is there anything to save? Orbit's own copies (untracked root .env files and the
 // node_modules link) do not count, and they are never committed.
 // A dotenv file name: ".env", ".env.local", ".env.development.local". Not ".envrc" or ".environment-notes.md": a file
 // that only starts with ".env" is somebody's work, and counting it as a copy deleted it with the worktree.
@@ -80,7 +80,7 @@ export const isDotenvName = (name: string) => /^\.env(\.[A-Za-z0-9_-]+)*$/.test(
 const COPY = /^\?\? "?(\.env(?:\.[A-Za-z0-9_-]+)*|node_modules\/?)"?$/
 const lines = (porcelain: string) => porcelain.replace(/\r/g, '').split('\n').filter(Boolean)
 export const hasWork = (porcelain: string): boolean => lines(porcelain).some((l) => !COPY.test(l))
-// the untracked root .env files Hive copied in: unstaged again after `git add -A`, so a WIP commit never holds them
+// the untracked root .env files Orbit copied in: unstaged again after `git add -A`, so a WIP commit never holds them
 export const envCopies = (porcelain: string): string[] =>
   lines(porcelain).map((l) => l.match(COPY)?.[1] ?? '').filter((f) => f.startsWith('.env'))
 

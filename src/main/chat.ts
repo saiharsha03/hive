@@ -75,8 +75,8 @@ import { addPending, pendingDelivered, pendingIsSteer, pendingReturned, pendingS
 // the events the user should hear about: the phone and the desktop get the same ones
 const notifyUser = (title: string, body: string, thread: string): void => { notifyPhone(title, body, thread); notifyDesktop(title, body, thread) }
 
-// a watcher's thread gets only these Hive tools: none starts, steers or reconfigures other threads, edits code (Codex,
-// worktrees) or runs services, so nothing it reaches through Hive escapes read-only
+// a watcher's thread gets only these Orbit tools: none starts, steers or reconfigures other threads, edits code (Codex,
+// worktrees) or runs services, so nothing it reaches through Orbit escapes read-only
 const WATCHER_TOOLS = new Set(['notify_phone', 'show_to_user', 'add_todo', 'list_todos', 'search_sessions', 'organize_thread', 'dev_stack_logs', 'list_watchers', 'list_threads', 'wait_for_thread', 'agent_status'])
 const forThread = <T extends { name: string }>(watcher: boolean, tools: T[]): T[] => (watcher ? tools.filter((t) => WATCHER_TOOLS.has(t.name)) : tools)
 // a watcher's tab, or a watcher's session resumed under any other tab id (the sidebar, the phone, message_thread,
@@ -158,7 +158,7 @@ const codexById = new Map<string, ChildProcess>()
 
 type Live = {
   q: Query; push: (m: SDKUserMessage) => void; sessionId: string | null; turns: ReturnType<typeof turnQueue<SDKUserMessage>>
-  background: boolean // hidden from the tab bar, or started by Hive on its own: runs in auto mode
+  background: boolean // hidden from the tab bar, or started by Orbit on its own: runs in auto mode
   closedByApp?: boolean // closeTab stopped it (disable, rotation, archive): the window must still hear hive_closed
   startedAt?: number // when its Claude process was started (to find that process: forceStopCommand)
   shellSince?: number | null // a foreground shell command the turn is waiting on, since when
@@ -185,7 +185,7 @@ type Live = {
   queuedFrom: Map<string, Unsent['source']>
   stopTasks: number // background tasks the last Stop hook reported still in flight
   lastActiveAt: number // the last event from this process
-  retiring?: 'idle' | 'account' // Hive closes the process on purpose and keeps the tab: the next message resumes the session
+  retiring?: 'idle' | 'account' // Orbit closes the process on purpose and keeps the tab: the next message resumes the session
   recycle?: boolean // signed in to another account: close the process once nothing of it runs (account switch)
   memoryDir: string | null // the shared auto-memory folder it was given (null: Claude Code's own for its folder)
 }
@@ -389,7 +389,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       tool(
         'rename_thread',
-        `Name THIS thread in the ${appName()} sidebar and its tab: a short title (3 to 6 words) that says what the user is working on, e.g. "Hive editor file tabs" or "CSV import cleanup". Stored like Claude Code's /rename, so the terminal shows it too.`,
+        `Name THIS thread in the ${appName()} sidebar and its tab: a short title (3 to 6 words) that says what the user is working on, e.g. "Orbit editor file tabs" or "CSV import cleanup". Stored like Claude Code's /rename, so the terminal shows it too.`,
         { title: z.string().describe('The new title, 3 to 6 words, no quotes') },
         async ({ title }) => {
           const t = title.replace(/\s+/g, ' ').replace(/^["']|["']$/g, '').trim().slice(0, 80)
@@ -466,7 +466,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       // Quarry (the user's SQL app), when it is installed: its agent interface. Quarry enforces its own rules (one
       // statement per call, reads in a read-only transaction, no writes on production or read-only connections); a
-      // write runs only with allowWrite, which Hive sets after the user said yes to that statement in this thread
+      // write runs only with allowWrite, which Orbit sets after the user said yes to that statement in this thread
       ...(quarryStatus().available ? [
         tool(
           'quarry_connections',
@@ -935,7 +935,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       tool(
         'resume_team',
-        'Lead or Owner: resume a paused team (also after Hive restarted). Every teammate gets a message to read team_status and its to-dos and carry on; '
+        'Lead or Owner: resume a paused team (also after Orbit restarted). Every teammate gets a message to read team_status and its to-dos and carry on; '
           + 'a teammate whose thread had closed is reopened from its Claude session.',
         { team: z.string().optional().describe('Team id; needed only by an Owner') },
         async ({ team: ref }) => {
@@ -1062,7 +1062,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       systemPrompt: { type: 'preset', preset: 'claude_code', append: append() },
       mcpServers: { hive },
       includePartialMessages: true,
-      // Hive has a stop button per background task (chat:stopTask), so an interrupt (Esc / Ctrl+Enter) only stops the
+      // Orbit has a stop button per background task (chat:stopTask), so an interrupt (Esc / Ctrl+Enter) only stops the
       // turn, as in the terminal; without this the SDK fails closed and the interrupt kills every background agent too
       perTaskStopAffordance: true,
       // a one-line "what it is doing now" for each running subagent every ~30s, shown on its row in the thread status
@@ -1082,7 +1082,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       // Claude's multiple-choice questions (AskUserQuestion) as a card in the thread and on the phone; giving the SDK a
       // permission handler is what makes the tool available. Any other tool reaching it is denied, as with no handler
       canUseTool: async (name, input, { signal, toolUseID }) => {
-        // a workflow (the Workflow tool) is the agent's own way of running work: Hive never stands in its way, in auto
+        // a workflow (the Workflow tool) is the agent's own way of running work: Orbit never stands in its way, in auto
         // mode either (the classifier may hand the call here); a watcher's stays under its read-only rules below
         if (permitWithoutPrompt(name, watcher)) return { behavior: 'allow', updatedInput: input }
         // the plan Claude made in plan mode: approve it into accept edits or manual, or keep planning with feedback
@@ -1139,7 +1139,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         if (end.kind === 'answers') return { behavior: 'allow', updatedInput: { ...input, answers: end.answers } }
         return { behavior: 'deny', message: end.kind === 'chat' ? 'The user replied in the chat instead of picking an option: read their next message.' : 'The question was dismissed (the turn was stopped).' }
       },
-      // hook events, Hive-only plugin switches, the Stop hook that reports loops and effort; watcher threads read-only
+      // hook events, Orbit-only plugin switches, the Stop hook that reports loops and effort; watcher threads read-only
       // unattended (background at start, a teammate, a watcher run): the output styles that hand the code to a human go off.
       // A thread in a repo or worktree under the workspace root shares the root's auto-memory folder
       ...withReadOnly(watcher, tabId, sessionOptions(tabId, send, {
@@ -1374,7 +1374,7 @@ export function setBackground(tabId: string, background: boolean, web: WebConten
 
 // While a turn runs: steer = delivered at Claude's next step inside it; queue = held until the turn ends, then starts a new one;
 // interrupt = queued, and the running turn is stopped now, so it goes in straight away as the next turn.
-// background: the tab is not on screen (or Hive started it on its own), so a new process starts in auto mode
+// background: the tab is not on screen (or Orbit started it on its own), so a new process starts in auto mode
 export type Outgoing = { uuid?: string; title?: string; text: string; images: { mediaType: string; data: string }[]; mode?: 'steer' | 'queue'; queueId?: string; background?: boolean; interrupt?: boolean }
 
 // ---- the thread's name, from a small second call ----
@@ -1436,7 +1436,7 @@ export function sendMessage(tabId: string, cwd: string, resume: string | undefin
   // the turn's end, so the question stays open until then)
   if ((msg.text || msg.images.length) && msg.mode !== 'queue') replyInChat(tabId)
   if (msg.text || msg.images.length) { cancelContinue(tabId); if (s.sessionId) cancelContinue(s.sessionId) } // the user took over
-  // sent while Claude works (steer) or queued: kept on disk until Claude reads it, so closing Hive loses nothing
+  // sent while Claude works (steer) or queued: kept on disk until Claude reads it, so closing Orbit loses nothing
   if ((msg.text || msg.images.length) && (msg.mode === 'queue' || cur.turns.isBusy())) {
     addPending({ key: msg.queueId, uuid: m.uuid, tabId, cwd, sessionId: cur.sessionId, title: titleOf(tabId), text: msg.text, pictures: msg.images, mode: msg.mode === 'queue' ? 'queue' : 'steer', background: cur.background })
   }
@@ -1530,7 +1530,7 @@ export function stopCodex(id: string): boolean {
   return true
 }
 
-// A thread Hive starts by itself (never from the renderer): the UI is told first so it shows as a background tab,
+// A thread Orbit starts by itself (never from the renderer): the UI is told first so it shows as a background tab,
 // then the fixed prompt goes in. It runs in auto mode like any background thread.
 // from: another thread started it (start_thread, or message_thread resuming a stopped one), so the prompt goes in labelled;
 // resume: the Claude session to continue
@@ -1580,7 +1580,7 @@ function activity(id: string, s: Live): Activity {
   }
 }
 
-// Hive closes this process on purpose and keeps the tab (idle, or an account switch): it ends like a process that ended
+// Orbit closes this process on purpose and keeps the tab (idle, or an account switch): it ends like a process that ended
 // by itself, so the tab and its session stay and the next message resumes the session
 function retire(s: Live, why: 'idle' | 'account'): void {
   if (s.retiring) return
@@ -1756,13 +1756,13 @@ export async function liveUsage(): Promise<{ u: any; at: number } | null> {
   return null
 }
 
-// a thread's live state for Hive's own schedulers (watchers): working = a turn is running; null = no live process
+// a thread's live state for Orbit's own schedulers (watchers): working = a turn is running; null = no live process
 export function threadState(tabId: string): { working: boolean; sessionId: string | null; waitingReason?: string; lastOk: boolean | null; lastReply: string | null } | null {
   const s = live.get(tabId)
   return s ? { working: s.turns.isBusy(), sessionId: s.sessionId, waitingReason: s.waitingReason, lastOk: s.lastOk, lastReply: s.lastReply } : null
 }
 
-// A message Hive delivers to a thread on someone's behalf (the phone, a watcher run, an automatic continue, messages
+// A message Orbit delivers to a thread on someone's behalf (the phone, a watcher run, an automatic continue, messages
 // resent after a restart): the thread starts, or resumes its Claude session, when it is not live. A live one takes it
 // the way it takes a window message: straight in when idle, else queued behind the running turn (kept on disk until
 // Claude reads it). The tab shows it like a started thread's first message (queueId: it waits in the queue).
@@ -1800,7 +1800,7 @@ export function promote(tabId: string, queueId: string): boolean {
 
 // "Send now": the running turn is stopped, so what waits goes in as soon as it ends (what an interrupting send does).
 // id = a queued message: it goes to the front of the queue first. id = the uuid of a steered message Claude has not
-// read: only the stop. No id: everything queued is handed over as steers, in order. Hive never sends a steer again:
+// read: only the stop. No id: everything queued is handed over as steers, in order. Orbit never sends a steer again:
 // the CLI keeps the messages it holds through a plain interrupt (the SDK's still_queued) and runs them as the next turn.
 // false, and nothing is stopped, when that message (or anything at all) no longer waits
 export async function sendNow(tabId: string, id?: string): Promise<boolean> {
@@ -1822,7 +1822,7 @@ export async function contextUsage(tabId: string): Promise<{ total: number; max:
   return { total: u.totalTokens, max: u.maxTokens }
 }
 
-// After this long a running shell command is moved to the background: HIVE_AUTO_BACKGROUND_S in Hive's settings,
+// After this long a running shell command is moved to the background: HIVE_AUTO_BACKGROUND_S in Orbit's settings,
 // default 60, 0 turns it off (empty or not a number = the default). Threads started from then on use it.
 let autoBackgroundMs = 60_000
 // the workspace root and the worktrees folder: threads started under them share the root's auto-memory folder

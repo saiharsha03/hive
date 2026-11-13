@@ -17,7 +17,7 @@ const set = (s: UpdateState) => { state = s; notify(s) }
 export const updateState = (): UpdateState | null => state
 
 async function checkPortable(): Promise<void> {
-  const res = await fetch(RELEASES, { headers: { 'User-Agent': 'Hive', Accept: 'application/vnd.github+json' } })
+  const res = await fetch(RELEASES, { headers: { 'User-Agent': 'Orbit', Accept: 'application/vnd.github+json' } })
   if (!res.ok) throw new Error(`GitHub releases: HTTP ${res.status}`)
   const r = (await res.json()) as { tag_name?: string; html_url?: string }
   // only a release page of this repo is ever opened, whatever the answer says

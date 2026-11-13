@@ -16,4 +16,4 @@ export const gh = (args: string[], opts: { cwd?: string; timeout?: number } = {}
   (isMerge(args) ? Promise.reject(new Error('gh: a merge goes through ghWrite')) : runGh(args, opts))
 
 export const ghWrite = (args: string[], opts: { cwd?: string; timeout?: number } = {}) =>
-  (allowedGhWrite(args) ? runGh(args, opts) : Promise.reject(new Error(`gh: ${args.slice(0, 2).join(' ')} is not a write Hive makes`)))
+  (allowedGhWrite(args) ? runGh(args, opts) : Promise.reject(new Error(`gh: ${args.slice(0, 2).join(' ')} is not a write Orbit makes`)))

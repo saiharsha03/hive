@@ -1,4 +1,4 @@
-// Claude account profiles: several logins kept side by side, switched without the browser and without restarting Hive.
+// Claude account profiles: several logins kept side by side, switched without the browser and without restarting Orbit.
 // Claude Code keeps a login in two places: the tokens in <config>/.credentials.json under "claudeAiOauth" (the same
 // file also holds MCP servers' own OAuth tokens, which belong to no account), and who it is in ~/.claude.json under
 // "oauthAccount" (that file is the CLI's big state file). A profile is exactly those two keys,
@@ -161,7 +161,7 @@ export function switchAccount(p: AccountPaths, id: string, now = Date.now()): Sw
   let target: Profile
   try { target = readJson(profileFile(p, id)) as unknown as Profile } catch { throw new Error(`The saved login for ${entry.email} is missing; sign in to it with the browser again (Add account).`) }
   if (!target?.claudeAiOauth || !target.oauthAccount || typeof target.oauthAccount !== 'object') throw new Error(`The saved login for ${entry.email} is incomplete; sign in to it with the browser again (Add account).`)
-  // a login Hive cannot switch (no tokens file, an API key or another provider, an engine that keeps them elsewhere):
+  // a login Orbit cannot switch (no tokens file, an API key or another provider, an engine that keeps them elsewhere):
   // refused before anything is touched; Add account (the browser sign-in) still works as always
   let current
   try { current = live(p) } catch { throw new Error(`Cannot read ${p.credentials}: this Claude Code keeps its login elsewhere, so saved accounts cannot be switched here. Use Add account (the browser sign-in).`) }
@@ -182,7 +182,7 @@ export function switchAccount(p: AccountPaths, id: string, now = Date.now()): Sw
     writeAtomic(p.credentials, credsText) // the tokens go back: the two files never disagree about who is signed in
     throw new Error(`Could not switch the account (writing ${p.claudeJson} failed: ${(e as Error).message}); nothing changed.`, { cause: e })
   }
-  // the keys Hive did not mean to touch are as they were
+  // the keys Orbit did not mean to touch are as they were
   let ok: boolean
   try {
     const credsAfter = readJson(p.credentials)
@@ -201,8 +201,8 @@ export function switchAccount(p: AccountPaths, id: string, now = Date.now()): Sw
   return { account: next, changed: true }
 }
 
-// Claude processes that are not Hive's own (a terminal session, an IDE): they keep the old login and may write their
-// copy of ~/.claude.json back, so a switch warns about them. Hive's own threads and its status process are its children.
+// Claude processes that are not Orbit's own (a terminal session, an IDE): they keep the old login and may write their
+// copy of ~/.claude.json back, so a switch warns about them. Orbit's own threads and its status process are its children.
 export async function otherClaudeProcesses(ownPid = process.pid): Promise<number> {
   const { execFile } = await import('node:child_process')
   const run = (cmd: string, args: string[]) => new Promise<string>((res) => execFile(cmd, args, { timeout: 10_000, windowsHide: true }, (_e, out) => res(String(out ?? ''))))
@@ -213,7 +213,7 @@ export async function otherClaudeProcesses(ownPid = process.pid): Promise<number
   return othersOf(pairs, ownPid)
 }
 
-// of these claude processes ([pid, parent pid]), how many are not Hive's: started by Hive, or by one of its own
+// of these claude processes ([pid, parent pid]), how many are not Orbit's: started by Orbit, or by one of its own
 export function othersOf(pairs: [number, number][], ownPid: number): number {
   const ours = new Set<number>()
   for (let changed = true; changed;) {

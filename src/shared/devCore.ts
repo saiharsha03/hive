@@ -1,6 +1,6 @@
 // Pull latest + Dev stack: pure logic (config parsing, repo scan rules, pull decisions, port / worktree / compose parsing,
 // ownership and status decisions). No I/O besides path joins, so it can be tested without Electron.
-// Everything workspace-specific (repo names, stacks, commands, ports) comes from Hive's .env, never from this file.
+// Everything workspace-specific (repo names, stacks, commands, ports) comes from Orbit's .env, never from this file.
 import { isAbsolute, join, resolve } from 'node:path'
 import { appName } from './appName'
 
@@ -27,7 +27,7 @@ export function parseEnvFile(text: string): Record<string, string> {
   return out
 }
 
-// ---------- config (from Hive's .env) ----------
+// ---------- config (from Orbit's .env) ----------
 
 export type SvcDef = {
   key: string
@@ -206,7 +206,7 @@ export function sourceOptions(mainDir: string, worktrees: Worktree[], branches: 
 
 export type Owner = { kind: 'user' } | { kind: 'thread'; id: string; title: string }
 export const ownerLabel = (o: Owner | null) => (!o ? '' : o.kind === 'user' ? 'you' : o.title)
-// the user can control anything Hive started; a thread only its own
+// the user can control anything Orbit started; a thread only its own
 export const canControl = (owner: Owner | null, caller: Owner): boolean =>
   caller.kind === 'user' || !owner || (owner.kind === 'thread' && owner.id === caller.id)
 
@@ -284,7 +284,7 @@ export type DevService = {
   state: SvcState
   external: boolean
   note: string
-  owner: string // '' when not started by Hive
+  owner: string // '' when not started by Orbit
   fromDir: string | null
   fromLabel: string
   startedAt: number

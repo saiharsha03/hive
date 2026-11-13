@@ -1,4 +1,4 @@
-// Claude's AskUserQuestion (the terminal's multiple-choice questions): the questions it sends and the answers Hive
+// Claude's AskUserQuestion (the terminal's multiple-choice questions): the questions it sends and the answers Orbit
 // returns (question text -> answer; several picks comma-separated, as the CLI expects). Shared by main and the UI.
 export type AskOption = { label: string; description: string }
 export type AskQuestion = { question: string; header: string; options: AskOption[]; multiSelect: boolean }

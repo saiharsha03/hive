@@ -1,6 +1,6 @@
-// What the quarry_ thread tools do (chat.ts registers them on Hive's MCP server): call Quarry's agent interface and
+// What the quarry_ thread tools do (chat.ts registers them on Orbit's MCP server): call Quarry's agent interface and
 // turn the answer into the tool's text. Kept apart from chat.ts so the opt-in e2e can run these very handlers against
-// a real Quarry without a Claude turn (index.ts, quarry:e2eTool). Hive adds no filter: Quarry enforces its own rules.
+// a real Quarry without a Claude turn (index.ts, quarry:e2eTool). Orbit adds no filter: Quarry enforces its own rules.
 // A write asks the user first (confirm), then sets allowWrite, as Quarry asks of its host.
 import { randomUUID } from 'node:crypto'
 import { waitForAnswer } from './asks'

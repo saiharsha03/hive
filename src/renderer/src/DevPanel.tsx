@@ -1,4 +1,4 @@
-// Stacks: one section per stack from Hive's .env (HIVE_STACKS). Start brings up the whole stack (Docker Desktop is
+// Stacks: one section per stack from Orbit's .env (HIVE_STACKS). Start brings up the whole stack (Docker Desktop is
 // opened first when it is not running), each repo runs from the branch / worktree picked in its row, and Shut down
 // stops the stack's services except the ones another running stack still needs.
 import { useEffect, useRef, useState } from 'react'
@@ -11,8 +11,8 @@ const STATE_TONE: Record<string, Tone> = { running: 'done', starting: 'wait', fa
 const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase()
 const isLive = (s: DevService) => s.state === 'starting' || s.state === 'running'
 
-// what Shut down stops: the stack's live services (not ones run outside Hive), minus any service another stack
-// still uses because that stack has a live service of its own, even one run outside Hive (core_api stays up for a
+// what Shut down stops: the stack's live services (not ones run outside Orbit), minus any service another stack
+// still uses because that stack has a live service of its own, even one run outside Orbit (core_api stays up for a
 // running Admin stack)
 export function shutdownNames(st: StackDef, stacks: StackDef[], services: DevService[]): string[] {
   const live = new Set(services.filter(isLive).map((s) => s.name))

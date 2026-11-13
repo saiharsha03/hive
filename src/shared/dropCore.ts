@@ -1,4 +1,4 @@
-// Drop a file on the Hive window to start work on it: which files count, the choices, and the new thread's first message.
+// Drop a file on the Orbit window to start work on it: which files count, the choices, and the new thread's first message.
 // Pure, so it can be tested without Electron.
 export const DROP_TYPES = ['csv', 'xlsx', 'xls', 'pdf', 'json']
 
@@ -18,7 +18,7 @@ export function parseDropChoices(v: string | undefined): DropChoice[] {
 export const extOf = (path: string) => (path.match(/\.([A-Za-z0-9]+)$/)?.[1] ?? '').toLowerCase()
 export const fileName = (path: string) => path.split(/[\\/]/).at(-1) ?? path
 
-// the first dropped file Hive can start work on (absolute paths only), or null
+// the first dropped file Orbit can start work on (absolute paths only), or null
 export function pickDropFile(paths: string[]): string | null {
   return paths.find((p) => /^([A-Za-z]:[\\/]|[\\/])/.test(p) && DROP_TYPES.includes(extOf(p))) ?? null
 }

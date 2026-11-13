@@ -36,7 +36,7 @@ function target(tabId: string | null) {
   return { s, cwd: s?.cwd || place.get().workspace || place.get().folder || '' }
 }
 
-// a typed "/mcp", "/permissions", "/branch try X", ... : true when Hive answered it here (nothing goes to Claude)
+// a typed "/mcp", "/permissions", "/branch try X", ... : true when Orbit answered it here (nothing goes to Claude)
 export function runLocalCommand(tabId: string | null, text: string): boolean {
   const c = localCommand(text)
   if (!c) return false

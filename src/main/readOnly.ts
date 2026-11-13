@@ -7,7 +7,7 @@ import { blockedCommand, PYTHON_GUARD } from '../shared/readOnlyCore'
 import { dataDir } from './testMode'
 
 // Settings > General HIVE_WATCHER_POST_SHA256: SHA-256 fingerprints of host + path a watcher may POST to (an alert
-// channel's Slack webhook), so the webhook itself is never stored in Hive's settings
+// channel's Slack webhook), so the webhook itself is never stored in Orbit's settings
 let posts = ''
 export const setWatcherPosts = (env: Record<string, string>) => { posts = (env.HIVE_WATCHER_POST_SHA256 ?? '').trim() }
 

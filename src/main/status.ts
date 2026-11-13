@@ -153,7 +153,7 @@ export function closeStatus(): void {
 }
 
 // signed in to another account: the next question starts a fresh idle process on the new login, and the old login's
-// usage reading is dropped (the credentials-file check does the same when the login changes outside Hive)
+// usage reading is dropped (the credentials-file check does the same when the login changes outside Orbit)
 export function restartStatus(): void {
   closeStatus()
   usage = null

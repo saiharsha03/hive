@@ -1,5 +1,5 @@
 // Atomic-ish file save that never throws. Writes a temp file and renames it over the target; on Windows that rename
-// fails with EPERM/EBUSY while anything (antivirus, an indexer, a second Hive) has the target open, so retry briefly,
+// fails with EPERM/EBUSY while anything (antivirus, an indexer, a second Orbit) has the target open, so retry briefly,
 // then write in place. A throw here would be an uncaught exception in main and take the whole app down.
 import { mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'

@@ -1,4 +1,4 @@
-// Runs before every test file: Hive's state files point into a fresh temp folder, so no test reads or
+// Runs before every test file: Orbit's state files point into a fresh temp folder, so no test reads or
 // writes the real ~/.claude files or the checkout's .env. The OS temp folder is pointed there too, so every folder a
 // test makes with mkdtemp (repos, state folders, logs) lands inside it, and the whole lot is deleted when the file is
 // done: test runs used to leave thousands of hive-* folders behind.
@@ -21,7 +21,7 @@ process.env.HIVE_ENV_FILE = join(dir, 'dot.env')
 process.env.HIVE_SCRIPTS_FILE = join(dir, 'scripts.json')
 process.env.HIVE_TODOS_FILE = join(dir, 'hive-todos.json')
 process.env.HIVE_WATCHERS_DIR = join(dir, 'watchers')
-// everything else Hive keeps (dataDir() in src/main/testMode.ts) would otherwise default to the real ~/.claude
+// everything else Orbit keeps (dataDir() in src/main/testMode.ts) would otherwise default to the real ~/.claude
 process.env.HIVE_DATA_DIR ||= join(dir, 'data')
 
 afterAll(() => {

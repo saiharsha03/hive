@@ -58,7 +58,7 @@ test('validRepoName stays under the repos root', () => {
 })
 
 // ---------- cleanup ----------
-test('hasWork ignores only Hive\'s own copies (root .env files, node_modules link)', () => {
+test('hasWork ignores only Orbit\'s own copies (root .env files, node_modules link)', () => {
   assert.equal(w.hasWork(''), false)
   assert.equal(w.hasWork('?? .env\n?? .env.local\r\n?? node_modules\n?? node_modules/\n'), false)
   assert.equal(w.hasWork(' M src/a.ts\n'), true)

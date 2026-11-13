@@ -57,8 +57,8 @@ export function textLabel(text: string): { preview: string; big: boolean } {
   return { preview: one.length > PREVIEW_CHARS ? `${one.slice(0, PREVIEW_CHARS)}…` : one, big: false }
 }
 
-// What has been seen. lastOffered: the most recent offer. atBlur: what the clipboard held when Hive lost focus,
-// so anything copied inside Hive (by Hive itself or by a Ctrl+C in the window) is not offered back.
+// What has been seen. lastOffered: the most recent offer. atBlur: what the clipboard held when Orbit lost focus,
+// so anything copied inside Orbit (by Orbit itself or by a Ctrl+C in the window) is not offered back.
 export type Seen = { lastOffered: string | null; atBlur: string | null; dismissed: string[] }
 export const emptySeen = (): Seen => ({ lastOffered: null, atBlur: null, dismissed: [] })
 

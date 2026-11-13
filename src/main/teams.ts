@@ -70,7 +70,7 @@ export function setPaused(team: Team, at: number | undefined): void {
   save(team)
 }
 
-// remember the Claude session of a team thread, so the team can be resumed after Hive restarts
+// remember the Claude session of a team thread, so the team can be resumed after Orbit restarts
 // The person is found by tab id, or by its stored session (a teammate reopened under its session id, then rewound)
 export function noteSession(threadId: string, sessionId: string, previous?: string | null): void {
   for (const t of listTeams()) {

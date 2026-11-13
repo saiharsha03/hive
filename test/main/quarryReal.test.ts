@@ -12,7 +12,7 @@ const serve = exe && existsSync(exe) ? new QuarryServe(() => [exe, 'serve']) : n
 afterAll(() => { serve?.stop(); stopQuarry() })
 
 describe.skipIf(!serve)('a real quarry serve', () => {
-  test('capabilities: protocol 1 with the methods Hive uses', () => {
+  test('capabilities: protocol 1 with the methods Orbit uses', () => {
     const c = checkCapabilities(execFileSync(exe, ['--capabilities'], { encoding: 'utf8', windowsHide: true }))
     assert.equal(c.ok, true, c.ok ? '' : c.reason)
   })

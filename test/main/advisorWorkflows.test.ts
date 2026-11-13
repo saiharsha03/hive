@@ -56,13 +56,13 @@ test("a thread's own advisor: switched live, and kept for its next process", asy
   assert.deepEqual(events, [{ type: 'hive_advisor', model: 'sonnet' }, { type: 'hive_advisor', model: null }])
   const again = sessionOptions('adv-3', () => {}, { flags: { advisorModel: 'opus' } }) // the default does not come back
   assert.equal('advisorModel' in (again.settings as object), false)
-  // that next process started with none: Off there drops Hive's flag, so the user's own settings apply
+  // that next process started with none: Off there drops Orbit's flag, so the user's own settings apply
   await setAdvisor('adv-3', q, 'sonnet')
   await setAdvisor('adv-3', q, '')
   assert.deepEqual(applied.slice(2), [{ advisorModel: 'sonnet' }, { advisorModel: null }])
 })
 
-test('a Workflow call is never denied by Hive (auto mode can hand it over); a watcher keeps its rules', () => {
+test('a Workflow call is never denied by Orbit (auto mode can hand it over); a watcher keeps its rules', () => {
   assert.equal(permitWithoutPrompt('Workflow', false), true)
   assert.equal(permitWithoutPrompt('Workflow', true), false)
   assert.equal(permitWithoutPrompt('Bash', false), false)

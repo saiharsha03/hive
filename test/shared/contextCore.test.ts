@@ -46,7 +46,7 @@ test('thinkingPreview: first line with words, cut short', () => {
   assert.equal(thinkingPreview(''), '')
 })
 
-test('reduceStatus: fast on/off from Hive, state and refusal from the result', () => {
+test('reduceStatus: fast on/off from Orbit, state and refusal from the result', () => {
   let st = reduceStatus(emptyStatus(), { type: 'hive_fast', on: true }, 0)
   assert.equal(st.fast, true)
   st = reduceStatus(st, { type: 'result', fast_mode_state: 'off', fast_mode_disabled_reason: 'model_not_allowed' }, 0)

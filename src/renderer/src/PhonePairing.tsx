@@ -33,7 +33,7 @@ export function PhonePairing() {
       {qr && (
         <div className="phoneqr">
           <img src={qr} alt="Pairing code" width={240} height={240} data-testid="phone-qr" />
-          <div className="dnote">Scan with the Hive app on your phone. This code holds the key to the link: close it once the phone is paired, and pair again if anyone else saw it.</div>
+          <div className="dnote">Scan with the Orbit app on your phone. This code holds the key to the link: close it once the phone is paired, and pair again if anyone else saw it.</div>
           <button className="dlink" onClick={() => setQr(null)} data-testid="phone-qr-close">Close the code</button>
         </div>
       )}

@@ -1,9 +1,9 @@
-// Hive's own screens for Claude Code's configuration commands (/mcp, /agents, /permissions, /hooks, /memory, /resume,
+// Orbit's own screens for Claude Code's configuration commands (/mcp, /agents, /permissions, /hooks, /memory, /resume,
 // /branch, /add-dir): which typed command opens which, and the pure reading of the files behind them (subagent
 // frontmatter, the permission rules and hooks of a settings file, where CLAUDE.md files are looked for, an MCP
 // server's row). No I/O and no node modules, so it runs in main, the window and the tests alike.
 
-// ---- typed commands Hive answers itself ----
+// ---- typed commands Orbit answers itself ----
 export type LocalCommand = 'mcp' | 'agents' | 'permissions' | 'hooks' | 'memory' | 'resume' | 'branch' | 'add-dir'
 const NAMES: Record<string, LocalCommand> = {
   mcp: 'mcp', agents: 'agents', permissions: 'permissions', 'allowed-tools': 'permissions', hooks: 'hooks', memory: 'memory',
@@ -158,7 +158,7 @@ export function mcpFile(scope: string, cwd: string, home: string): string {
     case 'project': return joinPath(cwd, '.mcp.json')
     case 'plugin': return 'a plugin'
     case 'claudeai': return 'claude.ai connectors'
-    case 'sdk': case 'dynamic': return 'Hive (built in)'
+    case 'sdk': case 'dynamic': return 'Orbit (built in)'
     case 'managed': case 'enterprise': return 'managed-mcp.json (managed settings)'
     default: return ''
   }

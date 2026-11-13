@@ -4,11 +4,11 @@ import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { close, DATA, launch, shot, type Launched } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 test('thread pin, snooze, close and archive persist across a relaunch', async () => {
   let l: Launched = await launch()
-  let h = new Hive(l.page)
+  let h = new Orbit(l.page)
   await h.open('sessions')
   await expect(h.rows().nth(3)).toBeVisible({ timeout: 60_000 })
   const ids = await h.rows().evaluateAll((rs) => rs.slice(0, 4).map((r) => r.getAttribute('data-id')!))
@@ -31,7 +31,7 @@ test('thread pin, snooze, close and archive persist across a relaunch', async ()
 
   await close(l)
   l = await launch()
-  h = new Hive(l.page)
+  h = new Orbit(l.page)
   await h.open('sessions')
   await expect(h.section('pinned').locator(`[data-id="${pinned}"]`)).toBeVisible({ timeout: 60_000 })
   await h.unfold('snoozed')

@@ -4,7 +4,7 @@
 // It runs on the background model and effort (Settings > General; empty = the main default). It cannot reuse the
 // thread's prompt cache whatever it does: the cache needs the same system prompt and tool definitions byte for byte,
 // and a thread's are fixed when its process starts (the date and git status in Claude Code's prompt, the clock in
-// Hive's tool texts, Claude in Chrome's tools), so a fork started later never matches. A cheaper model is what helps.
+// Orbit's tool texts, Claude in Chrome's tools), so a fork started later never matches. A cheaper model is what helps.
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { rm } from 'node:fs/promises'
 import { claudeExecutable } from './engine'

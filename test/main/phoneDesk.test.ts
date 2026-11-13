@@ -1,4 +1,4 @@
-// Phone 2.0 on Hive's side: quiet hours, pausing and running wake-ups, the usage guard's memory, wake-ups on rows by id
+// Phone 2.0 on Orbit's side: quiet hours, pausing and running wake-ups, the usage guard's memory, wake-ups on rows by id
 import { afterAll, beforeEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import path from 'node:path'

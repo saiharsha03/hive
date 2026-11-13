@@ -1,4 +1,4 @@
-// Launches the built Hive (out/main/index.js) under Playwright with test mode on: no outside effects, every state
+// Launches the built Orbit (out/main/index.js) under Playwright with test mode on: no outside effects, every state
 // file in a temp folder, and a throwaway git repo as the workspace root. One temp folder per `npm run e2e`.
 //
 // What a run still uses of yours: the Claude login. The session specs send real turns, so they count against your
@@ -34,7 +34,7 @@ export function makeWorkspace(): void {
   if (!existsSync(join(DEMO, '.git'))) {
     git(DEMO, 'init', '-q', '-b', 'main')
     git(DEMO, 'config', 'user.email', 'e2e@example.invalid')
-    git(DEMO, 'config', 'user.name', 'Hive e2e')
+    git(DEMO, 'config', 'user.name', 'Orbit e2e')
     git(DEMO, 'config', 'commit.gpgsign', 'false')
     writeFileSync(join(DEMO, 'tracked.txt'), 'one\ntwo\nthree\n')
     writeFileSync(join(DEMO, 'second.txt'), 'alpha\n')
@@ -54,7 +54,7 @@ export function makeWorkspace(): void {
   writeFileSync(join(RUN, 'scripts.json'), JSON.stringify([
     { name: 'Weekly report', cwd: SCRIPT_CWD, options: [{ label: 'Full run', cmd: 'echo ran > marker.txt' }] },
   ], null, 2))
-  // Nothing of the real Hive is copied in: its session cache and search index hold real conversation text, and no
+  // Nothing of the real Orbit is copied in: its session cache and search index hold real conversation text, and no
   // spec needs them (the thread list is built from the transcripts either way, only a little slower the first time).
 }
 
@@ -62,7 +62,7 @@ export function makeWorkspace(): void {
 // account's default model): Haiku at low effort for every thread, the background ones started by a tool included; no
 // Claude in Chrome and no desktop toasts. env stays empty so the launch's .env is what counts, scripts null so the
 // run's scripts.json is.
-export const TEST_GENERAL = { shell: '', model: 'haiku', effort: 'low', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: false, desktopNotify: false }
+export const TEST_GENERAL = { shell: '', model: 'haiku', effort: 'low', ui: '', theme: '', appName: 'Orbit', appTagline: 'One desk, many agents', chrome: false, desktopNotify: false }
 // Test mode lists sessions only from HIVE_PROJECTS_DIR (never the real ~/.claude/projects), so the run seeds a few
 // small invented transcripts there for the thread list specs (pin, snooze, close, archive). Seeded once per run.
 export const PROJECTS = join(RUN, 'projects')
@@ -91,7 +91,7 @@ export function seedSettings(data: string): void {
 
 // The deploy spec is opt-in: it runs your real diffs.sh, which fetches in the real repos and copies its message to
 // the real clipboard. It needs HIVE_E2E_DEPLOY_ENV to name a .env with the repos root and the HIVE_DEPLOY_* keys;
-// Hive's own .env is never picked up by itself. Only those keys are copied. null = not asked for (the spec skips).
+// Orbit's own .env is never picked up by itself. Only those keys are copied. null = not asked for (the spec skips).
 export function deployEnvFile(): string | null {
   const src = process.env.HIVE_E2E_DEPLOY_ENV
   if (!src || !existsSync(src)) return null
@@ -128,7 +128,7 @@ export async function launch(opts: { envFile?: string; data?: string; env?: Reco
   const app = await electron.launch({ executablePath, args: [ROOT], cwd: ROOT, env, timeout: 60_000 })
   // an exit the test did not ask for (seen once, right after a Claude turn) is logged with its code, for the morning
   const proc = app.process()
-  proc.on('exit', (code, signal) => { if (!quitting.has(app)) console.warn(`Hive exited unexpectedly: code ${code} signal ${signal}`) })
+  proc.on('exit', (code, signal) => { if (!quitting.has(app)) console.warn(`Orbit exited unexpectedly: code ${code} signal ${signal}`) })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   // the app is up once its title bar renders
@@ -141,7 +141,7 @@ export async function shot(page: Page, name: string): Promise<void> {
 }
 
 // Quit the app; if Electron has not exited after 20 s (seen once: a quit right after launch hung for minutes), kill
-// the process tree. Hive's state files are written synchronously, so nothing is lost either way.
+// the process tree. Orbit's state files are written synchronously, so nothing is lost either way.
 export async function close(l: Launched | undefined): Promise<void> {
   if (!l) return
   quitting.add(l.app)
@@ -149,7 +149,7 @@ export async function close(l: Launched | undefined): Promise<void> {
   const done = l.app.close().then(() => true, () => true)
   const ok = await Promise.race([done, new Promise<boolean>((r) => setTimeout(() => r(false), 20_000))])
   if (!ok && proc.pid) {
-    console.warn('Hive did not quit within 20 s; killing it')
+    console.warn('Orbit did not quit within 20 s; killing it')
     try { execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'pipe' }) } catch { proc.kill() }
   }
 }
@@ -167,9 +167,9 @@ export const selectedTab = async (page: Page): Promise<string> =>
   (await page.locator('[data-testid="tab"][aria-selected="true"]').getAttribute('data-id'))!
 
 // A thread's Claude Code processes, by pid: every process under the app's own whose program is claude and that was
-// started as a thread (replay-user-messages is on every thread's command line and on no other Claude process Hive
+// started as a thread (replay-user-messages is on every thread's command line and on no other Claude process Orbit
 // starts, such as the one behind the model list). Asked of the operating system, so it shows whether a process
-// really ended, whatever Hive believes.
+// really ended, whatever Orbit believes.
 export function threadPids(l: Launched): number[] {
   const root = l.app.process().pid!
   const rows: { pid: number; ppid: number; cmd: string }[] = process.platform === 'win32'

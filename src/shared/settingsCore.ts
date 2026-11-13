@@ -1,5 +1,5 @@
 import { PRODUCT } from './edition'
-// Hive settings: pure logic for the one settings store (~/.hive/hive-settings.json). It keeps the same KEY=VALUE
+// Orbit settings: pure logic for the one settings store (~/.hive/hive-settings.json). It keeps the same KEY=VALUE
 // names as the .env (so every feature keeps parsing its own keys) plus the scripts list and a few thread defaults.
 // First run seeds it from the .env and scripts.json; afterwards it wins and those files are only fallbacks.
 // Keys that look like credentials never enter it: they stay in the .env and the panel only says whether they are set.
@@ -17,14 +17,14 @@ import { trackerOrigin } from './trackerCore'
 export { EFFORTS }
 export type Effort = (typeof EFFORTS)[number]
 // '' = the default; ui / theme '' = the built-in look (the Appearance pickers fill them); appName / appTagline = what the app calls itself
-// desktopNotify: a Windows toast + taskbar flash when a thread needs you and Hive is not focused; on by default
+// desktopNotify: a Windows toast + taskbar flash when a thread needs you and Orbit is not focused; on by default
 // chrome: threads start with Claude in Chrome (claude --chrome; needs the Claude extension in Chrome); on by default
 // bgModel / bgEffort: watcher runs, Dependabot reviews and /btw; teamModel / teamEffort: teammates and a team's own Lead
 // ('' = the same as model / effort, so nothing changes until they are set)
 // idleCloseMinutes: an idle thread's Claude process closes after this long (the next message resumes it); 0 = never
 // teamMemoryKb: how much of each role memory file (the newest entries) goes into a teammate's brief
 // advisorModel: the model of Claude Code's server-side advisor tool for new threads (an alias or a full id; '' = off)
-// quarryPath: the Quarry exe ('' = find the installed one, 'off' = no Quarry in Hive)
+// quarryPath: the Quarry exe ('' = find the installed one, 'off' = no Quarry in Orbit)
 // workflows: Claude Code's Workflows feature for new threads: 'on', 'off', or '' = Claude Code's own default (by plan)
 // agents: other command-line agents an agent thread can run (none until added)
 // branchPrefix: put before the branch name of every thread started with Worktree on ('' = none)
@@ -37,6 +37,8 @@ export const DEFAULT_IDLE_CLOSE_MINUTES = 30
 export const DEFAULT_TEAM_MEMORY_KB = 6
 export const DEFAULT_APP_NAME = PRODUCT
 export const DEFAULT_APP_TAGLINE = 'One desk, many agents'
+// the default names this app shipped under before Orbit: a settings file carried over from Hive still holds one
+const OLD_DEFAULT_NAMES = ['Hive', 'Hive Next']
 export type Settings = {
   version: 1
   env: Record<string, string> // non-secret .env keys; '' = cleared (does not fall back to the .env)
@@ -98,7 +100,7 @@ export function normalizeSettings(v: unknown): Settings | null {
     scripts: Array.isArray(o.scripts) ? o.scripts : null,
     general: {
       shell: str(g.shell), model: str(g.model), effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : '',
-      ui: str(g.ui), theme: str(g.theme), appName: str(g.appName) || DEFAULT_APP_NAME,
+      ui: str(g.ui), theme: str(g.theme), appName: (OLD_DEFAULT_NAMES.includes(str(g.appName)) ? '' : str(g.appName)) || DEFAULT_APP_NAME,
       appTagline: typeof g.appTagline === 'string' ? g.appTagline.trim() : DEFAULT_APP_TAGLINE, // '' = no tagline
       chrome: g.chrome !== false, // on unless turned off
       desktopNotify: g.desktopNotify !== false, // on unless turned off
@@ -215,7 +217,7 @@ export function validateSettings(d: { env: Record<string, string>; scripts: unkn
   if (d.general.appTagline.length > 80) err('general.appTagline', 'Tagline is longer than 80 characters')
   if (d.general.ui && !ID_RE.test(d.general.ui)) err('general.ui', `${d.general.ui} is not a UI id`)
   if (d.general.theme && !ID_RE.test(d.general.theme)) err('general.theme', `${d.general.theme} is not a theme id`)
-  for (const k of Object.keys(e)) if (isSecretKey(k)) err(k, `${k} looks like a credential: keep it in the vault or the .env, not in Hive settings`)
+  for (const k of Object.keys(e)) if (isSecretKey(k)) err(k, `${k} looks like a credential: keep it in the vault or the .env, not in Orbit settings`)
   if (d.general.shell && /[\\/]/.test(d.general.shell) && !exists(d.general.shell)) warn('general.shell', `Shell ${d.general.shell} does not exist`)
   const bp = (d.general.branchPrefix ?? '').trim()
   if (bp && !validBranchName(`${bp}x`)) err('general.branchPrefix', `${bp} cannot start a git branch name`)

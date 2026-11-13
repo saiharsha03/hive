@@ -93,7 +93,7 @@ test('limitedAnswer: an answer under the notification key is taken only for the 
   assert.deepEqual(limitedAnswer({ working: false, asks: [] }, 'a1', 'No'), { refused: 'That question is no longer open' })
 })
 
-test('noteKind: from the titles Hive writes', () => {
+test('noteKind: from the titles Orbit writes', () => {
   assert.deepEqual(['Question: Ship', 'Waiting: Ship', 'Failed: Bump node', 'Finished: Sweep', 'Usage limit: Drafts', 'Deploy is green'].map(noteKind), ['ask', 'ask', 'fail', 'done', 'limit', 'note'])
 })
 

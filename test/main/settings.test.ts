@@ -125,7 +125,7 @@ test('store file: first run seeds and saves; afterwards the store wins; a broken
   // test mode: Haiku at low effort and no Chrome, whatever the settings say
   for (const k of ['main', 'team', 'background'] as const) assert.deepEqual(threadDefaults(k, true), { model: 'haiku', effort: 'low' })
   saveSettings(again)
-  // no .env at all: the store alone still configures Hive
+  // no .env at all: the store alone still configures Orbit
   const envFile = process.env.HIVE_ENV_FILE
   process.env.HIVE_ENV_FILE = join(FIX, 'missing.env')
   const none = loadConfig(FIX, (env) => effectiveEnv(env, again))
@@ -166,6 +166,7 @@ test('seeding from env: credentials stay out, defaults for the app name and tagl
   assert.equal(n.general.appName, PRODUCT) // empty name falls back
   assert.equal(n.general.appTagline, '') // an emptied tagline stays empty
   assert.equal(normalizeSettings({ general: { appName: 'Desk', ui: 'compact', theme: 'dark' } })!.general.appName, 'Desk')
+  for (const old of ['Hive', 'Hive Next']) assert.equal(normalizeSettings({ general: { appName: old } })!.general.appName, PRODUCT) // a carried-over default
 })
 
 test('validators: ids, kind, region, appearance, app name, tagline, credentials', () => {

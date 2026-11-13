@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { commandGroup, filterCommands, insertCommand, slashQuery, type Command } from '../../shared/composerCore'
 
-// /btw is Hive's own (the engine's is terminal-only): a side question that stays out of the conversation
+// /btw is Orbit's own (the engine's is terminal-only): a side question that stays out of the conversation
 const BTW: Command = { name: 'btw', description: 'Ask a quick side question about this thread; the answer stays out of the conversation', argumentHint: '<question>', builtin: true }
 
 export function useSlashMenu(tabId: string, draft: string, setDraft: (s: string) => void) {

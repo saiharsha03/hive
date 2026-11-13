@@ -1,5 +1,5 @@
 // The theme and the one layout's toggles, and how older saved preferences fold into them. Pure, so it is tested.
-// Older Hive saved one of four layouts ("ui": default, workbench, strip, focus) and a theme per layout ("themeByUI":
+// Older Orbit saved one of four layouts ("ui": default, workbench, strip, focus) and a theme per layout ("themeByUI":
 // default, mono, colour, light, hc): the Focus layout becomes Focus mode, the rest the one layout; Monochrome and
 // Colourful become Dark.
 

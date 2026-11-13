@@ -1,4 +1,4 @@
-// Dev stack, main process: plain code, no Claude. Starts the services a stack lists in Hive's .env (docker compose
+// Dev stack, main process: plain code, no Claude. Starts the services a stack lists in Orbit's .env (docker compose
 // services and local dev processes), tracks their status / port / logs / owner, and lets each process run from the main
 // checkout, an existing git worktree, or a new worktree for a local branch.
 // The same engine backs the panel (IPC) and the agent tool in chat.ts, which gets guard rails through the `caller`.
@@ -542,7 +542,7 @@ export async function ensureWorktree(repo: string, want: { branch?: string; tick
 
 // ---------- Worktree on a new thread ----------
 
-// the repo Hive lists (Pull latest's repos) that holds this folder, and the branch its main checkout is on; null = none
+// the repo Orbit lists (Pull latest's repos) that holds this folder, and the branch its main checkout is on; null = none
 export async function threadRepoOf(folder: string): Promise<{ repo: string; dir: string; branch: string | null } | null> {
   if (!loaded.config || !folder) return null
   const f = realDir(folder)
@@ -566,7 +566,7 @@ export async function startThreadWorktree(folder: string, text: string, prefix: 
   return { repo: r.repo, path, branch, cwd: join(path, relative(realDir(r.dir), realDir(folder))) }
 }
 
-// Hive services still running from a folder
+// Orbit services still running from a folder
 const runningFrom = (dir: string) => [...procs.entries()].filter(([, p]) => !p.exited && sameDir(p.dir, dir)).map(([n]) => n)
 
 // a closed / archived thread's worktree: refuse while a service runs from it, auto-save uncommitted work as a WIP commit

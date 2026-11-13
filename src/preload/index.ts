@@ -104,7 +104,7 @@ contextBridge.exposeInMainWorld('api', {
   stopAll: (pause?: boolean): Promise<{ threads: number; tasks: number }> => ipcRenderer.invoke('hive:stopAll', !!pause),
   // undo Stop everything: the held queues go again and paused wake-ups resume
   resumeAll: (): Promise<{ queues: number; wakeups: boolean }> => ipcRenderer.invoke('hive:resumeAll'),
-  // the quiet hours Hive shares with the phone app
+  // the quiet hours Orbit shares with the phone app
   quietGet: (): Promise<{ on: boolean; from: string; to: string }> => ipcRenderer.invoke('quiet:get'),
   quietSet: (q: { on: boolean; from: string; to: string }): Promise<{ on: boolean; from: string; to: string }> => ipcRenderer.invoke('quiet:set', q),
   onWakeupsChanged: (cb: () => void) => {
@@ -204,7 +204,7 @@ contextBridge.exposeInMainWorld('api', {
   gitPrAutoMerge: (dir: string, headSha: string, on: boolean) => ipcRenderer.invoke('git:prAutoMerge', dir, headSha, on),
   deployConfig: () => ipcRenderer.invoke('deploy:config'),
   deployDiffs: (suite: string, fetch?: boolean) => ipcRenderer.invoke('deploy:diffs', suite, fetch),
-  // a background thread Hive started by itself (Dependabot reviewer)
+  // a background thread Orbit started by itself (Dependabot reviewer)
   onThread: (cb: (t: { tabId: string; title: string; cwd: string; prompt: string; foreground?: boolean }) => void) => {
     const fn = (_e: unknown, t: { tabId: string; title: string; cwd: string; prompt: string }) => cb(t)
     ipcRenderer.on('hive:thread', fn)

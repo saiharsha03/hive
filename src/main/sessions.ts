@@ -160,7 +160,7 @@ async function scan(full: boolean): Promise<SessionInfo[]> {
     if ('empty' in k) continue
     // hidden: helper runs in temp/scratchpad folders, and sessions other programs start through the
     // Python Agent SDK (the security plugin's background reviews, bots); the terminal is "cli",
-    // Hive's own sessions are "sdk-cli"
+    // Orbit's own sessions are "sdk-cli"
     if (/\\AppData\\Local\\Temp\\/i.test(k.cwd) || k.entrypoint === 'sdk-py') continue
     const { size: _s, mtime: _m, v: _v, ...info } = k
     out.push(info)

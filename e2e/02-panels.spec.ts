@@ -4,12 +4,12 @@ import { expect, test } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { close, DEMO, gitOut, launch, SCRIPT_CWD, shot, TAG, type Launched } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 test.describe('panels', () => {
   let l: Launched
-  let h: Hive
-  test.beforeAll(async () => { l = await launch(); h = new Hive(l.page) })
+  let h: Orbit
+  test.beforeAll(async () => { l = await launch(); h = new Orbit(l.page) })
   test.afterAll(async () => { await close(l) })
 
   test('to-dos: "talk to Claude about this" opens a thread with the to-do filled in', async () => {
@@ -190,7 +190,7 @@ test.describe('panels', () => {
   test('settings: a saved app name applies live (window title and top bar)', async () => {
     await h.open('settings')
     await expect(h.id('settings')).toBeVisible()
-    const name = `Hive ${TAG}`
+    const name = `Orbit ${TAG}`
     await h.id('settings-nav-general').click()
     await h.id('settings-app-name').fill(name)
     await h.id('settings-save').click()
@@ -199,9 +199,9 @@ test.describe('panels', () => {
     await expect(h.brand()).toContainText(name)
     await shot(l.page, 'settings-app-name')
     // put it back, so later screenshots read normally
-    await h.id('settings-app-name').fill('Hive')
+    await h.id('settings-app-name').fill('Orbit')
     await h.id('settings-save').click()
-    await expect.poll(() => l.page.title()).toBe('Hive')
+    await expect.poll(() => l.page.title()).toBe('Orbit')
     // Settings is a page in a tab: closing the tab closes it
     await h.id('tab-close-tool:settings').click()
     await expect(h.id('settings')).toHaveCount(0)

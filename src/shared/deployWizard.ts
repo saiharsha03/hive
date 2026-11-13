@@ -4,7 +4,7 @@
 import { commitsFor, type Commit, type RepoDiff, type Suite, type Target } from './deployCore'
 
 export type Group = 'api' | 'web'
-// a suite's repos by group, from the Hive .env (API repos before web repos)
+// a suite's repos by group, from the Orbit .env (API repos before web repos)
 export type Groups = Record<Group, string[]>
 
 export type StepStatus = 'pending' | 'skipped' | 'pushed' | 'landed' | 'confirmed'

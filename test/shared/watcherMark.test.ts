@@ -21,7 +21,7 @@ describe('the watcher mark', () => {
   })
 
   it('is recognised whatever the app is called, brackets included', () => {
-    for (const app of ['Hive', 'MyHive', 'Hive [work]', 'a]b', 'x'.repeat(40)]) {
+    for (const app of ['Orbit', 'MyHive', 'Orbit [work]', 'a]b', 'x'.repeat(40)]) {
       setAppName(app)
       expect(isWatcherTranscript(transcript(header('Watch'))), app).toBe(true)
       expect(isWatcherTranscript(transcript(wake('Watch'))), app).toBe(true)
@@ -33,20 +33,20 @@ describe('the watcher mark', () => {
   })
 
   it('keeps the header on one line and its brackets balanced', () => {
-    setAppName('Hive [work]')
-    expect(header('PRs [open]\nand more').split('\n')[0]).toBe(`${WATCHER_MARK} [Hive (work) watcher run: PRs (open) and more]`)
+    setAppName('Orbit [work]')
+    expect(header('PRs [open]\nand more').split('\n')[0]).toBe(`${WATCHER_MARK} [Orbit (work) watcher run: PRs (open) and more]`)
     expect(headerName('  a [b]\r\n c ')).toBe('a (b) c')
   })
 
   it('still knows a transcript written before the mark', () => {
-    expect(isWatcherStart('[Hive watcher run: Watch]\nRun kind: sweep')).toBe(true)
+    expect(isWatcherStart('[Orbit watcher run: Watch]\nRun kind: sweep')).toBe(true)
     expect(isWatcherStart('[MyHive wake-up: Selfie] Now: Monday')).toBe(true)
-    expect(isWatcherTranscript(transcript('[Hive watcher run: Watch]\nRun kind: sweep'))).toBe(true)
+    expect(isWatcherTranscript(transcript('[Orbit watcher run: Watch]\nRun kind: sweep'))).toBe(true)
   })
 
   it('counts only at the very start of the first message', () => {
     expect(isWatcherStart(`please explain ${WATCHER_MARK}`)).toBe(false)
-    expect(isWatcherStart('fix the [Hive watcher run: x] header')).toBe(false)
+    expect(isWatcherStart('fix the [Orbit watcher run: x] header')).toBe(false)
     expect(isWatcherTranscript(transcript('hi') + '\n' + JSON.stringify({ type: 'user', message: { content: header('Watch') } }))).toBe(false)
   })
 })

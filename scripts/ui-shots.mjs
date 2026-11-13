@@ -97,7 +97,7 @@ writeFileSync(join(RUN, 'scripts.json'), JSON.stringify([
   { name: 'Weekly report', cwd: RUN, options: [{ label: 'Full run', cmd: 'echo ran' }] },
   { name: 'Refresh fixtures', cwd: RUN, options: [{ label: 'All', cmd: 'echo ran' }] },
 ], null, 2))
-writeFileSync(join(DATA, 'hive-settings.json'), JSON.stringify({ version: 1, env: {}, scripts: null, general: { shell: '', model: 'haiku', effort: 'low', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: false, desktopNotify: false } }, null, 2))
+writeFileSync(join(DATA, 'hive-settings.json'), JSON.stringify({ version: 1, env: {}, scripts: null, general: { shell: '', model: 'haiku', effort: 'low', ui: '', theme: '', appName: 'Orbit', appTagline: 'One desk, many agents', chrome: false, desktopNotify: false } }, null, 2))
 
 // ---- times ----
 const NOW = Date.now()
@@ -208,7 +208,7 @@ const fixtures = {
     env: { HIVE_REPOS_ROOT: REPOS, HIVE_DEPLOY_SUITES: 'ledger-web,ledger-api,fieldbook', HIVE_DEPENDABOT_REPOS: 'example-org/ledger-web', HIVE_DEPENDABOT_MAX_REVIEWS: '3', HIVE_WATCH_REPORTS: join(RUN, 'reports') },
     sections: { HIVE_REPOS_ROOT: 'dev', HIVE_DEPLOY_SUITES: 'deploy', HIVE_DEPENDABOT_REPOS: 'dependabot', HIVE_DEPENDABOT_MAX_REVIEWS: 'dependabot', HIVE_WATCH_REPORTS: 'watch' },
     scripts: null, secrets: [], problems: [], weekly: { pct: 41, error: '' },
-    general: { shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Hive', appTagline: 'One desk, many agents', chrome: true, desktopNotify: true, bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: 30, teamMemoryKb: 6 },
+    general: { shell: '', model: '', effort: '', ui: '', theme: '', appName: 'Orbit', appTagline: 'One desk, many agents', chrome: true, desktopNotify: true, bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: 30, teamMemoryKb: 6 },
   },
   'settings:validate': [],
 }

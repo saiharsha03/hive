@@ -8,7 +8,7 @@ import type { Todo } from './teamTodoCore'
 
 export const MAX_TEAMMATES = 10
 
-export type Ref = { id: string; title: string; cwd?: string; sessionId?: string } // sessionId: to resume the thread after Hive restarts
+export type Ref = { id: string; title: string; cwd?: string; sessionId?: string } // sessionId: to resume the thread after Orbit restarts
 export type Member = { id: string; name: string; role: string; cwd: string; joinedAt: number; sessionId?: string }
 export type Team = { id: string; name: string; goal: string; dir: string; owner?: Ref; lead: Ref; members: Member[]; createdAt: number; endedAt?: number; pausedAt?: number }
 export type LogEntry = { at: number; from: string; fromName: string; to: string[]; text: string } // to [] = posted to the board only

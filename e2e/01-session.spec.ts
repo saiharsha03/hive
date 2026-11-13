@@ -2,12 +2,12 @@
 // replies. Every session runs in the throwaway workspace; global-teardown.ts deletes their transcripts afterwards.
 import { expect, test } from '@playwright/test'
 import { close, launch, shot, TAG, TEST_GENERAL, type Launched } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 test.describe.serial('session', () => {
   let l: Launched
-  let h: Hive
-  test.beforeAll(async () => { l = await launch(); h = new Hive(l.page) })
+  let h: Orbit
+  test.beforeAll(async () => { l = await launch(); h = new Orbit(l.page) })
   test.afterAll(async () => { await close(l) })
 
   test('the app launches', async () => {

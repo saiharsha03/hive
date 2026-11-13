@@ -1,4 +1,4 @@
-// Quarry inside Hive, against a fake `quarry serve` (test/support/fakeQuarry.mjs, invented data only)
+// Quarry inside Orbit, against a fake `quarry serve` (test/support/fakeQuarry.mjs, invented data only)
 import { afterAll, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -11,7 +11,7 @@ const viaNode = (): [string, ...string[]] => [process.execPath, FAKE, 'serve']
 const serves: QuarryServe[] = []
 afterAll(() => { for (const s of serves) s.stop(100); stopQuarry() })
 
-test('capabilities: protocol 1 with every method Hive calls, else why not', () => {
+test('capabilities: protocol 1 with every method Orbit calls, else why not', () => {
   const caps = execFileSync(process.execPath, [FAKE, '--capabilities'], { encoding: 'utf8' })
   const c = checkCapabilities(caps)
   assert.equal(c.ok, true)
@@ -61,7 +61,7 @@ test('calls run concurrently and come back by id; errors carry Quarry\'s ApiErro
   assert.deepEqual(hello, { name: 'Quarry', version: '9.9.0', protocol: 1 })
   await assert.rejects(s.call('no.such'), (e: QuarryError) => e.rpcCode === -32601)
   await assert.rejects(s.call('ui.asset', { path: 'nope.js' }), (e: QuarryError) => e.data?.code === 'not_found')
-  assert.ok(s.stderrBytes > 0) // Quarry's log went to the counter, not to Hive's console
+  assert.ok(s.stderrBytes > 0) // Quarry's log went to the counter, not to Orbit's console
 })
 
 test('a serve that dies is started again (with a pause); a stopped one is not', async () => {

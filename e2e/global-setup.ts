@@ -13,5 +13,5 @@ export default async function globalSetup(): Promise<void> {
   const { makeWorkspace, seedSettings, DATA, RUN, SHOTS } = await import('./harness')
   makeWorkspace()
   seedSettings(DATA)
-  console.log(`Hive e2e run folder: ${RUN}\nScreenshots: ${SHOTS}\nThe session specs send real Claude turns on your login (Haiku, low effort).`)
+  console.log(`Orbit e2e run folder: ${RUN}\nScreenshots: ${SHOTS}\nThe session specs send real Claude turns on your login (Haiku, low effort).`)
 }

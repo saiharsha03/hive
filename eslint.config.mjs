@@ -35,7 +35,7 @@ export default tseslint.config(
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       // the React Compiler rules in react-hooks v7 (purity, refs, set-state-in-effect, memoization) only matter
-      // when the compiler is on; Hive does not use it
+      // when the compiler is on; Orbit does not use it
     },
   },
   {

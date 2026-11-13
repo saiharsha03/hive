@@ -18,7 +18,7 @@ const api = (id, code, message) => fail(id, -32000, message, { code, message, sq
 const b64 = (s) => Buffer.from(s).toString('base64')
 const CONN = { id: 'c1', name: 'Orchard demo', host: 'db.orchard.example', port: 5432, database: 'orchard', user: 'orchard_app', production: false, readOnly: false, hasPassword: true }
 const PROD = { ...CONN, id: 'c2', name: 'Orchard live', production: true }
-process.stderr.write('fake quarry: started (this line must never show in Hive logs)\n')
+process.stderr.write('fake quarry: started (this line must never show in Orbit logs)\n')
 
 createInterface({ input: process.stdin }).on('line', (line) => {
   let m

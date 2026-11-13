@@ -3,7 +3,7 @@
 // session path + size + mtime, with the byte offset indexed so far: a transcript that grew is indexed from there on,
 // not again from the start. A transcript whose thread is working is left until its turn ends. The work runs on the main
 // process but yields between sessions and between chunks of a long one; the index is saved at most every SAVE_EVERY
-// and when Hive quits (saveSearchNow).
+// and when Orbit quits (saveSearchNow).
 import { app, BrowserWindow } from 'electron'
 import MiniSearch from 'minisearch'
 import { createReadStream, mkdirSync, renameSync, writeFileSync } from 'node:fs'
@@ -134,7 +134,7 @@ function save(): Promise<void> {
   })())
 }
 
-// Hive is quitting: the index as it is now, written at once (a few MB to a few tens of MB)
+// Orbit is quitting: the index as it is now, written at once (a few MB to a few tens of MB)
 export function saveSearchNow(): void {
   if (!dirty || !entries.size) return
   try {
@@ -210,7 +210,7 @@ async function reconcile(): Promise<void> {
   else if (dirty) scheduleSave()
 }
 
-// a pass that changed little leaves the save for later (at most every SAVE_EVERY; Hive quitting saves at once)
+// a pass that changed little leaves the save for later (at most every SAVE_EVERY; Orbit quitting saves at once)
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleSave(): void {
   if (saveTimer) return

@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { close, DATA, launch, shot, TAG, type Launched } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 // the weekly usage the app sees under test mode (it reads none from Claude): 55% falls in the default tiers' second row
 process.env.HIVE_TEST_WEEKLY_PCT = '55'
@@ -30,11 +30,11 @@ const runsOf = (id: string): unknown[] => {
 
 test.describe.serial('watchers', () => {
   let l: Launched
-  let h: Hive
+  let h: Orbit
   const name = `${TAG} watcher`
   let id = ''
   let schedId = ''
-  test.beforeAll(async () => { l = await launch(); h = new Hive(l.page) })
+  test.beforeAll(async () => { l = await launch(); h = new Orbit(l.page) })
   test.afterAll(async () => { await close(l) })
 
   test('the Watchers view lists watchers and says test mode', async () => {

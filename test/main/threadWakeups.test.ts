@@ -30,10 +30,10 @@ test('a one-off wake-up fires once when due, with its prompt, and is kept on dis
   expect(w.listWakeups()).toEqual([])
 })
 
-test('one missed while Hive was closed fires once on return and says how late', async () => {
+test('one missed while Orbit was closed fires once on return and says how late', async () => {
   w.addWakeup({ sessionId: 's1', title: 'T', at: new Date(T0), prompt: 'p' })
   expect(await w.tick(T0 + 90 * min)).toBe(1)
-  expect(sent[0].text).toMatch(/90 min late: Hive was closed or the laptop was asleep/)
+  expect(sent[0].text).toMatch(/90 min late: Orbit was closed or the laptop was asleep/)
 })
 
 test('a repeating one catches up once and moves to its next slot after now', async () => {

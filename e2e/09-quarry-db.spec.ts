@@ -1,7 +1,7 @@
 // Opt-in: Quarry against a real, throwaway database. Needs HIVE_QUARRY_EXE and a running Docker that already has the
 // postgres:17 image (never pulled: --pull never). The spec starts its own container on a loopback port, with an
 // invented "orchard" schema, and removes it at the end. Quarry runs isolated in the run's folder (as in 08). Two
-// connections are made through Quarry's own interface (its bridge in the page); then Hive's own quarry_ tool handlers
+// connections are made through Quarry's own interface (its bridge in the page); then Orbit's own quarry_ tool handlers
 // run against them (quarry:e2eTool, no Claude turn): list, schema, rows, a write that asks first and runs only on
 // "Run it", a read-only connection that refuses the write anyway, and a CSV export from the embedded page.
 import { expect, test } from '@playwright/test'
@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { close, DATA, launch, type Launched } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 const exe = process.env.HIVE_QUARRY_EXE ?? ''
 const docker = (...args: string[]) => execFileSync('docker', args, { encoding: 'utf8', windowsHide: true, timeout: 120_000 }).trim()
@@ -45,7 +45,7 @@ const inView = <T>(l: Launched, js: string) => l.app.evaluate(async ({ webConten
 test('Quarry with a real database: the thread tools, the write card, read-only, and CSV export', async () => {
   const l = await launch({ env: { HIVE_E2E_QUARRY: '1', HIVE_QUARRY_EXE: exe } })
   try {
-    const h = new Hive(l.page)
+    const h = new Orbit(l.page)
     // a thread tab for the write question's card (nothing is sent to Claude)
     await h.newSession()
     const tab = await h.id('tab').last().getAttribute('data-id')
@@ -57,7 +57,7 @@ test('Quarry with a real database: the thread tools, the write card, read-only, 
     await inView(l, `window.quarryHost.invoke('save_connection', ${conn('Orchard demo', false)}).then(() => 1)`)
     await inView(l, `window.quarryHost.invoke('save_connection', ${conn('Orchard read only', true)}).then(() => 1)`)
 
-    // Hive's own tool handlers, through main (quarry:e2eTool)
+    // Orbit's own tool handlers, through main (quarry:e2eTool)
     const tool = (name: string, args: object = {}) => l.page.evaluate(([t, n, a]) => window.api.quarryE2eTool(t as string, n as string, a as object), [tab, name, args] as const)
     const list = await tool('quarry_connections')
     expect(list.ok).toBe(true)

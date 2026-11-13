@@ -1,4 +1,4 @@
-// Hive's quiet hours (one setting with the phone app's: it reads and writes them here). During them the desktop
+// Orbit's quiet hours (one setting with the phone app's: it reads and writes them here). During them the desktop
 // notification for a thread comes without sound; a failure still rings, as on the phone. Kept in hive-quiet.json.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

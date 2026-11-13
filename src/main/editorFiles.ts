@@ -1,5 +1,5 @@
 // The editor's files: read and save text with the time it was last changed on disk (so the editor can tell when
-// something else changed it), and the "Open in VS Code" hand-off for what Hive's editor does not do (debugging).
+// something else changed it), and the "Open in VS Code" hand-off for what Orbit's editor does not do (debugging).
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { isLocalPath } from './preview'
 

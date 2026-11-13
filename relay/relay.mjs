@@ -1,11 +1,11 @@
-// Hive relay: the meeting point between Hive on your computer and the Hive app on your phone, so neither has to be
+// Orbit relay: the meeting point between Orbit on your computer and the Orbit app on your phone, so neither has to be
 // reachable from the internet. Both sides dial out to it. It only checks tokens (it stores their SHA-256, never the
 // tokens), forwards sealed blobs it cannot read (AES-256-GCM with a key only the computer and phone have), tells the
 // phone whether the computer is online, and pushes through Firebase when the app is closed.
 //
 // Run it on a server behind a reverse proxy (Caddy, nginx), or on your own computer behind cloudflared. See README.md.
 //
-//   HIVE_RELAY_ADMIN_TOKEN   required: what Hive sends to register a paired phone (any long random string)
+//   HIVE_RELAY_ADMIN_TOKEN   required: what Orbit sends to register a paired phone (any long random string)
 //   HIVE_RELAY_PORT          default 8787
 //   HIVE_RELAY_HOST          default 127.0.0.1 (put a TLS proxy or tunnel in front; never expose plain HTTP)
 //   HIVE_RELAY_STATE         default ./relay-state.json (pairs: token hashes and the phone's push token)
@@ -20,8 +20,8 @@ const PORT = Number(process.env.HIVE_RELAY_PORT ?? 8787)
 const HOST = process.env.HIVE_RELAY_HOST ?? '127.0.0.1'
 const STATE = process.env.HIVE_RELAY_STATE ?? './relay-state.json'
 const FCM_ACCOUNT = process.env.HIVE_RELAY_FCM_ACCOUNT ?? ''
-const MAX_MESSAGE = 2 * 1024 * 1024 // a thread's recent messages, sealed (Hive keeps them well under this)
-const PUSH_INLINE = 3600 // FCM data is at most 4 KB: a sealed blob this small rides in the push (Hive keeps notifications under it)
+const MAX_MESSAGE = 2 * 1024 * 1024 // a thread's recent messages, sealed (Orbit keeps them well under this)
+const PUSH_INLINE = 3600 // FCM data is at most 4 KB: a sealed blob this small rides in the push (Orbit keeps notifications under it)
 if (ADMIN.length < 24) { console.error('HIVE_RELAY_ADMIN_TOKEN must be set (24+ characters)'); process.exit(1) }
 
 // ---- state: pair id -> { desk, phone: sha256 hex of their tokens, fcm: the phone's push token } ----
@@ -65,7 +65,7 @@ async function push(pair, blob) {
   } catch (e) { console.error('push failed:', e.message) }
 }
 
-// ---- HTTP: health, pairing (Hive, with the admin token), the phone's push token, one blob from the phone ----
+// ---- HTTP: health, pairing (Orbit, with the admin token), the phone's push token, one blob from the phone ----
 const body = (req) => new Promise((res, rej) => {
   let s = ''
   req.on('data', (c) => { s += c; if (s.length > 64 * 1024) { rej(new Error('too big')); req.destroy() } })
@@ -164,4 +164,4 @@ setInterval(() => {
   for (const room of sockets.values()) for (const ws of room.values()) { if (!ws.isAlive) ws.terminate(); else { ws.isAlive = false; ws.ping() } }
 }, 30_000).unref()
 
-server.listen(PORT, HOST, () => console.log(`Hive relay on http://${HOST}:${PORT} (pushes ${fcm ? 'on' : 'off'})`))
+server.listen(PORT, HOST, () => console.log(`Orbit relay on http://${HOST}:${PORT} (pushes ${fcm ? 'on' : 'off'})`))

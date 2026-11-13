@@ -1,5 +1,5 @@
-// A thread's background work: workflows (phases and agents), subagents, shells, and Hive's own Codex runs,
-// from the SDK's task_* messages and Hive's hive_codex events. Pure, so it can be tested without Electron.
+// A thread's background work: workflows (phases and agents), subagents, shells, and Orbit's own Codex runs,
+// from the SDK's task_* messages and Orbit's hive_codex events. Pure, so it can be tested without Electron.
 
 export type TaskAgent = {
   key: string

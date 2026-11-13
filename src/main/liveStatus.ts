@@ -15,8 +15,8 @@ import { EFFORTS } from '../shared/settingsCore'
 
 type Send = (event: unknown) => void
 
-// Plugins Hive already covers itself (its own Codex runner, deploy, to-dos and status) or that only draw in the
-// terminal (mods). They stay on in the terminal; Hive's SDK sessions turn them off in the flag-settings layer,
+// Plugins Orbit already covers itself (its own Codex runner, deploy, to-dos and status) or that only draw in the
+// terminal (mods). They stay on in the terminal; Orbit's SDK sessions turn them off in the flag-settings layer,
 // which outranks user, project and local settings without writing any settings file.
 export const HIVE_OFF_PLUGINS = [
   'codex-panel', 'ship-panel',
@@ -29,7 +29,7 @@ export const HIVE_OFF_PLUGINS = [
 export const UNATTENDED_OFF_PLUGINS = ['learning-output-style', 'explanatory-output-style']
 
 const readJson = (file: string): any => { try { return JSON.parse(readFileSync(file, 'utf8')) } catch { return null } }
-// the user's own auto-memory folder setting, which Hive never overrides
+// the user's own auto-memory folder setting, which Orbit never overrides
 export const userMemoryDir = (): string | null => {
   const v = readJson(join(homedir(), '.claude', 'settings.json'))?.autoMemoryDirectory
   return typeof v === 'string' && v.trim() ? v : null
@@ -55,11 +55,11 @@ type Tab = {
   reading: Promise<void>
   watcher?: FSWatcher
   timer?: ReturnType<typeof setTimeout>
-  model?: string // picked in Hive; also passed when the process restarts
-  effort?: string // picked in Hive (null-ish = the user's default)
+  model?: string // picked in Orbit; also passed when the process restarts
+  effort?: string // picked in Orbit (null-ish = the user's default)
   reported?: string // the level the Stop hook last reported outside an ultrathink turn
-  advisor?: string // picked in Hive for this thread ('' = none); also passed when the process restarts
-  fast?: boolean // fast mode turned on in Hive for this thread; also passed when the process restarts
+  advisor?: string // picked in Orbit for this thread ('' = none); also passed when the process restarts
+  fast?: boolean // fast mode turned on in Orbit for this thread; also passed when the process restarts
   advisorNow?: string | null // what the running process has (the pick, else Settings > General), for /status
   advisorAtStart?: string // the advisor the running process was started with ('' = none): Off has to override that one
   boost?: { prev: string | undefined; left: number } // ultrathink: what to go back to, after how many turn ends
@@ -71,7 +71,7 @@ const tab = (id: string): Tab => {
   return t
 }
 
-// what every Hive session adds to its query options. unattended: a background, team or watcher thread (the output
+// what every Orbit session adds to its query options. unattended: a background, team or watcher thread (the output
 // styles above go off too); memoryDir: the auto-memory folder it shares (chat.ts), both in the flag-settings layer
 // flags: Settings > General's Claude Code settings (settings.sessionFlags: advisor model, Workflows); a thread's own
 // advisor pick wins over the default one
@@ -166,7 +166,7 @@ function setWatching(tabId: string, on: boolean) {
 
 const textOf = (m: any): string => (m.message?.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
 
-// every message of a Hive session passes through here (after chat.ts handled it)
+// every message of a Orbit session passes through here (after chat.ts handled it)
 export function observe(tabId: string, m: SDKMessage, pathOf: (sessionId: string) => string, q: Query): void {
   const t = tab(tabId)
   const msg = m as any
@@ -216,7 +216,7 @@ function endTurn(tabId: string, q: Query) {
   if (!t.boost || --t.boost.left > 0) return
   const prev = t.boost.prev
   t.boost = undefined
-  // null drops Hive's flag so the user's own default applies again
+  // null drops Orbit's flag so the user's own default applies again
   q.applyFlagSettings({ effortLevel: (prev ?? null) as any })
     .then(() => t.send({ type: 'hive_effort', level: prev ?? t.reported ?? null }))
     .catch((e: any) => t.send({ type: 'hive_effort', level: 'max', error: `Could not restore effort after ultrathink: ${e?.message ?? e}` }))
@@ -239,7 +239,7 @@ export async function setEffort(tabId: string, q: Query | undefined, level: stri
   t.send({ type: 'hive_effort', level })
 }
 
-// a thread's advisor model, switched live. '' = none: Hive's flag goes, so the user's own settings apply again. A
+// a thread's advisor model, switched live. '' = none: Orbit's flag goes, so the user's own settings apply again. A
 // process started with an advisor keeps that one under whatever is applied later (clearing the key with null brings
 // it back, seen on a live process), so there Off is sent as an empty advisor, which the process runs as no advisor
 export async function setAdvisor(tabId: string, q: Query | undefined, model: string): Promise<void> {
@@ -296,8 +296,8 @@ export function registerStatusIpc(handle: Handle, deps: Deps): void {
       name: s.name, status: s.status, source: s.source ?? s.scope ?? '', error: s.error, tools: s.tools?.length ?? null,
     }))
     if (live) return rows
-    // the idle process loads plain settings: show what a new Hive session gets instead, its own hive server added and
-    // the plugins Hive turns off left out
+    // the idle process loads plain settings: show what a new Orbit session gets instead, its own hive server added and
+    // the plugins Orbit turns off left out
     const off = new Set(HIVE_OFF_PLUGINS)
     return [{ name: 'hive', status: 'connected', source: 'built in', error: undefined, tools: null },
       ...rows.filter((r) => !off.has(r.name.replace(/^plugin:/, '').split(':')[0]))]

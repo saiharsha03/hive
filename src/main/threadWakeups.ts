@@ -1,7 +1,7 @@
 // Scheduled wake-ups for any thread (the schedule_wakeup tool). Claude Code's own /loop wake-ups and crons live inside
-// the session and die when Hive closes; these are rows in one SQLite table under ~/.hive/hive, so they outlive the
-// turn, Hive closing and the laptop sleeping. Hive checks them every 30 s, after it starts and when the laptop wakes;
-// a row that came due while Hive was closed (or asleep) fires once when it is back and says how late it is.
+// the session and die when Orbit closes; these are rows in one SQLite table under ~/.hive/hive, so they outlive the
+// turn, Orbit closing and the laptop sleeping. Orbit checks them every 30 s, after it starts and when the laptop wakes;
+// a row that came due while Orbit was closed (or asleep) fires once when it is back and says how late it is.
 // A repeating row then moves to its next slot after now: missed slots are not replayed one by one.
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -35,7 +35,7 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS thread_wakeups (
 )`
 
 export const MIN_EVERY_MINUTES = 5
-// later than this counts as "Hive was closed or the laptop asleep" in the wake message
+// later than this counts as "Orbit was closed or the laptop asleep" in the wake message
 const LATE_MS = 3 * 60_000
 
 let file = ''
@@ -97,7 +97,7 @@ export function nextSlot(wakeAt: number, everyMinutes: number, now: number): num
 export function wakeMessage(r: ThreadWakeup, now: number): string {
   const late = now - Date.parse(r.wake_at)
   const lines = [`[Scheduled wake-up #${r.id}, due ${r.wake_at}${r.every_minutes ? `, repeats every ${r.every_minutes} min` : ''}]`]
-  if (late > LATE_MS) lines.push(`This is ${Math.round(late / 60_000)} min late: Hive was closed or the laptop was asleep. Catch up on whatever you missed.`)
+  if (late > LATE_MS) lines.push(`This is ${Math.round(late / 60_000)} min late: Orbit was closed or the laptop was asleep. Catch up on whatever you missed.`)
   lines.push('', r.prompt)
   return lines.join('\n')
 }
@@ -118,7 +118,7 @@ let ticking = false
 
 // Paused ("stop everything" with its pause switch, from the phone or the window): no wake-up fires until it is resumed.
 // Nothing is dropped or moved: what came due meanwhile fires once on resume, saying how late it is, as after a
-// restart. Kept on disk (next to the table), so a pause outlives Hive closing too.
+// restart. Kept on disk (next to the table), so a pause outlives Orbit closing too.
 const pauseFile = () => `${wakeupsFile()}.paused`
 // Off (the app sets this at start from WAKEUPS_OFF in edition.ts): nothing fires by itself, as if always paused. The
 // automatic continue after a usage limit reads the same answer, so it is held too. Run now still works: that is asked for.

@@ -1,13 +1,13 @@
 // Deploy section: pure logic (git log parsing, ahead counts, changelog message, landed / stuck decisions).
 // No imports and no I/O, so it can be tested without Electron.
 
-export type Suite = string // a suite id from the Hive .env
+export type Suite = string // a suite id from the Orbit .env
 export type Target = 'staging' | 'prod'
 export type Env = 'dev' | 'qa' | 'staging' | 'prod'
 export type Commit = { sha: string; title: string; author: string; pr?: number }
 export const ENVS: Env[] = ['dev', 'qa', 'staging', 'prod']
 
-// ---------- config (from Hive's .env; nothing workspace-specific lives in this file) ----------
+// ---------- config (from Orbit's .env; nothing workspace-specific lives in this file) ----------
 
 export type DeploySuite = { id: string; label: string; api: string[]; web: string[] } // API repos deploy before web repos
 export type DeployWeb = { host: string; distribution: string } // S3 bucket (also the site host) + CloudFront distribution
@@ -105,7 +105,7 @@ export type RepoDiff = {
 // ---------- diffs.sh output ----------
 
 // One repo as the diffs script reported it. diffs.sh is the source of truth for what changed;
-// Hive only reads git afterwards for commit titles (see deploy.ts).
+// Orbit only reads git afterwards for commit titles (see deploy.ts).
 export type DiffsLine = {
   repo: string
   error?: string // "repo not found at ...", "git fetch timed out or failed", "failed to get origin/main", ...

@@ -1,5 +1,5 @@
 // Self-scheduled watchers (schedule every "self"): the watcher plans its own wake-ups in a SQLite table in its folder
-// and manages it (status, results, extra columns). Hive only reads it: it wakes the watcher when a pending row comes
+// and manages it (status, results, extra columns). Orbit only reads it: it wakes the watcher when a pending row comes
 // due, marks those rows woken, and wakes it once after FALLBACK_MS when nothing is pending, so it never stays asleep.
 import { DatabaseSync } from 'node:sqlite'
 import { join } from 'node:path'
@@ -13,8 +13,8 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS wakeups (
   id INTEGER PRIMARY KEY,
   wake_at TEXT NOT NULL,                  -- when to wake, ISO local time, e.g. 2026-11-02T08:00:00
   purpose TEXT,                           -- why you want to wake then
-  status TEXT NOT NULL DEFAULT 'pending', -- pending | woken (set by Hive) | done | failed | skipped
-  woken_at TEXT,                          -- when Hive woke you for this row
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | woken (set by Orbit) | done | failed | skipped
+  woken_at TEXT,                          -- when Orbit woke you for this row
   finished_at TEXT,
   result TEXT,                            -- what the run did
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))

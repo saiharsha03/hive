@@ -57,7 +57,7 @@ async function targets(): Promise<GitTarget[]> {
   return out
 }
 
-// only folders Hive lists; a worktree made since the last list is picked up by listing again
+// only folders Orbit lists; a worktree made since the last list is picked up by listing again
 async function resolve(dir: string): Promise<string> {
   const find = () => known.find((t) => sameDir(t.dir, dir))
   const hit = find() ?? (await targets(), find())
@@ -227,7 +227,7 @@ export async function branchChanges(dir: string) {
   let note = ''
   if (pr) {
     const base = pr.pr.baseRefName
-    if (!safeBranch(base)) note = `The base branch name ${base} is not one Hive diffs against.`
+    if (!safeBranch(base)) note = `The base branch name ${base} is not one Orbit diffs against.`
     else {
       try { branch = numstatFiles(await git(d, ['diff', `origin/${base}...HEAD`, '--numstat', '-z'])).map((f) => ({ ...f, area: 'branch' as const })) } catch (e) { note = `Could not compare with origin/${base}: ${(e as Error).message.split('\n')[0]}` }
     }
@@ -270,7 +270,7 @@ export async function prAutoMerge(dir: string, headSha: string, on: boolean): Pr
 }
 
 // the listed repo or worktree a file is in (the deepest one, so a worktree inside a repo folder wins), and the
-// file's path inside it; null when Hive lists none
+// file's path inside it; null when Orbit lists none
 export async function gitLocate(file: string): Promise<{ dir: string; name: string; path: string } | null> {
   const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
   const find = (f: string) => known

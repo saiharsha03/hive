@@ -1,6 +1,6 @@
 // Scripts panel: pure logic (config parsing, the "open" glob, picking the newest match, missing-file notes).
 // No I/O of its own (the folder lister and exists check are passed in), so it can be tested without Electron.
-// The scripts themselves come from Hive's local scripts.json (git ignores it), never from this file.
+// The scripts themselves come from Orbit's local scripts.json (git ignores it), never from this file.
 import { isAbsolute, join } from 'node:path'
 
 export type ScriptOption = { label: string; cmd: string }

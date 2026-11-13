@@ -219,7 +219,7 @@ export function TeamView({ onActivate, onMessage, inWindow, bare }: { onActivate
   )
 }
 
-// pause every running turn of the team, or wake it back up (also after Hive restarted)
+// pause every running turn of the team, or wake it back up (also after Orbit restarted)
 function PauseButton({ v }: { v: View }) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')

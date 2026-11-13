@@ -3,12 +3,12 @@
 // Test mode passes no advisor to Claude, so only the window and the IPC call are checked; no Claude turn is sent.
 import { expect, test } from '@playwright/test'
 import { close, launch, shot } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 test('the model menu sets a thread advisor and the message box line shows it', async () => {
   const l = await launch()
   try {
-    const h = new Hive(l.page)
+    const h = new Orbit(l.page)
     // every chat:setAdvisor call is recorded on its way to main's own handler, which still runs
     await l.app.evaluate(({ ipcMain }) => {
       const g = globalThis as unknown as { __advisorCalls: [string, string][] }

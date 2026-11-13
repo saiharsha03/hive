@@ -1,4 +1,4 @@
-// Git panel: source control for the repos Hive lists and their worktrees; plain git, no Claude.
+// Git panel: source control for the repos Orbit lists and their worktrees; plain git, no Claude.
 // Diffs open in the right-hand panel. No discard / reset / clean: nothing here throws work away.
 import { useEffect, useRef, useState } from 'react'
 import { DiffModeToggle } from './DiffView'

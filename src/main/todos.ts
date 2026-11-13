@@ -118,7 +118,7 @@ export const restoreTodo = (todo: Todo, index: number) =>
     await write(todos)
   })
 
-// calls onChange (debounced) when the file changes on disk: Hive, the agent's add_todo tool or the terminal helper.
+// calls onChange (debounced) when the file changes on disk: Orbit, the agent's add_todo tool or the terminal helper.
 // Watches the folder, since every write replaces the file by a rename. Returns a stop function.
 export function watchTodos(onChange: () => void, delay = 150): () => void {
   const file = todosFile()

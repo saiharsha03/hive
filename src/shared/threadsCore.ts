@@ -1,4 +1,4 @@
-// Thread places (pin, snooze, close, archive) shared by the desktop sidebar and the phone list Hive main builds.
+// Thread places (pin, snooze, close, archive) shared by the desktop sidebar and the phone list Orbit main builds.
 // autoFix / autoArchive: when the thread's PR toggles were turned on (Changes panel), absent when off
 export type ThreadState = { pinned?: number; snoozedUntil?: number; snoozedAt?: number; closedAt?: number; archivedAt?: number; autoFix?: number; autoArchive?: number }
 export type ThreadMap = Record<string, ThreadState>

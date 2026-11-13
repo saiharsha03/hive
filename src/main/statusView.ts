@@ -1,6 +1,6 @@
 // What the terminal's /status and /usage show, for one thread, live: account and plan, model, effort, permission mode,
 // session, folder, context use, MCP servers, plan limits with their reset times and the thread's own token totals from
-// its transcript. Everything comes from what Hive already has: the thread's live process (or the idle status process),
+// its transcript. Everything comes from what Orbit already has: the thread's live process (or the idle status process),
 // status.ts's usage reading and sessionStats.ts's incremental totals. Nothing here sends a message, so it costs no usage.
 import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import { getStatus, idle } from './status'

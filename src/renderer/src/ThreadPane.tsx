@@ -25,7 +25,7 @@ export function ThreadPane({ id, focused }: { id: string; focused: boolean }) {
   const [mode, setMode] = useState(permissionMode)
   useEffect(() => { void modeReady.then(() => setMode(permissionMode)) }, [])
   const cb: ThreadCallbacks = useMemo(() => ({
-    // /mcp, /agents, /permissions, /hooks, /memory, /resume, /branch, /add-dir open Hive's own screens (ClaudePanels.tsx)
+    // /mcp, /agents, /permissions, /hooks, /memory, /resume, /branch, /add-dir open Orbit's own screens (ClaudePanels.tsx)
     onSend: (text, images, m) => { if (!images.length && runLocalCommand(id, text)) return; send(id, text, images, m) },
     onDequeue: (q) => window.api.chatDequeue(id, q),
     onPromote: (q) => void window.api.chatPromote(id, q),

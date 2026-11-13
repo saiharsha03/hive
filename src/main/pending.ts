@@ -1,5 +1,5 @@
 // Messages sent while Claude was working (steered or queued) are kept in ~/.hive/hive-pending.json until they reach
-// Claude, so closing Hive by mistake loses none of them: on the next start they are sent again to the same thread.
+// Claude, so closing Orbit by mistake loses none of them: on the next start they are sent again to the same thread.
 // A message has reached Claude when the CLI echoes it back (its uuid, chat.ts hive_seen); the end of the turn it rode
 // is the fallback for an engine that sends no echo. A queued message handed over to the engine rides the next turn.
 import { randomUUID } from 'node:crypto'
@@ -49,7 +49,7 @@ export function pendingResent(keys: string[], uuid: string): void {
   if (all.some((p) => keys.includes(p.key))) write(all.map((p) => (keys.includes(p.key) ? { ...p, uuid } : p)))
 }
 // the text sent again after a restart: the pictures as files Claude can open
-export const resendText = (p: Pending) => (p.images?.length ? `${p.text}${p.text ? '\n\n' : ''}(Attached images, saved when Hive closed: ${p.images.join(', ')})` : p.text)
+export const resendText = (p: Pending) => (p.images?.length ? `${p.text}${p.text ? '\n\n' : ''}(Attached images, saved when Orbit closed: ${p.images.join(', ')})` : p.text)
 export const pendingDelivered = (key: string) => drop((p) => p.key !== key)
 // Claude took this message in (the CLI's echo of it): quitting now must not send it again
 export const pendingSeen = (uuid: string) => drop((p) => p.uuid !== uuid)
@@ -68,7 +68,7 @@ export function pendingSession(tabId: string, sessionId: string): void {
   if (all.some((p) => p.tabId === tabId && p.sessionId !== sessionId)) write(all.map((p) => (p.tabId === tabId ? { ...p, sessionId } : p)))
 }
 // everything left from the last run, oldest first, to send again. They stay on disk, now as steers of their thread, so
-// they go only when that thread's turn ends: Hive closing again before then loses none of them.
+// they go only when that thread's turn ends: Orbit closing again before then loses none of them.
 export function takePending(): Pending[] {
   const all = read()
   if (all.some((p) => p.mode !== 'steer')) write(all.map((p) => ({ ...p, mode: 'steer' as const })))

@@ -123,7 +123,7 @@ test('a send or new thread tried again with the same mid runs once and gets the 
   assert.equal(await oncePerMid(undefined, run), 'sent 3') // an older app sends no mid: every request runs
   assert.equal(await oncePerMid(undefined, run), 'sent 4')
   // one that failed did not run, so the retry runs it
-  await assert.rejects(oncePerMid('m-3', async () => { throw new Error('The Hive window is not open') }))
+  await assert.rejects(oncePerMid('m-3', async () => { throw new Error('The Orbit window is not open') }))
   assert.equal(await oncePerMid('m-3', run), 'sent 5')
   // forgotten after ten minutes
   assert.equal(await oncePerMid('m-1', run, Date.now() + 11 * 60_000), 'sent 6')

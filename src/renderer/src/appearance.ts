@@ -2,7 +2,7 @@
 // mode (rail and inspector hidden) and the rail on the right. Applying is live: data-theme / data-focus on <html>,
 // nothing remounts the conversations. Settings -> Appearance and the command field use the same setters.
 //
-// Older Hive saved one of four layouts ("ui": default, workbench, strip, focus) and a theme per layout
+// Older Orbit saved one of four layouts ("ui": default, workbench, strip, focus) and a theme per layout
 // ("themeByUI": default, mono, colour, light, hc). Those are read once and folded in: the Focus layout becomes Focus
 // mode, the other three become the one layout; Monochrome and Colourful become Dark.
 import { useSyncExternalStore } from 'react'

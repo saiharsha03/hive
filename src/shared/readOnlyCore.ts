@@ -4,7 +4,7 @@
 
 export const isWatcherTab = (tabId: string) => tabId.startsWith('watcher-')
 // A watcher session, whatever tab resumes it (sidebar, phone, message_thread, after a restart): its first message is
-// Hive's run header "[<app> watcher run: <name>]" or a wake-up "[<app> wake-up: <name>]". jsonl = the transcript's start;
+// Orbit's run header "[<app> watcher run: <name>]" or a wake-up "[<app> wake-up: <name>]". jsonl = the transcript's start;
 // null = no complete first user message in it yet (read more, or treat as a watcher's: fail closed)
 // the first line of a watcher run header or wake-up: "[<app> watcher run: <name>]" / "[<app> wake-up: <name>]"
 // That shape depends on the app's name (a name with "]" in it never matched, and the session was then resumed
@@ -100,7 +100,7 @@ export function blockedCommand(cmd: string): string | null {
 // GET / HEAD / OPTIONS, except POSTs to known read-only search endpoints and to alert channels the user allowed.
 // Not covered: clients that do not go through http.client (httpx, aiohttp, pycurl) and a Python started with -S or -I,
 // which skips sitecustomize.
-export const PYTHON_GUARD = String.raw`# Hive read-only guard for watcher threads (written by Hive; edits are overwritten)
+export const PYTHON_GUARD = String.raw`# Orbit read-only guard for watcher threads (written by Orbit; edits are overwritten)
 import os, sys
 if os.environ.get("HIVE_READONLY") == "1":
     import hashlib, re, http.client
@@ -134,7 +134,7 @@ if os.environ.get("HIVE_READONLY") == "1":
         # the bare path: no scheme and host, query or fragment, no doubled slashes
         path = re.sub(r"/+", "/", re.sub(r"^https?://[^/]+", "", url or "/").split("?")[0].split("#")[0])
         if not _allowed(method, self.host, path):
-            raise ReadOnlyBlocked(f"Hive read-only: {method} https://{self.host}{path} is blocked in watcher threads")
+            raise ReadOnlyBlocked(f"Orbit read-only: {method} https://{self.host}{path} is blocked in watcher threads")
         return _putrequest(self, method, url, *a, **k)
 
     http.client.HTTPConnection.putrequest = putrequest

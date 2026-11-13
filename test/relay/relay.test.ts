@@ -1,6 +1,6 @@
 // the relay end to end on a local port: pairing, sealed messages both ways (it forwards what it cannot read), the
-// phone told when the computer is offline, wrong tokens refused, and Hive's sealing (mobileLink) round-tripping.
-// Both sides sign in with the Authorization header, as Hive and the app do; ?token= stays for clients without headers.
+// phone told when the computer is offline, wrong tokens refused, and Orbit's sealing (mobileLink) round-tripping.
+// Both sides sign in with the Authorization header, as Orbit and the app do; ?token= stays for clients without headers.
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
@@ -118,7 +118,7 @@ test('relay: pair, forward sealed blobs both ways, offline notice, wrong token r
     assert.equal(p2.got.filter((f) => f.desk === 'offline').length, 2)
     assert.deepEqual(await (await post(phone, { pair, blob: 'z' })).json(), { ok: true, delivered: false }) // and a posted one says so
 
-    // unpairing (Hive, with the admin token) closes both sides with 4401 and the tokens stop working
+    // unpairing (Orbit, with the admin token) closes both sides with 4401 and the tokens stop working
     const d2 = await client('desk', pair, desk)
     assert.equal((await fetch(`${base}/v1/pair/${pair}`, { method: 'DELETE', headers: { authorization: 'Bearer nope' } })).status, 401)
     assert.equal(d2.ws.readyState, WebSocket.OPEN)

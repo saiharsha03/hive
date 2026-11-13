@@ -1,4 +1,4 @@
-// Deploy section, main process. Diffs come from your deploy tooling's diffs.sh (it does the fetch); Hive's own git calls
+// Deploy section, main process. Diffs come from your deploy tooling's diffs.sh (it does the fetch); Orbit's own git calls
 // are read-only (log / rev-parse / diff --name-only; Check status also fetches).
 // The only write is running your deploy.sh (HIVE_DEPLOY_SCRIPT), and only from the user's click (IPC, never a Claude tool).
 // AWS calls are read-only (describe / list / s3 cp to stdout).
@@ -15,7 +15,7 @@ import {
 import type { Loaded } from './devConfig'
 import { blocked, TEST_MODE } from './testMode'
 
-// everything workspace-specific (repos, suites, org, AWS names, the deploy script) comes from Hive's .env
+// everything workspace-specific (repos, suites, org, AWS names, the deploy script) comes from Orbit's .env
 let root = ''
 let dcfg: DeployConfig | null = null
 const NOT_SET = 'Deploy is not configured: fill in the Deploy section of Settings.'
@@ -85,7 +85,7 @@ async function localDiff(repo: string): Promise<RepoDiff> {
 }
 
 // The diffs script (HIVE_DIFFS_SCRIPT), run exactly as by hand (`bash diffs.sh <suite>` from its own folder). It fetches with
-// its own timeout. Its own copy to the clipboard needs pbcopy or xclip, so Hive copies the message (below).
+// its own timeout. Its own copy to the clipboard needs pbcopy or xclip, so Orbit copies the message (below).
 function runDiffsScript(suite: Suite): Promise<string> {
   const script = scriptPath(dc().diffsScript)
   if (!existsSync(script)) throw new Error(`diffs.sh not found at ${script} (set HIVE_DIFFS_SCRIPT)`)
@@ -133,7 +133,7 @@ export async function suiteDiffs(suite: Suite, fetch = true) {
     return { diffs, changelog: changelog(suite, diffs, dc().org), output: '', root }
   }
   const output = await runDiffsScript(suite)
-  // the script copies its message only where pbcopy or xclip exists (not on Windows), so Hive copies it itself
+  // the script copies its message only where pbcopy or xclip exists (not on Windows), so Orbit copies it itself
   if (!TEST_MODE) { try { clipboard.writeText(deployMessage(output)) } catch { /* the page has a Copy button */ } }
   const report = parseDiffsOutput(output)
   const diffs = await Promise.all(repos.map((r) => diffFromLine(r, report.repos.find((x) => x.repo === r))))

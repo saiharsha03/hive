@@ -1,6 +1,6 @@
 # Windows installer (NSIS) and portable build: npm run dist  ->  dist/
-appId: io.github.saiharsha03.hive
-productName: Hive
+appId: io.github.saiharsha03.orbit
+productName: Orbit
 copyright: Copyright © 2026 saiharsha03
 directories:
   output: dist
@@ -13,7 +13,7 @@ files:
   # native binaries for other platforms and architectures (the build is x64 only)
   - '!**/node_modules/node-pty/prebuilds/{darwin,linux}-*/**'
   - '!**/node_modules/node-pty/prebuilds/win32-arm64/**'
-  # Hive runs the user's installed Claude Code (needed for /login anyway), not the SDK's bundled copy
+  # Orbit runs the user's installed Claude Code (needed for /login anyway), not the SDK's bundled copy
   - '!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**'
   - '!**/*.{pdb,map}'
 
@@ -44,7 +44,7 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
-  shortcutName: Hive
+  shortcutName: Orbit
   artifactName: ${productName}-Setup-${version}.${ext}
 
 portable:

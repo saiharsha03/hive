@@ -28,7 +28,7 @@ const CODEX_DONE = /^\[Codex finished task (\w+)( with an error)?\]\s*/
 // not something the user typed; a message that merely starts with "<" (pasted HTML) is kept
 const WRAPPER = /^<(command-|local-command|system-reminder|task-notification|bash-|user-prompt|ide_)/
 
-// a message from another Hive thread carries its label (threadTalkCore); anything else the user typed
+// a message from another Orbit thread carries its label (threadTalkCore); anything else the user typed
 function userItem(text: string, images: string[], at?: number, uuid?: string): Item {
   const t = parseFromThread(text)
   return t ? { kind: 'thread', fromId: t.from.id, fromTitle: t.from.title, text: t.text } : { kind: 'user', text, images, ...(at ? { at } : {}), ...(uuid ? { uuid } : {}) }
@@ -164,7 +164,7 @@ function historyParser(): { line: (line: string) => void; done: () => Item[] } {
   const done = (): Item[] => {
     // a tool with no result in the transcript was cut off
     for (const t of tools.values()) if (t.status === 'running') t.status = 'done'
-    // a background Codex run whose answer never came back was stopped (tab closed, Hive restarted)
+    // a background Codex run whose answer never came back was stopped (tab closed, Orbit restarted)
     for (const b of codexByCall.values()) if (b.status === 'running') {
       b.status = 'error'
       b.answer = `Stopped before Codex answered (the tab was closed or ${appName()} restarted).`

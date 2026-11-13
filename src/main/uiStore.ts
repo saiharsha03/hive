@@ -1,4 +1,4 @@
-// UI state that must not depend on how Hive was started (dev server vs built app have different browser storage):
+// UI state that must not depend on how Orbit was started (dev server vs built app have different browser storage):
 // thread pins / snoozes / closes, small UI preferences and what a restart restores, kept as JSON files under ~/.claude.
 import { readFileSync } from 'node:fs'
 import { writeFileSafe } from './safeWrite'
@@ -22,7 +22,7 @@ export function uiLoad(name: string): Record<string, unknown> {
   }
 }
 
-// through writeFileSafe: a locked file (antivirus, a second Hive) must not crash the app
+// through writeFileSafe: a locked file (antivirus, a second Orbit) must not crash the app
 export function uiSave(name: string, value: unknown): void {
   const f = FILES[name]
   if (!f || !value || typeof value !== 'object' || Array.isArray(value)) return

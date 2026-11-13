@@ -1,4 +1,4 @@
-// A new thread's folder and, in a git repo Hive lists, the Worktree toggle (as in Claude Code Desktop: off by default,
+// A new thread's folder and, in a git repo Orbit lists, the Worktree toggle (as in Claude Code Desktop: off by default,
 // remembered per repo). With it on, the first message starts the thread in its own worktree on a new branch.
 import { useEffect, useState } from 'react'
 import { getPref, setPref } from './prefs'

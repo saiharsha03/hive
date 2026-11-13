@@ -1,4 +1,4 @@
-// What Hive's /mcp, /agents, /permissions, /hooks, /memory, /branch and /add-dir screens read and change. MCP state
+// What Orbit's /mcp, /agents, /permissions, /hooks, /memory, /branch and /add-dir screens read and change. MCP state
 // and forks go through the Agent SDK (mcpServerStatus, reconnectMcpServer, toggleMcpServer, forkSession); the rest
 // reads Claude Code's own files. Only permission rules and new agent files are ever written. MCP rows carry names of
 // env variables and headers, never their values; ~/.claude.json and credential files are never read here.

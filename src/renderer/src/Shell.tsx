@@ -107,8 +107,8 @@ export function Shell() {
       { id: 'close', group: 'Actions' as const, label: 'Close this tab', hint: 'Ctrl+W', run: () => closeSession(focus) },
       { id: 'export', group: 'Actions' as const, label: 'Export this thread as Markdown', run: () => window.dispatchEvent(new CustomEvent('hive:export', { detail: focus })) },
     ] : []),
-    { id: 'quit', group: 'Actions', label: 'Quit Hive (threads stop; closing the window only hides it)', hint: 'Ctrl+Q', run: () => void window.api.quitApp() },
-    { id: 'update', group: 'Actions', label: 'Check for Hive updates', run: () => void window.api.updateCheck().then(() => window.api.updateState()).then((u) => notice(u ? `Hive ${u.version} is ${u.kind === 'ready' ? 'downloaded: restart from the status line' : 'available'}` : 'No newer Hive release')).catch(() => {}) },
+    { id: 'quit', group: 'Actions', label: 'Quit Orbit (threads stop; closing the window only hides it)', hint: 'Ctrl+Q', run: () => void window.api.quitApp() },
+    { id: 'update', group: 'Actions', label: 'Check for Orbit updates', run: () => void window.api.updateCheck().then(() => window.api.updateState()).then((u) => notice(u ? `Orbit ${u.version} is ${u.kind === 'ready' ? 'downloaded: restart from the status line' : 'available'}` : 'No newer Orbit release')).catch(() => {}) },
   ], [live, metas, focus, focused, quarry?.available, agents])
   const src: PaletteSources = useMemo(() => ({
     commands,
@@ -123,7 +123,7 @@ export function Shell() {
     },
     engine: async () => { const r = await engineCommands(activeId() ?? undefined); return r.ok ? [...r.data, { name: 'btw', description: 'Ask a quick side question; the answer stays out of the conversation', argumentHint: '<question>', builtin: true }] : [] },
     runSlash: (c) => {
-      // the configuration commands Hive has its own screen for (ClaudePanels.tsx), for the focused thread
+      // the configuration commands Orbit has its own screen for (ClaudePanels.tsx), for the focused thread
       if (runLocalCommand(focused && !focused.tool && !focused.file && !focused.agent ? focused.id : null, `/${c.name}`)) return
       const v = SLASH_VIEW[c.name]
       if (v === 'accounts') return setAccountsOpen(true)

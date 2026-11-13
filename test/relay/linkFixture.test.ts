@@ -1,4 +1,4 @@
-// Hive (mobileLink.ts) and the phone app (Link.kt) must seal and open the same blobs. Both test suites read one file,
+// Orbit (mobileLink.ts) and the phone app (Link.kt) must seal and open the same blobs. Both test suites read one file,
 // mobile/app/src/test/resources/link-fixture.json: here with mobileLink.ts, in the app with Link.kt (LinkTest.kt).
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
@@ -18,7 +18,7 @@ test('the notification key is derived the same way on both sides', () => {
   assert.notEqual(fx.notifyKey, fx.key)
 })
 
-test('blobs sealed by Hive open, with the right key, pair and direction only', () => {
+test('blobs sealed by Orbit open, with the right key, pair and direction only', () => {
   assert.ok(fx.cases.length >= 3)
   for (const c of fx.cases) assert.deepEqual(open(keyOf(c), fx.pair, c.dir, c.blob), c.msg, c.name)
 })
@@ -28,7 +28,7 @@ test('a changed, cut, misdirected or wrongly keyed blob does not open', () => {
   for (const c of fx.bad) assert.equal(open(keyOf(c), fx.pair, c.dir, c.blob), null, c.name)
 })
 
-test('blobs sealed by the app (Link.kt) open in Hive', () => {
+test('blobs sealed by the app (Link.kt) open in Orbit', () => {
   assert.ok(fx.fromApp.length >= 2, 'the fixture has no blob sealed by the app')
   for (const c of fx.fromApp) assert.deepEqual(open(keyOf(c), fx.pair, c.dir, c.blob), c.msg, c.name)
 })

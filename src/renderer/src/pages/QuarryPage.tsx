@@ -1,4 +1,4 @@
-// Quarry: the user's SQL app, its own UI inside Hive. Main runs `quarry serve` and serves the UI from quarry://app/;
+// Quarry: the user's SQL app, its own UI inside Orbit. Main runs `quarry serve` and serves the UI from quarry://app/;
 // the view is a <webview> whose preload (src/preload/quarry.ts) gives the UI its window.quarryHost bridge. Main fixes
 // the view's source, preload and settings, and answers Quarry calls only from it. The page exists only when Quarry is
 // installed and usable (the rail link and the palette entry follow useQuarry).
@@ -29,7 +29,7 @@ export function QuarryPage() {
   const look = useAppearance()
   const theme = quarryTheme(look.theme)
   const fonts = quarryFonts(look.fonts)
-  // the view starts with the theme and fonts Hive has now (in its address, for the bridge); the address is fixed for
+  // the view starts with the theme and fonts Orbit has now (in its address, for the bridge); the address is fixed for
   // the view's life, so a later change in Settings > Appearance is sent in with Quarry's own setters
   const [start] = useState(() => ({ theme, fonts }))
   const view = useRef<View | null>(null)

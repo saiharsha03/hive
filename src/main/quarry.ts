@@ -1,5 +1,5 @@
 // Quarry, main process: find the installed exe, run one `quarry serve` for as long as it is needed (started on the first
-// call, stopped when Hive quits, started again if it dies), and call it. JSON-RPC 2.0 over the process's stdin and
+// call, stopped when Orbit quits, started again if it dies), and call it. JSON-RPC 2.0 over the process's stdin and
 // stdout, one object per line; requests run concurrently and answers are matched by id (quarryCore.ts). Nothing
 // Quarry sends is logged: its stderr is counted, not printed, and a call's params (SQL, values) never are.
 // No Electron imports: index.ts serves the UI and routes the Quarry page's calls; a test drives a fake serve.
@@ -142,7 +142,7 @@ export const onQuarryChange = (f: (s: QuarryStatus) => void) => { onChange = f }
 const set = (s: Partial<QuarryStatus>) => { status = { ...status, ...s }; onChange(status) }
 
 // Settings > General quarryPath: '' = find the installed Quarry, 'off' = no Quarry, a path = that exe. The feature
-// (page, rail link, thread tools) exists only when an exe is found that speaks protocol 1 with the methods Hive uses.
+// (page, rail link, thread tools) exists only when an exe is found that speaks protocol 1 with the methods Orbit uses.
 // how: tests run a fake serve through node instead of an exe
 type How = { caps?: (exe: string) => Promise<string>; command?: (exe: string) => [string, ...string[]]; exists?: (p: string) => boolean; recorded?: () => Promise<string[]> }
 export async function configureQuarry(setting: string, test = TEST_MODE, how: How = {}): Promise<QuarryStatus> {

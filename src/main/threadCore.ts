@@ -87,7 +87,7 @@ export function messageParts(content: unknown): { text: string; images: { mediaT
 }
 
 // The / menu: every command the engine reports, as it reports them, plus the interactive CLI's own commands it leaves
-// out (picking one sends it; the engine answers "isn't available in this environment" and Hive runs it in the
+// out (picking one sends it; the engine answers "isn't available in this environment" and Orbit runs it in the
 // thread's terminal, chat.ts cliOnlyCommand). /mcp, /agents, /permissions, /hooks, /memory, /resume, /branch and
 // /add-dir never reach the engine: the window opens its own screen for them (renderer ClaudePanels.tsx). /status and /usage are marked view: the window shows them itself, live
 // (chat:statusView), instead of a terminal.
@@ -106,6 +106,6 @@ export function menuCommands(engine: MenuCommand[]): MenuCommand[] {
   return [...engine, ...extra].map((c) => (c.name === 'status' || c.name === 'usage' ? { ...c, view: c.name } : c))
 }
 
-// tools Hive lets through when the engine asks it (canUseTool: auto mode can hand a call over) instead of answering
+// tools Orbit lets through when the engine asks it (canUseTool: auto mode can hand a call over) instead of answering
 // "no permission prompt": the Workflow tool, for every thread but a watcher's (read-only)
 export const permitWithoutPrompt = (tool: string, watcher: boolean): boolean => !watcher && tool === 'Workflow'

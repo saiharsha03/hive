@@ -1,4 +1,4 @@
-// The phone app's side of Hive: pairing (a QR code with the relay address, the pair id, the phone's token and the
+// The phone app's side of Orbit: pairing (a QR code with the relay address, the pair id, the phone's token and the
 // sealing key), one outgoing connection to the relay, the phone's requests (list threads, read one, send, start a new
 // one, stop) and notifications (Claude's notify_phone, a thread waiting for you, a background thread finished).
 // Settings: HIVE_MOBILE_RELAY (https://...) and HIVE_MOBILE_ADMIN_TOKEN (the relay's admin token). The pairing lives
@@ -15,7 +15,7 @@ import type { PhoneThread } from '../shared/threadsCore'
 import type { UsageRow } from '../shared/usageCore'
 import type { AskQuestion } from '../shared/askCore'
 import { guardNote, guardStep, limitedAnswer, noteActions, noteKind, phoneInbox, usageGuard, withWakes, type NoteActions, type NoteKind, type PhoneAccount, type PhoneAsk, type PhoneFail, type PhonePeek, type PhoneRunning, type PhoneTeam, type PhoneWakeup, type QuietHours } from '../shared/phoneCore'
-// seen: on your own message, whether Claude has taken it in (true) or not yet (false); absent when Hive cannot tell
+// seen: on your own message, whether Claude has taken it in (true) or not yet (false); absent when Orbit cannot tell
 export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string; seen?: boolean }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
 export type Deps = {
@@ -37,7 +37,7 @@ export type Deps = {
   stopTask: (thread: string, task: string) => Promise<boolean>
   wakeups: () => PhoneWakeup[]
   cancelWakeup: (kind: string, id: string) => boolean
-  // 2.0 app. All optional: the app is told which there are (hello's "can") and hides the rest; where Hive can do the
+  // 2.0 app. All optional: the app is told which there are (hello's "can") and hides the rest; where Orbit can do the
   // job with what is above (peek, running, stopAll) it does.
   // a thread right now, without reading its transcript (inbox, notification buttons)
   peek?: (id: string) => PhonePeek | null
@@ -50,7 +50,7 @@ export type Deps = {
   // the account profiles and the switch between them
   accounts?: () => PhoneAccount[] | Promise<PhoneAccount[]>
   switchAccount?: (id: string) => Promise<string>
-  // Hive's own quiet hours: read them, or set and read them
+  // Orbit's own quiet hours: read them, or set and read them
   quietHours?: (set?: QuietHours) => QuietHours | Promise<QuietHours>
   // 3.0 app: a thread's model, effort and permission mode (read and set), a message that waits or interrupts, the
   // notes, the to-dos and the watchers
@@ -118,7 +118,7 @@ export function initMobile(env: Record<string, string>, d: Deps): void {
 
 // The usage guard on the phone: when a plan window passes 85% (and again at 95%) the phone is told which window, how
 // full, when it fills, how many threads pause then and when they carry on. Looked at every five minutes from the
-// reading Hive already keeps; said once per step, window and reset, kept in hive-usage-guard.json so a restart does not
+// reading Orbit already keeps; said once per step, window and reset, kept in hive-usage-guard.json so a restart does not
 // say it again (only the newest few steps are kept: an old window's steps never come back).
 const GUARD_EVERY_MS = 5 * 60_000
 let guardTimer: ReturnType<typeof setInterval> | undefined
@@ -236,7 +236,7 @@ export function checkPhoneSeq(st: SeqState, seq: number, now: number): { run: bo
     return { run: false, future: true, next: { ...next, refused: [...refused, seq] } }
   }
   if (refused.length >= FUTURE_KEEP) return { run: false, next }
-  // new to Hive but older than the window: the phone clock is behind, or the relay held it back
+  // new to Orbit but older than the window: the phone clock is behind, or the relay held it back
   if (now - seq > FRESH_MS) return { run: false, stale: true, next }
   return { run: true, next: { ...next, seqIn: seq } }
 }
@@ -294,8 +294,8 @@ export function oncePerMid<T>(mid: unknown, run: () => Promise<T>, now = Date.no
 const MAX_FRAME = 4 * 1024 * 1024 // the relay passes at most 2 MB; anything longer is not parsed
 let staleSaid = 0
 
-// ---- what the 2.0 app asks for, from the optional deps or from the ones every Hive has ----
-// which optional requests this Hive answers; the app hides the screens and buttons for the others
+// ---- what the 2.0 app asks for, from the optional deps or from the ones every Orbit has ----
+// which optional requests this Orbit answers; the app hides the screens and buttons for the others
 const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.settings && d.setThread ? ['threadSettings'] : []), ...(d.sendHow ? ['sendHow'] : []), ...(d.notes && d.noteSave ? ['notes'] : []), ...(d.todos ? ['todos'] : []), ...(d.watchers ? ['watchers'] : []), ...(d.threadMore ? ['threadMore'] : []), ...(d.rewind ? ['rewind'] : []), ...(d.versions ? ['versions'] : []), ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : []), ...(d.changes && d.diff ? ['changes'] : []), ...(d.prMerge ? ['prMerge'] : [])]
 
 async function peekThread(d: Deps, id: string): Promise<PhonePeek | null> {
@@ -321,7 +321,7 @@ async function runningNow(d: Deps, threads: PhoneThread[]): Promise<PhoneRunning
 }
 
 // Stop everything: every thread that is working or waiting is interrupted and every background task stopped.
-// pauseWakeups needs the dep (Hive's own "stop everything"); without it the wake-ups stay as they are, and the answer says so.
+// pauseWakeups needs the dep (Orbit's own "stop everything"); without it the wake-ups stay as they are, and the answer says so.
 async function stopEverything(d: Deps, pauseWakeups: boolean): Promise<{ threads: number; tasks: number; wakeups: boolean }> {
   if (d.stopAll) return { ...(await d.stopAll(pauseWakeups)), wakeups: pauseWakeups }
   const threads = await d.threads()
@@ -350,7 +350,7 @@ async function limitedRequest(d: Deps, m: Record<string, unknown>): Promise<void
   const ask = String(m.ask ?? '')
   const took = limitedAnswer(await peekThread(d, id).catch(() => null), ask, String(m.label ?? ''))
   const refused = 'refused' in took ? took.refused : d.answer(id, ask, took.answers) ? '' : 'That question is no longer open'
-  if (refused) sendToPhone(fitNotification('Not answered', `${refused}. Open Hive to answer.`, id), true, true)
+  if (refused) sendToPhone(fitNotification('Not answered', `${refused}. Open Orbit to answer.`, id), true, true)
 }
 
 async function onMessage(raw: string): Promise<void> {
@@ -384,7 +384,7 @@ async function onMessage(raw: string): Promise<void> {
     return
   }
   pairing.seqIn = c.next.seqIn
-  if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
+  if (!store()) return void sendToPhone({ re: m.rid, error: 'Orbit could not save its replay record, so the request was not run' })
   await phoneRequest(deps, m, limited, (body) => sendToPhone({ re: m.rid, ...body }))
 }
 
@@ -505,8 +505,8 @@ export async function phoneRequest(deps: Deps, m: Record<string, unknown>, limit
 // ---- notifications: shown on the phone even when the app is closed (the relay pushes the sealed blob) ----
 export function notifyPhone(title: string, body: string, thread?: string): string {
   if (TEST_MODE) return blocked('phone notifications')
-  if (!pairing) return 'No phone is paired with Hive (Settings > General > Phone app).'
-  if (!connected) return 'Hive is not connected to the relay right now, so the phone was not notified.'
+  if (!pairing) return 'No phone is paired with Orbit (Settings > General > Phone app).'
+  if (!connected) return 'Orbit is not connected to the relay right now, so the phone was not notified.'
   const kind = noteKind(title)
   const id = thread ?? ''
   if (kind === 'fail' && id) fails.set(id, { thread: id, title: title.replace(/^Failed:\s*/, ''), note: body, at: Date.now() })

@@ -1,7 +1,7 @@
 // Watchers: many scheduled, self-prompting background threads. Pure logic (watcher.json, its schedule, ids, the run
 // header, the default prompt, the legacy Watch migration plan). No I/O, so it can be tested without Electron.
 // Each watcher is a folder: watcher.json (what the user or a thread set), the prompt file, memory/, reports/,
-// findings.jsonl, and state.json (Hive's own scheduler state). What a watcher looks at is entirely up to its prompt.
+// findings.jsonl, and state.json (Orbit's own scheduler state). What a watcher looks at is entirely up to its prompt.
 import { parseTime } from './dependabotCore'
 import { appName } from './appName'
 import {
@@ -24,7 +24,7 @@ export type WatcherFile = {
   createdAt: string // ISO
 }
 export type WatcherRun = { id: string; tabId: string; kind: RunKind; startedAt: number; endedAt?: number; sessionId?: string; error?: string; summary?: string } // summary: its final reply, for the next run
-// Hive's scheduler state: the long-lived thread (tabId + Claude session) and the runs that went into it
+// Orbit's scheduler state: the long-lived thread (tabId + Claude session) and the runs that went into it
 export type WatcherState = Omit<WatchState, 'enabled'> & {
   tabId: string | null // the thread's tab; null = no thread yet (the next run starts a fresh one)
   sessionId: string | null
@@ -171,7 +171,7 @@ export function reportsRootOf(setting: string | undefined, reposRoot: string): s
 
 const stamp = (t: number | null | undefined) => (t ? localIso(new Date(t)) : 'none')
 
-// what Hive puts before every run's message: facts about this run and where things go, nothing about what to look at.
+// what Orbit puts before every run's message: facts about this run and where things go, nothing about what to look at.
 // prompt: the prompt file's text, included on a new thread or when it changed since the thread last got it
 export function watcherHeader(a: {
   name: string; kind: RunKind; now: Date; lastRun: WatcherRun | null; s: Pick<WatcherState, 'last'>; f: Folders; promptFile: string; prompt: string | null; fresh: boolean
@@ -203,7 +203,7 @@ export function watcherHeader(a: {
 }
 
 // a self-scheduled watcher's wake-up on a thread that already has its instructions: only why it is awake, no instructions.
-// due: the rows Hive woke it for (empty = nothing was pending, the fallback wake); prompt: the prompt file when it changed
+// due: the rows Orbit woke it for (empty = nothing was pending, the fallback wake); prompt: the prompt file when it changed
 export function wakeMessage(a: { name: string; now: Date; due: { id: number; wake_at: string; purpose: string | null }[]; table: string; fallbackHours: number; promptFile: string; prompt: string | null; startup?: { lastSeen: number | null } }): string {
   const { name, now, due, table, fallbackHours, promptFile, prompt, startup } = a
   return [
@@ -288,7 +288,7 @@ export function legacyState(j: unknown): { state: WatcherState; enabled: boolean
 // what one row of the list shows; detail adds the findings, reports and runs
 export type WatcherSummary = {
   id: string
-  builtin?: boolean // Dependabot: Hive's own, configured in Settings
+  builtin?: boolean // Dependabot: Orbit's own, configured in Settings
   name: string
   goal: string
   enabled: boolean

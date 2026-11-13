@@ -80,7 +80,7 @@ import { keyAction, phoneFolder, readyGate } from './windowCore'
 
 // test mode: Electron's own storage (search index, sessions cache, page storage) lives in the test data folder
 if (TEST_MODE) app.setPath('userData', join(dataDir(), 'userData'))
-// beside Hive: its own name and its own Electron storage, so the two apps keep separate locks, caches and windows
+// beside Orbit: its own name and its own Electron storage, so the two apps keep separate locks, caches and windows
 else if (NEXT) { app.setName(PRODUCT); app.setPath('userData', join(app.getPath('appData'), PRODUCT)) }
 // test mode only: what the e2e specs read straight from the main process (e2e/10-idle-close, e2e/11-live-settings).
 // facts: a thread's live process (null once it has none); settings: the running Claude process's own answer to the
@@ -119,7 +119,7 @@ let teamWin: BrowserWindow | null = null
 const mainWeb = () => (mainWin && !mainWin.isDestroyed() && !mainWin.webContents.isDestroyed() ? mainWin.webContents : null)
 // the main window's page has loaded and has reset (chat:reset, its first effect): only then can it be handed threads
 const page = readyGate()
-// Hive's own background threads (Dependabot reviewers) open as background tabs in the app window
+// Orbit's own background threads (Dependabot reviewers) open as background tabs in the app window
 // (not webContents.isLoading(): that is true whenever anything inside the page loads, such as the Quarry view that
 // stays mounted, and it kept every watcher and Dependabot run from starting)
 const appWindow = () => { const w = mainWeb(); return w && page.ready() ? mainWin! : undefined }
@@ -381,7 +381,7 @@ const mobileDeps = () => ({
   diff: async (id: string, path: string, area: string) => gitPanel.fileDiff(await phoneThreadDir(id), path, area),
   prMerge: async (id: string, headSha: string) => gitPanel.prMerge(await phoneThreadDir(id), headSha),
   // 2.0 app: a thread now without its transcript, all running background work, stop everything, run a wake-up now,
-  // and the quiet hours it shares with Hive
+  // and the quiet hours it shares with Orbit
   peek: (id: string) => {
     const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
     return l ? { working: l.busy, asks: openAsks(l.tabId) as PhoneAsk[] } : null
@@ -500,7 +500,7 @@ function saveFromPanel(d: unknown) {
   const changed = (sec: string) => [...new Set([...Object.keys(before.env), ...Object.keys(next.env)])].some((k) => sectionOf(k) === sec && (before.env[k] ?? '') !== (next.env[k] ?? ''))
   const notes: string[] = []
   if (changed('dev')) notes.push('Dev stack: services already running keep their old settings until you restart them.')
-  if (changed('other')) notes.push('Other keys: restart Hive for anything that reads them at start.')
+  if (changed('other')) notes.push('Other keys: restart Orbit for anything that reads them at start.')
   if (before.general.shell !== next.general.shell) notes.push('Terminal shell: used by terminals opened from now on.')
   if (before.general.model !== next.general.model || before.general.effort !== next.general.effort) notes.push('Model and effort: used by threads started from now on.')
   return { ok: true, problems, notes }
@@ -568,7 +568,7 @@ handle('todos:due', (_e, id: string, due: string | null) => setDue(id, due))
 handle('todos:edit', (_e, id: string, text: string) => editTodo(id, text))
 handle('todos:delete', (_e, id: string) => deleteTodo(id))
 handle('todos:restore', (_e, todo: Todo, index: number) => restoreTodo(todo, Number(index)))
-// the list file changed on disk (Hive, the agent's add_todo tool, the terminal helper): tell the window to reload it
+// the list file changed on disk (Orbit, the agent's add_todo tool, the terminal helper): tell the window to reload it
 watchTodos(() => {
   for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('todos:changed')
 })
@@ -601,10 +601,10 @@ handle('worktree:start', async (_e, tabId: string, folder: string, text: string)
   return w
 })
 // the page (re)loaded: no tab is showing any live session any more, so stop them all. The main window's page is ready
-// for threads from now on; messages left unsent when Hive last closed go out once, after its first reset
-// ---- carrying on after Hive closed mid-work ----
-// The threads that are working are written down every few seconds. A thread still in that list when Hive starts was
-// cut off (Hive was quit, crashed, or the computer went down): it gets one message from Hive telling it so, and it
+// for threads from now on; messages left unsent when Orbit last closed go out once, after its first reset
+// ---- carrying on after Orbit closed mid-work ----
+// The threads that are working are written down every few seconds. A thread still in that list when Orbit starts was
+// cut off (Orbit was quit, crashed, or the computer went down): it gets one message from Orbit telling it so, and it
 // carries on. Watcher and Dependabot runs are left to their own schedules. At most RESUME_MAX threads, and only from a
 // list written in the last day.
 const RESUME_PROMPT = `[From ${appName()}, not from the user] ${appName()} was closed while you were working, so your last turn was cut off. Carry on from where you stopped. Anything that was running in the background then (a shell, a subagent, a monitor) is gone: start it again if you still need it.`
@@ -676,7 +676,7 @@ handle('settings:validate', (_e, d: unknown) => validateSettings(draftOf(d), exi
 handle('settings:save', (_e, d: unknown) => saveFromPanel(d))
 // per-thread status: model, effort, commands, models, MCP servers, stopping background tasks
 registerStatusIpc(handle, { liveQuery, stopCodex })
-// Hive's own /mcp, /agents, /permissions, /hooks, /memory, /branch and /add-dir screens (claudeConfig.ts)
+// Orbit's own /mcp, /agents, /permissions, /hooks, /memory, /branch and /add-dir screens (claudeConfig.ts)
 registerClaudeConfigIpc(handle, { liveQuery, idle, transcriptPath })
 // /status and /usage for one thread, live (statusView.ts): the tab's folder and session for a thread with no process yet
 handle('chat:statusView', (_e, tabId: string, known?: { cwd?: string; sessionId?: string }) =>
@@ -810,7 +810,7 @@ handle('accounts:switch', (_e, id: string) => switchToProfile(String(id ?? '')))
 // forget a saved account (its profile only; the engine's own login is left as it is)
 handle('accounts:remove', (_e, id: string) => { const ok = !TEST_MODE && removeAccount(realAccountPaths(), String(id ?? '')); if (ok) accountsChanged(); return ok })
 handle('account:cancel', () => cancelSwitch())
-// Git panel: plain git on the repos and worktrees Hive lists; the page names a folder from that list, never a command
+// Git panel: plain git on the repos and worktrees Orbit lists; the page names a folder from that list, never a command
 handle('git:list', () => gitPanel.gitList())
 handle('git:detail', (_e, dir: string) => gitPanel.gitDetail(String(dir)))
 handle('git:diff', (_e, dir: string, path: string, area: string, full?: boolean, orig?: string) =>
@@ -942,7 +942,7 @@ function openTeamWindow(teamId: string | null): void {
   else void win.loadFile(APP_HTML, { search })
 }
 
-// messages that had not reached Claude when Hive last closed go to their threads again (chat:reset, once)
+// messages that had not reached Claude when Orbit last closed go to their threads again (chat:reset, once)
 function resendPending(web: Electron.WebContents): void {
   for (const p of TEST_MODE ? [] : resendGroups(takePending())) {
     // the original tab id: a watcher's thread stays a watcher's thread (and read-only)
@@ -1126,13 +1126,13 @@ function makeTray(): void {
 // terminals and agent threads stop with the app (Quit does not always pass through window-all-closed)
 app.on('before-quit', () => { quitting = true; saveSearchNow(); stopQuarry(); killAllTerminals() })
 
-// one Hive at a time: opening it again (the shortcut, Start menu) brings back the running one
+// one Orbit at a time: opening it again (the shortcut, Start menu) brings back the running one
 if (!TEST_MODE && !app.requestSingleInstanceLock()) app.quit()
 app.on('second-instance', showWindow)
 
 // Run from source on Windows the process is electron.exe, so the taskbar shows Electron's icon and name. Windows takes
 // both from a Start menu shortcut that carries the same app id, so one is kept there: the taskbar
-// button then shows Hive's icon, and pinning it starts this checkout. Not in tests.
+// button then shows Orbit's icon, and pinning it starts this checkout. Not in tests.
 function sourceRunIdentity(): void {
   if (process.platform !== 'win32' || TEST_MODE || !process.env.APPDATA) return
   const id = `${APP_ID}.source`
@@ -1140,8 +1140,8 @@ function sourceRunIdentity(): void {
     const programs = join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
     const root = app.getAppPath()
     const options = { target: process.execPath, args: `"${root}"`, cwd: root, icon: join(root, 'build', 'icon.ico'), iconIndex: 0, appUserModelId: id, description: PRODUCT }
-    // a "Hive" shortcut that already starts this Electron (made by hand, also the one in Startup) is the one to keep;
-    // otherwise a "Hive (source)" one is made, so an installed Hive's own shortcut is never touched
+    // a "Orbit" shortcut that already starts this Electron (made by hand, also the one in Startup) is the one to keep;
+    // otherwise a "Orbit (source)" one is made, so an installed Orbit's own shortcut is never touched
     const mine = (f: string) => { try { return shell.readShortcutLink(f).target.toLowerCase() === process.execPath.toLowerCase() } catch { return false } }
     const own = [join(programs, `${PRODUCT}.lnk`), join(programs, 'Startup', `${PRODUCT}.lnk`), join(app.getPath('desktop'), `${PRODUCT}.lnk`)].filter(mine)
     for (const f of own) shell.writeShortcutLink(f, 'update', options)

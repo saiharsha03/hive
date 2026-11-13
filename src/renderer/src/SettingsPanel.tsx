@@ -395,10 +395,10 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
             <option value="">(Claude Code's default)</option><option value="on">On</option><option value="off">Off</option>
           </select>
         </Row>
-        <Row label="Branch prefix" hint="Hive prepends it to every worktree branch name of a thread started with Worktree on, which is useful for keeping Claude-created branches organized. Empty = none." problems={of('general.branchPrefix')}>
+        <Row label="Branch prefix" hint="Orbit prepends it to every worktree branch name of a thread started with Worktree on, which is useful for keeping Claude-created branches organized. Empty = none." problems={of('general.branchPrefix')}>
           <input className="sin" data-testid="settings-branch-prefix" value={g.branchPrefix} spellCheck={false} placeholder="(none)" onChange={(e) => setGeneral({ branchPrefix: e.target.value })} />
         </Row>
-        <Row label="Quarry" hint="The Quarry SQL app's exe. Empty = find the installed Quarry; off = no Quarry in Hive. When one is found, Hive gets a Quarry page and threads get its quarry_ tools." problems={of('general.quarryPath')}>
+        <Row label="Quarry" hint="The Quarry SQL app's exe. Empty = find the installed Quarry; off = no Quarry in Orbit. When one is found, Orbit gets a Quarry page and threads get its quarry_ tools." problems={of('general.quarryPath')}>
           <input className="sin wide" data-testid="settings-quarry" value={g.quarryPath} spellCheck={false} placeholder="(find the installed Quarry)" onChange={(e) => setGeneral({ quarryPath: e.target.value })} />
         </Row>
         <Row label="Team memory in briefs" hint="KB of each role memory file (the newest entries) a teammate's brief carries; the file keeps everything." problems={of('general.teamMemoryKb')}>
@@ -468,7 +468,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
     ),
     phone: (
       <>
-        {field('HIVE_MOBILE_RELAY', 'Relay', 'The relay the Hive phone app and this computer both connect to (https://...). See Phone app in README.md: on a server, or on this computer behind cloudflared.', 'https://hive-relay.example.com')}
+        {field('HIVE_MOBILE_RELAY', 'Relay', 'The relay the Orbit phone app and this computer both connect to (https://...). See Phone app in README.md: on a server, or on this computer behind cloudflared.', 'https://hive-relay.example.com')}
         {field('HIVE_MOBILE_ADMIN_TOKEN', 'Relay admin token', 'The HIVE_RELAY_ADMIN_TOKEN the relay runs with, so this computer can register a paired phone.', '')}
         <Row label="Phone app" hint="Pair once by scanning a code with the phone app. Claude can then notify the phone (notify_phone), and you get a notification when a thread waits for you or a background thread finishes."><PhonePairing /></Row>
       </>
@@ -481,7 +481,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
     ),
     notify: g && (
       <>
-        <Row label="Desktop notifications" hint="A Windows notification and a flashing taskbar icon when a thread is waiting for you, asks a question, finishes or fails while Hive is not the focused window."><label className="scheck"><input type="checkbox" data-testid="settings-desktop-notify" checked={g.desktopNotify} onChange={(e) => setGeneral({ desktopNotify: e.target.checked })} /> Notify me on the desktop</label></Row>
+        <Row label="Desktop notifications" hint="A Windows notification and a flashing taskbar icon when a thread is waiting for you, asks a question, finishes or fails while Orbit is not the focused window."><label className="scheck"><input type="checkbox" data-testid="settings-desktop-notify" checked={g.desktopNotify} onChange={(e) => setGeneral({ desktopNotify: e.target.checked })} /> Notify me on the desktop</label></Row>
         <Row label="Quiet hours" hint="No desktop or phone ring between the two times. A failure still rings. Shared with the phone app.">
           {quiet ? (
             <div className="slist">

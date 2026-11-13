@@ -77,7 +77,7 @@ export function phoneInbox(threads: PhoneThread[], asks: Record<string, PhoneAsk
 // only do what is safe from a phone someone else could be holding unlocked: stop a thread, or pick a choice that
 // holds back, declines or asks to see more. Every other choice ("Promote now", "Yes", "Delete the branch") opens the
 // app, and its fingerprint, instead. So a choice is taken from a button only when it starts like one that holds back
-// AND names nothing that acts ("Wait for the freeze, then promote" still promotes). Hive checks again on arrival.
+// AND names nothing that acts ("Wait for the freeze, then promote" still promotes). Orbit checks again on arrival.
 const HOLDS = /^\s*(no\b|not\b|wait|later|hold|pause|stop|cancel|skip|don'?t\b|do not\b|show\b|explain|summar|review|neither|none\b|nothing|leave\b|keep (it|this|that|as)\b|let me\b|ask me\b|i'?ll\b)/i
 const ACTS = /\b(deploy\w*|promot\w*|ship\w*|releas\w*|publish\w*|push\w*|merg\w*|rebas\w*|forc\w*|delet\w*|remov\w*|drop\w*|destroy\w*|wip\w*|reset\w*|overwrit\w*|rm|prod|production|migrat\w*|pay\w*|send\w*|email\w*|buy|purchas\w*|charg\w*|refund\w*|grant\w*|install\w*|upgrad\w*|then|and then|after that)\b/i
 export const riskyChoice = (label: string): boolean => !HOLDS.test(label) || ACTS.test(label)

@@ -25,7 +25,7 @@ export function shouldOffer(o: Offer, at: number): boolean {
 // what the big thread is asked to do
 export function handoffRequest(file: string): string {
   return [
-    '[Hive handoff] This thread has grown large, so the user is moving to a fresh thread. Before it starts:',
+    '[Orbit handoff] This thread has grown large, so the user is moving to a fresh thread. Before it starts:',
     '1. Save anything worth keeping across sessions to your memory (update existing memory files, do not duplicate).',
     `2. Write a handoff for the next thread to ${file} (create the folder if needed). Make it self-contained:`,
     '   the goal; what is done (with commit shas, file paths, PR or ticket links); decisions made and why; the current state',

@@ -49,7 +49,7 @@ test('pictures are kept as files, named in the resent text, and removed once del
   const [left] = p.takePending()
   const pic = left.images![0]
   assert.ok(pic.endsWith('k2-0.jpg') && readFileSync(pic, 'utf8') === 'jpg!')
-  assert.equal(p.resendText(left), `(Attached images, saved when Hive closed: ${pic})`)
+  assert.equal(p.resendText(left), `(Attached images, saved when Orbit closed: ${pic})`)
 })
 
 test('resend: one prompt per thread with all its messages, in order', () => {

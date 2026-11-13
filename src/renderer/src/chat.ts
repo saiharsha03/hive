@@ -77,7 +77,7 @@ export function toolLine(name: string, input: any): { verb: string; what: string
     case 'mcp__hive__wait_for_thread': return { verb: input?.timeout_s === 0 ? 'Checked thread' : 'Waited for thread', what: short(input?.thread) }
   }
   const mcp = name.match(/^mcp__(.+?)__(.+)$/)
-  // a connector's tool (Hive's own included): its name, and the first thing it was called with
+  // a connector's tool (Orbit's own included): its name, and the first thing it was called with
   if (mcp) {
     const first = Object.values(input ?? {}).find((v) => typeof v === 'string' && v.trim()) as string | undefined
     return { verb: mcp[2].replace(/_/g, ' '), what: short(first, 80) }
@@ -117,14 +117,14 @@ export function applyEvent(s: Session, ev: any): Session {
       return { ...s, continueRev: (s.continueRev ?? 0) + 1 }
     case 'hive_ask': {
       const asks = [...(s.asks ?? []).filter((x) => x !== ev.id), ev.id]
-      // Claude's own AskUserQuestion already has its tool row (the card draws on it); a question Hive asks itself
+      // Claude's own AskUserQuestion already has its tool row (the card draws on it); a question Orbit asks itself
       // (Quarry's write confirmation) has none, so it gets one, carrying the questions the event brought
       const hasRow = s.items.some((it) => it.kind === 'tool' && it.id === ev.id)
       if (hasRow || !Array.isArray(ev.questions)) return { ...s, asks }
       return { ...s, asks, items: [...s.items, { kind: 'tool', id: ev.id, name: 'AskUserQuestion', input: { questions: ev.questions }, status: 'running' }] }
     }
     case 'hive_ask_done':
-      // a row Hive made for its own question ends here (Claude's ends with its tool result)
+      // a row Orbit made for its own question ends here (Claude's ends with its tool result)
       return { ...s, asks: (s.asks ?? []).filter((x) => x !== ev.id), items: s.items.map((it) => (it.kind === 'tool' && it.id === ev.id && String(ev.id).startsWith('quarry-') && it.status === 'running' ? { ...it, status: 'done' as const } : it)) }
     case 'hive_mode':
       return { ...s, mode: ev.mode ?? s.mode, modeError: ev.error }

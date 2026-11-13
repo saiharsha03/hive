@@ -251,7 +251,7 @@ test('self-scheduled watcher: each wake is a fresh thread with the full header p
   await tick()
   assert.equal(calls.length, 3); assert.match(calls[2].prompt, /Nothing was pending .* after 6 hours/)
   finish(last()); await tick()
-  // Hive restarts: the first tick always wakes it once to catch up, saying when Hive was last running; then only due rows
+  // Orbit restarts: the first tick always wakes it once to catch up, saying when Orbit was last running; then only due rows
   writeFileSync(join(root, '.heartbeat'), String(new Date('2026-11-01T09:00:00').getTime()))
   initWatchers({}, join(root, '..'), deps)
   await tick()
@@ -276,7 +276,7 @@ test('Stop hook: a run that saved nothing (or, self-scheduled, set no next wake)
   mkdirSync(join(root, 'saver', 'memory', 'projects'), { recursive: true })
   writeFileSync(join(root, 'saver', 'memory', 'projects', 'notes.md'), 'checked x') // deep: the folder time is not enough
   assert.equal(watcherStopReason(tab), null)
-  assert.equal(watcherStopReason('watcher-unknown-1'), null) // not a run Hive started: never blocks
+  assert.equal(watcherStopReason('watcher-unknown-1'), null) // not a run Orbit started: never blocks
   createWatcher({ name: 'Planner', goal: 'g', schedule: { every: 'self' } }, 'test')
   const ptab = calls.at(-1)!.tabId
   writeFileSync(join(root, 'planner', 'memory', 'notes.md'), 'x')

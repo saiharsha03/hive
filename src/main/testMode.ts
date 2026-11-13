@@ -1,6 +1,6 @@
-// Test mode (HIVE_TEST_MODE=1, set by the e2e harness): nothing Hive does reaches the outside world (no Watch or
+// Test mode (HIVE_TEST_MODE=1, set by the e2e harness): nothing Orbit does reaches the outside world (no Watch or
 // Dependabot runs, no deploy.sh, no script commands, no git commit / push / pull, no hook or plugin switches), and
-// Hive's own state files live in HIVE_DATA_DIR instead of ~/.claude, so a test run never touches the real ones.
+// Orbit's own state files live in HIVE_DATA_DIR instead of ~/.claude, so a test run never touches the real ones.
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { STATE_FOLDER } from '../shared/edition'
@@ -11,7 +11,7 @@ export const TEST_MODE = process.env.HIVE_TEST_MODE === '1'
 export const dataDir = (): string =>
   process.env.HIVE_DATA_DIR || (TEST_MODE ? join(tmpdir(), 'hive-test-data') : join(homedir(), STATE_FOLDER))
 
-// the Claude Code projects folder Hive lists sessions from: HIVE_PROJECTS_DIR (the e2e harness seeds fake transcripts
+// the Claude Code projects folder Orbit lists sessions from: HIVE_PROJECTS_DIR (the e2e harness seeds fake transcripts
 // there); in test mode without it a folder under the test data, never the real ~/.claude/projects
 export const projectsRoot = (): string =>
   process.env.HIVE_PROJECTS_DIR || (TEST_MODE ? join(dataDir(), 'projects') : join(homedir(), '.claude', 'projects'))

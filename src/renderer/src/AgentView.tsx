@@ -1,5 +1,5 @@
 // Agent threads: another command-line agent (Codex CLI, OpenCode, any command in Settings > Agents) run in a tab of its
-// own, its own terminal as the body (TerminalView's AgentTerminal; the process lives in main's terminal.ts). Hive cannot
+// own, its own terminal as the body (TerminalView's AgentTerminal; the process lives in main's terminal.ts). Orbit cannot
 // read its conversation: the state word is main's guess from the terminal (agentThreadCore). Not kept across restarts;
 // closing the tab ends it.
 import { useCallback } from 'react'
@@ -75,7 +75,7 @@ export function AgentAsk() {
   )
 }
 
-// ---- the tab body: name, state, folder, Restart and Stop, a line on what Hive does not cover, then the terminal ----
+// ---- the tab body: name, state, folder, Restart and Stop, a line on what Orbit does not cover, then the terminal ----
 export function AgentPane({ id, focused }: { id: string; focused: boolean }) {
   const s = useSession(id)
   const state = useStore(agentThreads, useCallback((a: ReturnType<typeof agentThreads.get>) => a[id]?.state ?? 'running', [id]))
@@ -90,7 +90,7 @@ export function AgentPane({ id, focused }: { id: string; focused: boolean }) {
         <button onClick={restart} title="Stop it and start it again in the same folder" data-testid="agent-restart">Restart</button>
         <button onClick={stop} disabled={state === 'exited' || state === 'failed'} title="End its process; the tab stays" data-testid="agent-stop">Stop</button>
       </div>
-      <div className="term-bar">This agent uses its own sign-in and permission rules, and its usage is not counted in Hive's limits.</div>
+      <div className="term-bar">This agent uses its own sign-in and permission rules, and its usage is not counted in Orbit's limits.</div>
       <AgentTerminal id={id} cwd={s.cwd ?? ''} agent={s.agent} focused={focused} />
     </div>
   )

@@ -1,5 +1,5 @@
 // A branch's pull request and its checks (from `gh pr view --json ...`), and the message that asks a thread to ship
-// its branch. Hive itself never commits, pushes or opens the PR: the thread does, by the project's own rules.
+// its branch. Orbit itself never commits, pushes or opens the PR: the thread does, by the project's own rules.
 
 export type CheckState = 'none' | 'pending' | 'failing' | 'passing'
 export type Checks = { state: CheckState; passed: number; failed: number; pending: number; total: number }

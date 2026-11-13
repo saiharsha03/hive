@@ -2,7 +2,7 @@
 // run is a fresh background thread, closed when the run ends: what carries over is what the run saved (memory folder,
 // SQLite db, findings, reports) and its final reply, which the next run's header quotes. Disabling closes a run that is
 // still open. A run never starts while the previous run's thread is still working (its own run, or the user talking to it).
-// Adaptive watchers take their sweep interval from the 7-day usage limit, each with its own tiers. Hive adds no guards:
+// Adaptive watchers take their sweep interval from the 7-day usage limit, each with its own tiers. Orbit adds no guards:
 // the thread runs in auto mode like any other background thread. With HIVE_TEST_MODE=1 nothing runs on its own.
 // No Electron imports: the thread starter and the thread state are passed in.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, type Dirent } from 'node:fs'
@@ -25,7 +25,7 @@ import { saveReminder } from '../shared/watcherSaveCore'
 export type RunThread = (t: { tabId: string; cwd: string; title: string; prompt: string; resume?: string }) => boolean // false: no window yet
 export type ThreadState = (tabId: string) => { working: boolean; sessionId: string | null; waitingReason?: string; lastOk?: boolean | null; lastReply?: string | null } | null
 export type Usage = () => Promise<{ pct: number | null; readAt: number; error: string }> // the 7-day limit, 0-100
-// a watcher Hive has built in (Dependabot): shown in the same list with its own switch
+// a watcher Orbit has built in (Dependabot): shown in the same list with its own switch
 export type Builtin = { id: string; summary: () => WatcherSummary | null; setEnabled: (on: boolean) => void }
 type Deps = {
   runThread: RunThread; threadState: ThreadState; closeThread: (tabId: string) => void
@@ -81,8 +81,8 @@ export function watcherTabFor(sessionId: string): string | null {
 const cfgOf = (id: string, w: WatcherFile) => watcherConfig(dirOf(id), w)
 const cwdOf = (w: WatcherFile) => w.cwd || workspace || homedir()
 
-// Hive's own heartbeat (written every tick) tells a self-scheduled watcher, on its first wake after a start, how long
-// Hive was closed; woke = the watchers that already had a run since this start
+// Orbit's own heartbeat (written every tick) tells a self-scheduled watcher, on its first wake after a start, how long
+// Orbit was closed; woke = the watchers that already had a run since this start
 const heartbeatFile = () => join(watchersRoot(), '.heartbeat')
 const readHeartbeat = (): number | null => { try { const t = Number(readFileSync(heartbeatFile(), 'utf8').trim()); return t > 0 ? t : null } catch { return null } }
 const beat = () => { try { mkdirSync(watchersRoot(), { recursive: true }); writeFileSync(heartbeatFile(), String(Date.now())) } catch { /* next tick */ } }
@@ -209,7 +209,7 @@ export async function tick(): Promise<void> {
 
 // a self-scheduled watcher wakes for its due rows, or once FALLBACK_MS after its last run when nothing is pending.
 // A table that can't be read right now (the watcher is writing it) is tried again next tick.
-// boot: its first wake since Hive started, which always happens and says how long Hive was closed
+// boot: its first wake since Orbit started, which always happens and says how long Orbit was closed
 type Wake = { due: Wakeup[]; startup?: { lastSeen: number | null } }
 function selfWake(dir: string, s: WatcherState, boot: boolean): Wake | null {
   const now = Date.now()

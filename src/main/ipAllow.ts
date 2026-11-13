@@ -1,5 +1,5 @@
 // IP allowlist: a configured command (HIVE_ALLOWLIST_CMD) that allows this machine's public IP somewhere, such as a
-// cloud security group. Hive reads the public IP every couple of minutes; the button is on when the IP is not one the
+// cloud security group. Orbit reads the public IP every couple of minutes; the button is on when the IP is not one the
 // command has already succeeded for (allowKnown.ts: home and office both stay known). An IP that can't be read is shown
 // as such, not as a change. Test mode reads no IP and never runs the command.
 import { spawn } from 'node:child_process'
@@ -38,7 +38,7 @@ export function allowStatus(): AllowStatus {
   }
 }
 
-// forget an allowed address (its rule was removed on the other side): the next time Hive is there, it can allow it again
+// forget an allowed address (its rule was removed on the other side): the next time Orbit is there, it can allow it again
 // The address this computer has now is already allowed on the other side (someone added it by hand): keep it as known,
 // without running the command.
 export function markAllowed(): AllowStatus {

@@ -37,11 +37,11 @@ export function PluginsMenu() {
       {error && <div className="dd-error">{error}</div>}
       {!plugins && !error && <div className="dd-hint">Loading…</div>}
       <div className="dd-body">
-        <div className="dd-group">Hive</div>
+        <div className="dd-group">Orbit</div>
         <div className={clipOn ? 'hk' : 'hk off'}>
           <div className="hk-text">
             <span className="hk-name">Clipboard suggestions</span>
-            <span className="hk-desc">When Hive gains focus, offer a new screenshot or copied text above the message box. Applies right away.</span>
+            <span className="hk-desc">When Orbit gains focus, offer a new screenshot or copied text above the message box. Applies right away.</span>
           </div>
           <button data-testid="plugins-button-2" className={clipOn ? 'switch on' : 'switch'} onClick={() => setClipboardOn(!clipOn)} aria-label={clipOn ? 'Turn off' : 'Turn on'}>
             <i />

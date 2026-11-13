@@ -1,15 +1,15 @@
 // Idle close, against a really running Claude process: a thread left idle past the limit has its process closed by
-// Hive, the tab stays, and the next message resumes the same Claude session (it still knows what it said). The limit
+// Orbit, the tab stays, and the next message resumes the same Claude session (it still knows what it said). The limit
 // is Settings > General's idleCloseMinutes; this run gives it in milliseconds (HIVE_TEST_IDLE_CLOSE_MS, test mode
 // only), so the app's own timer fires within seconds. Two tiny turns on Haiku at low effort.
 import { expect, test } from '@playwright/test'
 import { threadPids, close, launch, liveFacts, selectedTab, shot } from './harness'
-import { Hive } from './hive'
+import { Orbit } from './hive'
 
 test('an idle thread closes its Claude process, keeps its tab, and the next message resumes the same session', async () => {
   const l = await launch({ env: { HIVE_TEST_IDLE_CLOSE_MS: '8000' } })
   try {
-    const h = new Hive(l.page)
+    const h = new Orbit(l.page)
     await h.newSession()
     const tab = await selectedTab(l.page)
     const tabs = await h.id('tab').count()

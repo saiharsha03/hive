@@ -57,7 +57,7 @@ export async function deleteNote(id: string): Promise<void> {
   await rename(fileOf(id), join(bin, `${id}-${Date.now()}.md`))
 }
 
-// the folder changed (Hive, Claude or another editor): tell the window to reload the list
+// the folder changed (Orbit, Claude or another editor): tell the window to reload the list
 export function watchNotes(onChange: () => void, delay = 200): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {

@@ -2,7 +2,7 @@
 // redesign only has to keep the test ids (or change this file).
 import { expect, type Locator, type Page } from '@playwright/test'
 
-export class Hive {
+export class Orbit {
   constructor(readonly page: Page) {}
 
   id = (t: string): Locator => this.page.getByTestId(t)

@@ -19,7 +19,7 @@ let logDir = join(dataDir(), 'hive', 'scripts')
 const runs = new Map<string, ScriptRun>() // script name -> its latest run
 const procs = new Map<string, { child: ChildProcess; stopping: boolean }>()
 
-// scripts.json sits next to Hive's .env (HIVE_SCRIPTS_FILE overrides, for tests)
+// scripts.json sits next to Orbit's .env (HIVE_SCRIPTS_FILE overrides, for tests)
 export function initScripts(appDir: string, onUpdate: (runs: ScriptRun[]) => void, logs?: string, fromSettings?: () => unknown[] | null) {
   file = process.env.HIVE_SCRIPTS_FILE || join(appDir, 'scripts.json')
   if (fromSettings) stored = fromSettings
@@ -27,7 +27,7 @@ export function initScripts(appDir: string, onUpdate: (runs: ScriptRun[]) => voi
   if (logs) logDir = logs
 }
 
-// read on every call, so edits to the file show up without restarting Hive
+// read on every call, so edits to the file show up without restarting Orbit
 function load(): { scripts: ScriptDef[]; message: string } {
   const list = stored()
   if (list) {
@@ -150,7 +150,7 @@ export function stopScript(name: string) {
   killTree(p.child)
 }
 
-// Hive is closing: no script keeps running without a window to show or stop it
+// Orbit is closing: no script keeps running without a window to show or stop it
 export function stopAllScripts() {
   for (const name of procs.keys()) stopScript(name)
 }

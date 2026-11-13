@@ -1,21 +1,21 @@
-// Quarry (a separate SQL desktop app) inside Hive: the pure parts, testable without Quarry or Electron. Quarry runs
+// Quarry (a separate SQL desktop app) inside Orbit: the pure parts, testable without Quarry or Electron. Quarry runs
 // headless as `quarry serve` and speaks JSON-RPC 2.0 over stdio, one JSON object per line; there is no port and no
-// token (Quarry's docs/embedding.md). Hive finds the installed exe, checks it speaks protocol 1, serves its UI from a
+// token (Quarry's docs/embedding.md). Orbit finds the installed exe, checks it speaks protocol 1, serves its UI from a
 // quarry: protocol and gives threads a few tools over its agent interface. Quarry enforces its own rules (one statement
 // per call, read-only reads, no writes on production or read-only connections, writes only with allowWrite).
 
 export const PROTOCOL = 1
-// the methods Hive calls: the UI's (any, forwarded as the user's own actions) are not listed here
+// the methods Orbit calls: the UI's (any, forwarded as the user's own actions) are not listed here
 export const NEEDED_METHODS = ['rpc.hello', 'ui.index', 'ui.asset', 'agent.listConnections', 'agent.describeSchema', 'agent.query', 'agent.explain'] as const
 
 export type Capabilities = { name: string; version: string; protocol: number; methods: string[]; agent?: { maxRows?: number; defaultRows?: number; maxTimeoutMs?: number; defaultTimeoutMs?: number } }
 
-// `quarry --capabilities`: usable only when it is protocol 1 and has every method Hive uses
+// `quarry --capabilities`: usable only when it is protocol 1 and has every method Orbit uses
 export function checkCapabilities(text: string): { ok: true; caps: Capabilities } | { ok: false; reason: string } {
   let c: any
   try { c = JSON.parse(text.trim()) } catch { return { ok: false, reason: 'quarry --capabilities did not answer JSON' } }
   if (!c || typeof c !== 'object') return { ok: false, reason: 'quarry --capabilities did not answer an object' }
-  if (c.protocol !== PROTOCOL) return { ok: false, reason: `Quarry ${c.version ?? '?'} speaks protocol ${c.protocol ?? '?'}; Hive speaks ${PROTOCOL}` }
+  if (c.protocol !== PROTOCOL) return { ok: false, reason: `Quarry ${c.version ?? '?'} speaks protocol ${c.protocol ?? '?'}; Orbit speaks ${PROTOCOL}` }
   const methods: string[] = Array.isArray(c.methods) ? c.methods.filter((m: unknown) => typeof m === 'string') : []
   const missing = NEEDED_METHODS.filter((m) => !methods.includes(m))
   if (missing.length) return { ok: false, reason: `Quarry ${c.version ?? '?'} lacks ${missing.join(', ')}` }

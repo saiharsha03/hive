@@ -56,11 +56,11 @@ test('Team window address: written and read back; the normal page is not the Tea
 })
 
 test('isAppPage: the same page with a query or hash is accepted, anything else is not', () => {
-  const file = 'file:///C:/Hive/out/renderer/index.html'
+  const file = 'file:///C:/Orbit/out/renderer/index.html'
   assert.ok(isAppPage(file, file, false))
   assert.ok(isAppPage(`${file}?view=team&team=t1`, file, false))
   assert.ok(isAppPage(`${file}#x`, file, false))
-  assert.ok(!isAppPage('file:///C:/Hive/out/renderer/other.html?view=team', file, false))
+  assert.ok(!isAppPage('file:///C:/Orbit/out/renderer/other.html?view=team', file, false))
   assert.ok(!isAppPage('https://evil.example/index.html', file, false))
   const dev = 'http://localhost:5173'
   assert.ok(isAppPage('http://localhost:5173/?view=team&team=t1', dev, true))

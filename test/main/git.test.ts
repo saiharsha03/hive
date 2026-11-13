@@ -109,7 +109,7 @@ describe.skipIf(!hasGit)('git panel (real git)', () => {
     assert.equal((await g.gitList())[0].ahead, 0)
     assert.match(await g.gitFetch(REPO), /.+/)
 
-    // a worktree of a listed repo is listed and usable; a folder Hive does not list is refused
+    // a worktree of a listed repo is listed and usable; a folder Orbit does not list is refused
     sh(REPO, 'worktree', 'add', '-q', WT, 'feat/one')
     rows = await g.gitList()
     const wt = rows.find((r) => r.worktree)!
@@ -117,7 +117,7 @@ describe.skipIf(!hasGit)('git panel (real git)', () => {
     assert.equal(wt.branch, 'feat/one')
     assert.equal(wt.name, 'demo / wt-demo-side')
     assert.equal((await g.gitBranches(WT)).current, 'feat/one')
-    await assert.rejects(g.gitDetail(SCRATCH), /not a repo or worktree Hive(?: Next)? lists/)
+    await assert.rejects(g.gitDetail(SCRATCH), /not a repo or worktree Orbit(?: Next)? lists/)
     await assert.rejects(g.gitStage(REPO, ['../outside.txt']), /Not a path inside the repo/)
     await assert.rejects(g.gitDiff(REPO, join(SCRATCH, 'outside.txt'), 'untracked', false), /Not a path inside the repo/)
     await assert.rejects(g.gitShow(REPO, '--all'), /Not a commit id/)
