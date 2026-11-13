@@ -69,7 +69,7 @@ jobs:
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ env.TAG }}
-          name: Hive ${{ env.TAG }}
+          name: Orbit ${{ env.TAG }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
@@ -117,9 +117,9 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon -q testDebugUnitTest assembleRelease
           name=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | cut -d'"' -f2)
-          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/Hive-Phone-$name.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/Orbit-Phone-$name.apk"
           rm -rf "$RUNNER_TEMP/hive-secrets" app/google-services.json
-          echo "APK=$RUNNER_TEMP/Hive-Phone-$name.apk" >> "$GITHUB_ENV"
+          echo "APK=$RUNNER_TEMP/Orbit-Phone-$name.apk" >> "$GITHUB_ENV"
 
       - name: Attach it to the release
         if: env.HAS_KEY == 'true'

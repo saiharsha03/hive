@@ -46,7 +46,7 @@ jobs:
       - name: Unit and integration tests
         run: npm test
 
-  # the app build: only on Windows, the one platform Hive ships for
+  # the app build: only on Windows, the one platform Orbit ships for
   build:
     name: Build (windows-latest)
     runs-on: windows-latest
