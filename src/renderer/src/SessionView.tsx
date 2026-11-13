@@ -32,6 +32,7 @@ import { untilText } from '../../shared/cronCore'
 import { RunningBar } from './RunningBar'
 import { needsNote } from './background'
 import { ComingBar } from './ComingBar'
+import { threadPrs } from '../../shared/prLinkCore'
 
 export type Attachment = { url: string; mediaType: string; data: string }
 export type SendMode = 'steer' | 'queue' | 'interrupt'
@@ -367,6 +368,8 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     const now = new Map(tasks.filter((t) => t.toolUseId && t.backgrounded).map((t) => [t.toolUseId!, t.status]))
     return new Map([...bgEnded, ...now])
   }, [tasks])
+  // the repo of the last pull request this thread opened: a bare #123 in a reply links to it
+  const repo = useMemo(() => threadPrs(session.items).at(-1)?.repo, [session.items])
   const base = session.history?.count ?? 0
   const used = new Set<string>()
   const keyOf = (it: Item, i: number): string => {
@@ -415,7 +418,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
       return
     }
     // the time Claude wrote it, small under the reply (a day and the time once it is not today)
-    if (it.kind === 'assistant') { out.push(<div key={key} className="msg cl" data-testid="msg-assistant"><MdBody text={it.text} />{it.at ? <span className="msg-at" title={new Date(it.at).toLocaleString()} data-testid="msg-time">{replyTime(it.at)}</span> : null}</div>); return }
+    if (it.kind === 'assistant') { out.push(<div key={key} className="msg cl" data-testid="msg-assistant"><MdBody text={it.text} repo={repo} />{it.at ? <span className="msg-at" title={new Date(it.at).toLocaleString()} data-testid="msg-time">{replyTime(it.at)}</span> : null}</div>); return }
     if (it.kind === 'tool' && it.name === 'AskUserQuestion') { out.push(<div key={key} className="qwrap"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} result={it.output} /></div>); return }
     if (it.kind === 'show') { out.push(<div key={key} className="msg"><ShowCard path={it.path} onOpen={st.open} /></div>); return }
     if (it.kind === 'note') { out.push(<div key={key} className="note">{it.text}</div>); return }
@@ -431,7 +434,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
       )
       return
     }
-    if (it.kind === 'agent') { out.push(<div key={key} className="msg cl from"><div className="msg-note">{it.from}</div><MdBody text={it.text} /></div>); return }
+    if (it.kind === 'agent') { out.push(<div key={key} className="msg cl from"><div className="msg-note">{it.from}</div><MdBody text={it.text} repo={repo} /></div>); return }
     if (it.kind === 'error') { out.push(<div key={key} className="msg err" data-testid="msg-error"><span>Failed: {it.text}</span></div>) }
   })
   flush()
@@ -740,6 +743,9 @@ export function SessionView(p: Props) {
   const shownMode = session.mode ?? (session.background ? 'auto' : mode)
   const wt = session.worktrees?.at(-1)
   const folder = wt ? `${wt.repo} on ${wt.branch}` : (session.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? ''
+  // the pull requests this thread opened: the latest on the header, the rest in its tooltip
+  const prs = useMemo(() => threadPrs(session.items), [session.items])
+  const pr = prs.at(-1)
   const running = session.items.filter((i) => i.kind === 'tool' && i.status === 'running').at(-1)
   const runningTasks = status.tasks.filter((t) => t.status === 'running').length
   const stopGoal = async () => { if (session.busy) { p.onStop(); p.onSend('/goal clear', [], 'queue') } else p.onSend('/goal clear', []) }
@@ -769,6 +775,10 @@ export function SessionView(p: Props) {
         <div className="phead-t">
           <div className="phead-l">
             {folder && <div className="phead-sub" title={session.cwd} data-testid="folder-picker">{wt ? <>{wt.repo} on <b>{wt.branch}</b></> : folder}</div>}
+            {pr && (
+              <a className="phead-pr" href={pr.url} target="_blank" rel="noreferrer" data-testid="thread-pr"
+                title={[`${pr.repo} #${pr.num}`, ...prs.slice(0, -1).reverse().map((x, i) => `${i ? '' : 'Earlier: '}${x.repo} #${x.num}`)].join('\n')}>PR #{pr.num}</a>
+            )}
           </div>
           <span className="phead-acts">
             {PANEL_ACTS.map((a) => (

@@ -12,6 +12,8 @@
 .phead-t { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); margin-top: var(--s2); }
 .phead-sub { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .phead-sub b { color: var(--ink); font-weight: 500; }
+.phead-pr { color: var(--accent-text); white-space: nowrap; flex: none; text-decoration: none; }
+.phead-pr:hover { text-decoration: underline; }
 .phead-l { display: flex; align-items: baseline; gap: var(--s3); min-width: 0; flex: 1 1 auto; }
 /* what is coming up for this thread (loops, wake-ups, an automatic continue): one quiet link beside the folder; its list
    opens over the conversation, so nothing below moves */

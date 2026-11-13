@@ -2,7 +2,8 @@
 // message (rich HTML + the original markdown), one per table (HTML + TSV) and one per code block (just the code), and Ctrl+C
 // on a selection in the conversation gives light HTML instead of Chromium's copy with the dark theme's colors inline.
 import { INSIGHT, insightCallouts } from '../../shared/insightCore'
-import { memo, useRef, useState, type ComponentProps } from 'react'
+import { linkPrTree } from '../../shared/prLinkCore'
+import { memo, useMemo, useRef, useState, type ComponentProps } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cleanHtml, tableTsv, textOf, wrapSelection, type CNode } from '../../shared/copyCore'
@@ -72,14 +73,18 @@ const COMPONENTS = {
   pre: ({ node: _n, ...p }: ComponentProps<'pre'> & { node?: unknown }) => <CodeBox {...p} />,
 }
 
+// owner/repo#123 and github PR URLs become links (a bare #123 too once the thread's repo is known); a click opens the browser
+const prLinks = (repo?: string) => () => (tree: unknown) => linkPrTree(tree as Parameters<typeof linkPrTree>[0], repo)
+
 // memo: a message's Markdown is parsed again only when its text changes, not whenever the conversation re-renders
-export const MdBody = memo(function MdBody({ text, copy = true }: { text: string; copy?: boolean }) {
+export const MdBody = memo(function MdBody({ text, copy = true, repo }: { text: string; copy?: boolean; repo?: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const plugins = useMemo(() => [remarkGfm, prLinks(repo)], [repo])
   const copyAll = async () => { if (ref.current) await write(cleanHtml(kids(ref.current)), text) }
   return (
     <div className="mdmsg">
       {copy && <CopyButton className="msgcopy" title="Copy the message (formatted for Teams / Outlook / Word, markdown for plain text)" onCopy={copyAll} />}
-      <div className="body md" ref={ref}><Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>{insightCallouts(text)}</Markdown></div>
+      <div className="body md" ref={ref}><Markdown remarkPlugins={plugins} components={COMPONENTS}>{insightCallouts(text)}</Markdown></div>
     </div>
   )
 })
