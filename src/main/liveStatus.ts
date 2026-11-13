@@ -166,7 +166,7 @@ function setWatching(tabId: string, on: boolean) {
 
 const textOf = (m: any): string => (m.message?.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
 
-// every message of a Orbit session passes through here (after chat.ts handled it)
+// every message of an Orbit session passes through here (after chat.ts handled it)
 export function observe(tabId: string, m: SDKMessage, pathOf: (sessionId: string) => string, q: Query): void {
   const t = tab(tabId)
   const msg = m as any

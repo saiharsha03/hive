@@ -1,5 +1,5 @@
 // Threads waiting for a usage limit to reset: each wakes a minute after its reset (spaced a few minutes apart) with
-// "Continue where you left off". Saved in hive-autocontinue.json, so a Orbit restart keeps them.
+// "Continue where you left off". Saved in hive-autocontinue.json, so an Orbit restart keeps them.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileSafe } from './safeWrite'
