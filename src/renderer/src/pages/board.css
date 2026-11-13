@@ -22,3 +22,31 @@
 .bd-meta .btn-link { font: var(--t-label); color: var(--dim); }
 .bd-meta .btn-link:hover { color: var(--hi); }
 .bd-meta .btn-link:focus-visible { outline: none; text-decoration: underline; color: var(--hi); }
+
+/* Colour. Each stage has one colour (the app's kind colours), on its heading, a bar over the column and the left edge
+   of its cards, so the board reads by stage at a glance. On a card, the type word is coloured (a bug in the fail
+   colour) and a high priority in the wait colour. */
+.bd-s-backlog { --bd: var(--dim); }
+.bd-s-todo { --bd: var(--k-loop); }
+.bd-s-doing { --bd: var(--work); }
+.bd-s-blocked { --bd: var(--fail); }
+.bd-s-review { --bd: var(--k-advisor); }
+.bd-s-prod { --bd: var(--k-monitor); }
+.bd-s-done { --bd: var(--done); }
+.bd-col-head { border-top: 2px solid var(--bd, var(--rule2)); padding-top: var(--s2); }
+.bd-col-t { color: var(--bd, var(--hi)); font-weight: 650; }
+.bd-col-n { color: var(--dim); }
+.bd-card { box-shadow: inset 3px 0 0 var(--bd, transparent); background: color-mix(in srgb, var(--bd, transparent) 6%, var(--raised)); }
+.bd-card:hover { background: color-mix(in srgb, var(--bd, transparent) 12%, var(--raised)); }
+.bd-card:focus-visible { box-shadow: inset 3px 0 0 var(--bd, transparent), inset 0 0 0 1px var(--rule2); }
+.bd-key { color: var(--bd, var(--dim)); }
+.bd-tags { display: flex; gap: var(--s2); align-items: baseline; }
+.bd-type, .bd-pri { font-weight: 600; flex: none; }
+.bd-t-bug { color: var(--fail); }
+.bd-t-story { color: var(--done); }
+.bd-t-task { color: var(--k-loop); }
+.bd-t-epic { color: var(--k-review); }
+.bd-t-other { color: var(--dim); }
+.bd-pri { color: var(--dim); font-weight: 500; }
+.bd-pri.hot { color: var(--signal); font-weight: 600; }
+.bd-proj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

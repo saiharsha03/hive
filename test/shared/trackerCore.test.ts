@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
-  adfToText, buildJql, columnOf, columnsOf, fetchFailure, filterCards, firstMessage, httpError, mapIssue, searchUrl, statusNote,
+  adfToText, buildJql, columnOf, columnsOf, isUrgent, typeTone, fetchFailure, filterCards, firstMessage, httpError, mapIssue, searchUrl, statusNote,
   threadFor, threadTitle, trackerConfig, trackerOrigin, trimDescription, type Card,
 } from '../../src/shared/trackerCore'
 
@@ -32,7 +32,8 @@ test('settings: what is missing is named in one sentence, and the site must be h
 })
 
 test('the search: mine, open or done in the last 14 days, as a GET address on the site', () => {
-  assert.equal(buildJql(), 'assignee = currentUser() AND (statusCategory != Done OR statusCategoryChangedDate >= -14d) ORDER BY updated DESC')
+  assert.equal(buildJql(), 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC') // done work is left out
+  assert.equal(buildJql(14), 'assignee = currentUser() AND (statusCategory != Done OR statusCategoryChangedDate >= -14d) ORDER BY updated DESC')
   assert.match(buildJql(3), />= -3d\)/)
   const u = new URL(searchUrl(SITE, buildJql(), 'tok+1'))
   assert.equal(u.origin + u.pathname, `${SITE}/rest/api/3/search/jql`)
@@ -98,19 +99,20 @@ test('columns: To do, In progress, In review only when such a status exists, Don
     card('A-1', { status: 'Done', cat: 'done' }), card('A-2', { status: 'In Progress', cat: 'indeterminate', updated: '2026-11-01T00:00:00.000+0000' }),
     card('A-3', { status: 'Blocked', cat: 'indeterminate', updated: '2026-11-09T00:00:00.000+0000' }), card('A-4', { status: 'Backlog' }),
   ]
-  const cols = columnsOf(cards)
-  assert.deepEqual(cols.map((c) => c.label), ['To do', 'In progress', 'Done']) // empty columns stay, In review does not
-  assert.deepEqual(cols.map((c) => c.cards.map((x) => x.key)), [['A-4'], ['A-3', 'A-2'], ['A-1']])
-  assert.deepEqual(columnsOf([...cards, card('A-5', { status: 'In Review', cat: 'indeterminate' })]).map((c) => c.label), ['To do', 'In progress', 'In review', 'Done'])
-  assert.deepEqual(columnsOf([]).map((c) => c.cards.length), [0, 0, 0])
+  // one column per real status, in stage order; within a column the newest first
+  const more = [...cards, card('A-5', { status: 'To Do' }), card('A-6', { status: 'In Prod - Feature flag not yet enabled', cat: 'indeterminate' }), card('A-7', { status: 'Ready for QA', cat: 'indeterminate' })]
+  const cols = columnsOf(more)
+  assert.deepEqual(cols.map((c) => c.label), ['Backlog', 'To Do', 'In Progress', 'Blocked', 'Ready for QA', 'In Prod - Feature flag not yet enabled', 'Done'])
+  assert.deepEqual(cols.find((c) => c.label === 'In Progress')!.cards.map((x) => x.key), ['A-2'])
+  assert.equal(cols.find((c) => c.label === 'In Prod - Feature flag not yet enabled')!.id, 'in-prod-feature-flag-not-yet-enabled')
+  assert.deepEqual(cols.map((c) => c.stage), ['backlog', 'todo', 'doing', 'blocked', 'review', 'prod', 'done'])
+  assert.deepEqual(['Bug', 'Story', 'Task', 'Epic', 'Spike', 'Odd'].map(typeTone), ['bug', 'story', 'task', 'epic', 'task', 'other'])
+  assert.deepEqual(['Highest', 'High', 'Medium', 'Low', ''].map(isUrgent), [true, true, false, false, false])
+  assert.deepEqual(columnsOf([]), [])
 })
 
-test('the real status shows on the card only when it differs from the column name', () => {
-  assert.equal(statusNote(card('A-1', { status: 'To Do' })), '')
-  assert.equal(statusNote(card('A-2', { status: 'Backlog' })), 'Backlog')
-  assert.equal(statusNote(card('A-3', { status: 'Blocked', cat: 'indeterminate' })), 'Blocked')
-  assert.equal(statusNote(card('A-4', { status: 'In Review', cat: 'indeterminate' })), '')
-  assert.equal(statusNote(card('A-5', { status: 'Done', cat: 'done' })), '')
+test('a card says nothing more about its status: the column is the status', () => {
+  assert.equal(statusNote(card('A-2', { status: 'Backlog' })), '')
 })
 
 test('the filter narrows by key, summary or project', () => {

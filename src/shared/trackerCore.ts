@@ -36,9 +36,11 @@ export const PAGE_SIZE = 100
 export const MAX_PAGES = 10 // a stop for a search that never ends; the page says when it was reached
 export const FIELDS = ['summary', 'status', 'issuetype', 'priority', 'project', 'updated', 'description']
 
-// mine and open, plus what was finished lately so done work does not vanish at once
-export const buildJql = (doneDays = DONE_DAYS): string =>
-  `assignee = currentUser() AND (statusCategory != Done OR statusCategoryChangedDate >= -${Math.max(0, Math.round(doneDays))}d) ORDER BY updated DESC`
+// mine and open. Done work is left out: the board is for what is still to do (doneDays > 0 adds what was finished lately)
+export const buildJql = (doneDays = 0): string => {
+  const days = Math.max(0, Math.round(doneDays))
+  return `assignee = currentUser() AND ${days ? `(statusCategory != Done OR statusCategoryChangedDate >= -${days}d)` : 'statusCategory != Done'} ORDER BY updated DESC`
+}
 
 export function searchUrl(origin: string, jql: string, nextPageToken = ''): string {
   const q = new URLSearchParams({ jql, fields: FIELDS.join(','), maxResults: String(PAGE_SIZE) })
@@ -131,17 +133,38 @@ export function filterCards(cards: Card[], query: string): Card[] {
 }
 
 // To do, In progress, In review (only when a status like that exists), Done; the newest change first in each
-export function columnsOf(cards: Card[]): { id: ColumnId; label: string; cards: Card[] }[] {
-  return COLUMNS
-    .map((c) => ({ ...c, cards: cards.filter((x) => x.column === c.id).sort((a, b) => b.updated - a.updated) }))
-    .filter((c) => c.id !== 'review' || c.cards.length > 0)
+// One column per real Jira status the cards are in ("Back Log", "To Do", "In Progress", "In Prod - Feature flag not yet
+// enabled"), not per status category: the stage is what the board is read for. Order: the backlog, then the rest of
+// what has not started, then work in hand, then review, then what is already in production; done (when asked for) last.
+const stageRank = (c: Card): number => {
+  const n = c.status.toLowerCase()
+  if (c.column === 'done') return 6
+  if (/back ?log/.test(n)) return 0
+  if (c.column === 'todo') return 1
+  if (/\bprod|deploy|released|feature flag/.test(n)) return 5
+  if (c.column === 'review' || /\bqa\b|review|test/.test(n)) return 4
+  if (/block|hold|wait/.test(n)) return 3
+  return 2
+}
+// the stage a status belongs to, for its colour: backlog, todo, doing, blocked, review, prod, done
+export const STAGES = ['backlog', 'todo', 'doing', 'blocked', 'review', 'prod', 'done'] as const
+export const stageOf = (c: Card): (typeof STAGES)[number] => STAGES[stageRank(c)]
+// what kind of ticket it is, for the card's type word: bug, story, task, epic or other
+export const typeTone = (type: string): 'bug' | 'story' | 'task' | 'epic' | 'other' => {
+  const t = type.toLowerCase()
+  return /bug|defect|incident/.test(t) ? 'bug' : /story|feature/.test(t) ? 'story' : /epic/.test(t) ? 'epic' : /task|spike|chore/.test(t) ? 'task' : 'other'
+}
+export const isUrgent = (priority: string): boolean => /high|critical|blocker|urgent/i.test(priority)
+export function columnsOf(cards: Card[]): { id: string; label: string; stage: (typeof STAGES)[number]; cards: Card[] }[] {
+  const by = new Map<string, Card[]>()
+  for (const c of cards) { const k = c.status || 'No status'; by.set(k, [...(by.get(k) ?? []), c]) }
+  return [...by.entries()]
+    .map(([label, list]) => ({ id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'none', label, stage: stageOf(list[0]), cards: list.sort((x, y) => y.updated - x.updated) }))
+    .sort((x, y) => stageRank(x.cards[0]) - stageRank(y.cards[0]) || x.label.localeCompare(y.label))
 }
 
-// the status as the card shows it: only when it says more than the column's own name
-export const statusNote = (card: Card): string => {
-  const label = COLUMNS.find((c) => c.id === card.column)!.label
-  return card.status && card.status.toLowerCase() !== label.toLowerCase() ? card.status : ''
-}
+// the column is the status now, so a card has nothing more to say about it
+export const statusNote = (_card: Card): string => ''
 
 // ---------- a thread from a card ----------
 
