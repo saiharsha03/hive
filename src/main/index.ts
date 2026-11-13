@@ -207,6 +207,16 @@ async function sendTo(id: string, text: string, user: boolean): Promise<string> 
   runInThread({ tabId: watcherTabFor(s.id) ?? s.id, cwd: s.cwd, title: s.title, prompt: text, resume: s.id, user }, w.webContents)
   return 'sent'
 }
+// the folder a phone request about a thread works in: the last worktree the thread made, else its own folder
+async function phoneThreadDir(id: string): Promise<string> {
+  const l = liveThreads().find((t) => t.tabId === id || t.sessionId === id)
+  const saved = l ? undefined : (await listSessions()).find((x) => x.id === id)
+  const sessionId = l?.sessionId ?? saved?.id ?? ''
+  const wt = sessionId ? (await threadLinks(sessionId).catch(() => [])).at(-1) : undefined
+  const dir = wt?.path || (l ? threadFacts(l.tabId)?.cwd || l.cwd : saved?.cwd) || ''
+  if (!dir) throw new Error('That thread is not known')
+  return dir
+}
 const mobileDeps = () => ({
   threads: async (): Promise<PhoneThread[]> => {
     // the sidebar's sections (Watchers, Pinned, Waiting, Working, Recent), from the same pins and watcher runs
@@ -364,6 +374,11 @@ const mobileDeps = () => ({
     return files?.length ? `rewound, ${files.length} file${files.length === 1 ? '' : 's'} put back` : 'rewound'
   },
   versions: () => versions(),
+  // 3.2: a thread's branch, files and diffs, and merging its PR, in the thread's folder (its last worktree, else where
+  // it runs); git.ts takes only a folder it lists
+  changes: async (id: string) => gitPanel.branchChanges(await phoneThreadDir(id)),
+  diff: async (id: string, path: string, area: string) => gitPanel.fileDiff(await phoneThreadDir(id), path, area),
+  prMerge: async (id: string, headSha: string) => gitPanel.prMerge(await phoneThreadDir(id), headSha),
   // 2.0 app: a thread now without its transcript, all running background work, stop everything, run a wake-up now,
   // and the quiet hours it shares with Hive
   peek: (id: string) => {

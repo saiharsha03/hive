@@ -57,6 +57,59 @@ test('phone requests: run once, in order, while fresh; others dropped; future-da
   assert.equal(send(now + 2 * hour, now + 2 * hour).run, true)
 })
 
+// a phone with fake deps: only the 3.2 ones are real, counting their calls
+const fakeDeps = () => {
+  const calls = { changes: 0, diff: 0, prMerge: 0 }
+  const none = async () => { throw new Error('not in this test') }
+  const d = {
+    threads: async () => [], read: async () => null, answer: () => false, send: none, start: none, stop: async () => {}, folders: () => [],
+    usage: none, changed: () => {}, teams: () => [], teamPause: none, teamResume: none, stopTask: async () => false, wakeups: () => [], cancelWakeup: () => false,
+    changes: async () => { calls.changes++; return { files: [] } },
+    diff: async () => { calls.diff++; return { text: '' } },
+    prMerge: async () => { calls.prMerge++; return { ok: true, number: 1, method: 'squash' } },
+  }
+  return { d, calls }
+}
+const ask = async (d: ReturnType<typeof fakeDeps>['d'], m: Record<string, unknown>, limited = false) => {
+  const { phoneRequest } = await import('../../src/main/mobile')
+  const replies: Record<string, unknown>[] = []
+  await phoneRequest(d as never, { seq: 1, rid: 1, id: 't1', ...m }, limited, (b) => replies.push(b))
+  return replies
+}
+const SHA = 'a'.repeat(40)
+
+test('hello says the phone can review changes and merge', async () => {
+  const { d } = fakeDeps()
+  const [r] = await ask(d, { op: 'hello', v: 3 })
+  assert.ok((r.can as string[]).includes('changes') && (r.can as string[]).includes('prMerge'))
+  const [old] = await ask({ ...d, changes: undefined, prMerge: undefined } as never, { op: 'hello', v: 3 })
+  assert.ok(!(old.can as string[]).includes('changes') && !(old.can as string[]).includes('prMerge'))
+})
+
+test('a notification button (limited) cannot read changes, a diff or merge', async () => {
+  const { d, calls } = fakeDeps()
+  for (const op of ['changes', 'diff', 'prMerge']) assert.deepEqual(await ask(d, { op, mid: 'm-lim', confirm: 'merge', headSha: SHA, path: 'a', area: 'branch' }, true), [])
+  assert.deepEqual(calls, { changes: 0, diff: 0, prMerge: 0 })
+})
+
+test('prMerge needs a mid and confirm "merge", and a repeated mid merges once', async () => {
+  const { d, calls } = fakeDeps()
+  assert.ok((await ask(d, { op: 'prMerge', confirm: 'merge', headSha: SHA }))[0].error)
+  assert.ok((await ask(d, { op: 'prMerge', mid: '', confirm: 'merge', headSha: SHA }))[0].error)
+  assert.ok((await ask(d, { op: 'prMerge', mid: 'x'.repeat(65), confirm: 'merge', headSha: SHA }))[0].error)
+  assert.ok((await ask(d, { op: 'prMerge', mid: 'm-a', headSha: SHA }))[0].error)
+  assert.ok((await ask(d, { op: 'prMerge', mid: 'm-a', confirm: 'yes', headSha: SHA }))[0].error)
+  assert.equal(calls.prMerge, 0)
+  const first = await ask(d, { op: 'prMerge', mid: 'm-merge-1', confirm: 'merge', headSha: SHA })
+  const again = await ask(d, { op: 'prMerge', mid: 'm-merge-1', confirm: 'merge', headSha: SHA })
+  assert.deepEqual(first, [{ merge: { ok: true, number: 1, method: 'squash' } }])
+  assert.deepEqual(again, first)
+  assert.equal(calls.prMerge, 1)
+  // changes and diff answer through their deps
+  assert.deepEqual(await ask(d, { op: 'changes' }), [{ changes: { files: [] } }])
+  assert.deepEqual(await ask(d, { op: 'diff', path: 'a', area: 'branch' }), [{ diff: { text: '' } }])
+})
+
 test('a send or new thread tried again with the same mid runs once and gets the first answer', async () => {
   const { oncePerMid } = await import('../../src/main/mobile')
   let runs = 0

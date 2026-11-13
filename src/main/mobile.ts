@@ -18,7 +18,7 @@ import { guardNote, guardStep, limitedAnswer, noteActions, noteKind, phoneInbox,
 // seen: on your own message, whether Claude has taken it in (true) or not yet (false); absent when Hive cannot tell
 export type PhoneItem = { k: 'you' | 'claude' | 'tool' | 'note'; t: string; seen?: boolean }
 export type MobileStatus = { configured: boolean; paired: boolean; connected: boolean; error: string }
-type Deps = {
+export type Deps = {
   threads: () => Promise<PhoneThread[]>
   // asks: Claude's open multiple-choice questions in that thread (an older app ignores them)
   read: (id: string) => Promise<{ title: string; items: PhoneItem[]; working: boolean; asks?: { id: string; questions: AskQuestion[] }[] } | null>
@@ -69,6 +69,10 @@ type Deps = {
   threadMore?: (id: string) => Promise<unknown>
   rewind?: (id: string, uuid: string) => Promise<string>
   versions?: () => unknown
+  // 3.2: a thread's branch, its files and one file's diff; merging its pull request (git.ts says when it may)
+  changes?: (id: string) => Promise<unknown>
+  diff?: (id: string, path: string, area: string) => Promise<unknown>
+  prMerge?: (id: string, headSha: string) => Promise<unknown>
 }
 export type PhoneThreadSettings = { live: boolean; mode: string; model: string; effort: string; modes: { value: string; label: string }[]; models: { value: string; label: string }[]; efforts: string[] }
 // future: refused requests dated ahead of this computer's clock (see checkPhoneSeq)
@@ -292,7 +296,7 @@ let staleSaid = 0
 
 // ---- what the 2.0 app asks for, from the optional deps or from the ones every Hive has ----
 // which optional requests this Hive answers; the app hides the screens and buttons for the others
-const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.settings && d.setThread ? ['threadSettings'] : []), ...(d.sendHow ? ['sendHow'] : []), ...(d.notes && d.noteSave ? ['notes'] : []), ...(d.todos ? ['todos'] : []), ...(d.watchers ? ['watchers'] : []), ...(d.threadMore ? ['threadMore'] : []), ...(d.rewind ? ['rewind'] : []), ...(d.versions ? ['versions'] : []), ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : [])]
+const can = (d: Deps): string[] => ['inbox', 'running', 'stopAll', 'noteButtons', ...(d.settings && d.setThread ? ['threadSettings'] : []), ...(d.sendHow ? ['sendHow'] : []), ...(d.notes && d.noteSave ? ['notes'] : []), ...(d.todos ? ['todos'] : []), ...(d.watchers ? ['watchers'] : []), ...(d.threadMore ? ['threadMore'] : []), ...(d.rewind ? ['rewind'] : []), ...(d.versions ? ['versions'] : []), ...(d.stopAll ? ['pause'] : []), ...(d.runWakeNow ? ['runWake'] : []), ...(d.accounts && d.switchAccount ? ['accounts'] : []), ...(d.quietHours ? ['quiet'] : []), ...(d.changes && d.diff ? ['changes'] : []), ...(d.prMerge ? ['prMerge'] : [])]
 
 async function peekThread(d: Deps, id: string): Promise<PhonePeek | null> {
   if (d.peek) return d.peek(id)
@@ -381,9 +385,13 @@ async function onMessage(raw: string): Promise<void> {
   }
   pairing.seqIn = c.next.seqIn
   if (!store()) return void sendToPhone({ re: m.rid, error: 'Hive could not save its replay record, so the request was not run' })
+  await phoneRequest(deps, m, limited, (body) => sendToPhone({ re: m.rid, ...body }))
+}
+
+// One request that passed the replay check. limited (a notification's button): only stop and answer, never a reply.
+export async function phoneRequest(deps: Deps, m: Record<string, unknown>, limited: boolean, reply: (body: Record<string, unknown>) => void): Promise<void> {
   if (limited) return void (await limitedRequest(deps, m).catch(() => {}))
   const id = typeof m.id === 'string' ? m.id : ''
-  const reply = (body: Record<string, unknown>) => sendToPhone({ re: m.rid, ...body })
   try {
     switch (m.op) {
       // ---- the 2.0 app ----
@@ -425,7 +433,7 @@ async function onMessage(raw: string): Promise<void> {
       case 'answer': return deps.answer(id, String(m.ask ?? ''), m.answers) ? reply({ ok: 'answered' }) : reply({ error: 'That question is no longer open' })
       // the app's first request after it connects; v 2 and up opens notifications with the notification key
       case 'hello':
-        if (typeof m.v === 'number' && m.v >= 2 && !pairing.nk) { pairing.nk = true; store() }
+        if (pairing && typeof m.v === 'number' && m.v >= 2 && !pairing.nk) { pairing.nk = true; store() }
         return reply({ ok: 'hello', v: 3, can: can(deps) })
       case 'send': {
         const d = deps; fails.delete(id)
@@ -460,6 +468,18 @@ async function onMessage(raw: string): Promise<void> {
       case 'threadMore': return deps.threadMore ? reply({ more: await deps.threadMore(id) }) : reply({ error: 'unknown request threadMore' })
       case 'rewind': return deps.rewind ? reply({ ok: await deps.rewind(id, String(m.uuid ?? '')) }) : reply({ error: 'unknown request rewind' })
       case 'versions': return deps.versions ? reply({ versions: deps.versions() }) : reply({ error: 'unknown request versions' })
+      // 3.2: review a thread's changes and merge its pull request
+      case 'changes': return deps.changes ? reply({ changes: await deps.changes(id) }) : reply({ error: 'unknown request changes' })
+      case 'diff': return deps.diff ? reply({ diff: await deps.diff(id, String(m.path ?? ''), String(m.area ?? '')) }) : reply({ error: 'unknown request diff' })
+      case 'prMerge': {
+        if (!deps.prMerge) return reply({ error: 'unknown request prMerge' })
+        const d = deps
+        // a merge runs once per tap: it needs its own mid (oncePerMid runs one without a usable mid every time)
+        if (typeof m.mid !== 'string' || !m.mid || m.mid.length > 64) return reply({ error: 'This merge has no request id. Update the app.' })
+        if (m.confirm !== 'merge') return reply({ error: 'The merge was not confirmed' })
+        const headSha = String(m.headSha ?? '')
+        return reply({ merge: await oncePerMid(m.mid, () => d.prMerge!(id, headSha)) })
+      }
       case 'watcherRun': return deps.watcherRun ? reply({ ok: await deps.watcherRun(id) }) : reply({ error: 'unknown request watcherRun' })
       case 'new': {
         const d = deps
