@@ -94,7 +94,7 @@ function TeamsTab() {
   )
 }
 
-// ---- Roles: ~/.hive/hive/roles/<id>/role.md and memory.md ----
+// ---- Roles: ~/.orbit/hive/roles/<id>/role.md and memory.md ----
 type RoleRow = Role & { memory: string }
 function RolesTab() {
   const [roles, setRoles] = useState<RoleRow[] | null>(null)

@@ -34,7 +34,7 @@ test('briefs: teammate gets roster, direct-talk rules and task; a separate Lead 
   const b = teamBrief(team, team.members[4], 'Click through the pipeline page')
   for (const s of ['You are "QA" (qa)', 'Owner (thread new-9)', 'Builder Web (builder; thread team-b2)', '"builders", "reviewers" reaches all of them', 'C:\\teams\\t1', 'Never push', 'Your task: Click through the pipeline page']) assert.ok(b.includes(s), s)
   const l = leadBrief(team, 'Keep it to two builders')
-  for (const s of ['You are the Lead', 'mcp__hive__add_teammate', 'team_post to "Owner"', 'From the Owner: Keep it to two builders']) assert.ok(l.includes(s), s)
+  for (const s of ['You are the Lead', 'mcp__orbit__add_teammate', 'team_post to "Owner"', 'From the Owner: Keep it to two builders']) assert.ok(l.includes(s), s)
 })
 
 test('status shows owner, lead, each member state and the log', () => {

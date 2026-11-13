@@ -1,4 +1,4 @@
-// Watchers, main process: plain code. Every watcher is a folder under ~/.hive/hive/watchers/<id>/. Every scheduled
+// Watchers, main process: plain code. Every watcher is a folder under ~/.orbit/hive/watchers/<id>/. Every scheduled
 // run is a fresh background thread, closed when the run ends: what carries over is what the run saved (memory folder,
 // SQLite db, findings, reports) and its final reply, which the next run's header quotes. Disabling closes a run that is
 // still open. A run never starts while the previous run's thread is still working (its own run, or the user talking to it).
@@ -40,7 +40,7 @@ let workspace = ''
 let builtins: Builtin[] = []
 let migration: string[] = [] // what the legacy migration did or why it could not, shown in the list
 
-// ~/.hive/hive/watchers (HIVE_WATCHERS_DIR, or HIVE_DATA_DIR/hive/watchers, for tests)
+// ~/.orbit/hive/watchers (HIVE_WATCHERS_DIR, or HIVE_DATA_DIR/hive/watchers, for tests)
 export const watchersRoot = () =>
   process.env.HIVE_WATCHERS_DIR || join(dataDir(), 'hive', 'watchers')
 const dirOf = (id: string) => join(watchersRoot(), id)
@@ -109,7 +109,7 @@ export function configureWatchers(workspaceRoot: string, env: Record<string, str
 let reportsRoot = ''
 const reportsDir = (id: string, w: WatcherFile) => foldersOf(id, dirOf(id), reportsRoot, w.name).reports
 
-// ---- migration of the single Watch (HIVE_WATCH_DIR + ~/.hive/hive/watch.json) into watcher "watch" ----
+// ---- migration of the single Watch (HIVE_WATCH_DIR + ~/.orbit/hive/watch.json) into watcher "watch" ----
 
 // moves the folder as a whole (memory/, the agent's SQLite db, reports/, findings.jsonl, the prompt keep their names),
 // then writes watcher.json from the HIVE_WATCH_* settings and state.json from watch.json. Runs once: nothing to do when

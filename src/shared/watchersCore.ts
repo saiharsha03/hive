@@ -193,7 +193,7 @@ export function watcherHeader(a: {
     `Your SQLite database: ${f.db} (create it on your first run if it does not exist, and keep it maintained).`,
     `Reports folder (daily and weekly reports as .html or .md; ${appName()}'s Watchers view lists them): ${f.reports}`,
     `Findings file (${appName()}'s Watchers view lists it): ${f.findings}. Append one JSON object per line: {"at": ISO time, "title": one line, "why": why it matters, "kind": "good" | "bad" | "info", "link": optional URL or path}.`,
-    'When something needs the user\'s attention, also call mcp__hive__organize_thread with action "waiting" and a one-line reason; call it with action "resolved" once that is no longer needed; otherwise just end the run.',
+    'When something needs the user\'s attention, also call mcp__orbit__organize_thread with action "waiting" and a one-line reason; call it with action "resolved" once that is no longer needed; otherwise just end the run.',
     prompt === null ? `Your instructions are in ${promptFile} (unchanged since you last got them in this thread).` : `Your instructions (from ${promptFile}):`,
     '',
     '---',
@@ -246,12 +246,12 @@ export function defaultPrompt(name: string, goal: string): string {
     '## Ground rules',
     '',
     '- Write only in your own folder unless the goal says otherwise.',
-    '- When the user needs to decide or act, call mcp__hive__organize_thread with action "waiting" and one line on why.',
+    '- When the user needs to decide or act, call mcp__orbit__organize_thread with action "waiting" and one line on why.',
     '',
   ].join('\n')
 }
 
-// ---- the legacy single Watch (HIVE_WATCH_* settings + ~/.hive/hive/watch.json) as watcher "watch" ----
+// ---- the legacy single Watch (HIVE_WATCH_* settings + ~/.orbit/hive/watch.json) as watcher "watch" ----
 
 // watcher.json for the old Watch, from its settings; prompt relative when it sat inside the folder
 export function legacyWatcher(env: Record<string, string>, dir: string, enabled: boolean, now: Date): WatcherFile {

@@ -2,7 +2,7 @@
 // Claude Code keeps a login in two places: the tokens in <config>/.credentials.json under "claudeAiOauth" (the same
 // file also holds MCP servers' own OAuth tokens, which belong to no account), and who it is in ~/.claude.json under
 // "oauthAccount" (that file is the CLI's big state file). A profile is exactly those two keys,
-// { claudeAiOauth, oauthAccount }, in ~/.hive/hive/accounts/<id>.json; a switch touches only those two keys.
+// { claudeAiOauth, oauthAccount }, in ~/.orbit/hive/accounts/<id>.json; a switch touches only those two keys.
 // Tokens never leave this module: what goes anywhere else (IPC, the phone, logs) is the id, email, plan and dates.
 // Every function takes the paths, so tests run on temp folders and never on the real files.
 import { createHash } from 'node:crypto'

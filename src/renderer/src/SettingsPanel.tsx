@@ -1,5 +1,5 @@
 // Settings: a page (a section list on the left, the form on the right) for everything that used to live in the
-// .env and scripts.json. Edits a draft; Save validates in the main process, writes ~/.hive/hive-settings.json and
+// .env and scripts.json. Edits a draft; Save validates in the main process, writes ~/.orbit/hive-settings.json and
 // re-applies it to every feature. Credential-looking keys never come here: the panel only says whether they are set.
 import { useEffect, useState, type ReactNode } from 'react'
 import {
@@ -232,7 +232,7 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
   // ---- Watchers: each has its own folder and schedule now (the Watchers view and the agent tools edit them) ----
   const watch = (
     <>
-      <Row label="Watchers" hint="Each watcher has its own folder, schedule and thread (~/.hive/hive/watchers). Make, switch on or off, schedule and run them on the Watchers and teams page.">
+      <Row label="Watchers" hint="Each watcher has its own folder, schedule and thread (~/.orbit/hive/watchers). Make, switch on or off, schedule and run them on the Watchers and teams page.">
         {onWatchers && <div><Btn onClick={() => onWatchers()} testid="settings-open-watchers">Open Watchers</Btn></div>}
       </Row>
       {view?.weekly && <Row label="Weekly use" hint="Adaptive watchers pick their tier from it.">{view.weekly.pct === null ? `unreadable (${view.weekly.error})` : `${Math.round(view.weekly.pct)}%`}</Row>}

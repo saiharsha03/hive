@@ -50,7 +50,7 @@ export function roleBrief(r: Role, roleMemory: string, shared: string, paths: { 
     `What every role learned (${paths.shared}):`,
     tail(shared) || '(nothing yet)',
     '',
-    `Before you stop, save lessons that will help the next ${r.name} with mcp__hive__remember (scope "role"), and lessons for everyone with scope "shared": `
+    `Before you stop, save lessons that will help the next ${r.name} with mcp__orbit__remember (scope "role"), and lessons for everyone with scope "shared": `
       + 'gotchas, commands that worked, mistakes to avoid. Facts only this job needs go in knowledge.md (team_note) instead.',
   ].join('\n')
 }

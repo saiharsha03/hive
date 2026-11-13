@@ -119,32 +119,32 @@ export const PERMISSION_MODE = 'bypassPermissions' as const
 
 const append = () => [
   `You are running inside ${appName()}, the user's desktop app for Claude Code.`,
-  'Keep this thread named after what the user is doing: once the task is clear (usually after your first reply), call mcp__hive__rename_thread with a short title (3 to 6 words), and again only when the work clearly moves to something else. Do not mention it.',
-  'The user runs many threads at once and sometimes types into the wrong one. When a message clearly is not meant for this thread (it refers to work this thread never did or to another task), do not act on it: say so in one line, call mcp__hive__list_threads to find the thread it belongs to, and offer to forward it there with mcp__hive__message_thread (forward it at once only if the user already asked you to).',
-  'To show the user an image, screenshot, HTML mockup, PDF or any file, call mcp__hive__show_to_user with its absolute path.',
+  'Keep this thread named after what the user is doing: once the task is clear (usually after your first reply), call mcp__orbit__rename_thread with a short title (3 to 6 words), and again only when the work clearly moves to something else. Do not mention it.',
+  'The user runs many threads at once and sometimes types into the wrong one. When a message clearly is not meant for this thread (it refers to work this thread never did or to another task), do not act on it: say so in one line, call mcp__orbit__list_threads to find the thread it belongs to, and offer to forward it there with mcp__orbit__message_thread (forward it at once only if the user already asked you to).',
+  'To show the user an image, screenshot, HTML mockup, PDF or any file, call mcp__orbit__show_to_user with its absolute path.',
   'It opens in a preview panel beside the chat and shows inline in the conversation. Use it instead of opening files in other apps (Start-Process, start, open).',
-  'mcp__hive__codex runs OpenAI Codex as a subagent on one task (a second opinion, a review, research, or an implementation). It runs in the background',
+  'mcp__orbit__codex runs OpenAI Codex as a subagent on one task (a second opinion, a review, research, or an implementation). It runs in the background',
   'and its answer arrives later as a message starting "[Codex finished"; end your turn or keep working meanwhile. The user watches it live.',
-  'You can add an item to the user\'s personal to-do list with mcp__hive__add_todo when the user asks, or when something clearly needs the user\'s follow-up later.',
-  'mcp__hive__list_todos reads that personal list (open items by status, with due dates); use it when the user asks what is on their list or what is due. It is not todo_list, which is a team\'s list.',
+  'You can add an item to the user\'s personal to-do list with mcp__orbit__add_todo when the user asks, or when something clearly needs the user\'s follow-up later.',
+  'mcp__orbit__list_todos reads that personal list (open items by status, with due dates); use it when the user asks what is on their list or what is due. It is not todo_list, which is a team\'s list.',
   'add_todo can also set a due date (YYYY-MM-DD; turn words like "Monday" or "next week" into a date using the current date) and a status:',
   '"talk" when the user needs to talk to someone about it ("need to talk"), "holding" to hold it off for now, otherwise leave it as "todo".',
-  'When the user asks you to note or save something to their Notes, use mcp__hive__add_note (it adds to the note with that title, or makes one).',
+  'When the user asks you to note or save something to their Notes, use mcp__orbit__add_note (it adds to the note with that title, or makes one).',
   ...(autoBackgroundMs ? [`A shell command still running after ${autoBackgroundMs / 1000} seconds is moved to the background by ${appName()}, so you stay free to talk with the user; you are told when it finishes, and can read its output then.`] : []),
-  'mcp__hive__organize_thread pins, snoozes, closes or archives this conversation in the sidebar (e.g. "talk tomorrow", "keep this handy", "we are done"); use your judgement.',
-  `To come back to this thread later (check a deploy at 3 PM, look at CI every 30 min, follow up tomorrow), use mcp__hive__schedule_wakeup: ${appName()} keeps it on disk and wakes this thread with the prompt even after ${appName()} was closed or the laptop slept (late ones fire once when it is back). /loop wake-ups and crons die when ${appName()} closes; use schedule_wakeup for anything that must survive that.`,
-  'Claude can search the user\'s past Claude Code sessions with mcp__hive__search_sessions when the user refers to earlier work ("like we did last week", "the CSV import").',
-  'To work on code in one of the user\'s repos, call mcp__hive__worktree with the repo and a branch or a ticket (key plus a few words) and do all the work in the folder it returns,',
+  'mcp__orbit__organize_thread pins, snoozes, closes or archives this conversation in the sidebar (e.g. "talk tomorrow", "keep this handy", "we are done"); use your judgement.',
+  `To come back to this thread later (check a deploy at 3 PM, look at CI every 30 min, follow up tomorrow), use mcp__orbit__schedule_wakeup: ${appName()} keeps it on disk and wakes this thread with the prompt even after ${appName()} was closed or the laptop slept (late ones fire once when it is back). /loop wake-ups and crons die when ${appName()} closes; use schedule_wakeup for anything that must survive that.`,
+  'Claude can search the user\'s past Claude Code sessions with mcp__orbit__search_sessions when the user refers to earlier work ("like we did last week", "the CSV import").',
+  'To work on code in one of the user\'s repos, call mcp__orbit__worktree with the repo and a branch or a ticket (key plus a few words) and do all the work in the folder it returns,',
   `never in the main checkout and never with git worktree add by hand. ${appName()} deletes that worktree when the user closes or archives this thread (uncommitted changes are first saved as a WIP commit; the branch stays). Never push unless the user asks.`,
-  'mcp__hive__dev_stack starts, stops or reports a configured dev stack (docker databases plus local servers) and mcp__hive__dev_stack_logs reads the logs of one service; use them to test your changes, pass a branch only for the repo you changed, and never touch services another thread started.',
-  "Call mcp__hive__organize_thread with action \"waiting\" and a one-line reason when you are blocked on the user's decision or input, so the sidebar shows this session as waiting for them. Do this whenever a turn ends with a question the user must answer before you can go on, even one asked in plain text: it is what sends the user's phone a notification, and once your turn ends you cannot come back to check whether they replied.",
-  `${appName()} threads can talk to each other: mcp__hive__list_threads, start_thread, message_thread and wait_for_thread let you hand parallel work to a new background thread, or ask a thread that already holds the context, and use its answer.`,
-  'Before you tell the user whether a subagent, workflow or background command is running, finished or stopped, call mcp__hive__agent_status and report what it says, never from memory: an interrupt or crash can end one without a notification.',
-  'Teams: when the user asks for a team (several threads working on one job together), mcp__hive__start_team starts one, with you as its Lead or (lead "new") as its Owner with a separate Lead thread; team_post, team_note, team_status, add_teammate and end_team run it. A message starting "[Team" is a post from a teammate. mcp__hive__list_roles shows the role library (each role carries its own instructions and a memory kept across teams); a Lead picks how many of each role the job needs.',
+  'mcp__orbit__dev_stack starts, stops or reports a configured dev stack (docker databases plus local servers) and mcp__orbit__dev_stack_logs reads the logs of one service; use them to test your changes, pass a branch only for the repo you changed, and never touch services another thread started.',
+  "Call mcp__orbit__organize_thread with action \"waiting\" and a one-line reason when you are blocked on the user's decision or input, so the sidebar shows this session as waiting for them. Do this whenever a turn ends with a question the user must answer before you can go on, even one asked in plain text: it is what sends the user's phone a notification, and once your turn ends you cannot come back to check whether they replied.",
+  `${appName()} threads can talk to each other: mcp__orbit__list_threads, start_thread, message_thread and wait_for_thread let you hand parallel work to a new background thread, or ask a thread that already holds the context, and use its answer.`,
+  'Before you tell the user whether a subagent, workflow or background command is running, finished or stopped, call mcp__orbit__agent_status and report what it says, never from memory: an interrupt or crash can end one without a notification.',
+  'Teams: when the user asks for a team (several threads working on one job together), mcp__orbit__start_team starts one, with you as its Lead or (lead "new") as its Owner with a separate Lead thread; team_post, team_note, team_status, add_teammate and end_team run it. A message starting "[Team" is a post from a teammate. mcp__orbit__list_roles shows the role library (each role carries its own instructions and a memory kept across teams); a Lead picks how many of each role the job needs.',
   'A message starting "[To subagent" is the user talking to one of your subagents: pass the text on with SendMessage to that agent, word for word, then carry on with what you were doing.',
   `A message starting "[From thread" was sent by another ${appName()} thread, not the user; your final reply is what that thread gets back when it waits for you.`,
-  ...(quarryStatus().available ? ["The user's SQL app Quarry is connected: mcp__hive__quarry_connections, quarry_schema, quarry_query and quarry_explain reach the databases saved in it (one statement per call; reads are read-only; for a write set allow_write and the user is asked to confirm it)."] : []),
-  'Watchers are scheduled background agents, each with its own memory folder and SQLite db; every run is a fresh thread: mcp__hive__create_watcher, list_watchers, update_watcher, enable_watcher, disable_watcher, run_watcher_now and delete_watcher manage them.',
+  ...(quarryStatus().available ? ["The user's SQL app Quarry is connected: mcp__orbit__quarry_connections, quarry_schema, quarry_query and quarry_explain reach the databases saved in it (one statement per call; reads are read-only; for a write set allow_write and the user is asked to confirm it)."] : []),
+  'Watchers are scheduled background agents, each with its own memory folder and SQLite db; every run is a fresh thread: mcp__orbit__create_watcher, list_watchers, update_watcher, enable_watcher, disable_watcher, run_watcher_now and delete_watcher manage them.',
 ].join(' ')
 
 // the tab's current title, sent with every message, for "in use by <thread>" in the dev stack
@@ -306,8 +306,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
   // this thread as the team knows it (a teammate reopened from history runs under its session id)
   const me = (team: Team) => personId(team, tabId)
 
-  const hive = createSdkMcpServer({
-    name: 'hive',
+  const orbit = createSdkMcpServer({
+    name: 'orbit',
     version: '1.0.0',
     tools: forThread(watcher, [
       tool(
@@ -349,7 +349,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       tool(
         'add_note',
-        `Write to the user's Notes in ${appName()} (Notes in the top bar; markdown files in ~/.hive/hive/notes). Use when the user asks you to note, jot down or save something. `
+        `Write to the user's Notes in ${appName()} (Notes in the top bar; markdown files in ~/.orbit/hive/notes). Use when the user asks you to note, jot down or save something. `
           + 'A note whose title matches (any case) gets the text appended at its end; otherwise a new note with that title is made.',
         {
           title: z.string().min(1).describe('The note\'s title: an existing note to add to, or the new note\'s name'),
@@ -625,7 +625,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       ),
       tool(
         'create_watcher',
-        'Create a watcher: a scheduled background agent that keeps working on a goal. It gets a folder under ~/.hive/hive/watchers/<id>/ '
+        'Create a watcher: a scheduled background agent that keeps working on a goal. It gets a folder under ~/.orbit/hive/watchers/<id>/ '
           + '(watcher.json, prompt.md, memory/ with its own SQLite db, reports/, findings.jsonl). Every scheduled run is a fresh background thread, closed when the run ends; '
           + 'what carries over is what the run saved in that folder and its final reply, which the next run is shown. '
           + 'Without prompt, prompt.md is written from the goal. It is enabled and its first run starts at once. Shown in the Watchers view.',
@@ -673,7 +673,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         { id: z.string(), kind: z.enum(['sweep', 'daily', 'weekly']).optional().describe('Default sweep') },
         async ({ id, kind }) => { const m = runWatcherNow(id, kind ?? 'sweep'); return m ? fail(m) : ok(`Watcher "${id}" is running.`) },
       ),
-      tool('delete_watcher', 'Delete a watcher (soft): a run still open is closed and its folder moves to ~/.hive/hive/watchers/_deleted/.', { id: z.string() },
+      tool('delete_watcher', 'Delete a watcher (soft): a run still open is closed and its folder moves to ~/.orbit/hive/watchers/_deleted/.', { id: z.string() },
         async ({ id }) => { try { return ok(`Watcher "${id}" deleted; its folder is now ${deleteWatcher(id)}`) } catch (e: any) { return fail(`delete_watcher failed: ${e?.message ?? e}`) } }),
       tool(
         'agent_status',
@@ -731,7 +731,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const startOne = (id: string, title: string, dir: string, prompt: string, label: string) => {
             try { startBackgroundThread({ tabId: id, cwd: dir, title, prompt, from: me }, web); started.push(`${label} (${id})`) } catch (e: any) { started.push(`${label}: failed to start (${e?.message ?? e})`) }
           }
-          if (newLead) startOne(leadRef.id, leadRef.title, cwd, `${leadBrief(team, lead_task ?? '')}\n\n${briefForRole('lead')}\n\nThe role library (mcp__hive__list_roles):\n${formatRoles(listRoles())}`, 'Lead')
+          if (newLead) startOne(leadRef.id, leadRef.title, cwd, `${leadBrief(team, lead_task ?? '')}\n\n${briefForRole('lead')}\n\nThe role library (mcp__orbit__list_roles):\n${formatRoles(listRoles())}`, 'Lead')
           for (const { member: m, task } of mates) startOne(m.id, `${team.name}: ${m.name}`, m.cwd, `${teamBrief(team, m, task)}\n\n${briefForRole(m.role)}`, m.name)
           appendLog(team, { at: Date.now(), from: tabId, fromName: newLead ? 'Owner' : 'Lead', to: [], text: `Team started: ${goal}` })
           return ok(`${startedNote(team, !newLead)}\nStarted: ${started.join('; ')}${newLead ? '' : `\n\n${briefForRole('lead')}`}`)
@@ -778,7 +778,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           const out: string[] = []
           for (const t of uniq) {
             try {
-              await messageThread(liveIdOf(team, t.id), `[Team "${team.name}", ${myName}] ${text}\n(Reply with mcp__hive__team_post${t.id === team.owner?.id ? ` and team "${team.id}"` : ''}.)`, 'queue', { id: tabId, title: `${team.name}: ${myName}` }, web, team.id)
+              await messageThread(liveIdOf(team, t.id), `[Team "${team.name}", ${myName}] ${text}\n(Reply with mcp__orbit__team_post${t.id === team.owner?.id ? ` and team "${team.id}"` : ''}.)`, 'queue', { id: tabId, title: `${team.name}: ${myName}` }, web, team.id)
               out.push(t.name)
             } catch (e: any) { out.push(`${t.name} (not delivered: ${e?.message ?? e})`) }
           }
@@ -1060,7 +1060,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       pathToClaudeCodeExecutable: claudeExecutable(),
       settingSources: ['user', 'project', 'local'],
       systemPrompt: { type: 'preset', preset: 'claude_code', append: append() },
-      mcpServers: { hive },
+      mcpServers: { orbit },
       includePartialMessages: true,
       // Orbit has a stop button per background task (chat:stopTask), so an interrupt (Esc / Ctrl+Enter) only stops the
       // turn, as in the terminal; without this the SDK fails closed and the interrupt kills every background agent too

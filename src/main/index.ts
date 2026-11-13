@@ -96,7 +96,7 @@ if (TEST_MODE) {
 
 registerScheme()
 
-// Settings: the store (~/.hive/hive-settings.json, seeded once from the .env and scripts.json) over the .env.
+// Settings: the store (~/.orbit/hive-settings.json, seeded once from the .env and scripts.json) over the .env.
 // Re-read after every save from the Settings panel; the panels explain a missing config.
 const APP_DIR = app.getAppPath()
 const SCRIPTS_FILE = process.env.HIVE_SCRIPTS_FILE || join(APP_DIR, 'scripts.json')
@@ -146,7 +146,7 @@ setWatcherStop(watcherStopReason)
 setSearchBusy(busyTranscript)
 // usage limits: the idle status process has none, so a live thread's answer stands in
 setLiveUsage(liveUsage)
-// Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.hive/hive/watchers);
+// Watchers: scheduled self-prompting background threads, one long-lived thread each (folders under ~/.orbit/hive/watchers);
 // the old single Watch (HIVE_WATCH_* settings) moves in as watcher "watch" on the first start. Dependabot shows in the same list.
 // team threads: the list, one team with its live member states, log, plan and knowledge (the Team view)
 handle('teams:list', () => listTeams().map((t) => ({ id: t.id, name: t.name, goal: t.goal, createdAt: t.createdAt, endedAt: t.endedAt, members: t.members.length })))
@@ -557,7 +557,7 @@ handle('hooks:list', (_e, folder: string) => listHooks(folder))
 handle('hooks:set', (_e, folder: string, id: string, enabled: boolean) => setHook(folder, id, enabled))
 handle('plugins:list', () => listPlugins())
 handle('plugins:set', (_e, key: string, on: boolean) => setPlugin(key, on))
-// Notes: markdown files in ~/.hive/hive/notes
+// Notes: markdown files in ~/.orbit/hive/notes
 handle('notes:list', () => listNotes())
 handle('notes:save', (_e, id: string | null, text: string) => saveNote(id ? String(id) : null, String(text ?? '')))
 handle('notes:delete', (_e, id: string) => deleteNote(String(id)))

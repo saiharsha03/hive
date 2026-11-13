@@ -143,10 +143,10 @@ test('hive_thread_msg adds a thread item and marks busy; queue phases update it'
   assert.equal(s.items.some((i: any) => i.text === 'dies'), false)
 })
 test('tool lines on the sending side', () => {
-  assert.deepEqual(toolLine('mcp__hive__start_thread', { title: 'Count files' }), { verb: 'Started thread', what: 'Count files' })
-  assert.deepEqual(toolLine('mcp__hive__message_thread', { thread: 'x', text: 'go' }), { verb: 'Messaged thread', what: 'x: go' })
-  assert.equal(toolLine('mcp__hive__wait_for_thread', { thread: 'x', timeout_s: 0 }).verb, 'Checked thread')
-  assert.equal(toolLine('mcp__hive__wait_for_thread', { thread: 'x' }).verb, 'Waited for thread')
+  assert.deepEqual(toolLine('mcp__orbit__start_thread', { title: 'Count files' }), { verb: 'Started thread', what: 'Count files' })
+  assert.deepEqual(toolLine('mcp__orbit__message_thread', { thread: 'x', text: 'go' }), { verb: 'Messaged thread', what: 'x: go' })
+  assert.equal(toolLine('mcp__orbit__wait_for_thread', { thread: 'x', timeout_s: 0 }).verb, 'Checked thread')
+  assert.equal(toolLine('mcp__orbit__wait_for_thread', { thread: 'x' }).verb, 'Waited for thread')
 })
 
 // ---- transcript reload ----

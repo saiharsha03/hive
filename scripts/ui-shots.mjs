@@ -154,7 +154,7 @@ const fixtures = {
     ['goal', 'Keep working until a condition holds'], ['loop', 'Run a prompt on an interval'], ['review', 'Review the pending changes'], ['login', 'Sign in'],
   ].map(([name, description]) => ({ name, description, builtin: true })).concat([{ name: 'release-notes', description: 'Draft release notes from merged PRs' }, { name: 'triage', description: 'Sort new issues by area' }]),
   'chat:mcp': [
-    { name: 'hive', status: 'connected', source: 'built in', tools: 24 }, { name: 'git-host', status: 'connected', source: 'user', tools: 31 },
+    { name: 'orbit', status: 'connected', source: 'built in', tools: 24 }, { name: 'git-host', status: 'connected', source: 'user', tools: 31 },
     { name: 'postgres-ro', status: 'connected', source: 'project', tools: 4 }, { name: 'issue-tracker', status: 'needs-auth', source: 'user', tools: null },
     { name: 'error-feed', status: 'failed', source: 'user', error: 'connection refused', tools: null },
   ],
@@ -308,7 +308,7 @@ const events = [
 
   // the team: the lead plans, two builders work, one failed, Codex writes a migration
   ['t-lead', { type: 'system', subtype: 'init', model: 'claude-fable-5-2', permissionMode: 'auto' }],
-  ['t-lead', assistant(tool('lt1', 'mcp__hive__message_thread', { thread: 'Builder 2', text: 'Port the CSV writer next' }))],
+  ['t-lead', assistant(tool('lt1', 'mcp__orbit__message_thread', { thread: 'Builder 2', text: 'Port the CSV writer next' }))],
   ['t-lead', task('task_started', 'k-b2', { task_type: 'local_agent', description: 'Builder 2: port the CSV writer to the job queue', subagent_type: 'builder' })],
   ['t-lead', task('task_progress', 'k-b2', { summary: 'Edit reports/csv_writer.py +44 -19' })],
   ['t-lead', task('task_started', 'k-b1', { task_type: 'local_agent', description: 'Builder 1: move PDF exports', subagent_type: 'builder' })],

@@ -14,7 +14,7 @@ const status = async () => ({
   usage: [{ key: 'five_hour', label: 'Current session (5 hours)', pct: 42, resetsAt: '2026-11-09T18:00:00Z' }],
   connectors: null, engine: { installed: true, version: '9.9.9' },
 })
-const mcp = async () => [{ name: 'hive', status: 'connected', scope: 'sdk', tools: [{}, {}] }] as any
+const mcp = async () => [{ name: 'orbit', status: 'connected', scope: 'sdk', tools: [{}, {}] }] as any
 
 test('a live thread: its own process answers, with the transcript\'s token totals and the plan limits', async () => {
   const f = transcript('C:/r/app', 'sess-1')
@@ -35,7 +35,7 @@ test('a live thread: its own process answers, with the transcript\'s token total
   assert.deepEqual(v.account, { email: 'me@example.com', organization: 'Org', plan: 'max', tokenSource: 'oauth', apiProvider: 'firstParty' })
   assert.deepEqual([v.model, v.effort, v.permissionMode, v.sessionId, v.cwd, v.memoryDir], ['claude-x', 'high', 'bypassPermissions', 'sess-1', 'C:/r/app', 'C:/m'])
   assert.deepEqual(v.context, { total: 1234, max: 200_000 })
-  assert.deepEqual(v.mcp, [{ name: 'hive', status: 'connected', source: 'sdk', error: undefined, tools: 2 }])
+  assert.deepEqual(v.mcp, [{ name: 'orbit', status: 'connected', source: 'sdk', error: undefined, tools: 2 }])
   assert.equal(v.limits[0].pct, 42)
   assert.equal(v.limits[0].resetsAt, '2026-11-09T18:00:00Z')
   assert.deepEqual([v.tokens?.input, v.tokens?.output, v.tokens?.cacheRead, v.tokens?.requests], [7, 3, 100, 1])

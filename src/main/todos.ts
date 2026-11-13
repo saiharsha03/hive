@@ -1,4 +1,4 @@
-// The user's personal to-do list, kept in ~/.hive/hive-todos.json. Claude can add items too.
+// The user's personal to-do list, kept in ~/.orbit/hive-todos.json. Claude can add items too.
 import { randomUUID } from 'node:crypto'
 import { watch } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'

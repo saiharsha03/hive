@@ -20,7 +20,7 @@ test('loadHistory streamed = parseHistory of the whole text (tools, Codex, compa
     { type: 'user', uuid: 'u1', timestamp: '2026-11-01T10:00:00Z', message: { role: 'user', content: 'start' } },
     { type: 'assistant', message: { id: 'm1', content: [{ type: 'text', text: 'on it' }, { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }] } },
     { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'a b' }] } },
-    { type: 'assistant', message: { id: 'm2', content: [{ type: 'tool_use', id: 'c1', name: 'mcp__hive__codex', input: { task: 'review' } }] } },
+    { type: 'assistant', message: { id: 'm2', content: [{ type: 'tool_use', id: 'c1', name: 'mcp__orbit__codex', input: { task: 'review' } }] } },
     { type: 'system', subtype: 'compact_boundary', compactMetadata: { trigger: 'auto' } },
     { type: 'assistant', message: { id: 'm3', content: [{ type: 'text', text: 'done' }] } },
   ]
@@ -29,6 +29,16 @@ test('loadHistory streamed = parseHistory of the whole text (tools, Codex, compa
   assert.deepEqual(await loadHistory(f), whole)
   assert.ok(whole.some((i) => i.kind === 'codex' && i.status === 'error')) // never answered: stopped
   assert.deepEqual(await loadHistory(join(dir, 'missing.jsonl')), [])
+})
+
+test('a transcript from before the rename (mcp__hive__ tools) reads as the orbit tools', () => {
+  const old = [
+    { type: 'assistant', message: { id: 'm1', content: [{ type: 'tool_use', id: 's1', name: 'mcp__hive__show_to_user', input: { path: 'C:/a.png' } }, { type: 'tool_use', id: 'c1', name: 'mcp__hive__codex', input: { task: 'review' } }] } },
+  ]
+  const items = parseHistory(old.map((e) => JSON.stringify(e)).join('\n'))
+  assert.ok(items.some((i) => i.kind === 'show' && i.path === 'C:/a.png'))
+  assert.ok(items.some((i) => i.kind === 'codex' && i.task === 'review'))
+  assert.deepEqual(items.filter((i) => i.kind === 'tool').map((i) => (i as { name: string }).name), ['mcp__orbit__show_to_user', 'mcp__orbit__codex'])
 })
 
 test('the fork point read from the file = forkPoint of the whole transcript', async () => {

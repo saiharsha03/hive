@@ -125,7 +125,7 @@ test.describe.serial('session', () => {
   test('the Status and usage page lists the MCP servers', async () => {
     await h.open('mcp')
     await expect(h.id('mcp-server').first()).toBeVisible({ timeout: 60_000 })
-    await expect(h.id('mcp-server').filter({ hasText: 'hive' })).toHaveCount(1)
+    await expect(h.id('mcp-server').filter({ hasText: 'orbit' })).toHaveCount(1)
     await shot(l.page, 'session-mcp')
     // the page is a tab now (it was a popover that Esc closed): close its tab, so the thread is back in the pane
     await h.id('tab-close-tool:status').click()

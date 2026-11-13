@@ -51,7 +51,7 @@ export function toolVerb(name: string): { word: string; tone: VerbTone } {
   if (name === 'TodoWrite') return { word: 'Plan', tone: 'other' }
   if (name === ADVISOR_TOOL) return { word: 'Advisor', tone: 'advisor' } // a second model was asked: its own colour, so it is not read as one more tool call
   const mcp = name.match(/^mcp__(.+?)__(.+)$/)
-  if (mcp) return { word: mcp[1] === 'hive' ? 'Orbit' : mcp[1].replace(/^claude_ai_/, '').replace(/[-_]/g, ' ').split(' ')[0], tone: mcp[1] === 'hive' ? 'agent' : 'other' }
+  if (mcp) return { word: mcp[1] === 'orbit' || mcp[1] === 'hive' ? 'Orbit' : mcp[1].replace(/^claude_ai_/, '').replace(/[-_]/g, ' ').split(' ')[0], tone: mcp[1] === 'orbit' || mcp[1] === 'hive' ? 'agent' : 'other' }
   return { word: name, tone: 'other' }
 }
 

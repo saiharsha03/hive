@@ -1,4 +1,4 @@
-// Which worktrees each thread made through the worktree tool, kept in ~/.hive/hive-thread-worktrees.json so Orbit can
+// Which worktrees each thread made through the worktree tool, kept in ~/.orbit/hive-thread-worktrees.json so Orbit can
 // delete them when the thread is closed or archived, even after a restart. Keyed by the Claude session id.
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { dataDir } from './testMode'

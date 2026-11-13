@@ -296,10 +296,10 @@ export function registerStatusIpc(handle: Handle, deps: Deps): void {
       name: s.name, status: s.status, source: s.source ?? s.scope ?? '', error: s.error, tools: s.tools?.length ?? null,
     }))
     if (live) return rows
-    // the idle process loads plain settings: show what a new Orbit session gets instead, its own hive server added and
+    // the idle process loads plain settings: show what a new Orbit session gets instead, its own orbit server added and
     // the plugins Orbit turns off left out
     const off = new Set(HIVE_OFF_PLUGINS)
-    return [{ name: 'hive', status: 'connected', source: 'built in', error: undefined, tools: null },
+    return [{ name: 'orbit', status: 'connected', source: 'built in', error: undefined, tools: null },
       ...rows.filter((r) => !off.has(r.name.replace(/^plugin:/, '').split(':')[0]))]
   })
   handle('chat:stopTask', async (_e, tabId: string, taskId: string) => {

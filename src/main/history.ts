@@ -20,8 +20,10 @@ export type Item =
   | { kind: 'thread'; fromId: string; fromTitle: string; text: string }
   | { kind: 'codex'; id: string; task: string; model: string; allowEdits: boolean; status: 'running' | 'done' | 'error'; lines: string[]; answer: string }
 
-const SHOW = 'mcp__hive__show_to_user'
-const CODEX = 'mcp__hive__codex'
+const SHOW = 'mcp__orbit__show_to_user'
+const CODEX = 'mcp__orbit__codex'
+// a transcript from before the rename calls the app's own tools mcp__hive__*: read them as today's names
+const toolName = (name: string) => (typeof name === 'string' ? name.replace(/^mcp__hive__/, 'mcp__orbit__') : name)
 // "[Codex finished task ab12cd34]" / "... with an error]": the answer a background Codex run sent back
 const CODEX_DONE = /^\[Codex finished task (\w+)( with an error)?\]\s*/
 // Claude Code's own wrappers stored as user turns (slash commands, reminders, notifications),
@@ -148,13 +150,14 @@ function historyParser(): { line: (line: string) => void; done: () => Item[] } {
           if (t) { t.status = out.failed ? 'error' : 'done'; t.output = out.text }
         }
         else if (b.type === 'tool_use') {
-          if (b.name === SHOW) items.push({ kind: 'show', path: b.input?.path })
-          if (b.name === CODEX) {
+          const name = toolName(b.name)
+          if (name === SHOW) items.push({ kind: 'show', path: b.input?.path })
+          if (name === CODEX) {
             const box = { kind: 'codex' as const, id: b.id, task: b.input?.task ?? '', model: b.input?.model ?? '', allowEdits: !!b.input?.allowEdits, status: 'running' as const, lines: [], answer: '' }
             codexByCall.set(b.id, box)
             items.push(box)
           }
-          const t = { kind: 'tool' as const, id: b.id, name: b.name, input: b.input, status: 'running' as const }
+          const t = { kind: 'tool' as const, id: b.id, name, input: b.input, status: 'running' as const }
           tools.set(b.id, t)
           items.push(t)
         }

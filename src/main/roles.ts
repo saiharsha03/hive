@@ -1,5 +1,5 @@
-// Team roles on disk: ~/.hive/hive/roles/<id>/role.md (instructions, editable) and memory.md (what every teammate
-// in that role learned, kept across teams), plus ~/.hive/hive/roles/shared-memory.md for all roles. The default
+// Team roles on disk: ~/.orbit/hive/roles/<id>/role.md (instructions, editable) and memory.md (what every teammate
+// in that role learned, kept across teams), plus ~/.orbit/hive/roles/shared-memory.md for all roles. The default
 // roles are written on first use; a role the Lead names that does not exist yet gets a folder of its own.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

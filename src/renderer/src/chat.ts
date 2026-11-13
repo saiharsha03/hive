@@ -49,8 +49,8 @@ export type Session = {
   worktrees?: { repo: string; path: string; branch: string }[] // made by this thread through the worktree tool
 }
 
-export const SHOW = 'mcp__hive__show_to_user'
-export const CODEX = 'mcp__hive__codex'
+export const SHOW = 'mcp__orbit__show_to_user'
+export const CODEX = 'mcp__orbit__codex'
 
 // what the main area shows for a tool call, one line
 export function toolLine(name: string, input: any): { verb: string; what: string } {
@@ -70,11 +70,11 @@ export function toolLine(name: string, input: any): { verb: string; what: string
     case SHOW: return { verb: 'Showed you', what: file(input?.path) }
     case CODEX: return { verb: 'Codex', what: short(input?.task) }
     case ADVISOR_TOOL: return { verb: 'Advisor', what: 'asked for advice on the conversation so far' }
-    case 'mcp__hive__list_threads': return { verb: 'Listed threads', what: '' }
-    case 'mcp__hive__agent_status': return { verb: 'Checked background work', what: '' }
-    case 'mcp__hive__start_thread': return { verb: 'Started thread', what: short(input?.title) }
-    case 'mcp__hive__message_thread': return { verb: 'Messaged thread', what: short(`${input?.thread}: ${input?.text ?? ''}`) }
-    case 'mcp__hive__wait_for_thread': return { verb: input?.timeout_s === 0 ? 'Checked thread' : 'Waited for thread', what: short(input?.thread) }
+    case 'mcp__orbit__list_threads': return { verb: 'Listed threads', what: '' }
+    case 'mcp__orbit__agent_status': return { verb: 'Checked background work', what: '' }
+    case 'mcp__orbit__start_thread': return { verb: 'Started thread', what: short(input?.title) }
+    case 'mcp__orbit__message_thread': return { verb: 'Messaged thread', what: short(`${input?.thread}: ${input?.text ?? ''}`) }
+    case 'mcp__orbit__wait_for_thread': return { verb: input?.timeout_s === 0 ? 'Checked thread' : 'Waited for thread', what: short(input?.thread) }
   }
   const mcp = name.match(/^mcp__(.+?)__(.+)$/)
   // a connector's tool (Orbit's own included): its name, and the first thing it was called with

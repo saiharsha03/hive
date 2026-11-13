@@ -96,7 +96,7 @@ export function buildSections<T extends Item>(sessions: T[], states: ThreadMap, 
   return out
 }
 
-// ---- storage: ~/.hive/hive-threads.json through the main process, so dev and built Orbit share it ----
+// ---- storage: ~/.orbit/hive-threads.json through the main process, so dev and built Orbit share it ----
 
 const KEY = 'hive.threads' // the old browser-storage key, read once to carry earlier state over
 let cache: ThreadMap = read()
