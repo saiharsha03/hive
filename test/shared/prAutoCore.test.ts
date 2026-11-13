@@ -11,7 +11,7 @@ test('fixChecksPrompt names the failing checks, the logs to read and the same PR
   const p = fixChecksPrompt(12, ['test', 'lint'])
   for (const s of ['#12', '`test`, `lint`', 'gh run view', '--log-failed', 'gh pr checks 12', 'Do not open another']) assert.ok(p.includes(s), s)
   assert.ok(fixChecksPrompt(3, []).includes('some checks'))
-  assert.ok(fixReviewPrompt(4, ['kyle', 'kyle', 'dan']).includes('from kyle, dan'))
+  assert.ok(fixReviewPrompt(4, ['robin', 'robin', 'sam']).includes('from robin, sam'))
 })
 
 test('autoFixNow sends the checks prompt once per head sha, only when on, idle and open', () => {
@@ -32,14 +32,14 @@ test('autoFixNow sends the checks prompt once per head sha, only when on, idle a
 
 test('autoFixNow sends review comments newer than the switch-on and the last sent, once', () => {
   const quiet = { checks: 'passing' }
-  assert.equal(autoFixNow(x({ ...quiet, feedback: [{ author: 'kyle', at: 50 }] }), 12), null) // before Auto-fix was on
-  const r = autoFixNow(x({ ...quiet, feedback: [{ author: 'kyle', at: 50 }, { author: 'dan', at: 150 }, { author: 'kyle', at: 200 }] }), 12)
+  assert.equal(autoFixNow(x({ ...quiet, feedback: [{ author: 'robin', at: 50 }] }), 12), null) // before Auto-fix was on
+  const r = autoFixNow(x({ ...quiet, feedback: [{ author: 'robin', at: 50 }, { author: 'sam', at: 150 }, { author: 'robin', at: 200 }] }), 12)
   assert.equal(r?.kind, 'review')
   assert.equal(r?.kind === 'review' && r.at, 200)
   assert.ok(r?.text.includes('from dan, kyle'))
-  assert.equal(autoFixNow(x({ ...quiet, feedback: [{ author: 'dan', at: 150 }], sentAt: 150 }), 12), null)
+  assert.equal(autoFixNow(x({ ...quiet, feedback: [{ author: 'sam', at: 150 }], sentAt: 150 }), 12), null)
   // failing checks on a new head go first
-  assert.equal(autoFixNow(x({ feedback: [{ author: 'dan', at: 150 }] }), 12)?.kind, 'checks')
+  assert.equal(autoFixNow(x({ feedback: [{ author: 'sam', at: 150 }] }), 12)?.kind, 'checks')
 })
 
 test('autoArchiveNow: on, merged or closed, idle and not archived yet', () => {
