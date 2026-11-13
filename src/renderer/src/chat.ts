@@ -40,6 +40,7 @@ export type Session = {
   background: boolean // live but hidden from the tab bar
   waitingReason?: string // why the user is needed (Claude's words, or Finished / Failed + first line)
   waitingSince?: number
+  needs?: { text: string; at: number } // what Claude said it needs from the user, and how many items the thread had then
   answeredBy?: string // the model of the latest answer, to note when it changes
   mode?: string // the live session's permission mode (auto while in the background)
   modeError?: string // the last mode switch failed

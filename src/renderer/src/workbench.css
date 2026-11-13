@@ -338,3 +338,102 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .tk-row span { color: var(--ink); overflow-wrap: anywhere; white-space: pre-wrap; }
 .tk-row pre { margin: 0; font: 12px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; user-select: text; }
 .insp .item .nm.rw { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- Colour, everywhere ----------
+   One meaning per colour, used the same way in every place: the accent is "working", green "done", amber "needs you",
+   red "failed"; each kind of thing (agent, shell, monitor, loop, review, advisor) keeps the colour it has in Activity.
+   A destination on the rail and a section's page share one colour, so the page says where you are. */
+.app { --c-threads: var(--k-agent); --c-scheduled: var(--k-loop); --c-files: var(--k-shell); --c-todo: var(--k-monitor); --c-notes: var(--k-review); --c-more: var(--k-advisor); --c-terminal: var(--ansi-green); }
+
+/* the rail: every icon in its own colour, the open one lit with a bar at its edge */
+.abar-item { --c: var(--dim); color: color-mix(in srgb, var(--c) 72%, var(--dim)); }
+.abar-item[data-testid="abar-threads"] { --c: var(--c-threads); }
+.abar-item[data-testid="abar-scheduled"] { --c: var(--c-scheduled); }
+.abar-item[data-testid="abar-files"] { --c: var(--c-files); }
+.abar-item[data-testid="abar-todo"] { --c: var(--c-todo); }
+.abar-item[data-testid="abar-notes"] { --c: var(--c-notes); }
+.abar-item[data-testid="abar-more"], .abar-item[aria-haspopup] { --c: var(--c-more); }
+.abar-item[data-testid="abar-terminal"] { --c: var(--c-terminal); }
+.abar-item:hover { color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--side)); }
+.abar-item.on { color: var(--c); background: color-mix(in srgb, var(--c) 18%, var(--side)); box-shadow: inset 3px 0 0 var(--c); }
+
+/* state words: working, done and held get their colour back */
+.app .sw-work { color: var(--work); } .app .sw-done { color: var(--done); } .app .sw-hold { color: var(--k-shell); }
+.app .sw-wait { color: var(--signal); font-weight: 600; } .app .sw-fail { color: var(--fail); font-weight: 600; }
+
+/* a thread row carries its state on its left edge, and a light wash of it */
+.side .rail-row { --st: transparent; box-shadow: inset 3px 0 0 var(--st); }
+.side .rail-row.busy, .side .rail-row:has(.sw-work) { --st: var(--work); }
+.side .rail-row:has(.sw-done) { --st: var(--done); }
+.side .rail-row:has(.sw-hold) { --st: var(--k-shell); }
+.side .rail-row:has(.sw-wait) { --st: var(--signal); }
+.side .rail-row:has(.sw-fail) { --st: var(--fail); }
+.side .rail-row:has(.sw-wait), .side .rail-row:has(.sw-fail), .side .rail-row.busy { background: color-mix(in srgb, var(--st) 9%, transparent); }
+.side .rail-row.on { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--raised)); }
+.side .rail-row.on:has(.sw-wait), .side .rail-row.on:has(.sw-fail) { box-shadow: inset 3px 0 0 var(--st); }
+
+/* a tab's top line is its thread's state */
+.tab:has(.sw-work) { border-top-color: var(--work); }
+.tab:has(.sw-done) { border-top-color: color-mix(in srgb, var(--done) 70%, transparent); }
+.tab:has(.sw-wait) { border-top-color: var(--signal); background: color-mix(in srgb, var(--signal) 10%, transparent); }
+.tab:has(.sw-fail) { border-top-color: var(--fail); background: color-mix(in srgb, var(--fail) 10%, transparent); }
+.tab.on { background: color-mix(in srgb, var(--accent) 9%, var(--bg)); }
+.tab-new { color: var(--accent-text); }
+
+/* the thread header: each panel button in the colour of what it opens */
+.app .pact { --c: var(--dim); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, var(--rule2)); }
+.app .pact[data-testid="chat-changes"] { --c: var(--git-modified); }
+.app .pact[data-testid="chat-activity"] { --c: var(--k-agent); }
+.app .pact[data-testid="chat-rewind"] { --c: var(--k-review); }
+.app .pact[data-testid="terminal-toggle"] { --c: var(--c-terminal); }
+.app .pact .codicon { display: inline; color: var(--c); }
+.app .pact:hover { background: color-mix(in srgb, var(--c) 14%, transparent); }
+.app .pact[aria-pressed="true"], .app .pact[aria-expanded="true"] { background: color-mix(in srgb, var(--c) 22%, transparent); box-shadow: inset 0 0 0 1px var(--c); }
+.app .pact b.num { color: var(--bg); background: var(--c); padding: 0 5px; font-weight: 600; border-radius: 8px !important; }
+.phead h1 { box-shadow: inset 3px 0 0 var(--accent); padding-left: var(--s3); }
+.phead-sub b { color: var(--git-modified); }
+.coming-b { color: var(--k-loop); } .coming-b.held { color: var(--signal); }
+
+/* the conversation: the first word of a tool row says what it did, in colour */
+.app .trow .tv { font-weight: 600; }
+.app .trow .tv.t-read { color: var(--tm-read); } .app .trow .tv.t-edit { color: var(--tm-edit); } .app .trow .tv.t-add { color: var(--done); }
+.app .trow .tv.t-run { color: var(--tm-bash); } .app .trow .tv.t-search { color: var(--tm-search); } .app .trow .tv.t-agent { color: var(--tm-agent); }
+.app .trow .tv.t-other { color: var(--dim); }
+.app .trow.failed { box-shadow: inset 2px 0 0 var(--fail); }
+.conv .msg.cl h1, .conv .msg.cl h2, .conv .msg.cl h3 { color: var(--label); }
+.conv .msg.cl strong { color: var(--hi); }
+.conv .msg.cl a { color: var(--accent-text); }
+.conv .msg.cl.from { border-left-color: var(--k-agent); }
+
+/* what is running: the bar and each group in its kind's colour */
+.runbar { border-top: 2px solid color-mix(in srgb, var(--work) 60%, var(--rule)); }
+.runbar-b b { color: var(--work); }
+.runbar-g { --c: var(--k-agent); color: var(--c); box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--c) 35%, transparent); }
+.runbar-g[data-testid="running-group-shells"] { --c: var(--k-shell); }
+.runbar-g[data-testid="running-group-monitors"] { --c: var(--k-monitor); }
+.runbar-g .codicon { color: var(--c); }
+.runbar-gn { color: var(--c); }
+
+/* side bar and pages: a heading in its section's colour, with a bar */
+.side-head { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--sc, var(--accent)) 60%, transparent); color: var(--sc, var(--hi)); }
+.side:has(.side-threads) { --sc: var(--c-threads); } .side:has(.side-scheduled) { --sc: var(--c-scheduled); } .side:has(.side-files) { --sc: var(--c-files); }
+.side:has(.side-todo) { --sc: var(--c-todo); } .side:has(.side-notes) { --sc: var(--c-notes); }
+.full-sec { --sc: var(--c-more); }
+.full-sec.full-scheduled { --sc: var(--c-scheduled); } .full-sec.full-todo { --sc: var(--c-todo); } .full-sec.full-notes { --sc: var(--c-notes); } .full-sec.full-files { --sc: var(--c-files); }
+.full-sec.full-usage { --sc: var(--k-loop); } .full-sec.full-git, .full-sec.full-pull, .full-sec.full-dependabot { --sc: var(--git-modified); }
+.full-sec.full-running, .full-sec.full-watchers { --sc: var(--k-monitor); } .full-sec.full-deploy, .full-sec.full-env { --sc: var(--ansi-green); }
+.full-sec.full-board { --sc: var(--k-review); } .full-sec.full-codex, .full-sec.full-quarry { --sc: var(--ansi-magenta); }
+.full-sec .page-head h1 { color: var(--sc); padding-left: var(--s3); box-shadow: inset 4px 0 0 var(--sc); }
+.full-sec .page-tabs { border-bottom-color: color-mix(in srgb, var(--sc) 30%, var(--rule)); }
+.full-sec .page-tabs button.on { color: var(--sc); border-bottom-color: var(--sc); font-weight: 600; }
+.full-back { color: var(--accent-text); }
+.full-sec .sec-head, .full-sec .dstack .drow .dtitle { color: var(--label); }
+.app .td-seg button.on { color: var(--bg); background: var(--c-todo); }
+.insp .isec.isec-k { box-shadow: inset 0 -1px 0 color-mix(in srgb, currentColor 30%, transparent); }
+.panel-tab.on { color: var(--c-terminal); border-bottom-color: var(--c-terminal); }
+
+/* why the thread is marked waiting: Claude's own reason, said in the thread the moment it is marked */
+.needs-note { flex: none; display: flex; gap: var(--s3); align-items: baseline; margin: var(--s2) var(--pane-pad); padding: var(--s2) var(--s3); background: color-mix(in srgb, var(--signal) 14%, var(--bg)); box-shadow: inset 3px 0 0 var(--signal); color: var(--hi); font: var(--t-ui); }
+.app .needs-note { border-radius: var(--r-row) !important; }
+.needs-note b { color: var(--signal); font-weight: 650; flex: none; }
+.needs-note span { min-width: 0; overflow-wrap: anywhere; }

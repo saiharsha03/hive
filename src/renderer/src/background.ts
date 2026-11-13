@@ -23,6 +23,12 @@ export function markWaiting(s: Session, reason: string | undefined, now: number,
   return { ...s, waitingReason: reason?.trim() || 'Needs your input', waitingSince: now }
 }
 
+// What Claude said it needs ("waiting" with a reason), kept even when the thread is the one on screen, so the thread
+// itself says why it is marked waiting. It stands until the user's next message.
+export const withNeeds = (s: Session, reason: string | undefined): Session => ({ ...s, needs: { text: reason?.trim() || 'Needs your input', at: s.items.length } })
+export const needsNote = (s: Pick<Session, 'needs' | 'items'>): string =>
+  s.needs && !s.items.slice(s.needs.at).some((it) => it.kind === 'user') ? s.needs.text : ''
+
 const firstLine = (t: string) => (t.split('\n').map((l) => l.replace(/^[#>*\-\s`]+/, '').trim()).find(Boolean) ?? '')
 
 // an event for one session; a background turn that ends while the tab is not on screen leaves it waiting for the user

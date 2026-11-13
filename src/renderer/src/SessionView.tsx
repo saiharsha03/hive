@@ -30,6 +30,7 @@ import { sinceSummary, toolVerb, toolResult, errorLine, exitOnly, historyStep, p
 import { State, Btn, Pins, clock } from './kit'
 import { untilText } from '../../shared/cronCore'
 import { RunningBar } from './RunningBar'
+import { needsNote } from './background'
 import { ComingBar } from './ComingBar'
 
 export type Attachment = { url: string; mediaType: string; data: string }
@@ -818,6 +819,7 @@ export function SessionView(p: Props) {
           <Btn kind="link" onClick={() => p.onBackground()} testid="chat-background-tasks" title="Move what runs to the background (Ctrl+B)">Background tasks</Btn>
         </div>
       )}
+      {needsNote(session) && <div className="needs-note" role="status" data-testid="needs-note"><b>Waiting for you</b><span>{needsNote(session)}</span></div>}
       <RunningBar tabId={session.id} items={session.items} busy={session.busy} onSend={p.onSend} />
       {btws.map((b, i) => (
         <div key={i} className="btw" data-testid="btw-answer">

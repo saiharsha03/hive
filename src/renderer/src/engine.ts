@@ -4,7 +4,7 @@
 import { HANDOFF_AT_DEFAULT, handoffRequest, handoffStart, shouldOffer } from '../../shared/handoffCore'
 import { isWatcherTab } from '../../shared/readOnlyCore'
 import { tabsToRestore, tabsToSave } from '../../shared/restoreCore'
-import { activateSession, findSession, markWaiting, onSessionEvent } from './background'
+import { activateSession, findSession, markWaiting, onSessionEvent, withNeeds } from './background'
 import { refreshThreadList } from './Rail'
 import { keepVisible, organize, setRetireHandler } from './threads'
 import { pruneDrafts, saveTabs, savedTabs } from './restore'
@@ -149,11 +149,11 @@ export function startEngine() {
     }
     if (ev.type === 'hive_organize') {
       if (ev.action === 'waiting') {
-        setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(s, ev.reason, Date.now(), activeId() === s.id && !s.background) : s)))
+        setSessions((all) => all.map((s) => (s.id === tabId ? markWaiting(withNeeds(s, ev.reason), ev.reason, Date.now(), activeId() === s.id && !s.background) : s)))
         return
       }
       if (ev.action === 'resolved') {
-        setSessions((all) => all.map((s) => (s.id === tabId ? { ...s, waitingReason: undefined, waitingSince: undefined } : s)))
+        setSessions((all) => all.map((s) => (s.id === tabId ? { ...s, waitingReason: undefined, waitingSince: undefined, needs: undefined } : s)))
         return
       }
       if (cur?.sessionId) organize(cur.sessionId, ev.action, ev.until)
