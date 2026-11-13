@@ -24,6 +24,7 @@ import {
 import { PAGE_LABEL, PAGE_KEYS, type ToolTab } from './chat'
 import { CloseAsk } from './CloseAsk'
 import { AgentAsk, AgentPane, agentDefs, askAgentThread } from './AgentView'
+import { ClaudePanel, runLocalCommand } from './ClaudePanels'
 import { panes as panesStore, setSessions, useSessionMetas, useStore } from './store'
 import { focusedTab, activate as activateIn } from './panes'
 import { RunningPage } from './pages/RunningPage'
@@ -42,8 +43,8 @@ import { NEXT } from '../../shared/edition'
 
 // slash commands that print a screen in the terminal open a real view here instead
 const SLASH_VIEW: Record<string, ToolTab | 'accounts' | 'settings-claude'> = {
-  status: 'status', usage: 'status', cost: 'status', context: 'status', mcp: 'status', login: 'accounts',
-  hooks: 'settings-claude', permissions: 'settings-claude', memory: 'settings-claude', config: 'settings', settings: 'settings',
+  status: 'status', usage: 'status', cost: 'status', context: 'status', login: 'accounts',
+  config: 'settings', settings: 'settings',
 }
 
 // the page a section is also known as (its shortcut is the section's), and a shortcut as the palette writes it
@@ -85,6 +86,9 @@ export function Shell() {
     // another command-line agent in a tab of its own (Settings > Agents)
     ...(agents.length ? agents.map((d): Command => ({ id: `agent:${d.name}`, group: 'Actions', label: `New agent thread: ${d.name}`, hint: d.command, run: () => askAgentThread(d.name) }))
       : [{ id: 'agent-setup', group: 'Actions' as const, label: 'New agent thread (add an agent in Settings first)', run: () => { pickSettingsSection('agents'); openPage('settings') } }]),
+    // Claude Code's configuration screens, for the focused thread (ClaudePanels.tsx)
+    ...([['mcp', 'MCP servers'], ['agents', 'Subagents'], ['permissions', 'Permission rules'], ['hooks', 'Hooks'], ['memory', 'Memory files (CLAUDE.md)'], ['resume', 'Resume a thread of this folder'], ['branch', 'Branch this thread'], ['add-dir', 'Add a folder to this thread']] as const)
+      .map(([cmd, label]): Command => ({ id: `cc:${cmd}`, group: 'Actions', label, hint: `/${cmd}`, run: () => { runLocalCommand(focused && !focused.tool && !focused.file && !focused.agent ? focused.id : null, `/${cmd}`) } })),
     { id: 'next-needs', group: 'Actions', label: 'Next thread that needs me', hint: 'Ctrl+.', run: () => nextNeedsMe() },
     { id: 'reopen', group: 'Actions', label: 'Reopen the last closed thread', hint: 'Ctrl+Shift+T', run: () => reopenClosed() },
     { id: 'stop-all', group: 'Actions', label: 'Stop everything', hint: 'Ctrl+Alt+Esc', run: () => void stopEverything() },
@@ -119,6 +123,8 @@ export function Shell() {
     },
     engine: async () => { const r = await engineCommands(activeId() ?? undefined); return r.ok ? [...r.data, { name: 'btw', description: 'Ask a quick side question; the answer stays out of the conversation', argumentHint: '<question>', builtin: true }] : [] },
     runSlash: (c) => {
+      // the configuration commands Hive has its own screen for (ClaudePanels.tsx), for the focused thread
+      if (runLocalCommand(focused && !focused.tool && !focused.file && !focused.agent ? focused.id : null, `/${c.name}`)) return
       const v = SLASH_VIEW[c.name]
       if (v === 'accounts') return setAccountsOpen(true)
       if (v === 'settings-claude') { pickSettingsSection('claude'); return openPage('settings') }
@@ -292,6 +298,7 @@ export function Shell() {
       {dropped && <DropPrompt path={dropped} choices={dropChoices} onPick={(c) => startFromFile(c, dropped)} onCancel={() => setDropped(null)} />}
       <CloseAsk />
       <AgentAsk />
+      <ClaudePanel />
       {toasts.length > 0 && (
         <div className="toasts" role="status">
           {toasts.map((n) => (

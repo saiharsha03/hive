@@ -1,0 +1,16 @@
+/* Claude Code configuration screens (ClaudePanels.tsx): /mcp, /agents, /permissions, /hooks, /memory, /resume, /add-dir */
+.ccp { padding: 0 18px 18px; font-size: 13px; color: var(--ink); }
+.ccp-for { margin-left: 10px; font: 400 12px/1.2 var(--sans); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccp-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-top: 1px solid var(--rule); }
+.ccp-row:first-of-type { border-top: 0; }
+.ccp-click { cursor: pointer; }
+.ccp-click:hover { background: var(--lift2); }
+.ccp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ccp-name { color: var(--hi); font-weight: 600; }
+.ccp-dim { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }
+.ccp-mono { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.ccp-err { color: var(--fail); font-size: 12px; overflow-wrap: anywhere; }
+.ccp-acts { display: flex; gap: 6px; flex: none; }
+.ccp-kind { flex: none; min-width: 90px; color: var(--faint); font-size: 12px; }
+.ccp-rules { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 6px 0; }
+.ccp-rule { display: inline-flex; align-items: baseline; gap: 6px; background: var(--lift2); padding: 2px 8px; }

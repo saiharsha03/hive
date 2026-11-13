@@ -19,6 +19,7 @@ import { pendingResent, resendGroups, takePending } from './pending'
 import { initDesktopNotify } from './desktopNotify'
 import { initMobile, mobileStatus, notifyPhone, pairPhone, unpairPhone, type PhoneItem, type PhoneThread } from './mobile'
 import { registerStatusIpc, setAdvisor, setEffort, setModel } from './liveStatus'
+import { registerClaudeConfigIpc } from './claudeConfig'
 import { modeLabel } from '../shared/modeCore'
 import { threadStatusView } from './statusView'
 import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
@@ -667,6 +668,8 @@ handle('settings:validate', (_e, d: unknown) => validateSettings(draftOf(d), exi
 handle('settings:save', (_e, d: unknown) => saveFromPanel(d))
 // per-thread status: model, effort, commands, models, MCP servers, stopping background tasks
 registerStatusIpc(handle, { liveQuery, stopCodex })
+// Hive's own /mcp, /agents, /permissions, /hooks, /memory, /branch and /add-dir screens (claudeConfig.ts)
+registerClaudeConfigIpc(handle, { liveQuery, idle, transcriptPath })
 // /status and /usage for one thread, live (statusView.ts): the tab's folder and session for a thread with no process yet
 handle('chat:statusView', (_e, tabId: string, known?: { cwd?: string; sessionId?: string }) =>
   threadStatusView({ liveQuery, facts: threadFacts, transcript: transcriptPath, defaultAdvisor: () => sessionFlags().advisorModel ?? null }, String(tabId ?? ''), {

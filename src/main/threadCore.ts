@@ -88,7 +88,8 @@ export function messageParts(content: unknown): { text: string; images: { mediaT
 
 // The / menu: every command the engine reports, as it reports them, plus the interactive CLI's own commands it leaves
 // out (picking one sends it; the engine answers "isn't available in this environment" and Hive runs it in the
-// thread's terminal, chat.ts cliOnlyCommand). /status and /usage are marked view: the window shows them itself, live
+// thread's terminal, chat.ts cliOnlyCommand). /mcp, /agents, /permissions, /hooks, /memory, /resume, /branch and
+// /add-dir never reach the engine: the window opens its own screen for them (renderer ClaudePanels.tsx). /status and /usage are marked view: the window shows them itself, live
 // (chat:statusView), instead of a terminal.
 export type MenuCommand = { name: string; description: string; argumentHint?: string; aliases?: string[]; builtin?: boolean; terminal?: boolean; view?: 'status' | 'usage' }
 const CLI_ONLY: [string, string][] = [
@@ -96,6 +97,8 @@ const CLI_ONLY: [string, string][] = [
   ['doctor', 'Check the Claude Code installation'], ['permissions', 'Manage tool permission rules'], ['hooks', 'Manage hooks'],
   ['agents', 'Manage subagents'], ['memory', 'Edit memory files'], ['ide', 'Connect to an IDE'], ['terminal-setup', 'Set up terminal key bindings'],
   ['status', 'Account, model, session and connection status'], ['usage', 'Plan usage limits and this session\'s tokens'],
+  ['resume', 'Open a past thread of this folder'], ['branch', 'Copy this thread into a new one and continue there'],
+  ['add-dir', 'Let this thread work in another folder too'],
 ]
 export function menuCommands(engine: MenuCommand[]): MenuCommand[] {
   const names = new Set(engine.flatMap((c) => [c.name, ...(c.aliases ?? [])]))

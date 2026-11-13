@@ -30,6 +30,7 @@ import { appName } from '../shared/appName'
 import { modeFor, modeSwitch } from '../shared/modeCore'
 import { idleCloseMs, idleSweepMs, sessionFlags, threadDefaults } from './settings'
 import { advisorNow, boostForMessage, forgetTab, observe, sessionOptions, userMemoryDir } from './liveStatus'
+import { dirsOption } from './threadDirs'
 import { busyWith, idleToClose, messageParts, permitWithoutPrompt, retireStep, sharedMemoryDir, threadClass, type Activity } from './threadCore'
 import { readOnlyOptions } from './readOnly'
 import { isWatcherTab, isWatcherTranscript } from '../shared/readOnlyCore'
@@ -1052,6 +1053,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
     options: {
       cwd,
       resume,
+      ...dirsOption(tabId), // folders added with /add-dir (threadDirs.ts)
       ...(fork?.at && resume ? { resumeSessionAt: fork.at, forkSession: true } : {}),
       // backups of the files each turn changes, so Rewind can put them back (Query.rewindFiles)
       enableFileCheckpointing: true,

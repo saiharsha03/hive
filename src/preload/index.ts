@@ -365,4 +365,15 @@ contextBridge.exposeInMainWorld('api', {
   // folder and session, for a thread with no process yet
   chatStatusView: (tabId: string, known?: { cwd?: string; sessionId?: string }) => ipcRenderer.invoke('chat:statusView', tabId, known),
   chatStopTask: (tabId: string, taskId: string) => ipcRenderer.invoke('chat:stopTask', tabId, taskId),
+  // /mcp, /agents, /permissions, /hooks, /memory, /branch, /add-dir screens (main/claudeConfig.ts; typed in ClaudePanels.tsx)
+  ccMcp: (tabId: string, cwd: string) => ipcRenderer.invoke('cc:mcp', tabId, cwd),
+  ccMcpDo: (tabId: string, server: string, action: string) => ipcRenderer.invoke('cc:mcpDo', tabId, server, action),
+  ccAgents: (cwd: string) => ipcRenderer.invoke('cc:agents', cwd),
+  ccAgentNew: (cwd: string, scope: string, name: string) => ipcRenderer.invoke('cc:agentNew', cwd, scope, name),
+  ccSettings: (cwd: string) => ipcRenderer.invoke('cc:settings', cwd),
+  ccRule: (cwd: string, scope: string, kind: string, rule: string, add: boolean) => ipcRenderer.invoke('cc:rule', cwd, scope, kind, rule, add),
+  ccMemory: (cwd: string) => ipcRenderer.invoke('cc:memory', cwd),
+  ccFork: (cwd: string, sessionId: string, title: string) => ipcRenderer.invoke('cc:fork', cwd, sessionId, title),
+  ccAddDir: (tabId: string, dir: string) => ipcRenderer.invoke('cc:addDir', tabId, dir),
+  ccDirs: (tabId: string) => ipcRenderer.invoke('cc:dirs', tabId),
 })
