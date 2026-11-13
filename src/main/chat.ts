@@ -517,7 +517,7 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         'worktree',
         'Create (or reuse) a git worktree of one of the user\'s repos for this thread and return its folder and branch. Do all code changes for that repo in the returned folder. '
           + 'With ticket (e.g. "PROJ-123 fix login redirect") the branch is feat/PROJ-123-fix-login-redirect, or the local branch already made for that ticket; with branch, that branch. '
-          + 'A new branch starts from origin\'s default branch (fetched first) unless base names another ref. .env files are copied in and node_modules is linked from the main checkout. '
+          + 'A new branch starts from origin\'s default branch (fetched first) unless base names another ref. .env files (and the git-ignored files the repo\'s .worktreeinclude names) are copied in and node_modules is linked from the main checkout. '
           + `${appName()} deletes the worktree when the user closes or archives this thread (uncommitted changes are saved first as a WIP commit; the branch is kept). Pass the same branch to dev_stack to run it.`,
         {
           repo: z.string().describe('Repo folder name under the repos root, as dev_stack uses it'),
@@ -1187,6 +1187,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           inited = true
           s.sessionId = (m as any).session_id
           if (forkedFrom && s.sessionId !== forkedFrom) void moveThreadLinks(forkedFrom, s.sessionId!).catch(() => 0)
+          // a new thread started with Worktree on: its worktree was linked to the tab before the session had an id
+          else if (!resume && s.sessionId !== tabId) void moveThreadLinks(tabId, s.sessionId!).catch(() => 0)
           noteSession(tabId, s.sessionId!, resumedFrom)
           pendingSession(tabId, s.sessionId!)
           send({ type: 'hive_session', sessionId: s.sessionId, path: transcriptPath(cwd, s.sessionId!) })

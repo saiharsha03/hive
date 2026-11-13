@@ -106,3 +106,15 @@ test('links: a handoff moves them to the new thread (merging), and leaves others
   assert.equal(w.moveLinks(map, 'old', 'old'), map)
 })
 
+// ---------- Worktree on a new thread ----------
+test('startBranch: prefix plus the first message slug, a timestamp without one, -2 when taken', () => {
+  const at = new Date(2026, 10, 13, 9, 5, 7)
+  const none = () => false
+  assert.equal(w.startBranch('', 'Fix the login page!', at, none), 'fix-the-login-page')
+  assert.equal(w.startBranch('claude/', 'Fix the login page', at, none), 'claude/fix-the-login-page')
+  assert.equal(w.startBranch('', '???', at, none), '20261113-090507')
+  const taken = new Set(['fix-login', 'fix-login-2'])
+  assert.equal(w.startBranch('', 'fix login', at, (b) => taken.has(b)), 'fix-login-3')
+  assert.equal(w.startBranch('bad..', 'x', at, none), null)
+})
+

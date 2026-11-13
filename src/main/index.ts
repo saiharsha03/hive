@@ -22,7 +22,7 @@ import { registerStatusIpc, setAdvisor, setEffort, setModel } from './liveStatus
 import { registerClaudeConfigIpc } from './claudeConfig'
 import { modeLabel } from '../shared/modeCore'
 import { threadStatusView } from './statusView'
-import { cleanupThread, moveThreadLinks, threadLinks } from './threadWorktrees'
+import { cleanupThread, linkThread, moveThreadLinks, threadLinks } from './threadWorktrees'
 import { checkStatus, deployConfig, dismissWatcher, initDeploy, listWatchers, rewatch, startDeploy, suiteDiffs } from './deploy'
 import { dependabotSummary, initDependabot, setDependabotEnabled } from './dependabot'
 import { allowStatus, forgetAllowed, initAllowlist, markAllowed, runAllowlist } from './ipAllow'
@@ -60,7 +60,7 @@ import { addTodo, deleteTodo, editTodo, listTodos, restoreTodo, setDone, setDue,
 import { sessionStats } from './sessionStats'
 import { checkLogin, closeStatus, getStatus, idle, restartStatus, setLiveUsage, weeklyUsage } from './status'
 import { loadConfig, readDotEnv } from './devConfig'
-import { loadSettings, saveSettings, sessionFlags, SETTINGS_FILE } from './settings'
+import { currentSettings, loadSettings, saveSettings, sessionFlags, SETTINGS_FILE } from './settings'
 import { effectiveEnv, envForSave, isSecretKey, normalizeSettings, sectionOf, validateSettings, type Draft, type Settings, type SettingsView } from '../shared/settingsCore'
 import { parseDropChoices } from '../shared/dropCore'
 import { pullAll } from './pull'
@@ -592,6 +592,14 @@ handle('chat:setBackground', (e, tabId: string, on: boolean) => setBackground(ta
 handle('worktree:links', (_e, thread: string) => threadLinks(String(thread)))
 handle('worktree:cleanup', (_e, thread: string) => cleanupThread(String(thread)))
 handle('worktree:move', (_e, from: string, to: string) => moveThreadLinks(String(from), String(to)))
+// Worktree on a new thread: the repo the folder is in (to show the toggle), and the worktree made before its first
+// message, linked to the tab until the session id is known (chat.ts moves it then) so Close / Archive treat it the same
+handle('worktree:repoOf', (_e, folder: string) => dev.threadRepoOf(String(folder ?? '')))
+handle('worktree:start', async (_e, tabId: string, folder: string, text: string) => {
+  const w = await dev.startThreadWorktree(String(folder), String(text ?? ''), currentSettings()?.general.branchPrefix ?? '')
+  await linkThread(String(tabId), { repo: w.repo, path: w.path, branch: w.branch, at: Date.now() })
+  return w
+})
 // the page (re)loaded: no tab is showing any live session any more, so stop them all. The main window's page is ready
 // for threads from now on; messages left unsent when Hive last closed go out once, after its first reset
 // ---- carrying on after Hive closed mid-work ----

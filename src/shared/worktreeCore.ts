@@ -24,6 +24,20 @@ export function findTicketBranch(key: string, branches: string[]): string | null
   return hits.find((b) => b.startsWith('feat/')) ?? hits[0] ?? null
 }
 
+// a thread started with Worktree on: <prefix><slug of its first message>, or a timestamp when the message has no
+// letters or digits; -2, -3... when that branch is taken. null = the prefix makes no valid branch name.
+export function startBranch(prefix: string, text: string, now: Date, taken: (b: string) => boolean): string | null {
+  const p = now
+  const two = (n: number) => String(n).padStart(2, '0')
+  const slug = slugify(text, 30) || `${p.getFullYear()}${two(p.getMonth() + 1)}${two(p.getDate())}-${two(p.getHours())}${two(p.getMinutes())}${two(p.getSeconds())}`
+  const base = `${prefix.trim()}${slug}`
+  if (!validBranchName(base)) return null
+  for (let n = 1; ; n++) {
+    const b = n === 1 ? base : `${base}-${n}`
+    if (!taken(b)) return b
+  }
+}
+
 // ---------- the worktree tool ----------
 
 export type WorktreePlan =

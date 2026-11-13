@@ -18,6 +18,7 @@ import { ModelEffort, ModePicker } from './ThreadStatus'
 import { dismissGoal, useThreadStatus } from './statusStore'
 import { SummaryRow, ThinkingRow, WarningRow } from './ChatRows'
 import { FastToggle } from './FastToggle'
+import { NewThreadPlace } from './WorktreeToggle'
 import { useSlashMenu } from './SlashMenu'
 import { useMentionMenu } from './MentionMenu'
 import { mentionText } from '../../shared/mentionCore'
@@ -993,6 +994,7 @@ export function SessionView(p: Props) {
           <ModelEffort tabId={session.id} ultra={ultra} />
           <FastToggle tabId={session.id} />
           <ModePicker tabId={session.id} mode={shownMode} error={session.modeError} />
+          {!session.sessionId && !session.items.length && !session.busy && <NewThreadPlace tabId={session.id} cwd={session.cwd ?? ''} />}
           {ultra && <span className="pick ultra" data-testid="ultra-note">ultrathink: max effort for this turn</span>}
           <Btn kind="link" onClick={() => fileInput.current?.click()} testid="composer-attach" title="Attach files or images">Attach</Btn>
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => { void addFiles([...(e.target.files ?? [])]); e.target.value = '' }} data-testid="composer-file" />

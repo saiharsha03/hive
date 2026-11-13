@@ -119,6 +119,8 @@ contextBridge.exposeInMainWorld('api', {
   worktreeLinks: (thread: string) => ipcRenderer.invoke('worktree:links', thread),
   worktreeCleanup: (thread: string) => ipcRenderer.invoke('worktree:cleanup', thread),
   worktreeMove: (from: string, to: string) => ipcRenderer.invoke('worktree:move', from, to),
+  worktreeRepoOf: (folder: string) => ipcRenderer.invoke('worktree:repoOf', folder),
+  worktreeStart: (tabId: string, folder: string, text: string) => ipcRenderer.invoke('worktree:start', tabId, folder, text),
   // a dropped file's absolute path (File.path is gone from Electron)
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   chatReset: () => ipcRenderer.invoke('chat:reset'),

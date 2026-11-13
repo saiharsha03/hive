@@ -13,6 +13,7 @@ import { forgetSent } from './RunPanels'
 import type { DiffSpec } from './DiffPanel'
 import { resumeEverything as resumeEverythingMain, stopEverythingMain } from './api/next'
 import { getAppearance, setLayout } from './appearance'
+import { worktreeOn } from './WorktreeToggle'
 
 // ---- where new threads start: the workspace root, else the home folder ----
 export const place = createStore<{ workspace: string; folder: string }>({ workspace: '', folder: '' })
@@ -365,9 +366,29 @@ export function send(targetId: string, text: string, images: Attachment[], mode?
   }
   setSessions((all) => all.map((s) => (s.id === target.id ? { ...s, busy: true, items: [...s.items, item] } : s)))
   keepVisible(target.sessionId ?? target.id) // writing to a closed or archived thread brings it back to the list
-  window.api.chatSend(target.id, target.cwd || place.get().folder, target.sessionId, {
+  const go = (cwd: string) => window.api.chatSend(target.id, cwd, target.sessionId, {
     uuid, title: target.title, text, images: images.map((i) => ({ mediaType: i.mediaType, data: i.data })), mode: busyMode, queueId, background: target.background, ...(interrupt ? { interrupt: true } : {}),
-  }).catch(sendFailed(target.id, uuid, !!target.busy))
+  })
+  const cwd = target.cwd || place.get().folder
+  // a new thread's first message: with Worktree on for its repo, the thread starts in a worktree made for it first;
+  // anything sent while that is being made waits for it
+  const first = !target.sessionId && !target.items.length && !target.busy && !starting.has(target.id)
+  const dir = starting.get(target.id) ?? (first ? startDir(target.id, cwd, text) : Promise.resolve(cwd))
+  dir.then(go).catch(sendFailed(target.id, uuid, !!target.busy))
+}
+
+// ---- Worktree on a new thread (as in Claude Code Desktop): off by default, remembered per repo (WorktreeToggle) ----
+const starting = new Map<string, Promise<string>>()
+function startDir(tabId: string, cwd: string, text: string): Promise<string> {
+  const p = window.api.worktreeRepoOf(cwd).then(async (r) => {
+    if (!r || !worktreeOn(r.repo)) return cwd
+    const w = await window.api.worktreeStart(tabId, cwd, text)
+    setSessions((all) => all.map((s) => (s.id === tabId ? { ...s, cwd: w.cwd, worktrees: [{ repo: w.repo, path: w.path, branch: w.branch }] } : s)))
+    return w.cwd
+  })
+  starting.set(tabId, p)
+  void p.catch(() => {}).finally(() => starting.delete(tabId))
+  return p
 }
 
 // "Send now": the running turn is stopped so what waits goes in at once. id = a queued message (it goes ahead of the

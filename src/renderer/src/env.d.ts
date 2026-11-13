@@ -144,6 +144,8 @@ interface Window {
     worktreeLinks: (thread: string) => Promise<WorktreeLink[]>
     worktreeCleanup: (thread: string) => Promise<string[]>
     worktreeMove: (from: string, to: string) => Promise<number>
+    worktreeRepoOf: (folder: string) => Promise<{ repo: string; dir: string; branch: string | null } | null>
+    worktreeStart: (tabId: string, folder: string, text: string) => Promise<{ repo: string; path: string; branch: string; cwd: string }>
     pathForFile: (file: File) => string
     chatReset: () => Promise<void>
     previewUrl: (path: string) => Promise<string>

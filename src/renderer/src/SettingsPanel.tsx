@@ -395,6 +395,9 @@ export function SettingsPanel({ onClose, onWatchers, onAccounts }: { onClose?: (
             <option value="">(Claude Code's default)</option><option value="on">On</option><option value="off">Off</option>
           </select>
         </Row>
+        <Row label="Branch prefix" hint="Hive prepends it to every worktree branch name of a thread started with Worktree on, which is useful for keeping Claude-created branches organized. Empty = none." problems={of('general.branchPrefix')}>
+          <input className="sin" data-testid="settings-branch-prefix" value={g.branchPrefix} spellCheck={false} placeholder="(none)" onChange={(e) => setGeneral({ branchPrefix: e.target.value })} />
+        </Row>
         <Row label="Quarry" hint="The Quarry SQL app's exe. Empty = find the installed Quarry; off = no Quarry in Hive. When one is found, Hive gets a Quarry page and threads get its quarry_ tools." problems={of('general.quarryPath')}>
           <input className="sin wide" data-testid="settings-quarry" value={g.quarryPath} spellCheck={false} placeholder="(find the installed Quarry)" onChange={(e) => setGeneral({ quarryPath: e.target.value })} />
         </Row>

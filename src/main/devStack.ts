@@ -6,16 +6,18 @@ import { BrowserWindow } from 'electron'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
 import { connect } from 'node:net'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative } from 'node:path'
 import {
   LogBuffer, canControl, decideStart, detectDefault, formatStatus, ownerLabel, parseComposePs, parseEnvFile, parseListening, parseWorktrees, serviceState,
   sourceOptions, validBranchName, worktreeDir,
   type DevConfig, type DevService, type DevState, type Owner, type Source, type SourceOption, type SvcDef,
 } from '../shared/devCore'
 import type { Loaded } from './devConfig'
-import { WIP_MESSAGE, decideCleanup, envCopies, hasWork, isDotenvName, planWorktree, validRepoName, type WorktreeLink } from '../shared/worktreeCore'
+import { WIP_MESSAGE, decideCleanup, envCopies, hasWork, isDotenvName, planWorktree, startBranch, validRepoName, type WorktreeLink } from '../shared/worktreeCore'
+import { included, mayReach, parseInclude } from '../shared/worktreeIncludeCore'
+import { scanRepos } from './pull'
 import { appName } from '../shared/appName'
-import { sameDir, withRealRoots } from './paths'
+import { realDir, sameDir, withRealRoots } from './paths'
 
 export type { Owner, Source }
 export const USER: Owner = { kind: 'user' }
@@ -226,7 +228,41 @@ async function addWorktree(repo: string, branch: string, base?: string): Promise
   // --no-track: the new branch must not follow origin/main, so a push never goes there
   await git(main, base ? ['worktree', 'add', '--no-track', '-b', branch, target, base] : ['worktree', 'add', target, branch])
   prepareWorktree(main, target)
+  await copyIncludes(main, target).catch((e) => console.warn(`[worktreeinclude] ${repo}: not copied (${(e as Error).message})`))
   return target
+}
+
+// .worktreeinclude: the git-ignored files of the main checkout that it names are copied into the new worktree (never
+// over a file already there). Only the count is logged, never a name or a content.
+async function copyIncludes(main: string, wt: string): Promise<number> {
+  const file = join(main, '.worktreeinclude')
+  if (!existsSync(file)) return 0
+  const rules = parseInclude(readFileSync(file, 'utf8'))
+  if (!rules.length) return 0
+  const ignored = (await git(main, ['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'])).split('\0').filter(Boolean)
+  let n = 0
+  const copy = (rel: string) => {
+    const to = join(wt, rel)
+    if (existsSync(to)) return
+    mkdirSync(dirname(to), { recursive: true })
+    copyFileSync(join(main, rel), to)
+    n++
+  }
+  // a folder git ignores as a whole: walked only where a pattern can match inside it; links are never followed
+  const walk = (rel: string) => {
+    for (const e of readdirSync(join(main, rel), { withFileTypes: true })) {
+      const sub = `${rel}/${e.name}`
+      if (e.isDirectory()) { if (mayReach(rules, sub)) walk(sub) }
+      else if (e.isFile() && included(rules, sub)) copy(sub)
+    }
+  }
+  for (const entry of ignored) {
+    const rel = entry.replace(/\/+$/, '')
+    if (entry.endsWith('/')) { if (mayReach(rules, rel)) walk(rel) }
+    else if (included(rules, rel) && lstatSync(join(main, rel)).isFile()) copy(rel)
+  }
+  console.log(`[worktreeinclude] copied ${n} file${n === 1 ? '' : 's'}`)
+  return n
 }
 
 // ---------- processes ----------
@@ -502,6 +538,32 @@ export async function ensureWorktree(repo: string, want: { branch?: string; tick
   const rm = from.match(/^origin\/(.+)$/)
   if (rm) await git(main, ['fetch', 'origin', rm[1]]).catch((e) => { fetchNote = ` (fetch failed, used the last fetched ${from}: ${(e as Error).message})` })
   return { path: await addWorktree(repo, plan.branch, from), branch: plan.branch, note: `new branch from ${from}${fetchNote}` }
+}
+
+// ---------- Worktree on a new thread ----------
+
+// the repo Hive lists (Pull latest's repos) that holds this folder, and the branch its main checkout is on; null = none
+export async function threadRepoOf(folder: string): Promise<{ repo: string; dir: string; branch: string | null } | null> {
+  if (!loaded.config || !folder) return null
+  const f = realDir(folder)
+  const hit = scanRepos(loaded.config)
+    .filter((r) => { const rel = relative(realDir(r.dir), f); return !rel.startsWith('..') && !isAbsolute(rel) })
+    .sort((a, b) => b.dir.length - a.dir.length)[0]
+  if (!hit) return null
+  const branch = (await git(hit.dir, ['branch', '--show-current']).catch(() => '')).trim() || null
+  return { repo: hit.name, dir: hit.dir, branch }
+}
+
+// before a new thread's first message: a worktree under the worktree root on a new branch <prefix><slug>, made from the
+// branch the main checkout is on; cwd = the same subfolder inside it
+export async function startThreadWorktree(folder: string, text: string, prefix: string): Promise<{ repo: string; path: string; branch: string; cwd: string }> {
+  const r = await threadRepoOf(folder)
+  if (!r) throw new Error(`${folder} is not in a repo ${appName()} lists, so it cannot get a worktree`)
+  const local = await refNames(r.dir, 'refs/heads')
+  const branch = startBranch(prefix, text, new Date(), (b) => local.includes(b) || existsSync(worktreeDir(cfg().worktreesDir, r.repo, b)))
+  if (!branch) throw new Error(`The branch prefix "${prefix}" does not make a valid branch name; change it in Settings`)
+  const path = await addWorktree(r.repo, branch, r.branch ?? 'HEAD')
+  return { repo: r.repo, path, branch, cwd: join(path, relative(realDir(r.dir), realDir(folder))) }
 }
 
 // Hive services still running from a folder

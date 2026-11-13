@@ -7,7 +7,7 @@ import { PRODUCT } from './edition'
 import { isAbsolute, join } from 'node:path'
 import { parseDependabotConfig, parseTime } from './dependabotCore'
 import { parseDeployConfig } from './deployCore'
-import { parseDevConfig } from './devCore'
+import { parseDevConfig, validBranchName } from './devCore'
 import { parseAgents, type AgentDef } from './agentThreadCore'
 import { parseScriptsConfig } from './scriptsCore'
 import { EFFORTS } from './statusCore'
@@ -27,10 +27,11 @@ export type Effort = (typeof EFFORTS)[number]
 // quarryPath: the Quarry exe ('' = find the installed one, 'off' = no Quarry in Hive)
 // workflows: Claude Code's Workflows feature for new threads: 'on', 'off', or '' = Claude Code's own default (by plan)
 // agents: other command-line agents an agent thread can run (none until added)
+// branchPrefix: put before the branch name of every thread started with Worktree on ('' = none)
 export type General = {
   shell: string; model: string; effort: Effort | ''; ui: string; theme: string; appName: string; appTagline: string; chrome: boolean; desktopNotify: boolean
   bgModel: string; bgEffort: Effort | ''; teamModel: string; teamEffort: Effort | ''; idleCloseMinutes: number; teamMemoryKb: number
-  advisorModel: string; workflows: '' | 'on' | 'off'; quarryPath: string; agents: AgentDef[]
+  advisorModel: string; workflows: '' | 'on' | 'off'; quarryPath: string; agents: AgentDef[]; branchPrefix: string
 }
 export const DEFAULT_IDLE_CLOSE_MINUTES = 30
 export const DEFAULT_TEAM_MEMORY_KB = 6
@@ -45,7 +46,7 @@ export type Settings = {
 export const emptyGeneral = (): General => ({
   shell: '', model: '', effort: '', ui: '', theme: '', appName: DEFAULT_APP_NAME, appTagline: DEFAULT_APP_TAGLINE, chrome: true, desktopNotify: true,
   bgModel: '', bgEffort: '', teamModel: '', teamEffort: '', idleCloseMinutes: DEFAULT_IDLE_CLOSE_MINUTES, teamMemoryKb: DEFAULT_TEAM_MEMORY_KB,
-  advisorModel: '', workflows: '', quarryPath: '', agents: [],
+  advisorModel: '', workflows: '', quarryPath: '', agents: [], branchPrefix: '',
 })
 
 // what the panel edits and gets back
@@ -108,6 +109,7 @@ export function normalizeSettings(v: unknown): Settings | null {
       workflows: g.workflows === 'on' || g.workflows === 'off' ? g.workflows : '',
       quarryPath: str(g.quarryPath),
       agents: parseAgents(g.agents),
+      branchPrefix: str(g.branchPrefix),
     },
   }
 }
@@ -215,6 +217,8 @@ export function validateSettings(d: { env: Record<string, string>; scripts: unkn
   if (d.general.theme && !ID_RE.test(d.general.theme)) err('general.theme', `${d.general.theme} is not a theme id`)
   for (const k of Object.keys(e)) if (isSecretKey(k)) err(k, `${k} looks like a credential: keep it in the vault or the .env, not in Hive settings`)
   if (d.general.shell && /[\\/]/.test(d.general.shell) && !exists(d.general.shell)) warn('general.shell', `Shell ${d.general.shell} does not exist`)
+  const bp = (d.general.branchPrefix ?? '').trim()
+  if (bp && !validBranchName(`${bp}x`)) err('general.branchPrefix', `${bp} cannot start a git branch name`)
   return out
 }
 
