@@ -15,7 +15,7 @@ const LABELS: Record<string, string> = {
   bypassPermissions: 'Bypass permissions',
   auto: 'Auto mode',
   acceptEdits: 'Accept edits',
-  default: 'Ask before tools',
+  default: 'Manual',
   dontAsk: "Don't ask",
   plan: 'Plan mode',
 }

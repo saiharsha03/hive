@@ -21,6 +21,7 @@ import { useSlashMenu } from './SlashMenu'
 import { useMentionMenu } from './MentionMenu'
 import { mentionText } from '../../shared/mentionCore'
 import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
+import { historyMatches, isModelKey, stashStep, tabTakes, type Stash } from '../../shared/promptKeysCore'
 import { Icon, Modal, useEscape } from './ui'
 import { conversationMarkdown } from '../../shared/exportCore'
 import { AskCard } from './AskCard'
@@ -57,6 +58,22 @@ const drafts = new Map<string, { text: string; images: Attachment[] }>(Object.en
 // fill a thread's message box without sending (Diagnose, a to-do's Talk about)
 export const prefillDraft = (id: string, text: string) => { drafts.set(id, { text, images: [] }) }
 export const draftEmpty = (id: string) => { const d = drafts.get(id); return !d || (!d.text.trim() && !d.images.length) }
+// Ctrl+S: what each thread's box put aside (in memory)
+const stashes = new Map<string, Stash<Attachment>>()
+// Claude Code's predicted next prompt per thread (prompt_suggestion, after a turn); a send or a new turn drops it
+const suggestions = new Map<string, string>()
+const suggestionSubs = new Set<(tabId: string) => void>()
+let suggestionsOn = false
+function watchSuggestions() {
+  if (suggestionsOn) return
+  suggestionsOn = true
+  window.api.onChatEvent((tabId, ev) => {
+    if (ev?.type === 'prompt_suggestion' && typeof ev.suggestion === 'string') suggestions.set(tabId, ev.suggestion)
+    else if (ev?.type === 'result') { if (!suggestions.delete(tabId)) return } // it comes after its turn's result
+    else return
+    suggestionSubs.forEach((f) => f(tabId))
+  })
+}
 // where each thread was scrolled to; "bottom" keeps following new messages
 const scrolls = new Map<string, { top: number; bottom: boolean }>()
 // "since you looked": how many items a thread had, and when, the last time it was on screen and focused
@@ -622,6 +639,49 @@ export function SessionView(p: Props) {
   // or a long text cannot be shown that way, so those keep the line above the box.
   const clipHint = shownClip && shownClip.kind === 'text' && !shownClip.big && !draft && !images.length ? shownClip : null
   const clipChip = shownClip && (shownClip.kind === 'image' || shownClip.big) ? shownClip : null
+  // Claude Code's suggested next prompt: the empty box's placeholder while the thread is idle, Tab puts it in
+  const [suggestion, setSuggestion] = useState(() => suggestions.get(session.id) ?? null)
+  useEffect(() => {
+    watchSuggestions()
+    setSuggestion(suggestions.get(session.id) ?? null)
+    const f = (id: string) => { if (id === session.id) setSuggestion(suggestions.get(id) ?? null) }
+    suggestionSubs.add(f)
+    return () => { suggestionSubs.delete(f) }
+  }, [session.id])
+  const shownSuggestion = !session.busy && !session.asks?.length && !draft && !images.length ? suggestion : null
+  const tabTake = tabTakes(!!clipHint, shownSuggestion, !draft && !images.length)
+  const dropSuggestion = () => { suggestions.delete(session.id); setSuggestion(null) }
+  // Ctrl+S: the box's text and pictures put aside, and back with Ctrl+S in an empty box
+  const [stashed, setStashed] = useState(() => stashes.has(session.id))
+  useEffect(() => { setStashed(stashes.has(session.id)) }, [session.id])
+  const toggleStash = (): boolean => {
+    const r = stashStep({ text: draft, images }, stashes.get(session.id) ?? null)
+    if (!r) return false
+    if (r.stashed) stashes.set(session.id, r.stashed); else stashes.delete(session.id)
+    setStashed(!!r.stashed)
+    setDraft(r.box.text)
+    setImages(r.box.images)
+    hist.current.at = -1
+    return true
+  }
+  // Ctrl+R: search this thread's earlier prompts; Enter or Tab puts the match in the box, Esc leaves the box as it was
+  const [hsearch, setHsearch] = useState<{ q: string; at: number } | null>(null)
+  const hmatches = hsearch ? historyMatches(promptHistory(session.items), hsearch.q) : []
+  const hlist = useRef<HTMLDivElement>(null)
+  useEffect(() => { hlist.current?.querySelector('.sm-row.on')?.scrollIntoView({ block: 'nearest' }) }, [hsearch?.at])
+  const closeSearch = (pick: string | null) => {
+    setHsearch(null)
+    if (pick !== null) { setDraft(pick); hist.current.at = -1 }
+    requestAnimationFrame(() => box.current?.focus())
+  }
+  const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!hsearch) return
+    const step = (d: number) => setHsearch({ ...hsearch, at: Math.max(0, Math.min(hmatches.length - 1, hsearch.at + d)) })
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSearch(null) }
+    else if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); closeSearch(hmatches[hsearch.at] ?? null) }
+    else if (e.key === 'ArrowDown' || (e.ctrlKey && e.key.toLowerCase() === 'r')) { e.preventDefault(); e.stopPropagation(); step(1) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); step(-1) }
+  }
   const pasteClip = async () => {
     if (!clip) return
     clearOffer()
@@ -693,6 +753,7 @@ export function SessionView(p: Props) {
     // /status, /usage, /cost and /stats print a screen in the terminal: here they open the Status and usage page
     if (/^\/(status|usage|cost|stats)$/.test(draft.trim()) && !images.length) { p.onStatusView(); setDraft(''); return }
     p.onSend(draft.trim(), images, m)
+    dropSuggestion()
     setDraft('')
     setImages([])
     scrolls.set(session.id, { top: 0, bottom: true })
@@ -704,6 +765,12 @@ export function SessionView(p: Props) {
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (slash.onKey(e)) return
     if (mention.onKey(e)) return
+    // the terminal's keys: Ctrl+R history search, Ctrl+S stash, Alt+P model (stopped here, so the app's Ctrl+R reload
+    // only runs outside a message box)
+    const ctrlOnly = e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey
+    if (ctrlOnly && e.key.toLowerCase() === 'r') { e.preventDefault(); e.stopPropagation(); setHsearch({ q: '', at: 0 }); return }
+    if (ctrlOnly && e.key.toLowerCase() === 's') { e.preventDefault(); e.stopPropagation(); toggleStash(); return }
+    if (isModelKey(e)) { e.preventDefault(); e.stopPropagation(); window.dispatchEvent(new CustomEvent('hive:model-picker', { detail: session.id })); return }
     // Up / Down: earlier prompts of this thread, starting from an empty box; what was being typed comes back at the end
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
       const past = promptHistory(session.items)
@@ -721,7 +788,11 @@ export function SessionView(p: Props) {
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey) { e.preventDefault(); submit('steer'); return }
     // Shift+Tab: the next permission mode, as in the terminal (Manual, Accept edits, Plan); the mode pill shows it
     if (e.key === 'Tab' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); void window.api.chatSetMode(session.id, nextMode(shownMode)).catch(() => {}); return }
-    if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && clipHint) { e.preventDefault(); void pasteClip(); return }
+    if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && tabTake) {
+      e.preventDefault()
+      if (tabTake === 'clip') void pasteClip(); else if (shownSuggestion) { setDraft(shownSuggestion); dropSuggestion() }
+      return
+    }
     if (tabQueues(e, session.busy, !!draft.trim() || images.length > 0)) { e.preventDefault(); submit('queue'); return }
     if (e.key === 'Escape' && session.busy) { e.preventDefault(); p.onStop() }
   }
@@ -872,6 +943,19 @@ export function SessionView(p: Props) {
       <div className="composer" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes(PATH_MIME)) e.preventDefault() }} onDrop={onDrop}>
         {slash.menu}
         {mention.menu}
+        {hsearch && (
+          <div className="slashmenu" role="listbox" ref={hlist} data-testid="history-search">
+            <input className="uline" autoFocus value={hsearch.q} placeholder="Search earlier prompts of this thread" data-testid="history-search-input"
+              onChange={(e) => setHsearch({ q: e.target.value, at: 0 })} onKeyDown={onSearchKey} onBlur={() => setHsearch(null)} />
+            {!hmatches.length && <div className="sm-hint">{hsearch.q ? 'No earlier prompt has that' : 'No earlier prompts in this thread'}</div>}
+            {hmatches.map((m, i) => (
+              <div key={`${i}:${m}`} role="option" aria-selected={i === hsearch.at} className={i === hsearch.at ? 'sm-row on' : 'sm-row'} data-testid="history-search-row"
+                onMouseDown={(e) => { e.preventDefault(); closeSearch(m) }}>
+                <span className="sm-name">{m.split('\n')[0]}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {(clipChip || images.length > 0) && (
           <div className="atts">
             {images.map((im, j) => (
@@ -886,9 +970,9 @@ export function SessionView(p: Props) {
           <textarea
             ref={box} rows={1} className={ultra ? 'ultra' : undefined} aria-label="Message Claude"
             onScroll={(e) => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop }}
-            placeholder={clipHint ? clipHint.preview : session.busy ? 'Steer Claude' : session.asks?.length ? 'Answer above, or reply here' : 'Reply to Claude'}
+            placeholder={clipHint ? clipHint.preview : shownSuggestion ? shownSuggestion : session.busy ? 'Steer Claude' : session.asks?.length ? 'Answer above, or reply here' : 'Reply to Claude'}
             value={draft}
-            onChange={(e) => { setDraft(e.target.value); setCaret(e.target.selectionStart) }}
+            onChange={(e) => { setDraft(e.target.value); setCaret(e.target.selectionStart); if (e.target.value && suggestion) dropSuggestion() }}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onKeyDown={onKey} onPaste={onPaste}
             data-testid="composer"
@@ -897,6 +981,8 @@ export function SessionView(p: Props) {
             {restored.current && draft.trim() && <span data-testid="draft-kept">Draft kept</span>}
             <span><span className="keys">Enter</span> {session.busy ? 'steer' : 'send'}</span>
             {clipHint && <span data-testid="keys-clip"><span className="keys">Tab</span> paste what you copied <Btn kind="link" onClick={dismissClip} testid="composer-clip-dismiss" title="Hide this suggestion">Hide</Btn></span>}
+            {tabTake === 'suggestion' && <span data-testid="keys-suggestion"><span className="keys">Tab</span> use the suggestion</span>}
+            {stashed && <span style={{ visibility: 'visible' }} title="Ctrl+S in an empty box brings it back" data-testid="keys-stashed"><span className="keys">Ctrl+S</span> stashed</span>}
             {session.busy && !clipHint && <span><span className="keys">Tab</span> queue</span>}
             {flushes && <span title="Stops the tool call Claude is in the middle of; what waits goes in at once, in order" data-testid="keys-send-waiting"><span className="keys">Ctrl+Shift+Enter</span> send waiting now</span>}
           </span>

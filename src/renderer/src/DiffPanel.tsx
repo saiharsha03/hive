@@ -1,7 +1,10 @@
 // Right-hand diff panel (where the Preview opens): a file's working-tree or staged diff or a commit from the Git panel,
 // or what one of the agent's Edit / MultiEdit / Write calls changed.
 import { useEffect, useState } from 'react'
-import { DiffModeToggle, DiffView } from './DiffView'
+import { DiffComments, DiffModeToggle, DiffView, diffComments, setDiffCommentsSend } from './DiffView'
+import { diffOwner, send } from './actions'
+import { useStore } from './store'
+import { diffCommentsMessage } from '../../shared/diffCommentCore'
 import { counts, type FileDiff, type Hunk } from '../../shared/diffCore'
 import { parseUnifiedDiff, type FileArea } from '../../shared/gitCore'
 
@@ -22,7 +25,7 @@ function FileBlock({ f, onShowAll, head }: { f: FileDiff; onShowAll?: () => void
           <span className="dv-add">+{c.add}</span><span className="dv-del">−{c.del}</span>
         </div>
       )}
-      {f.binary ? <div className="dv-none">Binary file changed.</div> : <DiffView hunks={f.hunks} onShowAll={onShowAll} />}
+      {f.binary ? <div className="dv-none">Binary file changed.</div> : <DiffView hunks={f.hunks} onShowAll={onShowAll} file={f.path} />}
     </div>
   )
 }
@@ -32,6 +35,14 @@ export function DiffPanel({ spec, onClose, onOpenInGit }: { spec: DiffSpec; onCl
   const [err, setErr] = useState('')
   const [full, setFull] = useState(false)
   const [n, setN] = useState(0) // Reload
+  // line comments go to the thread the diff was opened from, as one message; a new diff starts a new list
+  const owner = useStore(diffOwner, (o) => o)
+  const sendComments = (text: string) => { if (owner && text) send(owner, text, []) }
+  useEffect(() => { diffComments.set([]) }, [spec])
+  useEffect(() => {
+    setDiffCommentsSend(() => { sendComments(diffCommentsMessage(diffComments.get())); diffComments.set([]) })
+    return () => setDiffCommentsSend(null)
+  })
 
   useEffect(() => { setFull(false) }, [spec])
   useEffect(() => {
@@ -55,6 +66,7 @@ export function DiffPanel({ spec, onClose, onOpenInGit }: { spec: DiffSpec; onCl
           : <button data-testid="diff-button-2" className="link" onClick={() => setN((x) => x + 1)}>Reload</button>}
         <button data-testid="diff-button-3" className="x pv-x" aria-label="Close diff" onClick={onClose}>×</button>
       </div>
+      <DiffComments to={owner} onSend={sendComments} />
       <div className="pv-body dv-body">
         {err && <div className="pv-msg">{err}</div>}
         {!err && !files && <div className="pv-msg">Loading…</div>}

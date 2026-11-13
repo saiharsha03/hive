@@ -70,12 +70,17 @@ export function escapeShownFile(): boolean {
 
 // ---- the diff tab: the change last picked (an edit row, a changed file) ----
 export const diffSpec = createStore<DiffSpec | null>(null)
+// the thread a diff was opened from: its line comments are sent there (none when opened from a page)
+export const diffOwner = createStore<string | null>(null)
+const threadIn = (id: string | null) => (id && !id.startsWith('tool:') && !id.startsWith('file:') && getSessions().some((s) => s.id === id) ? id : null)
 export function showDiff(d: DiffSpec | null) {
+  if (d) diffOwner.set(threadIn(activeId()) ?? diffOwner.get())
   diffSpec.set(d)
   if (d) openPage('diff')
 }
 // from a page that must stay in view (Workspace > Git: the commit message, Commit and Push sit there), the diff opens beside it
 export function showDiffBeside(d: DiffSpec | null) {
+  diffOwner.set(null)
   diffSpec.set(d)
   if (!d) return
   const id = 'tool:diff'

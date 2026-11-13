@@ -1065,6 +1065,8 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
       perTaskStopAffordance: true,
       // a one-line "what it is doing now" for each running subagent every ~30s, shown on its row in the thread status
       agentProgressSummaries: true,
+      // a predicted next prompt after each turn (prompt_suggestion): the message box's placeholder, Tab takes it
+      promptSuggestions: !watcher,
       permissionMode: userModes.get(tabId) ?? modeFor(background, PERMISSION_MODE),
       // always set, so a session that started in auto can still switch to bypass when it comes to the foreground
       allowDangerouslySkipPermissions: true,

@@ -238,6 +238,14 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   useEscape(fold, more && !open)
   const modelText = st.model ? modelLabel(st.model) : dfl.model ? `${nameOf(dfl.model)} (default)` : seen.model ? `${modelLabel(seen.model)} (default)` : 'default'
   const effortText = thinking ? 'max, ultrathink' : st.effort ?? (dfl.own.effort ? `${dfl.own.effort} (default)` : seen.effort ? `${seen.effort} (default)` : 'medium (default)')
+  // Alt+P in this thread's message box: the pickers open and the model list with them (once its button is on screen)
+  const [wantModels, setWantModels] = useState(false)
+  useEffect(() => {
+    const f = (e: Event) => { if ((e as CustomEvent).detail === tabId) { setMore(true); setWantModels(true) } }
+    window.addEventListener('hive:model-picker', f)
+    return () => window.removeEventListener('hive:model-picker', f)
+  }, [tabId])
+  useEffect(() => { if (more && wantModels) { setWantModels(false); if (open !== 'model') openModels() } }, [more, wantModels])
   const short = (x: string) => x.replace(/ \(default\)$/, '')
   const failed = (err || st.effortError) && <span className="pick-err" title={err || st.effortError}>switch failed, kept the old one</span>
   if (!more) return (
@@ -291,12 +299,12 @@ export function ModelEffort({ tabId, ultra }: { tabId: string; ultra: boolean })
   )
 }
 
-// the permission mode picker for the message box: bypass, auto, accept edits, ask before tools, plan
+// the permission mode picker for the message box: bypass, auto, accept edits, manual, plan (the desktop app's names)
 const MODE_ROWS: { value: string; label: string; note: string }[] = [
   { value: 'bypassPermissions', label: 'Bypass permissions', note: 'runs everything without asking' },
   { value: 'auto', label: 'Auto', note: 'a classifier decides what is safe to run' },
   { value: 'acceptEdits', label: 'Accept edits', note: 'file edits run; commands ask first' },
-  { value: 'default', label: 'Ask before tools', note: 'asks before edits and commands' },
+  { value: 'default', label: 'Manual', note: 'asks before edits and commands' },
   { value: 'plan', label: 'Plan', note: 'reads and plans; nothing is changed' },
 ]
 export function ModePicker({ tabId, mode, error }: { tabId: string; mode: string; error?: string }) {

@@ -1,0 +1,9 @@
+/* Line comments on a diff (DiffView): the "+" beside a line number on hover, the comment rows, the send bar */
+.dv-n { position: relative; }
+.dv-plus { position: absolute; left: 2px; top: 1px; width: 15px; height: 17px; line-height: 15px; padding: 0; border-radius: 3px; background: var(--raised); color: var(--link); font: 600 12px var(--mono); outline: 1px solid var(--edge); visibility: hidden; cursor: pointer; }
+.dv tr:hover .dv-plus, .dv-plus:focus-visible { visibility: visible; }
+.dv-crow td { padding: 4px 10px 6px 50px; background: var(--raised); }
+.dv-comment { display: flex; gap: 10px; align-items: baseline; font: 12px/1.5 var(--sans); color: var(--ink); white-space: pre-wrap; }
+.dv-comment span { flex: 1; min-width: 0; }
+.dv-cbox { width: 100%; resize: vertical; font: 12px/1.5 var(--sans); color: var(--ink); background: var(--input); border: 1px solid var(--edge); padding: 4px 6px; }
+.dv-csend { display: flex; gap: 12px; align-items: center; justify-content: flex-end; padding: 6px 12px; border-bottom: 1px solid var(--rule); font-size: 12px; }
