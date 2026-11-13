@@ -4,6 +4,18 @@ All notable changes to Orbit (called Hive until 2.0) are documented here. The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-11-13
+
+### Fixed
+
+- The thread header no longer lets the goal line cover the title at narrower widths: the title truncates, the goal,
+  loop and wake-up lines truncate on their own, and when space is tight they move below the title.
+- The collapsed Thinking row keeps underscores in names.
+
+### Added
+
+- A test-mode tour script, `scripts/tour-2.0.mjs`, that drives every 2.0 feature with screenshots.
+
 ## [2.0.1] - 2026-11-13
 
 ### Fixed

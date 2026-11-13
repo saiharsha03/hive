@@ -113,7 +113,7 @@ const assistant = (...content) => ({ type: 'assistant', message: { model: 'claud
 const result = (id, out, opts = {}) => ({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: out, is_error: !!opts.error }] }, ...(opts.patch ? { tool_use_result: { structuredPatch: opts.patch } } : {}) })
 const task = (subtype, id, extra) => ({ type: 'system', subtype, task_id: id, ...extra })
 const threads = [
-  { tabId: 't-main', title: 'Fix duplicate invoice numbers', cwd: API, sessionId: 's-main', foreground: true, prompt: 'Make invoice creation idempotent on the retry key and open a PR.' },
+  { tabId: 't-main', title: 'Fix duplicate invoice numbers when a payment retries after a gateway timeout', cwd: API, sessionId: 's-main', foreground: true, prompt: 'Make invoice creation idempotent on the retry key and open a PR.' },
   { tabId: 't-plan', title: 'Plan the export queue', cwd: API, sessionId: 's-plan', foreground: true, prompt: 'Plan moving report exports onto the job queue.' },
   { tabId: 't-wait', title: 'Ship ledger-web 4.18', cwd: API, sessionId: 's-wait', foreground: true, prompt: 'Ship 4.18 once staging has landed.' },
   { tabId: 't-run', title: 'Run the billing suite', cwd: API, sessionId: 's-run', foreground: true, prompt: 'Run the billing tests and watch the logs.' },
@@ -129,7 +129,7 @@ const ev = [
   ['t-main', assistant(tool('pr1', 'Bash', { command: 'gh pr create --fill --base main', description: 'Open the pull request' }))],
   ['t-main', result('pr1', `Creating pull request for fix/invoice-retry into main in acme/ledger-api\n\n${PR_URL}\n`)],
   ['t-main', assistant(text(`Opened the PR: ${PR_URL}. It follows acme/ledger-api #12, which added the retry header.`))],
-  ['t-main', { type: 'assistant', message: { model: '<synthetic>', content: [{ type: 'text', text: 'Goal set: CI is green on the invoice PR' }] } }],
+  ['t-main', { type: 'assistant', message: { model: '<synthetic>', content: [{ type: 'text', text: 'Goal set: CI is green on the invoice PR and the retry test passes on staging' }] } }],
   ['t-main', { type: 'hive_stop', crons: [{ id: 'c1', schedule: '*/10 * * * *', recurring: true, prompt: 'check CI on fix/invoice-retry' }], effort: 'high' }],
   ['t-main', { type: 'result', subtype: 'success' }],
 
@@ -205,13 +205,17 @@ const pane = (id) => page.locator(`[data-testid="chat-${id}"]`)
 const tab = (id) => page.locator(`[data-testid="tab"][data-id="${id}"]`)
 const must = (cond, msg) => { if (!cond) throw new Error(msg) }
 const visible = (loc, ms = 5000) => loc.first().waitFor({ state: 'visible', timeout: ms }).then(() => true, () => false)
+// the whole window as drawn (webContents.capturePage), not page.screenshot: under the app's zoom the page's idea of
+// the viewport is smaller than the window, so page shots lost the right and bottom edges
+const shoot = async (path) => writeFileSync(path, Buffer.from(await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64')), 'base64'))
+const resize = (w, h) => app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0].setContentSize(w, h), [w, h])
 let shotN = 0
 const results = []
 const goThreads = async () => { await page.keyboard.press('Escape').catch(() => {}); await tid('abar-threads').click(); await page.waitForTimeout(200) }
 const open = async (id) => { await tab(id).click(); await page.waitForTimeout(400) }
 async function feature(n, name, assertion, fn) {
   const shots = []
-  const snap = async (label) => { await page.waitForTimeout(350); const f = `${String(++shotN).padStart(2, '0')}-f${n}-${label}.png`; await page.screenshot({ path: join(OUT, f) }); shots.push(f) }
+  const snap = async (label) => { await page.waitForTimeout(350); const f = `${String(++shotN).padStart(2, '0')}-f${n}-${label}.png`; await shoot(join(OUT, f)); shots.push(f) }
   let status = 'PASS', reason
   try {
     const r = await fn(snap)
@@ -273,6 +277,19 @@ await feature(2, 'Thread header: title, PR chip, goal / loop / wake-up, coloured
   const gl = await p.getByTestId('coming-bar').innerText()
   must(/1 loop/.test(gl) && /1 wake-up/.test(gl), `header lines read: ${gl.replace(/\s+/g, ' ')}`)
   must(/CI is green/.test(await p.getByTestId('goal-chip').innerText()), 'goal chip text')
+  // a long title and the goal / loop / wake-up lines never overlap, at any width
+  const overlaps = []
+  for (const w of [1400, 1100, 900]) {
+    await resize(w, 740); await page.waitForTimeout(400)
+    const o = await p.evaluate((el) => {
+      const h = el.querySelector('.phead-h h1').getBoundingClientRect()
+      return [...el.querySelectorAll('.phead-r .goal-chip, .phead-r .coming-ln')].some((x) => { const r = x.getBoundingClientRect(); return r.width > 0 && r.left < h.right && r.right > h.left && r.top < h.bottom && r.bottom > h.top })
+    })
+    if (o) overlaps.push(w)
+    await snap(`header-${w}`)
+  }
+  await resize(1180, 740); await page.waitForTimeout(300)
+  must(!overlaps.length, `header lines overlap the title at ${overlaps.join(', ')} px`)
   await p.getByTestId('chat-activity').click(); await page.waitForTimeout(600)
   await snap('activity')
   if (await visible(tid('insp-close'), 500)) await tid('insp-close').click()

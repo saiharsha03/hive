@@ -18,10 +18,13 @@
 .phead-l { display: flex; align-items: baseline; gap: var(--s3); min-width: 0; flex: 1 1 auto; }
 /* what is coming up for this thread (loops, wake-ups, an automatic continue): one quiet link beside the folder; its list
    opens over the conversation, so nothing below moves */
-.phead-h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s4); min-width: 0; }
-.phead-h h1 { flex: 1 1 auto; }
-/* at the right of the title: the thread's goal, then what is coming up (loops, wake-ups) */
-.phead-r { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 1 auto; min-width: 0; max-width: 60%; font-size: 12.5px; }
+/* the title keeps at least 240px (it truncates past that); when the right-hand block cannot fit beside it, the block
+   wraps to its own line below instead of covering the title */
+.phead-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--s4); min-width: 0; }
+.phead-h h1 { flex: 1 1 240px; }
+/* at the right of the title: the thread's goal, then what is coming up (loops, wake-ups); each line truncates itself */
+.phead-r { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 1 auto; min-width: 0; max-width: 60%; margin-left: auto; font-size: 12.5px; }
+.phead-r > * { max-width: 100%; }
 /* the goal, the loops and the wake-ups each have a line of their own */
 .coming-b { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .coming-ln { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
