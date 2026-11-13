@@ -530,16 +530,19 @@ private fun ChangesRoute(id: String, notice: String, online: Boolean, canMerge: 
     val open = file
     if (open != null) { DiffScreen(open, diff, listOf(notice, diffErr).filter { it.isNotEmpty() }.joinToString(" "), onBack = back); return }
     ChangesScreen(changes, notice, err, result, canMerge && online, confirming, merging,
-        onBack = back, onFile = { file = it }, onAskMerge = { confirming = it; result = null }, onCancelMerge = { confirming = null },
+        onBack = back, onFile = { file = it }, onAskMerge = { if (!merging) { confirming = it; result = null } }, onCancelMerge = { if (!merging) confirming = null },
         onMerge = { p ->
-            merging = true
-            val mid = java.util.UUID.randomUUID().toString()
-            scope.launch {
-                val failed = attempt { result = ReadChanges.merge(Relay.ask("prMerge", mapOf("id" to id, "mid" to mid, "headSha" to p.headSha, "confirm" to "merge")).optJSONObject("merge")) }
-                if (failed.isNotEmpty()) result = false to failed
-                merging = false
-                confirming = null
-                reload()
+            // read at tap time, not from the last composition: a second tap before the screen redraws sends nothing
+            if (!merging) {
+                merging = true
+                val mid = java.util.UUID.randomUUID().toString()
+                scope.launch {
+                    val failed = attempt { result = ReadChanges.merge(Relay.ask("prMerge", mapOf("id" to id, "mid" to mid, "headSha" to p.headSha, "confirm" to "merge")).optJSONObject("merge")) }
+                    if (failed.isNotEmpty()) result = false to failed
+                    merging = false
+                    confirming = null
+                    reload()
+                }
             }
         })
 }
