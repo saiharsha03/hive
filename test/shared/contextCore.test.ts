@@ -44,6 +44,7 @@ test('thinkingPreview: first line with words, cut short', () => {
   assert.equal(thinkingPreview('\n\n**Plan**: read the file\nthen edit'), 'Plan: read the file')
   assert.equal(thinkingPreview('x'.repeat(100), 10), `${'x'.repeat(9)}…`)
   assert.equal(thinkingPreview(''), '')
+  assert.equal(thinkingPreview('## Call `create_invoice` with __the__ key > old_key'), 'Call create_invoice with the key > old_key')
 })
 
 test('reduceStatus: fast on/off from Orbit, state and refusal from the result', () => {

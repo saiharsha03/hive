@@ -46,6 +46,7 @@ export function fastSupported(models: { value: string; supportsFastMode?: boolea
 
 // the closed thinking row's preview: its first line that says something, cut short
 export function thinkingPreview(text: string, n = 90): string {
-  const line = text.split('\n').map((l) => l.replace(/[*_#`>]/g, '').trim()).find(Boolean) ?? ''
+  // markdown marks go; an underscore inside a word (create_invoice) is part of the name and stays
+  const line = text.split('\n').map((l) => l.replace(/^[\s#>]+/, '').replace(/[*`]|(?<!\w)_+|_+(?!\w)/g, '').trim()).find(Boolean) ?? ''
   return line.length > n ? `${line.slice(0, n - 1)}…` : line
 }
