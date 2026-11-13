@@ -24,6 +24,8 @@ import { hasUltrathink, ultrathinkParts } from '../../shared/composerCore'
 import { Icon, Modal, useEscape } from './ui'
 import { conversationMarkdown } from '../../shared/exportCore'
 import { AskCard } from './AskCard'
+import { PlanCard } from './PlanCard'
+import { nextMode } from '../../shared/planCore'
 import { PATH_MIME } from './FileTree'
 import { wakeLabel, CONTINUE_PROMPT } from '../../shared/continueCore'
 import { sinceSummary, toolVerb, toolResult, errorLine, exitOnly, historyStep, promptHistory, imageTag, dropImageTag } from './conversationCore'
@@ -390,7 +392,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
   session.items.forEach((it, i) => {
     if (i < session.items.length - limit) return
     const key = keyOf(it, i)
-    if (it.kind === 'tool' && it.name !== SHOW && it.name !== CODEX && it.name !== 'AskUserQuestion') {
+    if (it.kind === 'tool' && it.name !== SHOW && it.name !== CODEX && it.name !== 'AskUserQuestion' && it.name !== 'ExitPlanMode') {
       const bg = bgOf.get(it.id)
       const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
       tools.push({ key, item: it, word: toolVerb(it.name).word, failed: status === 'error' && exitOnly(it.name, status, it.output) === null, running: status === 'running', node:<ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
@@ -421,6 +423,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     // the time Claude wrote it, small under the reply (a day and the time once it is not today)
     if (it.kind === 'assistant') { out.push(<div key={key} className="msg cl" data-testid="msg-assistant"><MdBody text={it.text} repo={repo} />{it.at ? <span className="msg-at" title={new Date(it.at).toLocaleString()} data-testid="msg-time">{replyTime(it.at)}</span> : null}</div>); return }
     if (it.kind === 'tool' && it.name === 'AskUserQuestion') { out.push(<div key={key} className="qwrap"><AskCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} result={it.output} /></div>); return }
+    if (it.kind === 'tool' && it.name === 'ExitPlanMode') { out.push(<div key={key} className="qwrap"><PlanCard tabId={session.id} id={it.id} input={it.input} open={!!session.asks?.includes(it.id)} status={it.status} repo={repo} /></div>); return }
     if (it.kind === 'show') { out.push(<div key={key} className="msg"><ShowCard path={it.path} onOpen={st.open} /></div>); return }
     if (it.kind === 'note') { out.push(<div key={key} className="note">{it.text}</div>); return }
     if (it.kind === 'summary') { out.push(<SummaryRow key={key} text={it.text} />); return }
@@ -716,6 +719,8 @@ export function SessionView(p: Props) {
     if (e.key === 'Enter' && e.ctrlKey && e.shiftKey) { e.preventDefault(); if (flushes) p.onSendNow(); else submit('interrupt'); return }
     if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); if (draft.trim() || images.length) submit(); p.onRunInBackground(); return }
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey) { e.preventDefault(); submit('steer'); return }
+    // Shift+Tab: the next permission mode, as in the terminal (Manual, Accept edits, Plan); the mode pill shows it
+    if (e.key === 'Tab' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); void window.api.chatSetMode(session.id, nextMode(shownMode)).catch(() => {}); return }
     if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && clipHint) { e.preventDefault(); void pasteClip(); return }
     if (tabQueues(e, session.busy, !!draft.trim() || images.length > 0)) { e.preventDefault(); submit('queue'); return }
     if (e.key === 'Escape' && session.busy) { e.preventDefault(); p.onStop() }

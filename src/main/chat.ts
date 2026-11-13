@@ -39,6 +39,7 @@ import { notifyDesktop } from './desktopNotify'
 import { autoBackground } from '../shared/autoBackgroundCore'
 import { realLimits } from '../shared/usageCore'
 import { parseQuestions, type AskQuestion } from '../shared/askCore'
+import { PLAN_QUESTION, planDecision, planQuestions, planText } from '../shared/planCore'
 import { cancelAsks, openAsks, replyInChat, waitForAnswer } from './asks'
 import { cancelContinue, limitBack, scheduleContinue } from './autoContinue'
 import { addWakeup, cancelWakeup, formatWakeups, listWakeups } from './threadWakeups'
@@ -1080,6 +1081,24 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
         // a workflow (the Workflow tool) is the agent's own way of running work: Hive never stands in its way, in auto
         // mode either (the classifier may hand the call here); a watcher's stays under its read-only rules below
         if (permitWithoutPrompt(name, watcher)) return { behavior: 'allow', updatedInput: input }
+        // the plan Claude made in plan mode: approve it into accept edits or manual, or keep planning with feedback
+        // (the thread's plan card, the phone); approving switches the thread's mode as the mode picker does
+        if (name === 'ExitPlanMode' && !watcher) {
+          const questions = planQuestions()
+          const why = 'Plan: ready for review'
+          s.waitingReason = why
+          send({ type: 'hive_ask', id: toolUseID, questions })
+          send({ type: 'hive_organize', action: 'waiting', reason: why })
+          notifyUser(`Plan ready: ${titleOf(tabId)}`, planText(input).replace(/[#*`>\s]+/g, ' ').trim().slice(0, 200) || PLAN_QUESTION, tabId)
+          const got = await waitForAnswer(tabId, toolUseID, questions, signal)
+          send({ type: 'hive_ask_done', id: toolUseID })
+          if (!openAsks(tabId).length) { if (s.waitingReason === why) s.waitingReason = undefined; send({ type: 'hive_organize', action: 'resolved' }) }
+          if (got.kind !== 'answers') return { behavior: 'deny', message: got.kind === 'chat' ? 'The user replied in the chat instead of approving the plan: read their next message.' : 'The plan approval was dismissed (the turn was stopped).' }
+          const d = planDecision(got.answers[PLAN_QUESTION] ?? '')
+          if (d.behavior === 'deny') return d
+          setThreadMode(tabId, d.mode, web)
+          return { behavior: 'allow', updatedInput: input, updatedPermissions: [{ type: 'setMode', mode: d.mode, destination: 'session' }] }
+        }
         if (name !== 'AskUserQuestion') {
           if (watcher) return { behavior: 'deny', message: 'This is an unattended watcher run: nobody is there to allow this.' }
           if (allowedTools.get(tabId)?.has(name)) return { behavior: 'allow', updatedInput: input }

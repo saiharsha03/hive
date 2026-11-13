@@ -282,6 +282,8 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .ask2-foot .hint { flex: 1; min-width: 0; }
 .ask2-foot button.primary { background: var(--accent); color: var(--on-accent); border: 0; font: 600 13px var(--sans); height: 28px; padding: 0 18px; cursor: pointer; border-radius: 4px !important; }
 .ask2-foot button.primary:disabled { background: var(--btn-quiet); color: var(--dim); cursor: default; }
+/* the plan card (ExitPlanMode): the plan itself, scrolling inside the card once it is long */
+.plan-body { max-height: 420px; overflow: auto; margin-bottom: 14px; padding: 4px 12px; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px !important; }
 
 /* ---------- title bar, tabs and status line in the same code editor manner as the frame ---------- */
 .app .tb { height: 36px; grid-template-columns: 220px minmax(0, 1fr) auto; border-bottom: 1px solid var(--rule); }
