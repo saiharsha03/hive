@@ -1,7 +1,7 @@
-// Generates the Orbit app icon: the mark the window's title bar draws (a hexagon, one cell of the hive, holding an H
-// whose bar is in the accent) on a dark rounded square. Writes the SVG sources, PNGs for every size and a multi-size ICO.
+// Generates the Orbit app icon: the mark the window's title bar draws (OrbitMark.tsx: a centre, one orbit, and a body
+// on it in the accent) on a dark rounded square. Writes the SVG sources, PNGs for every size and a multi-size ICO.
 //   node scripts/make-icons.mjs
-// Sizes up to 32 px use heavier strokes and less margin so the shape still reads in a taskbar or tab.
+// Sizes up to 32 px use the heavier cut and less margin so the shape still reads in a taskbar or tab.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,27 +10,22 @@ import { Resvg } from '@resvg/resvg-js'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const out = join(root, 'build')
 const SIZE = 1024
-const BG = '#16171A'
-const INK = '#ECEAE5'
-const ACCENT = '#5FA8F5' // the Quiet theme's accent
+const BG = '#14161A'
+const INK = '#EDEBE6'
+const BODY = '#F28C38' // ember: the app icon cannot follow a theme
 
-// the mark on a 24 x 24 grid (the same paths as HiveMark.tsx), scaled into the square with `pad` px of margin
-const mark = (pad, w) => {
-  const k = (SIZE - 2 * pad) / 24
-  return `<rect width="${SIZE}" height="${SIZE}" rx="224" fill="${BG}"/>
-  <g transform="translate(${pad} ${pad}) scale(${k})" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 2.2 20.5 7v10L12 21.8 3.5 17V7z" stroke="${INK}" stroke-width="${w}"/>
-    <path d="M8.6 8.2v7.6M15.4 8.2v7.6" stroke="${INK}" stroke-width="${w}"/>
-    <path d="M8.6 12h6.8" stroke="${ACCENT}" stroke-width="${w * 1.1}"/>
-  </g>`
-}
+// the two cuts of the mark on a 24 x 24 grid (the same shapes as OrbitMark.tsx), scaled into the square with `pad` px of margin
+const FULL = `<circle cx="12" cy="12" r="3.3" fill="${INK}"/><path d="M20.341 11.006A8.4 8.4 0 1 1 14.427 3.958" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/><circle cx="18.435" cy="6.601" r="2.8" fill="${BODY}"/>`
+const SMALL = `<circle cx="12" cy="12" r="3.7" fill="${INK}"/><path d="M20.199 12.15A8.2 8.2 0 1 1 13.276 3.9" fill="none" stroke="${INK}" stroke-width="2.5" stroke-linecap="round"/><circle cx="18.282" cy="6.729" r="3.3" fill="${BODY}"/>`
+const mark = (pad, cut) => `<rect width="${SIZE}" height="${SIZE}" rx="224" fill="${BG}"/>
+  <g transform="translate(${pad} ${pad}) scale(${+((SIZE - 2 * pad) / 24).toFixed(3)})">${cut}</g>`
 const svg = (body) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
   ${body}
 </svg>
 `
-const full = svg(mark(150, 1.7))
-const small = svg(mark(70, 2.3))
+const full = svg(mark(150, FULL))
+const small = svg(mark(70, SMALL))
 
 mkdirSync(join(out, 'icons'), { recursive: true })
 writeFileSync(join(out, 'icon.svg'), full)

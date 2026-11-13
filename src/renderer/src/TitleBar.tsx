@@ -3,7 +3,7 @@
 // you is counted in the rail, not here. The bar drags the window; Windows draws its caption buttons on the right.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppName } from './appSettings'
-import { HiveMark } from './HiveMark'
+import { OrbitMark } from './OrbitMark'
 import { useEscape } from './ui'
 import { matchRank } from '../../shared/paletteRank'
 import { filterCommands, type Command as EngineCommand } from '../../shared/composerCore'
@@ -131,7 +131,7 @@ export function TitleBar({ src, paletteN, accountsOpen, setAccountsOpen }: { src
   const [open, setOpen] = useState(false)
   return (
     <header className="tb" data-testid="titlebar">
-      <span className="tb-brand" data-testid="brand"><HiveMark size={20} />{name}</span>
+      <span className="tb-brand" data-testid="brand"><OrbitMark size={20} />{name}</span>
       <CommandField src={src} open={open} setOpen={setOpen} focusN={paletteN} />
       <AccountButton open={accountsOpen} setOpen={setAccountsOpen} />
     </header>

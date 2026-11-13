@@ -95,6 +95,7 @@ body { background: var(--bg); color: var(--ink); font: var(--t-ui); font-feature
 .tb button, .tb input, .tb .tb-field { -webkit-app-region: no-drag; }
 .tb-brand { display: flex; align-items: center; gap: 10px; padding-left: 18px; font-weight: 650; font-size: 14px; color: var(--hi); letter-spacing: -.01em; }
 .tb-brand svg { flex: none; display: block; }
+.orbitmark { color: var(--hi); }
 .tb-field { justify-self: center; width: min(520px, 100%); position: relative; }
 .tb-field input { width: 100%; height: 28px; background: var(--bg); border: 0; color: var(--hi); font: 13px var(--sans); padding: 0 64px 0 12px; outline: none; }
 .tb-field input::placeholder { color: var(--faint); }

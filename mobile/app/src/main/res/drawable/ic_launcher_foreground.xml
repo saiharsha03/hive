@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- the launcher icon's front layer: the Hive mark, kept inside the part every launcher shape shows -->
+<!-- the launcher icon front layer: the Orbit mark inside the part every launcher shape shows -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <group android:translateX="26" android:translateY="26" android:scaleX="1.75" android:scaleY="1.75">
-        <path android:strokeColor="#F1F3F5" android:strokeWidth="2.1" android:strokeLineJoin="round" android:fillColor="#00000000" android:pathData="M16,2.6L27.6,9.3L27.6,22.7L16,29.4L4.4,22.7L4.4,9.3Z" />
-        <path android:strokeColor="#F1F3F5" android:strokeWidth="2.6" android:pathData="M11.6,10V22M20.4,10V22" />
-        <path android:strokeColor="#3D8BFF" android:strokeWidth="2.6" android:pathData="M11.6,16H20.4" />
+    <group android:translateX="27" android:translateY="27" android:scaleX="2.25" android:scaleY="2.25">
+        <path android:fillColor="#EDEBE6" android:pathData="M8.7,12a3.3,3.3 0 1,0 6.6,0a3.3,3.3 0 1,0 -6.6,0Z" />
+        <path android:strokeColor="#EDEBE6" android:strokeWidth="1.8" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="M20.341 11.006A8.4 8.4 0 1 1 14.427 3.958" />
+        <path android:fillColor="#F28C38" android:pathData="M15.635,6.601a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0Z" />
     </group>
 </vector>

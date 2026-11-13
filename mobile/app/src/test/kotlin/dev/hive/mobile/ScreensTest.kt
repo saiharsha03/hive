@@ -169,7 +169,7 @@ class ScreensTest {
 
     // the launcher icon as a square launcher shows it: the adaptive icon's two layers, full size
     @Test fun icon() = captureRoboImage("build/shots/phone-icon.png") {
-        Box(Modifier.size(108.dp).background(Color(0xFF1C1F23))) { Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize()) }
+        Box(Modifier.size(108.dp).background(Color(0xFF14161A))) { Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize()) }
     }
 
     @Test fun offline() = shot("inbox-offline", 0) { InboxScreen(Inbox(), now, notice = "The computer is offline (Hive is closed or asleep).") }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- the launcher icon's ground: the app's pane colour -->
-    <color name="ic_launcher_background">#1C1F23</color>
+    <!-- the launcher icon's ground: the Orbit icon tile colour -->
+    <color name="ic_launcher_background">#14161A</color>
 </resources>

@@ -105,7 +105,7 @@ fun Head(title: String, count: String = "", right: String = "", rightColor: Colo
     Row(Modifier.fillMaxWidth().padding(start = Pad, end = Pad, top = 8.dp, bottom = 10.dp)) {
         if (onBack != null) Text("Back", Modifier.clickable(onClick = onBack).padding(end = 12.dp).alignByBaseline(), style = T.action)
         // the mark (an H in a cell, its crossbar in the accent) on the screens that stand before the app: Locked, Pair
-        if (mark) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.ic_hive_mark), contentDescription = null, modifier = Modifier.padding(end = 10.dp).size(24.dp).align(Alignment.CenterVertically))
+        if (mark) androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(R.drawable.ic_orbit_mark), contentDescription = null, modifier = Modifier.padding(end = 10.dp).size(24.dp).align(Alignment.CenterVertically))
         // the title takes what it needs, the count sits right after it, and the word at the right keeps the edge
         Row(Modifier.weight(1f).alignByBaseline()) {
             Text(title, Modifier.weight(1f, fill = false).alignByBaseline(), style = if (sub) T.sub else T.page, maxLines = if (sub) 2 else 1, overflow = TextOverflow.Ellipsis)
