@@ -475,7 +475,9 @@ export async function formatWatchers(): Promise<string> {
 export function watcherStopReason(tabId: string): string | null {
   const r = runOf.get(tabId)
   if (!r) return null
-  const newer = (p: string) => { try { return statSync(p).mtimeMs >= r.since } catch { return false } }
+  // a second of slack: a file written in the same millisecond the run started can be stamped a hair earlier (seen on
+  // the Windows release runner, 2026-11-13); files from before the run are far older than that
+  const newer = (p: string) => { try { return statSync(p).mtimeMs >= r.since - 1000 } catch { return false } }
   // any file under the folder (a few levels deep): editing an existing file does not touch its folder's time
   const anyNewer = (dir: string, depth = 4): boolean => {
     let names: Dirent[]
