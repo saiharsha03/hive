@@ -11,13 +11,13 @@ test('open to-dos are listed by status, dated ones first, with overdue and today
     todo({ text: 'no date', createdAt: 1 }),
     todo({ text: 'late', due: '2026-11-10' }),
     todo({ text: 'due today', due: TODAY }),
-    todo({ text: 'ask Sam', status: 'talk' }),
+    todo({ text: 'ask Robin', status: 'talk' }),
     todo({ text: 'parked', status: 'holding', due: '2026-12-01' }),
     todo({ text: 'finished', status: 'done', doneAt: NOW - 1000 }),
   ], { now: NOW, today: TODAY })
   assert.equal(text, [
     'To do (3):', '- late (due 2026-11-10, overdue)', '- due today (due 2026-11-12, today)', '- no date', '',
-    'Need to talk (1):', '- ask Sam', '',
+    'Need to talk (1):', '- ask Robin', '',
     'Holding (1):', '- parked (due 2026-12-01)', '',
     '5 open, 1 overdue.',
   ].join('\n'))

@@ -9,9 +9,9 @@ import { linkPrTree, prPieces, threadPrs } from '../../src/shared/prLinkCore'
 const links = (text: string, repo?: string) => prPieces(text, repo).filter((p) => typeof p !== 'string')
 
 test('owner/repo#N and owner/repo #N both link, punctuation after the number stays text', () => {
-  assert.deepEqual(prPieces('The PR is open and ready for review: acme/etl-jobs #90.'), [
+  assert.deepEqual(prPieces('The PR is open and ready for review: acme/widgets #90.'), [
     'The PR is open and ready for review: ',
-    { text: 'acme/etl-jobs #90', url: 'https://github.com/acme/etl-jobs/issues/90' },
+    { text: 'acme/widgets #90', url: 'https://github.com/acme/widgets/issues/90' },
     '.',
   ])
   assert.deepEqual(prPieces('(see a/b#7), done'), ['(see ', { text: 'a/b#7', url: 'https://github.com/a/b/issues/7' }, '), done'])
@@ -55,10 +55,10 @@ test('the PRs a thread opened, from the output of a gh pr create that succeeded'
     pr('1', 'https://github.com/o/r/pull/3\n'),
     { kind: 'tool', name: 'Bash', input: { command: 'gh pr view 9' }, status: 'done', output: 'https://github.com/o/r/pull/9' },
     pr('2', 'failed', 'error'),
-    pr('3', 'Creating pull request\nhttps://github.com/acme/etl-jobs/pull/90'),
+    pr('3', 'Creating pull request\nhttps://github.com/acme/widgets/pull/90'),
   ]), [
     { repo: 'o/r', num: 3, url: 'https://github.com/o/r/pull/3' },
-    { repo: 'acme/etl-jobs', num: 90, url: 'https://github.com/acme/etl-jobs/pull/90' },
+    { repo: 'acme/widgets', num: 90, url: 'https://github.com/acme/widgets/pull/90' },
   ])
   assert.deepEqual(threadPrs([]), [])
 })
