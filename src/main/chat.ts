@@ -1,5 +1,6 @@
 // Live Claude sessions, one per open tab. Each tab keeps one Claude Code process running
 // (streaming input mode), so every message continues the same conversation and reuses the cache.
+import { authRetryDue, resultText } from '../shared/authRetryCore'
 import { createSdkMcpServer, query, tool, type Options, type PermissionMode, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { WebContents } from 'electron'
 import { typeInTerminal } from './terminal'
@@ -169,6 +170,7 @@ type Live = {
   // prompt hooks still run ends the turn with "prompt_check" and the message never reaches Claude, so it goes again
   unchecked?: SDKUserMessage | null
   stopped?: boolean // the user stopped the running turn (Stop, Interrupt, Send now): its end is not a failure
+  authRetry?: boolean // the turn failed on sign-in: the process closes and a new one answers the message
   sentNow?: boolean // Send now stopped the turn so a waiting message is answered at once
   lastOk: boolean | null // whether the last finished turn succeeded (null: none yet)
   onIdle: Set<() => void> // wait_for_thread callers, told when the thread has no turn running and nothing queued
@@ -196,6 +198,7 @@ const gone = new Map<string, Gone>()
 const findGone = (ref: string) => [...gone.values()].find((g) => g.tabId === ref || g.sessionId === ref)
 const wake = (s: Live) => { for (const cb of [...s.onIdle]) cb() }
 // what follows a Send now whose message was taken into the stopped turn and left unanswered
+const authTried = new Map<string, number>() // tab -> when a sign-in failure was last retried
 const SEND_NOW_NUDGE = 'Carry on: answer my last message above.'
 const userMsg = (text: string, uuid: string = randomUUID()) => ({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] }, parent_tool_use_id: null, uuid }) as SDKUserMessage
 // a message on its way to Claude: kept until Claude takes it in, so a process that ends first gives it back
@@ -1176,6 +1179,11 @@ function start({ tabId, cwd, resume, web, background }: Start): Live {
           continue
         }
         if (m.type === 'result' && s.stopped) (m as any).hive_stopped = true
+        // the sign-in this process holds is no longer good (an account switch, a token it could not refresh): a new
+        // process reads the login again, so the turn is tried once more instead of being left as a failure
+        if (m.type === 'result' && (m as any).is_error && !s.stopped && !watcher && s.sessionId && authRetryDue(resultText(m as any), authTried.get(tabId), Date.now())) {
+          authTried.set(tabId, Date.now()); s.authRetry = true; (m as any).hive_retrying = true
+        }
         send(m)
         // a command only the interactive CLI runs (/design-login, /login, /mcp, ...): run it there, in this
         // thread's terminal, instead of leaving "isn't available in this environment" (not for watchers)
@@ -1241,7 +1249,8 @@ ${s.lastReply}`, Date.now())
           if (nudge) { s.push(userMsg(SEND_NOW_NUDGE)); s.turns.markBusy(); send({ type: 'hive_nudged' }) }
           if (!s.turns.isBusy()) wake(s)
           // signed in to another account while this turn ran: the process closes now if nothing else of it runs
-          if (s.recycle && !busyWith(activity(tabId, s)).length) retire(s, 'account')
+          if (s.authRetry) retire(s, 'account')
+          else if (s.recycle && !busyWith(activity(tabId, s)).length) retire(s, 'account')
           // a background thread (not a watcher: they say themselves when they need you) finished: tell the phone
           if (s.background && !tabId.startsWith('watcher-') && !s.turns.isBusy()) {
             notifyUser(s.lastOk ? `Finished: ${titleOf(tabId)}` : `Failed: ${titleOf(tabId)}`, (s.lastReply ?? '').split('\n').find((l) => l.trim()) ?? '', tabId)
@@ -1269,6 +1278,11 @@ ${s.lastReply}`, Date.now())
         live.delete(tabId)
         if (s.sessionId) gone.set(tabId, { tabId, sessionId: s.sessionId, cwd, title: titleOf(tabId), lastReply: s.lastReply, tabOpen: true })
         wake(s)
+        if (s.authRetry && s.sessionId && !web.isDestroyed()) {
+          const again = start({ tabId, cwd, resume: s.sessionId, web, background: s.background })
+          live.set(tabId, again)
+          again.push(userMsg(SEND_NOW_NUDGE)); again.turns.markBusy(); again.emit({ type: 'hive_nudged' })
+        }
       }
     }
   })()

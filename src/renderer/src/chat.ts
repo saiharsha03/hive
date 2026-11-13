@@ -2,6 +2,7 @@
 import { hookWarning, isContinuation } from '../../shared/summaryCore'
 import { isWatcherTab } from '../../shared/readOnlyCore'
 import { modelLabel } from '../../shared/statusCore'
+import { dropEcho } from '../../shared/authRetryCore'
 import { ADVISOR_TOOL, advisorOutput, isAdvisorCall, isAdvisorResult } from '../../shared/advisorCallCore'
 import { resultText } from '../../shared/toolOutputCore'
 import { nowLine } from './conversationCore'
@@ -253,9 +254,11 @@ export function applyEvent(s: Session, ev: any): Session {
       // a turn the user stopped (Stop, Interrupt, Send now) ended as asked: its unfinished tools are stopped, not
       // failed, and no failure line is added
       const stopped = ev.hive_stopped === true
-      const items: Item[] = settle(s.items, ev.is_error && !stopped ? 'error' : 'done')
+      const why: string = ev.is_error ? [...(ev.errors ?? []), ev.result].filter(Boolean).join('\n') : ''
+      // main is trying the turn again on a fresh sign-in: a note, not a failure
+      if (ev.hive_retrying === true) return { ...s, items: [...dropEcho(settle(s.items, 'done'), why), { kind: 'note', text: 'Sign-in failed for this thread (its login had changed or expired). Trying once more on the current login.' }], busy: true, turnOpen: false, streaming: '' }
+      const items: Item[] = dropEcho(settle(s.items, ev.is_error && !stopped ? 'error' : 'done'), why)
       if (ev.is_error && !stopped) {
-        const why = [...(ev.errors ?? []), ev.result].filter(Boolean).join('\n')
         // the engine's internal end-of-turn diagnostic: say what it means, keep the raw line for reference
         const text = why.startsWith('[ede_diagnostic]') ? `The turn stopped before Claude finished (usually a full context: it compacts and carries on). ${why}` : why
         items.push({ kind: 'error', text: text || `The turn ended: ${ev.subtype ?? 'error'}` })

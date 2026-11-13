@@ -19,6 +19,7 @@ import { DROP_TYPES, dropMessage, dropTitle, pickDropFile, type DropChoice } fro
 import {
   activate, activeId, closeSession, dismissNotice, focusPaneAt, live as liveStore, moveToBackground, newBeside, newSession, nextNeedsMe, notice, notices,
   openFileTab, openPage, place, preview, reopenClosed, runUndo, sendFailed, setExtraRows, setPreview, stepTab, stopEverything, tabAt, toggleTerminal,
+  escapeShownFile,
 } from './actions'
 import { PAGE_LABEL, PAGE_KEYS, type ToolTab } from './chat'
 import { CloseAsk } from './CloseAsk'
@@ -177,6 +178,9 @@ export function Shell() {
       // something open over the window (an open layer has already taken it: ui.tsx's Escape stack)
       if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.defaultPrevented && isFull(sideView.get()) && !getAppearance().layout.focus
         && !(e.target as HTMLElement | null)?.closest?.(TYPING) && !document.querySelector(OVERLAY)) { e.preventDefault(); showSide('threads'); return }
+      // Escape on a picture or file a thread opened closes it and goes back to that thread (not while typing in it)
+      if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.defaultPrevented
+        && !(e.target as HTMLElement | null)?.closest?.(TYPING) && !document.querySelector(OVERLAY) && escapeShownFile()) { e.preventDefault(); return }
       if (!ctrl) return
       if (!e.shiftKey && !e.altKey && k === 'k') { e.preventDefault(); setPaletteN((n) => n + 1) }
       else if (!e.shiftKey && e.key === '.') { e.preventDefault(); nextNeedsMe() }

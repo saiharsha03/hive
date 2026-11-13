@@ -44,9 +44,28 @@ export function runUndo() {
 
 // ---- the full-window preview (a pasted image with no file behind it); files open as editor tabs ----
 export const preview = createStore<string | null>(null)
-export function setPreview(p: string | null) {
-  if (p && !p.startsWith('data:')) { openInEditor(p); return }
+// a file a thread opened (a picture or file Claude showed, a link clicked in the conversation) remembers that thread:
+// Escape on it closes it and goes back there
+const shownFrom = new Map<string, string>()
+export function setPreview(p: string | null, from?: string | null) {
+  if (p && !p.startsWith('data:')) {
+    const thread = from ?? activeId()
+    if (thread && !thread.startsWith('file:') && !thread.startsWith('tool:')) shownFrom.set(fileTabId(p), thread)
+    openInEditor(p)
+    return
+  }
   preview.set(p)
+}
+// Escape on the focused tab: true when it was a file a thread opened, now closed with that thread back in front
+export function escapeShownFile(): boolean {
+  const id = activeId()
+  const back = id ? shownFrom.get(id) : undefined
+  if (!id || !back) return false
+  closeTabs([id])
+  if (activeId() === id) return true // unsaved edits: the editor asks, the tab stays
+  shownFrom.delete(id)
+  if (getSessions().some((s) => s.id === back)) activate(back)
+  return true
 }
 
 // ---- the diff tab: the change last picked (an edit row, a changed file) ----

@@ -131,7 +131,7 @@ export function startEngine() {
     }
     flushDeltas((t) => t === tabId) // what was written so far goes in before the event that follows it
     const cur = getSessions().find((s) => s.id === tabId)
-    if (ev.type === 'hive_show' && ev.path && !cur?.background) setPreview(ev.path)
+    if (ev.type === 'hive_show' && ev.path && !cur?.background) setPreview(ev.path, tabId)
     if (ev.type === 'hive_title' && ev.title) {
       setSessions((all) => all.map((s) => (s.id === tabId ? { ...s, title: ev.title } : s)))
       refreshThreadList()
