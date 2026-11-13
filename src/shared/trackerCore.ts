@@ -98,9 +98,6 @@ export type Card = {
   key: string; summary: string; type: string; priority: string; project: string; projectName: string
   status: string; column: ColumnId; updated: number; url: string; description: string
 }
-export const COLUMNS: { id: ColumnId; label: string }[] = [
-  { id: 'todo', label: 'To do' }, { id: 'progress', label: 'In progress' }, { id: 'review', label: 'In review' }, { id: 'done', label: 'Done' },
-]
 
 // Jira has three status categories (new, indeterminate, done); a status with "review" in its name gets its own column
 export function columnOf(categoryKey: string, status: string): ColumnId {

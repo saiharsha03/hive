@@ -47,8 +47,6 @@
 .acct-pct { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
 .acct-threads { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
 .acct-act { text-align: right; }
-.acct-keys { background: none; border: 0; padding: 0; cursor: pointer; font: 12px var(--mono); color: var(--dim); text-decoration: none; }
-.acct-keys:hover { color: var(--hi); }
 .acct-old { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .acct-dim { color: var(--faint); font-size: 12px; }
 .acct-flow { display: flex; gap: 14px; align-items: baseline; width: 100%; }

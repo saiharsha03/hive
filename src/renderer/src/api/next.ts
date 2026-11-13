@@ -12,7 +12,6 @@ const api = (): Record<string, unknown> => (window as unknown as { api?: Record<
 // In test mode only, the screenshot script may seed answers for calls main does not have yet: window.__hiveSeed[name]
 // (an object with byArg answers by the first argument, with fallback for the rest)
 const seeded = (name: string): unknown => (window.api?.testMode ? (window as unknown as { __hiveSeed?: Record<string, unknown> }).__hiveSeed?.[name] : undefined)
-export const hasApi = (name: string): boolean => typeof api()[name] === 'function' || seeded(name) !== undefined
 // `name` is the seed key (what scripts/ui-shots.mjs seeds); `real` is the preload method when it is named differently
 async function call<T>(name: string, ...args: unknown[]): Promise<Avail<T>> { return callAs<T>(name, name, ...args) }
 async function callAs<T>(name: string, real: string, ...args: unknown[]): Promise<Avail<T>> {

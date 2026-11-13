@@ -36,7 +36,7 @@
 }
 .ws-page input::placeholder, .ws-page textarea::placeholder, .wt-page .sin::placeholder, .set-page .sin::placeholder { color: var(--faint); }
 .ws-page input[type='checkbox'], .wt-page input[type='checkbox'], .set-page input[type='checkbox'], .wt-page input[type='radio'], .set-page input[type='radio'] { accent-color: var(--hi); margin: 0; flex: none; }
-.ws-page .state-pr, .ws-page .pr { font: var(--t-state); color: var(--ink); }
+.ws-page .pr { font: var(--t-state); color: var(--ink); }
 .ws-page .pr.ok { color: var(--dim); } .ws-page .pr.bad { color: var(--fail); } .ws-page .pr.warn { color: var(--signal); } .ws-page .pr.work { color: var(--ink); }
 .ws-page .dd { color: var(--faint); font-size: 12px; display: block; }
 

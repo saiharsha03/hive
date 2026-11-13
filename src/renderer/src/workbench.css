@@ -248,7 +248,6 @@ body.panel-drag { cursor: row-resize; user-select: none; }
 .conv .msg.cl.from { max-width: min(88%, 1000px); }
 
 /* when a limit resets, said quietly after its bar */
-.sline .lim-reset { margin-left: 6px; color: var(--faint); }
 
 /* ---------- the question card ---------- */
 .askcard.ask2 { background: var(--side); border: 1px solid var(--rule); border-left: 3px solid var(--accent); padding: 16px 18px 14px; font: 13px var(--sans); border-radius: 8px !important; outline: 0; max-width: 820px; }

@@ -8,7 +8,6 @@ import { resultText } from '../../shared/toolOutputCore'
 import { nowLine } from './conversationCore'
 // pages: each opens as a tab (id "tool:<page>") so it can sit beside a thread; diff is the full diff of a change
 export type ToolTab = 'running' | 'scheduled' | 'deploys' | 'status' | 'watchers' | 'workspace' | 'settings' | 'diff' | 'quarry'
-export const TOOL_TABS: ToolTab[] = ['running', 'scheduled', 'deploys', 'status', 'watchers', 'workspace', 'settings', 'diff', 'quarry']
 export const PAGE_LABEL: Record<ToolTab, string> = {
   running: 'Running', scheduled: 'Scheduled', deploys: 'Deploys', status: 'Status and usage', watchers: 'Watchers and teams',
   workspace: 'Workspace', settings: 'Settings', diff: 'Diff', quarry: 'Quarry',

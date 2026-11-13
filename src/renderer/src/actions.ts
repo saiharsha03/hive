@@ -201,13 +201,6 @@ export function openPage(page: ToolTab) {
   }]))
   panes.set((p) => activateIn(p, id))
 }
-// a page beside the focused pane (so it sits next to a thread)
-export function openPageBeside(page: ToolTab) {
-  const id = `tool:${page}`
-  if (getSessions().some((s) => s.id === id)) { activate(id); return }
-  setSessions((all) => [...all, { id, tool: page, title: PAGE_LABEL[page], items: [], streaming: '', busy: false, loaded: true, background: false }])
-  panes.set((p) => addPaneFor(p, id, p.focus) ?? activateIn(p, id))
-}
 
 // a file opens as a tab next to the threads, in the focused pane (one tab per file)
 export function openFileTab(path: string) {

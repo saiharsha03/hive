@@ -23,7 +23,6 @@
 .sch-when { white-space: nowrap; }
 .sch-rel { color: var(--faint); }
 .sch-what { max-width: 320px; }
-.sch-guard { color: var(--faint); padding: 4px 0 10px; font-size: 12.5px; }
 .run-thread, .run-what { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .run-thread { max-width: 220px; }
 .sch-ev { z-index: 1; }

@@ -18,6 +18,5 @@ export function applyGeneral(g: Look) {
 }
 
 export const useAppName = () => useSyncExternalStore(subscribe, () => look.appName)
-export const useAppTagline = () => useSyncExternalStore(subscribe, () => look.appTagline)
 
 void window.api.settingsGet().then((v) => applyGeneral(v.general)).catch(() => { /* keep the defaults */ })
