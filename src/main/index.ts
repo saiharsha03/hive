@@ -1,4 +1,6 @@
 // Electron main process. The Agent SDK runs here.
+// first: Hive's data is copied over before any module reads the state folder (carryOver.ts)
+import './carryOver'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, protocol, shell, Tray } from 'electron'
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
