@@ -16,7 +16,8 @@ import { clearOffer, textHash, useClipboardOn, useClipOffer } from './clipboardO
 import { CopyButton, MdBody } from './MdBody'
 import { ModelEffort, ModePicker } from './ThreadStatus'
 import { dismissGoal, useThreadStatus } from './statusStore'
-import { SummaryRow, WarningRow } from './ChatRows'
+import { SummaryRow, ThinkingRow, WarningRow } from './ChatRows'
+import { FastToggle } from './FastToggle'
 import { useSlashMenu } from './SlashMenu'
 import { useMentionMenu } from './MentionMenu'
 import { mentionText } from '../../shared/mentionCore'
@@ -444,6 +445,7 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
     if (it.kind === 'show') { out.push(<div key={key} className="msg"><ShowCard path={it.path} onOpen={st.open} /></div>); return }
     if (it.kind === 'note') { out.push(<div key={key} className="note">{it.text}</div>); return }
     if (it.kind === 'summary') { out.push(<SummaryRow key={key} text={it.text} />); return }
+    if (it.kind === 'thinking') { out.push(<ThinkingRow key={key} text={it.text} />); return }
     if (it.kind === 'warning') { out.push(<WarningRow key={key} event={it.event} text={it.text} />); return }
     if (it.kind === 'thread') {
       if (it.queue?.pending) return
@@ -989,6 +991,7 @@ export function SessionView(p: Props) {
         </div>
         <div className="crow">
           <ModelEffort tabId={session.id} ultra={ultra} />
+          <FastToggle tabId={session.id} />
           <ModePicker tabId={session.id} mode={shownMode} error={session.modeError} />
           {ultra && <span className="pick ultra" data-testid="ultra-note">ultrathink: max effort for this turn</span>}
           <Btn kind="link" onClick={() => fileInput.current?.click()} testid="composer-attach" title="Attach files or images">Attach</Btn>

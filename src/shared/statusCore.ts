@@ -12,6 +12,10 @@ export type ThreadStatus = {
   effortError?: string
   advisor?: string | null // the advisor model main reported (hive_advisor); null = none, undefined = not told yet
   advisorPick?: string // the Advisor row picked in the model menu (advisorCore.ts), shown before main answers
+  fast?: boolean // fast mode asked for in Hive (hive_fast)
+  fastError?: string // the last fast switch failed
+  fastState?: string // what the engine says at the end of a turn: off, cooldown, on (fast_mode_state)
+  fastReason?: string // why it cannot serve now (fast_mode_disabled_reason)
   goal: Goal | null
   crons: LoopJob[]
   wakeRunning: string | null // the scheduled fire running right now (command uuid)
@@ -57,6 +61,11 @@ export function reduceStatus(st: ThreadStatus, ev: any, now: number): ThreadStat
       return { ...st, model: ev.model }
     case 'hive_advisor':
       return { ...st, advisor: typeof ev.model === 'string' && ev.model ? ev.model : null }
+    case 'hive_fast':
+      return { ...st, fast: !!ev.on, fastError: ev.error, fastReason: undefined }
+    case 'result':
+      if (ev.parent_tool_use_id || (ev.fast_mode_state === undefined && ev.fast_mode_disabled_reason === undefined)) return st
+      return { ...st, fastState: ev.fast_mode_state ?? st.fastState, fastReason: ev.fast_mode_disabled_reason }
     case 'hive_effort':
       return { ...st, effort: ev.level ?? st.effort, ultrathink: !!ev.ultrathink, effortError: ev.error }
     case 'hive_stop':

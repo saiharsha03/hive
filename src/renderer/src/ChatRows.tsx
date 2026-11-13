@@ -4,6 +4,33 @@ import { useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { summaryBody } from '../../shared/summaryCore'
+import { thinkingPreview } from '../../shared/contextCore'
+import { createStore, useStore } from './store'
+import { getPref, setPref } from './prefs'
+
+// Claude's thinking opens by default when this is on (Alt+T in the message box); a row clicked keeps its own choice
+export const thinkingOpen = createStore<boolean>(getPref('thinking.open', false))
+export function toggleThinkingOpen(): boolean {
+  const on = !thinkingOpen.get()
+  thinkingOpen.set(on)
+  setPref('thinking.open', on)
+  return on
+}
+
+// Claude's thinking: one dim line, the text when opened
+export function ThinkingRow({ text }: { text: string }) {
+  const dflt = useStore(thinkingOpen, (v) => v)
+  const [own, setOwn] = useState<boolean | null>(null)
+  const open = own ?? dflt
+  return (
+    <div className="sumrow" data-testid="thinking-row">
+      <button className="link" onClick={() => setOwn(!open)} aria-expanded={open} title="Claude's thinking. Alt+T in the message box opens every thinking row by default" data-testid="thinking-toggle">
+        {open ? '▾' : '▸'} Thinking{open ? '' : `: ${thinkingPreview(text)}`}
+      </button>
+      {open && <div className="body md sum-body"><Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown></div>}
+    </div>
+  )
+}
 
 export function SummaryRow({ text }: { text: string }) {
   const [open, setOpen] = useState(false)

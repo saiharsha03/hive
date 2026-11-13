@@ -5,7 +5,8 @@
 import { useEffect, useState } from 'react'
 import { createStore, panes as panesStore, useSessionMetas, useStore } from './store'
 import { focusedTab } from './panes'
-import { notice, openPage, runUndo, undo as undoStore } from './actions'
+import { notice, openPage, runUndo, send, undo as undoStore } from './actions'
+import { canCompact, contextPct, contextWarn } from '../../shared/contextCore'
 
 type KnownIp = { ip: string; at: number | null; label?: string }
 import type { AllowStatus } from '../../shared/allowCore'
@@ -170,13 +171,20 @@ export function StatusLine() {
     const t = setInterval(load, 10_000)
     return () => { alive = false; clearInterval(t) }
   }, [f?.id, f?.busy])
+  const pct = ctx ? contextPct(ctx.total, ctx.max) : null
   const branch = f ? (f.worktrees?.at(-1)?.branch ?? (f.cwd ?? '').split(/[\\/]/).filter(Boolean).at(-1) ?? '') : ''
   // the address is said only when it needs you: being allowed, changed, or not readable
   const ipWord = !allow?.configured ? '' : allow.running ? 'Allowing this address' : allow.changed ? 'New address, not allowed' : allow.unreadable ? 'Address not read' : ''
   return (
     <footer className="sline" data-testid="status-bar">
       {branch && <b className="branch" data-testid="status-branch">{branch}</b>}
-      {ctx && <span data-testid="status-context">Context {fmtTokens(ctx.total)}{ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}{ctx.max ? <Meter pct={(ctx.total / ctx.max) * 100} /> : null}</span>}
+      {/* the context meter opens what /context opens (the status page); Compact sends /compact as the CLI does */}
+      {ctx && f && <button className={contextWarn(pct) ? 'warm' : ''} onClick={() => openPage('status')} data-testid="status-context"
+        title={`Context in use: ${fmtTokens(ctx.total)}${ctx.max ? ` of ${fmtTokens(ctx.max)} (${pct}%)` : ''}. Click for the full status`}>
+        Context {fmtTokens(ctx.total)}{ctx.max ? ` of ${fmtTokens(ctx.max)}` : ''}{pct !== null ? <Meter pct={pct} /> : null}
+      </button>}
+      {ctx && f && canCompact({ live: true, busy: f.busy, compacting: f.compacting }) && <button onClick={() => send(f.id, '/compact', [])} data-testid="status-compact"
+        title="Summarise the conversation so far to free up context (/compact)">Compact</button>}
       {/* the usage limits are the gauges at the foot of the rail (LimitGauges) */}
       <span className="r" />
       <VersionsLine />

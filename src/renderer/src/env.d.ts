@@ -31,6 +31,7 @@ type Item =
   // failed: the message never reached Claude (why)
   | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string; seen?: boolean; seenAt?: number; steer?: boolean; interrupt?: boolean; during?: string; queue?: { id: string; pending: boolean }; failed?: string }
   | { kind: 'assistant'; text: string; at?: number }
+  | { kind: 'thinking'; text: string } // Claude's thinking (a summary), a collapsed row
   // patch: Claude Code's structuredPatch from an Edit / MultiEdit / Write result, for the diff; output: the result as text, shown when the row is opened
   | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown; output?: string }
   | { kind: 'show'; path: string }
@@ -281,12 +282,13 @@ interface Window {
     chatSetModel: (tabId: string, model: string) => Promise<void>
     chatSetMode: (tabId: string, mode: string) => Promise<void>
     chatSetEffort: (tabId: string, level: string) => Promise<void>
+    chatSetFast: (tabId: string, on: boolean) => Promise<void>
     quarryE2eTool: (tabId: string, tool: string, args: object) => Promise<{ ok: boolean; text: string }>
     quarryStatus: () => Promise<{ available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }>
     onQuarryChanged: (cb: (s: { available: boolean; exe: string | null; version: string | null; running: boolean; reason: string }) => void) => () => void
     chatSetAdvisor: (tabId: string, model: string) => Promise<void>
     chatCommands: (tabId?: string) => Promise<import('../../shared/composerCore').Command[]>
-    chatModels: (tabId?: string) => Promise<{ value: string; displayName: string; description: string }[]>
+    chatModels: (tabId?: string) => Promise<{ value: string; displayName: string; description: string; supportsFastMode?: boolean }[]>
     chatMcp: (tabId?: string) => Promise<McpServerRow[]>
     chatStopTask: (tabId: string, taskId: string) => Promise<boolean>
   }

@@ -11,6 +11,7 @@ import { ADVISOR_TOOL, advisorOutput, isAdvisorCall, isAdvisorResult } from '../
 export type Item =
   | { kind: 'user'; text: string; images: string[]; at?: number; uuid?: string } // images as data: URLs; at = when it was sent (ms); uuid = its transcript entry (Rewind)
   | { kind: 'assistant'; text: string; at?: number } // at = when Claude wrote it
+  | { kind: 'thinking'; text: string } // Claude's thinking (a summary)
   | { kind: 'tool'; id: string; name: string; input: any; status: 'running' | 'done' | 'error'; patch?: unknown; output?: string }
   | { kind: 'show'; path: string }
   | { kind: 'note'; text: string }
@@ -132,10 +133,11 @@ function historyParser(): { line: (line: string) => void; done: () => Item[] } {
       if (words || images.length) items.push(userItem(words, images, at, e.uuid))
     } else if (e.type === 'assistant' && Array.isArray(c)) {
       for (const b of c) {
-        const key = `${e.message.id}:${b.type}:${b.id ?? b.tool_use_id ?? b.text}`
+        const key = `${e.message.id}:${b.type}:${b.id ?? b.tool_use_id ?? b.text ?? b.thinking}`
         if (seen.has(key)) continue
         seen.add(key)
         if (b.type === 'text' && b.text.trim()) items.push({ kind: 'assistant', text: b.text, ...(at ? { at } : {}) })
+        else if (b.type === 'thinking' && typeof b.thinking === 'string' && b.thinking.trim()) items.push({ kind: 'thinking', text: b.thinking })
         else if (isAdvisorCall(b)) {
           const t = { kind: 'tool' as const, id: b.id, name: ADVISOR_TOOL, input: b.input ?? {}, status: 'running' as const }
           tools.set(b.id, t)

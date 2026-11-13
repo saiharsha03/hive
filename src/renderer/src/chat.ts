@@ -211,6 +211,8 @@ export function applyEvent(s: Session, ev: any): Session {
       }
       for (const b of ev.message?.content ?? []) {
         if (b.type === 'text' && b.text.trim()) put({ kind: 'assistant', text: b.text, at: Date.now() })
+        // Claude's thinking: a collapsed row (an empty block is thinking the API did not show)
+        else if (b.type === 'thinking' && typeof b.thinking === 'string' && b.thinking.trim()) put({ kind: 'thinking', text: b.thinking })
         else if (b.type === 'tool_use') {
           if (b.name === SHOW) put({ kind: 'show', path: b.input?.path })
           put({ kind: 'tool', id: b.id, name: b.name, input: b.input, status: 'running' })

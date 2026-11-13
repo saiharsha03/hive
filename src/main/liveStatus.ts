@@ -59,6 +59,7 @@ type Tab = {
   effort?: string // picked in Hive (null-ish = the user's default)
   reported?: string // the level the Stop hook last reported outside an ultrathink turn
   advisor?: string // picked in Hive for this thread ('' = none); also passed when the process restarts
+  fast?: boolean // fast mode turned on in Hive for this thread; also passed when the process restarts
   advisorNow?: string | null // what the running process has (the pick, else Settings > General), for /status
   advisorAtStart?: string // the advisor the running process was started with ('' = none): Off has to override that one
   boost?: { prev: string | undefined; left: number } // ultrathink: what to go back to, after how many turn ends
@@ -90,6 +91,8 @@ export function sessionOptions(tabId: string, send: Send, o: { unattended?: bool
       ...(o.memoryDir ? { autoMemoryDirectory: o.memoryDir } : {}),
       ...flags,
       ...(advisor ? { advisorModel: advisor } : {}),
+      // an SDK session runs fast only with the flag layer's fastMode on (else sdk_opt_in_required)
+      ...(t.fast ? { fastMode: true } : {}),
     },
     ...(t.model ? { model: t.model } : {}),
     ...(t.effort ? { effort: t.effort as Options['effort'] } : {}),
@@ -169,6 +172,9 @@ export function observe(tabId: string, m: SDKMessage, pathOf: (sessionId: string
   const msg = m as any
   if (msg.type === 'system' && msg.subtype === 'init') {
     const path = pathOf(msg.session_id)
+    // Claude's thinking comes as text (a summary), the way the CLI shows it; SDK sessions otherwise get it empty.
+    // null keeps the session's own thinking budget, only the display changes
+    q.setMaxThinkingTokens(null, 'summarized').catch(() => { /* an older engine: thinking stays hidden */ })
     if (path !== t.path) {
       setWatching(tabId, false)
       Object.assign(t, { path, offset: 0, rest: '' })
@@ -244,6 +250,19 @@ export async function setAdvisor(tabId: string, q: Query | undefined, model: str
   t.advisorNow = m || null
   t.send({ type: 'hive_advisor', model: m || null })
 }
+// fast mode for this thread, live (Alt+O); takes effect from the next turn, as /fast does
+export async function setFast(tabId: string, q: Query | undefined, on: boolean): Promise<void> {
+  const t = tab(tabId)
+  try {
+    if (q) await q.applyFlagSettings({ fastMode: on })
+  } catch (e: any) {
+    t.send({ type: 'hive_fast', on: !!t.fast, error: `Could not turn fast mode ${on ? 'on' : 'off'}: ${e?.message ?? e}` })
+    throw e
+  }
+  t.fast = on
+  t.send({ type: 'hive_fast', on })
+}
+
 export const advisorNow = (tabId: string): string | null => tabs.get(tabId)?.advisorNow ?? null
 
 export function forgetTab(tabId: string): void {
@@ -267,6 +286,7 @@ export function registerStatusIpc(handle: Handle, deps: Deps): void {
   handle('chat:setEffort', (_e, tabId: string, level: string) => setEffort(String(tabId), deps.liveQuery(String(tabId)), String(level)))
   // a thread's advisor model ('' = none), live; a thread with no process gets it when it starts
   handle('chat:setAdvisor', (_e, tabId: string, model: string) => setAdvisor(String(tabId), deps.liveQuery(String(tabId)), String(model ?? '')))
+  handle('chat:setFast', (_e, tabId: string, on: boolean) => setFast(String(tabId), deps.liveQuery(String(tabId)), !!on))
   // every command the engine reports, plus the interactive CLI's own ones it leaves out (threadCore.menuCommands)
   handle('chat:commands', async (_e, tabId?: string) => menuCommands(await ask(deps, tabId).supportedCommands()))
   handle('chat:models', (_e, tabId?: string) => ask(deps, tabId).supportedModels())
