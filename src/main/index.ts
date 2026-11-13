@@ -5,7 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, powerMonitor, p
 import { basename, dirname, join, resolve } from 'node:path'
 import QRCode from 'qrcode'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, watch, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import icon from '../../build/icon.png?asset'
@@ -1145,8 +1145,20 @@ function sourceRunIdentity(): void {
     // a "Orbit" shortcut that already starts this Electron (made by hand, also the one in Startup) is the one to keep;
     // otherwise a "Orbit (source)" one is made, so an installed Orbit's own shortcut is never touched
     const mine = (f: string) => { try { return shell.readShortcutLink(f).target.toLowerCase() === process.execPath.toLowerCase() } catch { return false } }
+    // this checkout's own shortcut: this Electron, started on this folder (not another worktree's)
+    const startsThis = (f: string) => { try { const l = shell.readShortcutLink(f); return mine(f) && (l.args ?? '').toLowerCase().includes(root.toLowerCase()) } catch { return false } }
+    const lnks = (dir: string) => { try { return readdirSync(dir).filter((n) => n.toLowerCase().endsWith('.lnk')).map((n) => join(dir, n)) } catch { return [] } }
+    // a shortcut from before the rename (Hive.lnk) that starts this checkout takes the new name, once
+    for (const dir of [programs, join(programs, 'Startup'), app.getPath('desktop')]) {
+      const named = join(dir, `${PRODUCT}.lnk`)
+      for (const f of lnks(dir)) if (f !== named && !f.endsWith(`${PRODUCT} (source).lnk`) && startsThis(f) && !existsSync(named)) renameSync(f, named)
+    }
     const own = [join(programs, `${PRODUCT}.lnk`), join(programs, 'Startup', `${PRODUCT}.lnk`), join(app.getPath('desktop'), `${PRODUCT}.lnk`)].filter(mine)
     for (const f of own) shell.writeShortcutLink(f, 'update', options)
+    // the taskbar pin keeps its file name (renaming it unpins it), but takes the new icon and app id so the running
+    // window groups with it
+    const pins = join(process.env.APPDATA, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar')
+    for (const f of lnks(pins)) if (startsThis(f)) shell.writeShortcutLink(f, 'update', options)
     const link = join(programs, `${PRODUCT} (source).lnk`)
     if (!own.length) shell.writeShortcutLink(link, existsSync(link) ? 'update' : 'create', options)
     app.setAppUserModelId(id)
