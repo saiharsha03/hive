@@ -10,7 +10,7 @@ import { engineInfo, latestEngine, updateEngine } from './engine'
 import { TEST_MODE } from './testMode'
 
 const SDK = '@anthropic-ai/claude-agent-sdk'
-const AUTO_SDK: boolean = false
+const AUTO_SDK: boolean = true
 export type Versions = {
   claude: { version: string | null; latest: string | null; state: '' | 'updating' | 'failed' }
   // waiting: the version installed on disk that the running app does not use yet (restart to use it)
@@ -68,8 +68,8 @@ export async function checkVersions(auto = true): Promise<Versions> {
     }
     // the SDK: only for a run from source (an installed app carries its own copy), and only within the same release
     // line, so a new line that may change how the app must talk to it is never taken unasked
-    // Hive Next never installs it by itself: a run from a worktree shares node_modules with the main checkout, so an
-    // install here would change the other app's dependencies under it. The status line says when a newer one exists.
+    // (AUTO_SDK false: never by itself, for a run from a worktree that shares node_modules with another checkout; the
+    // status line still says when a newer one exists)
     if (AUTO_SDK && !app.isPackaged && disk && sdkLatest && newer(sdkLatest, disk) && sameLine(sdkLatest, disk)) {
       set({ sdk: { ...state.sdk, state: 'updating' } })
       const ok = await new Promise<boolean>((res) => exec(`npm install ${SDK}@${sdkLatest} --no-audit --no-fund`, { cwd: app.getAppPath(), windowsHide: true, timeout: 5 * 60_000 }, (err) => res(!err)))

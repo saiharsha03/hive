@@ -9,6 +9,6 @@ export const PRODUCT = 'Orbit'
 /** the folder in the home folder for this app's state */
 export const STATE_FOLDER = '.orbit'
 export const APP_ID = 'io.github.saiharsha03.orbit'
-// While it is tried out beside Hive, this app wakes nothing by itself: no scheduled wake-up and no automatic continue
-// after a usage limit. Hive stays the one app that does. Set to false when this becomes the app in daily use.
-export const WAKEUPS_OFF: boolean = true
+// true = this app wakes nothing by itself: no scheduled wake-up and no automatic continue after a usage limit (for a
+// copy tried out beside the app in daily use). Orbit is the app in daily use, so it wakes threads.
+export const WAKEUPS_OFF: boolean = false
