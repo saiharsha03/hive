@@ -54,7 +54,7 @@ private fun tokensWord(n: Long) = if (n >= 1_000_000) String.format(java.util.Lo
 
 // pane: "", "work", "rewind" or "gate". rewinding: the message a rewind is running for.
 @Composable
-fun ThreadMoreBar(m: ThreadMore, pane: String, now: Long, online: Boolean, rewinding: String, onPane: (String) -> Unit, onRewind: (Point) -> Unit) {
+fun ThreadMoreBar(m: ThreadMore, pane: String, now: Long, online: Boolean, rewinding: String, onPane: (String) -> Unit, onRewind: (Point) -> Unit, onChanges: (() -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().background(C.side)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = Pad, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             if (m.contextMax > 0) Text("Context ${tokensWord(m.contextTotal)} of ${tokensWord(m.contextMax)}", style = T.label)
@@ -63,6 +63,8 @@ fun ThreadMoreBar(m: ThreadMore, pane: String, now: Long, online: Boolean, rewin
             tabs.forEach { (k, label) ->
                 Text(label, Modifier.clickable { onPane(if (pane == k) "" else k) }, style = T.label.copy(fontWeight = if (pane == k) FontWeight.SemiBold else FontWeight.Normal), color = if (pane == k) C.link else C.dim)
             }
+            // 3.2: the thread's branch, files and PR on their own screen (only when this Hive answers for them)
+            if (onChanges != null) Text("Changes", Modifier.clickable(onClick = onChanges), style = T.label, color = C.dim)
         }
         if (m.waiting.isNotEmpty()) {
             val tone = when { m.waiting.contains("review") -> kReview; m.waiting.contains("advisor") -> C.wait; else -> C.work }

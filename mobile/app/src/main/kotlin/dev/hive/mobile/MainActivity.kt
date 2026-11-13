@@ -484,6 +484,9 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collec
     val send: (String) -> Unit = { text -> sendHow(text, "") }
     val mic = rememberMic(onText = { Drafts.text[id] = joinDraft(Drafts.text[id] ?: "", it) }, onError = { err = it })
     val how = "sendHow" in can
+    // 3.2: the thread's changes, in place of the conversation until Back
+    var changesOpen by remember { mutableStateOf(false) }
+    if (changesOpen) { ChangesRoute(id, notice, online, "prMerge" in can) { changesOpen = false }; return }
     ThreadScreen(v, draft, online, loaded, err, notice, leaving, sentAsks, list,
         onBack = back, onStay = { leaving = false }, onLeave = { leaving = false; onBack() },
         onDraft = { Drafts.text[id] = it },
@@ -499,7 +502,46 @@ private fun ThreadRoute(id: String, notice: String, online: Boolean, can: Collec
         settings = settings?.copy(advisor = more?.advisor ?: ""), settingsOpen = settingsOpen, onSettingsOpen = { settingsOpen = it },
         onSetting = { what, value -> settingsOpen = ""; scope.launch { err = attempt { Relay.ask("setThread", mapOf("id" to id, "what" to what, "value" to value)) }; loadSettings() } },
         onQueue = if (how) ({ val text = draft.trim(); Drafts.text.remove(id); sendHow(text, "queue") }) else null,
-        onInterrupt = if (how) ({ val text = draft.trim(); Drafts.text.remove(id); sendHow(text, "interrupt") }) else null)
+        onInterrupt = if (how) ({ val text = draft.trim(); Drafts.text.remove(id); sendHow(text, "interrupt") }) else null,
+        onChanges = if ("changes" in can) ({ changesOpen = true }) else null)
+}
+
+// A thread's branch, PR and files; a file's diff; the merge. Merge sends what the confirm showed (the PR's head sha as
+// it was on screen) with a fresh mid and confirm = "merge"; Hive checks everything again before it merges.
+@Composable
+private fun ChangesRoute(id: String, notice: String, online: Boolean, canMerge: Boolean, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var changes by remember { mutableStateOf<Changes?>(null) }
+    var err by remember { mutableStateOf("") }
+    var file by remember { mutableStateOf<ChangeFile?>(null) }
+    var diff by remember { mutableStateOf<DiffView?>(null) }
+    var diffErr by remember { mutableStateOf("") }
+    var confirming by remember { mutableStateOf<PrCard?>(null) }
+    var merging by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    val back: () -> Unit = { if (file != null) file = null else if (confirming != null && !merging) confirming = null else onBack() }
+    BackHandler(onBack = back)
+    val reload = rememberLoader(id) { err = attempt("changes") { changes = ReadChanges.changes(Relay.ask("changes", mapOf("id" to id)).optJSONObject("changes")) } }
+    LaunchedEffect(file) {
+        val f = file ?: return@LaunchedEffect
+        diff = null
+        diffErr = attempt("diffs") { diff = ReadChanges.diff(Relay.ask("diff", mapOf("id" to id, "path" to f.path, "area" to f.area)).optJSONObject("diff")) }
+    }
+    val open = file
+    if (open != null) { DiffScreen(open, diff, listOf(notice, diffErr).filter { it.isNotEmpty() }.joinToString(" "), onBack = back); return }
+    ChangesScreen(changes, notice, err, result, canMerge && online, confirming, merging,
+        onBack = back, onFile = { file = it }, onAskMerge = { confirming = it; result = null }, onCancelMerge = { confirming = null },
+        onMerge = { p ->
+            merging = true
+            val mid = java.util.UUID.randomUUID().toString()
+            scope.launch {
+                val failed = attempt { result = ReadChanges.merge(Relay.ask("prMerge", mapOf("id" to id, "mid" to mid, "headSha" to p.headSha, "confirm" to "merge")).optJSONObject("merge")) }
+                if (failed.isNotEmpty()) result = false to failed
+                merging = false
+                confirming = null
+                reload()
+            }
+        })
 }
 
 // ---- the 3.0 screens ----

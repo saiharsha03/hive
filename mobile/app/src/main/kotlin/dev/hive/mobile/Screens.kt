@@ -205,12 +205,13 @@ fun ThreadScreen(
     settings: ThreadSettings? = null, settingsOpen: String = "", onSettingsOpen: (String) -> Unit = {}, onSetting: (String, String) -> Unit = { _, _ -> },
     onQueue: (() -> Unit)? = null, onInterrupt: (() -> Unit)? = null,
     more: ThreadMore? = null, morePane: String = "", now: Long = 0, rewinding: String = "", onMorePane: (String) -> Unit = {}, onRewind: (Point) -> Unit = {},
+    onChanges: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxSize()) {
         Head(v.title.ifEmpty { if (loaded) "Thread" else "Opening" }, sub = true, onBack = onBack, right = if (v.working) "Stop" else "", rightColor = C.fail, onRight = onStop)
         Notice(notice)
         Notice(error)
-        if (more != null) ThreadMoreBar(more, morePane, now, online, rewinding, onMorePane, onRewind)
+        if (more != null) ThreadMoreBar(more, morePane, now, online, rewinding, onMorePane, onRewind, onChanges)
         if (leaving) ConfirmBar("Leave without sending?", "What you typed has not been sent. It is kept as a draft in this thread.", "Leave", cancel = "Stay", onCancel = onStay, onConfirm = onLeave)
         // the thread's running subagents, shells, workflows and Codex runs with their live line; Stop ends one
         if (v.tasks.isNotEmpty()) {
