@@ -38,7 +38,7 @@ test('create, update, list newest first, soft delete; ids cannot leave the folde
 test('add_note: appends to the note with that title (any case), else makes one', async () => {
   const a = await store.addToNote('Orbit ideas', 'phone app')
   assert.ok(a.created)
-  const b = await store.addToNote('hive IDEAS', '- foldable layout')
+  const b = await store.addToNote('orbit IDEAS', '- foldable layout')
   assert.deepEqual([b.id, b.created], [a.id, false])
   const n = (await store.listNotes()).find((x) => x.id === a.id)!
   assert.equal(n.text, '# Orbit ideas\n\nphone app\n\n- foldable layout\n')
