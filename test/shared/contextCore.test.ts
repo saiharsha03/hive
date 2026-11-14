@@ -1,6 +1,15 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { canCompact, contextPct, contextWarn, fastLabel, fastSupported, thinkingPreview } from '../../src/shared/contextCore'
+import { canCompact, contextPct, contextWarn, creditsWords, fastLabel, fastSupported, thinkingPreview } from '../../src/shared/contextCore'
+
+test('usage credits in words: spent of the limit, or why fast cannot be turned on', () => {
+  assert.equal(creditsWords(null), '')
+  assert.equal(creditsWords({ on: true, used: 1234, limit: 5000, currency: 'USD' }), 'Usage credits: $12.34 of $50.00 used this month')
+  assert.equal(creditsWords({ on: true, used: 99, limit: null, currency: 'EUR' }), 'Usage credits: 0.99 EUR used this month')
+  assert.equal(creditsWords({ on: true, used: null, limit: null, currency: null }), 'Usage credits are on')
+  assert.match(creditsWords({ on: false, used: 5000, limit: 5000, currency: 'USD' }), /^Usage credits are off or used up \(\$50\.00 of \$50\.00 used this month\): fast mode/)
+  assert.match(creditsWords({ on: false, used: null, limit: null, currency: null }), /^Usage credits are off or used up: fast mode/)
+})
 import { emptyStatus, reduceStatus } from '../../src/shared/statusCore'
 
 test('contextPct: share of the window, clamped; null without a window', () => {

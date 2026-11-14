@@ -50,3 +50,12 @@ export function thinkingPreview(text: string, n = 90): string {
   const line = text.split('\n').map((l) => l.replace(/^[\s#>]+/, '').replace(/[*`]|(?<!\w)_+|_+(?!\w)/g, '').trim()).find(Boolean) ?? ''
   return line.length > n ? `${line.slice(0, n - 1)}…` : line
 }
+
+// usage credits in words, for the fast control's hover: "Usage credits: $12.34 of $50.00 used this month"
+export function creditsWords(c: { on: boolean; used: number | null; limit: number | null; currency: string | null } | null): string {
+  if (!c) return ''
+  const money = (v: number) => (c.currency && c.currency !== 'USD' ? `${(v / 100).toFixed(2)} ${c.currency}` : `$${(v / 100).toFixed(2)}`)
+  const spent = c.used === null ? '' : c.limit === null ? `${money(c.used)} used this month` : `${money(c.used)} of ${money(c.limit)} used this month`
+  if (!c.on) return `Usage credits are off or used up${spent ? ` (${spent})` : ''}: fast mode is billed only from them. Turn them on at claude.ai, Settings > Usage`
+  return spent ? `Usage credits: ${spent}` : 'Usage credits are on'
+}

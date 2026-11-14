@@ -2,7 +2,17 @@
 // window is, and so is a weekly window with a reset time while the 5 h one is idle
 import { describe, expect, it, test } from 'vitest'
 import assert from 'node:assert/strict'
-import { realLimits, usageRows } from '../../src/shared/usageCore'
+import { creditsOf, realLimits, usageRows } from '../../src/shared/usageCore'
+
+test('usage credits come from extra_usage; nothing known when the answer has none', () => {
+  assert.deepEqual(creditsOf({ extra_usage: { is_enabled: true, monthly_limit: 5000, used_credits: 1234, utilization: 24.7, currency: 'USD' } }),
+    { on: true, used: 1234, limit: 5000, currency: 'USD' })
+  assert.deepEqual(creditsOf({ extra_usage: { is_enabled: false, monthly_limit: null, used_credits: null, utilization: null } }),
+    { on: false, used: null, limit: null, currency: null })
+  assert.equal(creditsOf({ five_hour: {} }), null)
+  assert.equal(creditsOf(null), null)
+  assert.equal(creditsOf({ extra_usage: { monthly_limit: 1 } }), null)
+})
 
 test('placeholder limits are not a reading', () => {
   assert.equal(realLimits({ five_hour: { utilization: 0, resets_at: null } }), false)

@@ -415,6 +415,8 @@ const Transcript = memo(function Transcript({ session, limit, setLimit, st, star
       const bg = bgOf.get(it.id)
       const status = bg === 'running' ? 'running' : bg === 'failed' ? 'error' : it.status
       tools.push({ key, item: it, word: toolVerb(it.name).word, failed: status === 'error' && exitOnly(it.name, status, it.output) === null, running: status === 'running', node:<ToolRow key={key} it={it} status={status} bg={bg} cwd={session.cwd} onDiff={st.diff} onBackground={st.background} /> })
+      // a permission request for this call: its Allow / Deny card, in view under the call (not folded into a run)
+      if (it.ask && session.asks?.includes(it.id)) { flush(); out.push(<div key={`${key}:ask`} className="qwrap"><AskCard tabId={session.id} id={it.id} input={{ questions: it.ask }} open /></div>) }
       return
     }
     // a note a hook printed after a tool call goes with that call, inside the run (open it to read); a hook that blocks

@@ -4,6 +4,25 @@ All notable changes to Orbit (called Hive until 2.0) are documented here. The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-11-14
+
+### Fixed
+
+- A permission request (Claude asking to run Bash, Edit and other tools) now shows its Allow / Allow for this thread /
+  Deny card under the call in the thread. Before, only a "Waiting for you" line appeared, with nothing to click.
+- A message's Copy button no longer covers the end of its first line: the text wraps around it.
+- When a model's safeguards flag a request and Claude Code re-runs it on the fallback model (cyber: Opus 4.8, bio:
+  Opus 5), the refused answer is removed from the thread and a note says what was flagged and that the thread now
+  stays on the fallback model. Before, the refused answer stayed and only "Model changed" showed.
+- The session e2e helpers open the folded model and effort summary before using its pickers.
+
+### Changed
+
+- Fast mode follows your usage credits, which is the only thing it is billed from on a subscription. While the usage
+  reading says they are off or used up, the fast control reads "fast: no usage credits" and cannot be turned on, and a
+  thread that has fast mode on is switched off. Hovering the control shows how much credit was used this month
+  against the limit.
+
 ## [2.0.2] - 2026-11-13
 
 ### Fixed

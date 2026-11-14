@@ -90,6 +90,39 @@ test.describe.serial('session', () => {
     const got = await l.page.waitForFunction(() => (window as unknown as { __copied?: Record<string, string> }).__copied).then((x) => x.jsonValue()) ?? {}
     expect(got['text/html']).toMatch(/<\w+/)
     expect(got['text/plain'].length).toBeGreaterThan(0)
+    // the Copy button sits beside the text, never on it (it covered the end of the first line)
+    const overlaps = await last.evaluate((m) => {
+      const b = m.querySelector('.msgcopy')!.getBoundingClientRect()
+      const walk = document.createTreeWalker(m.querySelector('.body')!, NodeFilter.SHOW_TEXT)
+      const r = document.createRange()
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        r.selectNodeContents(n)
+        for (const t of r.getClientRects()) if (t.left < b.right && t.right > b.left && t.top < b.bottom && t.bottom > b.top) return true
+      }
+      return false
+    })
+    expect(overlaps).toBe(false)
+  })
+
+  test('a permission request shows its Allow / Deny card in the thread, and Allow runs the call', async () => {
+    const before = (await h.id('mode-picker').innerText()).replace(/^\s*mode\s*/i, '').replace(/, switch failed$/, '').trim()
+    await h.id('mode-picker').click()
+    await h.id('mode-list').locator('.pop-row').filter({ hasText: 'Manual' }).first().click()
+    await expect(h.id('mode-picker')).toContainText(/manual/i)
+    // a command that writes (a read-only one such as echo runs without asking, even in Manual)
+    await h.send(`${TAG}: use the Bash tool to run exactly: touch orbit-perm-check.txt. Then reply with the word done`)
+    const card = h.id('ask-card').filter({ hasText: /Allow Bash/ })
+    await expect(card).toBeVisible({ timeout: 120_000 })
+    await shot(l.page, 'session-permission-card')
+    await card.getByTestId('ask-option').filter({ hasText: /^1\s*Allow\s*Run it this once/ }).click()
+    await card.getByTestId('ask-submit').click()
+    await expect(card).toHaveCount(0, { timeout: 30_000 })
+    await h.waitIdle()
+    expect((await h.lastReply()).toLowerCase()).toContain('done')
+    // back to the mode the thread had, as the tests after this one expect
+    await h.id('mode-picker').click()
+    await h.id('mode-list').locator('.pop-row').filter({ hasText: new RegExp(before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).first().click()
+    await expect(h.id('mode-picker')).toContainText(new RegExp(before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'))
   })
 
   test('steer and queue work', async () => {

@@ -36,3 +36,14 @@ export function usageRows(l: any, now = Date.now()): UsageRow[] {
 export function afterReset<T extends { pct: number | null; resetsAt: string | null }>(w: T, now = Date.now()): T {
   return w.resetsAt && Date.parse(w.resetsAt) <= now ? { ...w, pct: 0, resetsAt: null } : w
 }
+
+// Usage credits (the answer's extra_usage), which fast mode is billed from on a subscription. on = false while they
+// cannot cover a send (turned off, or used up). Amounts are in minor units (cents). null when the answer says nothing
+// (an older reading, the shared usage file, an API key): then nothing is decided from it.
+export type Credits = { on: boolean; used: number | null; limit: number | null; currency: string | null }
+export function creditsOf(l: any): Credits | null {
+  const e = l?.extra_usage
+  if (!e || typeof e.is_enabled !== 'boolean') return null
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null)
+  return { on: e.is_enabled, used: n(e.used_credits), limit: n(e.monthly_limit), currency: typeof e.currency === 'string' ? e.currency : null }
+}

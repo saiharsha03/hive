@@ -10,7 +10,14 @@ export class Orbit {
   // ---- title bar ----
   brand = () => this.id('brand')
   // the focused thread's model and effort, as its composer's labelled pickers show them
-  topModel = () => this.id('model-picker')
+  // (folded into one "model, effort" summary until it is clicked)
+  topModel = () => this.id('model-picker').or(this.id('model-summary'))
+  // open the folded model and effort summary into its pickers; harmless when they are open already
+  async openPickers(): Promise<void> {
+    const summary = this.id('model-summary')
+    if (await summary.isVisible()) await summary.click()
+    await expect(this.id('model-picker')).toBeVisible()
+  }
   // The rail lists threads; pages (Running, Scheduled, Deploys, Status and usage, Watchers and teams, Workspace,
   // Settings) open as tabs from its foot; the inspector holds the focused thread's Files and Changes. Calling open()
   // again for the same panel is harmless.
@@ -79,6 +86,7 @@ export class Orbit {
   // the model picker is a popover list: pick its Haiku entry (whatever the SDK lists for Haiku). The pick shows in
   // the picker and the status bar at once, also before the first message.
   async pickHaiku(_live = true): Promise<void> {
+    await this.openPickers()
     await this.modelPicker().click()
     const haiku = this.id('model-list').locator('.pop-row').filter({ hasText: /haiku/i }).first()
     await expect(haiku).toBeVisible({ timeout: 60_000 })
@@ -87,6 +95,7 @@ export class Orbit {
     await expect(this.topModel()).toContainText(/haiku/i)
   }
   async pickEffort(level: string): Promise<void> {
+    await this.openPickers()
     await this.effortPicker().click()
     await this.id(`effort-list-${level}`).click()
   }

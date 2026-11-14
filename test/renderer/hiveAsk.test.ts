@@ -23,4 +23,14 @@ test("Claude's AskUserQuestion already has its row: no second one", () => {
   const a = applyEvent(withRow, { type: 'hive_ask', id: 'toolu_1', questions })
   assert.equal(a.items.length, 1)
   assert.deepEqual(a.asks, ['toolu_1'])
+  assert.equal((a.items[0] as { ask?: unknown }).ask, undefined)
+})
+
+test('a permission request keeps its question on the call it is for, so the Allow / Deny card can draw', () => {
+  const withRow = base([{ kind: 'tool', id: 'toolu_2', name: 'Bash', input: { command: 'ls' }, status: 'running' }])
+  const a = applyEvent(withRow, { type: 'hive_ask', id: 'toolu_2', questions })
+  assert.equal(a.items.length, 1)
+  assert.deepEqual(a.asks, ['toolu_2'])
+  assert.deepEqual((a.items[0] as { ask?: unknown }).ask, questions)
+  assert.deepEqual(applyEvent(a, { type: 'hive_ask_done', id: 'toolu_2' }).asks, [])
 })

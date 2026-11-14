@@ -6,7 +6,7 @@ import { claudeExecutable, engineInfo } from './engine'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { afterReset, realLimits, usageRows, type UsageRow } from '../shared/usageCore'
+import { afterReset, creditsOf, realLimits, usageRows, type Credits, type UsageRow } from '../shared/usageCore'
 import { readUsageFile, writeUsageFile } from './usageFile'
 
 export type Limit = { pct: number | null; resetsAt: string | null } | null
@@ -17,6 +17,7 @@ export type Status = {
   seven: Limit
   usage: UsageRow[] // every plan window with a reading, for the usage popover and the phone
   usageAt: number | null // when that reading was taken
+  credits: Credits | null // usage credits (what fast mode is billed from); null when the reading says nothing
   connectors: { connected: number; total: number; needsAuth: number; failed: number } | null
   engine: { installed: boolean; version: string | null }
   error?: string
@@ -111,6 +112,7 @@ export async function getStatus(force = false): Promise<Status> {
     seven: limit(l?.seven_day),
     usage: usageRows(l),
     usageAt: usage?.at ?? null,
+    credits: creditsOf(l),
     connectors: m && {
       connected: m.filter((s) => s.status === 'connected').length,
       total: m.length,

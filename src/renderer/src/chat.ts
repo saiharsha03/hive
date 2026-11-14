@@ -103,6 +103,13 @@ export function workingOn(items: Item[]): string | undefined {
   return nowLine(verb, what, t.input)
 }
 
+// the rows of engine messages taken back (a refused answer after a model fallback); unknown uuids change nothing
+const retract = (items: Item[], uuids: unknown): Item[] => {
+  if (!Array.isArray(uuids) || !uuids.length) return items
+  const gone = new Set(uuids)
+  return items.filter((it) => !('mid' in it && it.mid && gone.has(it.mid)))
+}
+
 const settle = (items: Item[], status: 'done' | 'error'): Item[] =>
   items.map((it) => (it.kind === 'tool' && it.status === 'running' ? { ...it, status } : it))
 
@@ -119,7 +126,10 @@ export function applyEvent(s: Session, ev: any): Session {
       // Claude's own AskUserQuestion already has its tool row (the card draws on it); a question Orbit asks itself
       // (Quarry's write confirmation) has none, so it gets one, carrying the questions the event brought
       const hasRow = s.items.some((it) => it.kind === 'tool' && it.id === ev.id)
-      if (hasRow || !Array.isArray(ev.questions)) return { ...s, asks }
+      if (!Array.isArray(ev.questions)) return { ...s, asks }
+      // a permission request (Bash, Edit, ...) comes with the call's own id: its row keeps the question, so the card
+      // draws under it (before this, only "Waiting for you" showed, with nothing to click)
+      if (hasRow) return { ...s, asks, items: s.items.map((it) => (it.kind === 'tool' && it.id === ev.id && it.name !== 'AskUserQuestion' && it.name !== 'ExitPlanMode' ? { ...it, ask: ev.questions } : it)) }
       return { ...s, asks, items: [...s.items, { kind: 'tool', id: ev.id, name: 'AskUserQuestion', input: { questions: ev.questions }, status: 'running' }] }
     }
     case 'hive_ask_done':
@@ -179,6 +189,17 @@ export function applyEvent(s: Session, ev: any): Session {
         const ended = s.compacting ? { compacting: false, busy: !!s.turnOpen } : {}
         return { ...s, ...ended, compactions: (s.compactions ?? 0) + 1, items: [...s.items, { kind: 'note', text: `Conversation ${how} to free up context` }] }
       }
+      // a model's safeguards flagged the request and it re-ran on the fallback model for that category (cyber: Opus 4.8,
+      // bio: Opus 5): the refused answer goes and a note says why the model changed and that the thread stays on it
+      if (ev.subtype === 'model_refusal_fallback') {
+        const items = retract(s.items, ev.retracted_message_uuids)
+        const what = ev.api_refusal_category ? ` (${ev.api_refusal_category})` : ''
+        const from = modelLabel(ev.original_model), to = modelLabel(ev.fallback_model)
+        const text = ev.scope === 'local'
+          ? `A side request was flagged by ${from}'s safeguards${what} and re-ran on ${to}; this thread's model is unchanged`
+          : `${from}'s safeguards flagged this request${what}, so it re-ran on ${to}. The thread stays on ${to}: pick the model again to go back`
+        return { ...s, items: [...items, { kind: 'note', text }], ...(ev.scope === 'local' ? {} : { answeredBy: ev.fallback_model }) }
+      }
       // a hook said something to the user (security warning on an edit, a blocked call); empty output stays hidden
       {
         const w = hookWarning(ev)
@@ -196,17 +217,20 @@ export function applyEvent(s: Session, ev: any): Session {
       return s
     }
     case 'assistant': {
-      const items = [...s.items]
-      // the model that answered changed (a /model switch or a fallback): say so once; no note for the first answer
+      // the answer a safeguard refusal replaced (it re-ran on a fallback model): the refused one goes
+      const items = retract(s.items, ev.supersedes)
+      // the model that answered changed (a /model switch or a fallback): say so once; no note for the first answer.
+      // A fallback's answer (supersedes) gets no note here: the fallback notice at the end of the turn says why
       const model: string | undefined = ev.message?.model
       const answeredBy = model && model !== '<synthetic>' ? model : s.answeredBy
-      if (answeredBy && s.answeredBy && answeredBy !== s.answeredBy) items.push({ kind: 'note', text: `Model changed: ${modelLabel(s.answeredBy)} → ${modelLabel(answeredBy)}` })
+      if (answeredBy && s.answeredBy && answeredBy !== s.answeredBy && !ev.supersedes?.length) items.push({ kind: 'note', text: `Model changed: ${modelLabel(s.answeredBy)} → ${modelLabel(answeredBy)}` })
       // What Claude says goes above any message of yours it has not read yet (one you sent while it was still writing):
       // the conversation reads in the order things happened for Claude, and your message moves down to where it is read.
+      const mid: string | undefined = typeof ev.uuid === 'string' ? ev.uuid : undefined
       const put = (it: Item) => {
         let at = items.length
         while (at > 0) { const prev = items[at - 1]; if (prev.kind === 'user' && prev.uuid && !prev.seen && !prev.queue) at--; else break }
-        items.splice(at, 0, it)
+        items.splice(at, 0, mid && (it.kind === 'assistant' || it.kind === 'thinking' || it.kind === 'tool') ? { ...it, mid } : it)
       }
       for (const b of ev.message?.content ?? []) {
         if (b.type === 'text' && b.text.trim()) put({ kind: 'assistant', text: b.text, at: Date.now() })

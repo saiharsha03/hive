@@ -314,5 +314,9 @@ button.pick:hover { color: var(--hi); }
 .ed-problems .pr { margin-left: auto; background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 0; }
 .ed-problems .pr:hover { color: var(--hi); }
 /* a message's Copy sits inside its own box: a message is paint-contained (content-visibility), so anything outside
-   it is clipped and cannot be clicked */
-.msg .mdcopy.msgcopy { top: 0; right: 0; }
+   it is clipped and cannot be clicked. It floats at the top right, in the flow, so the first line wraps around it
+   instead of running under it (it covered the end of the first line on hover); a table or code block that opens a
+   message starts below it */
+.msg .mdmsg { display: flow-root; }
+.msg .mdcopy.msgcopy { position: relative; top: auto; right: auto; float: right; margin: 0 0 4px 12px; }
+.msg .mdmsg > .body > .mdtable:first-child, .msg .mdmsg > .body > .mdpre:first-child { clear: right; }
